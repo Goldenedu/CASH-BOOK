@@ -1,0 +1,32 @@
+# ==============================================================================
+# GOLDEN ERP SYSTEM - CLOUDFLARE WORKER CONFIGURATION
+# File: wrangler.toml
+# ==============================================================================
+
+name = "cashbook-app-api"
+main = "src/worker.js"
+compatibility_date = "2026-08-01"
+compatibility_flags = ["nodejs_compat"]
+
+# 💡 CLOUDFLARE D1 DATABASE BINDING
+# 'database_id' နေရာတွင် သင် Cloudflare Dashboard တွင် ဆောက်ထားသော D1 Database ID ကို ထည့်သွင်းပါ
+[[d1_databases]]
+binding = "DB"
+database_name = "golden_school_db"
+database_id = "YOUR_CLOUDFLARE_D1_DATABASE_ID_HERE"
+
+# 💡 ENVIRONMENT VARIABLES
+[vars]
+ALLOWED_ORIGIN = "*"
+
+# ==============================================================================
+# 💡 CLOUDFLARE WORKER SECRETS (Command Line မှတစ်ဆင့် သတ်မှတ်ပေးရန်)
+# ------------------------------------------------------------------------------
+# 1. AUTH_SECRET သတ်မှတ်ရန်:
+#    npx wrangler secret put AUTH_SECRET
+#    (ဥပမာ လျှို့ဝှက်ကုဒ် ရှည်ရှည်တစ်ခု ထည့်ပါ: GoldenSecretKey_2026_SecureJWT_999)
+#
+# 2. RESEND_API_KEY သတ်မှတ်ရန် (Email Backup အတွက်):
+#    npx wrangler secret put RESEND_API_KEY
+#    (Resend.com မှ ရရှိသော re_xxxx API Key ကို ထည့်ပါ)
+# ==============================================================================

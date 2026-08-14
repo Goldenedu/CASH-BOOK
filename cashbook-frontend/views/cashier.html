@@ -1,0 +1,208 @@
+<!-- views/cashier.html -->
+<div class="space-y-5">
+
+  <!-- ၁။ Top Sub-Tabs Navigation Bar (SINGLE ROW WITH DISTINCT VIBRANT COLORS) -->
+  <div class="flex items-center gap-2 p-2 bg-[#0c1322] border border-slate-800/60 rounded-xl w-full overflow-x-auto whitespace-nowrap shadow-xl">
+
+    <!--1. CABank (Amber Gold Theme) -->
+    <button onclick="switchCashierSubTab('CABank')" id="ca-tab-CABank" class="ca-sub-tab-btn px-3.5 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 border bg-amber-950/40 border-amber-500/30 text-amber-300 hover:bg-amber-900/50">
+      <i class="fa-solid fa-building-columns text-amber-400"></i> Bank (CABank)
+    </button>
+    
+    <!-- 2. CACash (Emerald Green Theme) -->
+    <button onclick="switchCashierSubTab('CACash')" id="ca-tab-CACash" class="ca-sub-tab-btn px-3.5 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 border bg-emerald-950/40 border-emerald-500/30 text-emerald-300 hover:bg-emerald-900/50">
+      <i class="fa-solid fa-money-bill-wave text-emerald-400"></i> Cash (CACash)
+    </button>
+
+    <!-- 3. CAOffice (Cyan Blue Theme) -->
+    <button onclick="switchCashierSubTab('CAOffice')" id="ca-tab-CAOffice" class="ca-sub-tab-btn px-3.5 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 border bg-cyan-950/40 border-cyan-500/30 text-cyan-300 hover:bg-cyan-900/50">
+      <i class="fa-solid fa-briefcase text-cyan-400"></i> Office (CAOffice)
+    </button>
+
+    <!-- 4. CAKitchen (Rose Red Theme) -->
+    <button onclick="switchCashierSubTab('CAKitchen')" id="ca-tab-CAKitchen" class="ca-sub-tab-btn px-3.5 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 border bg-rose-950/40 border-rose-500/30 text-rose-300 hover:bg-rose-900/50">
+      <i class="fa-solid fa-utensils text-rose-400"></i> Kitchen (CAKitchen)
+    </button>
+
+    <!-- 5. CAPayroll (Teal Theme) -->
+    <button onclick="switchCashierSubTab('CAPayroll')" id="ca-tab-CAPayroll" class="ca-sub-tab-btn px-3.5 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 border bg-teal-950/40 border-teal-500/30 text-teal-300 hover:bg-teal-900/50">
+      <i class="fa-solid fa-hand-holding-dollar text-teal-400"></i> Payroll (CAPayroll)
+    </button>
+
+    <!-- 6. Today Income (Sky Blue Theme) -->
+    <button onclick="switchCashierSubTab('todayIncome')" id="ca-tab-todayIncome" class="ca-sub-tab-btn px-3.5 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 border bg-sky-950/40 border-sky-500/30 text-sky-300 hover:bg-sky-900/50">
+      <i class="fa-solid fa-receipt text-sky-400"></i> Today Income (Invoice)
+    </button>
+
+  </div>
+
+  <!-- ၂။ Top KPI Stats Cards Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400"><i class="fa-solid fa-arrow-trend-up text-xl"></i></div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Total Income</p>
+        <h3 id="ca-total-income" class="text-base font-extrabold text-white mt-1">0 MMK</h3>
+      </div>
+    </div>
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-rose-500/10 text-rose-400"><i class="fa-solid fa-arrow-trend-down text-xl"></i></div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Total Expense</p>
+        <h3 id="ca-total-expense" class="text-base font-extrabold text-white mt-1">0 MMK</h3>
+      </div>
+    </div>
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-indigo-500/10 text-indigo-400"><i class="fa-solid fa-scale-balanced text-xl"></i></div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Balances</p>
+        <h3 id="ca-balance" class="text-base font-extrabold text-white mt-1">0 MMK</h3>
+      </div>
+    </div>
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-sky-500/10 text-sky-400"><i class="fa-solid fa-list-check text-xl"></i></div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Total Entries</p>
+        <h3 id="ca-entries-count" class="text-base font-extrabold text-white mt-1">0</h3>
+      </div>
+    </div>
+  </div>
+
+  <!-- ၃။ Control Search & Action Bar -->
+  <div class="flex flex-col lg:flex-row justify-between items-center bg-[#0c1322] border border-slate-800/60 p-4 rounded-xl gap-4">
+    <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
+      <div class="relative w-full sm:w-64">
+        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
+        <input type="text" id="cashier-search" oninput="onSearchInputCashier()" placeholder="Search description, category, responsibility person, debit, credit..." class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white focus:outline-none focus:border-indigo-500 transition-all">
+      </div>
+
+      <!-- 💡 DATE RANGE FILTER CONTROLS -->
+      <div class="flex items-center gap-1.5 w-full sm:w-auto bg-[#0f172a] border border-slate-800 p-1 rounded-lg text-xs">
+        <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">From:</span>
+        <input type="date" id="ca-date-from" onchange="onSearchInputCashier()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
+        <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">To:</span>
+        <input type="date" id="ca-date-to" onchange="onSearchInputCashier()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
+        <button onclick="clearDateFilterCashier()" class="p-1 text-slate-400 hover:text-rose-400 transition" title="Clear Date Filter"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2.5 w-full lg:w-auto justify-end">
+      <button onclick="loadCashierData(false)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all" title="Refresh Data">
+        <i class="fa-solid fa-rotate text-xs"></i> Refresh
+      </button>
+
+      <button onclick="exportToCSVCashier()" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
+        <i class="fa-solid fa-file-export text-xs"></i> Export CSV
+      </button>
+
+      <button onclick="openAddModalCashier()" id="ca-btn-add" class="p-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-emerald-600/10 transition-all">
+        <i class="fa-solid fa-plus text-xs"></i> Add Cashier Entry
+      </button>
+    </div>
+  </div>
+
+  <!-- ၄။ Dynamic Table Grid (Swaps Headers for Income Tab vs CA* Sub-Ledgers) -->
+  <div class="table-container bg-[#0c1322] border border-slate-800/60 shadow-2xl relative overflow-x-auto">
+    <table class="w-full text-left border-collapse min-w-[1700px]">
+      <thead id="cashier-table-head">
+        <!-- Dynamic Headers rendered by js/cashier.js -->
+      </thead>
+      <tbody id="cashier-table-body" class="divide-y divide-slate-800/40 text-slate-300">
+        <!-- Dynamic Rows generated by js/cashier.js -->
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ၅။ Pagination Controller Tray -->
+  <div class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800/60 px-6 py-3.5 rounded-xl">
+    <div id="ca-pagination-info" class="text-xs font-semibold text-slate-400 tracking-wide">
+      Showing entries...
+    </div>
+    
+    <div class="flex items-center gap-2">
+      <button onclick="changePageCashier(-1)" id="ca-btn-prev" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+        <i class="fa-solid fa-chevron-left text-[10px]"></i> Previous
+      </button>
+      <button onclick="changePageCashier(1)" id="ca-btn-next" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+        Next <i class="fa-solid fa-chevron-right text-[10px]"></i>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ၆။ ADD / EDIT CASHIER ENTRY MODAL POPUP -->
+<div id="cashier-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-[#0c1322] border border-slate-800/80 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+    
+    <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
+      <h3 id="ca-form-title" class="text-sm font-black text-white uppercase tracking-wider">Add Cashier Entry</h3>
+      <button onclick="closeCashierModal()" class="text-slate-500 hover:text-white transition">
+        <i class="fa-solid fa-xmark text-sm"></i>
+      </button>
+    </div>
+
+    <form id="cashier-form" onsubmit="saveCashierForm(event)" class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+      <input type="hidden" id="ca-uniqueId">
+      
+      <!-- Row 1: DATE & RESPONSIBILITY PERSON -->
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Date</label>
+          <input type="date" id="ca-date" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-amber-300 uppercase tracking-wide">Responsibility Person (တာဝန်ရှိသူ)</label>
+          <input type="text" id="ca-resp-person" required placeholder="တာဝန်ရှိသူ အမည် ရိုက်ထည့်ပါ..." class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 font-bold rounded-lg p-2.5 outline-none focus:border-amber-500">
+        </div>
+      </div>
+
+      <!-- Row 2: CATEGORY & METHOD -->
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Category</label>
+          <select id="ca-category" onchange="onCategoryChangeCashier()" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+            <!-- Dynamically populated from config.js -->
+          </select>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Method</label>
+          <select id="ca-method" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+            <!-- Dynamically populated -->
+          </select>
+        </div>
+      </div>
+
+      <!-- Row 3: TRANSFER TO & DEBIT/CREDIT -->
+      <div class="flex flex-col gap-1">
+        <label class="font-bold text-slate-400 uppercase tracking-wide">Transfer To (ငွေလွှဲပြောင်းမည့် စာအုပ်)</label>
+        <select id="ca-transfer" onchange="onTransferTargetChangeCashier()" class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+          <!-- Dynamically populated -->
+        </select>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-emerald-400 uppercase tracking-wide">Debit (Income / ဝင်ငွေ)</label>
+          <input type="number" step="0.01" id="ca-debit" value="0" class="w-full text-right text-emerald-400 font-bold font-mono bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-emerald-500">
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-rose-400 uppercase tracking-wide">Credit (Expense / ထွက်ငွေ)</label>
+          <input type="number" step="0.01" id="ca-credit" value="0" class="w-full text-right text-rose-400 font-bold font-mono bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-rose-500">
+        </div>
+      </div>
+
+      <!-- Row 4: DESCRIPTION -->
+      <div class="flex flex-col gap-1">
+        <label class="font-bold text-slate-400 uppercase tracking-wide">Description</label>
+        <textarea id="ca-description" rows="3" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 placeholder-slate-500 rounded-lg p-2.5 outline-none focus:border-indigo-500" placeholder="အသေးစိတ် စာရင်းရှင်းလင်းချက် ရေးသွင်းရန်..."></textarea>
+      </div>
+
+      <!-- Actions Footer -->
+      <div class="flex justify-end items-center gap-3 pt-4 border-t border-slate-800">
+        <button type="button" onclick="closeCashierModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">Cancel</button>
+        <button type="submit" class="px-5 py-2 rounded-lg text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/10 transition-all">Confirm</button>
+      </div>
+    </form>
+  </div>
+</div>

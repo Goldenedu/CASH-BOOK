@@ -1,0 +1,462 @@
+<!DOCTYPE html> 
+<html lang="my" class="dark">
+<head>
+  <meta charset="UTF-8"> 
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230c1322'/><path d='M50 20 L90 38 L50 56 L10 38 Z' fill='%23818cf8'/><path d='M25 46.5 V65 C25 75 75 75 75 65 V46.5' fill='none' stroke='%23818cf8' stroke-width='6' stroke-linecap='round'/><circle cx='82' cy='55' r='4' fill='%23fbbf24'/><path d='M82 55 V75' stroke='%23fbbf24' stroke-width='3' stroke-linecap='round'/></svg>">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GOLDEN CASH BOOK - ERP SYSTEM</title>
+
+  <!-- 💡 Immediate Auth Check to prevent UI Flash (FOUC) -->
+  <script>
+    (function() {
+      var token = localStorage.getItem('golden_auth_token');
+      if (token) {
+        document.documentElement.className = 'dark is-authed';
+      } else {
+        document.documentElement.className = 'dark not-authed';
+      }
+    })();
+  </script>
+
+  <style>
+    html.is-authed #login-overlay { display: none; }
+    html.is-authed #erp-workspace { display: flex; }
+    html.not-authed #login-overlay { display: flex; }
+    html.not-authed #erp-workspace { display: none; }
+  </style>
+  
+  <link rel="stylesheet" href="css/tailwind.min.css?v=20260808b">
+  <link rel="stylesheet" href="css/fontawesome.min.css?v=20260808b">
+  <link rel="stylesheet" href="css/style.css?v=20260808b">
+
+  <!-- 💡 SheetJS Library for Multi-Tab Excel (.xlsx) Export with Security Crossorigin -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" crossorigin="anonymous"></script>
+</head>
+<body class="bg-[#090d16] font-sans flex h-screen overflow-hidden text-slate-300">
+
+  <!-- ==================== 1. LOGIN OVERLAY ==================== -->
+  <div id="login-overlay" class="fixed inset-0 bg-[#090d16] z-[100] flex items-center justify-center p-4">
+    <div class="relative w-full max-w-md bg-[#0e131f]/90 border border-amber-500/20 backdrop-blur-xl rounded-3xl p-8 shadow-[0_20px_50px_rgba(0,0,0,0.8)] text-center overflow-hidden space-y-6 text-slate-300">
+      
+      <div class="absolute -top-12 left-1/2 -translate-x-1/2 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div class="text-center">
+        <div class="inline-flex items-center justify-center p-4 rounded-2xl bg-gradient-to-b from-amber-500/15 to-amber-600/5 border border-amber-500/30 shadow-inner group transition-all duration-300 hover:scale-105 mb-3">
+          <i class="fa-solid fa-graduation-cap text-4xl text-amber-400 filter drop-shadow-[0_2px_8px_rgba(245,158,11,0.5)]"></i>
+        </div>
+        
+        <h2 class="text-xl font-black tracking-tight mb-1 text-gold-gradient filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+          Golden Education Private High School
+        </h2>
+        
+        <p class="text-[11px] font-extrabold uppercase tracking-[0.25em] text-amber-200/70 pb-3 border-b border-amber-500/10">
+          Financial Management System
+        </p>
+      </div>
+
+      <form id="login-form" onsubmit="handleLoginSubmit(event)" class="space-y-4 text-xs text-left">
+        <div>
+          <label class="block font-bold text-[11px] text-slate-300 uppercase tracking-widest mb-1.5">Select Username / Role</label>
+          <select id="login-username" required class="w-full p-3 bg-[#070a12]/80 border border-slate-700/60 rounded-xl text-xs text-slate-100 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20 transition-all duration-300 font-bold">
+            <option value="">-- Select Username --</option>
+            <option value="Owner">Owner</option>
+            <option value="Admin">Admin</option>
+            <option value="Finance">Finance</option>
+            <option value="HR">HR</option>
+            <option value="Accountant">Accountant</option>
+            <option value="Cashier">Cashier</option>
+            <option value="Staff">Staff</option>
+            <option value="Viewer">Viewer</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block font-bold text-[11px] text-slate-300 uppercase tracking-widest mb-1.5">Password</label>
+          <input type="password" id="login-password" required placeholder="Type password..." class="w-full p-3 bg-[#070a12]/80 border border-slate-700/60 rounded-xl text-xs text-slate-100 placeholder:text-slate-600 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20 transition-all duration-300">
+        </div>
+
+        <div id="login-error" class="hidden text-rose-400 font-semibold text-[11px] bg-rose-500/10 border border-rose-500/20 p-2.5 rounded-xl text-center"></div>
+
+        <button type="submit" class="w-full py-3.5 mt-2 bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 flex items-center justify-center gap-2 text-xs tracking-wider active:scale-[0.99] cursor-pointer">
+          <span>Enter System</span>
+          <i class="fa-solid fa-arrow-right-to-bracket text-sm"></i>
+        </button>
+      </form>
+
+      <div class="pt-4 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span class="font-medium text-slate-400">System Ready</span>
+        </div>
+        <span class="font-mono text-slate-500">v2.4 Secured</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== 2. MAIN WORKSPACE ==================== -->
+  <div id="erp-workspace" class="hidden h-full w-full">
+    <!-- Sidebar Navigation -->
+    <aside class="w-64 bg-[#0c1322] border-r border-slate-800 flex flex-col h-full shadow-2xl shrink-0">
+      <div class="h-[64px] px-4 border-b border-slate-800 flex items-center justify-between text-slate-200 bg-[#0e172a] shrink-0">
+        <div class="flex items-center gap-2.5 font-extrabold text-sm tracking-wide">
+          <i class="fa-solid fa-graduation-cap text-indigo-400 text-lg"></i>
+          <span class="text-slate-100">GOLDEN CASH BOOK</span>
+        </div>
+        <button onclick="handleLogout()" class="text-slate-500 hover:text-rose-400 transition p-1.5 rounded-lg" title="Logout">
+          <i class="fa-solid fa-power-off text-xs"></i>
+        </button>
+      </div>
+
+      <nav class="flex-1 px-2.5 py-2.5 space-y-0.5 overflow-y-auto" id="sidebar-nav">
+        <button onclick="switchTab('dashboard')" id="btn-dashboard" class="nav-btn w-full text-left px-3.5 py-2 rounded-lg text-slate-300 hover:text-white flex items-center gap-2.5 text-xs font-semibold">
+          <i class="fa-solid fa-gauge-high w-4 text-center text-indigo-400"></i> Home Dashboard
+        </button>
+
+        <p class="text-[9px] font-bold text-slate-500 px-3 uppercase tracking-wider mt-2.5 mb-1">Main Books</p>
+        <button onclick="switchTab('bank')" id="btn-bank" class="nav-btn w-full text-left px-3.5 py-2 rounded-lg text-slate-300 hover:text-white flex items-center gap-2.5 text-xs font-semibold">
+          <i class="fa-solid fa-building-columns text-amber-400 w-4 text-center"></i> Main Bank Book
+        </button>
+        <button onclick="switchTab('cash')" id="btn-cash" class="nav-btn w-full text-left px-3.5 py-2 rounded-lg text-slate-300 hover:text-white flex items-center gap-2.5 text-xs font-semibold">
+          <i class="fa-solid fa-money-bill-wave text-emerald-400 w-4 text-center"></i> Main Cash Book
+        </button>
+        <button onclick="switchTab('income')" id="btn-income" class="nav-btn w-full text-left px-3.5 py-2 rounded-lg text-slate-300 hover:text-white flex items-center gap-2.5 text-xs font-semibold">
+          <i class="fa-solid fa-wallet text-sky-400 w-4 text-center"></i> Main Income Book
+        </button>
+
+        <p class="text-[9px] font-bold text-slate-500 px-3 uppercase tracking-wider mt-2.5 mb-1">Expense Book</p>
+        <button onclick="switchTab('office')" id="btn-office" class="nav-btn w-full text-left px-3.5 py-2 rounded-lg text-slate-300 hover:text-white flex items-center gap-2.5 text-xs font-semibold">
+          <i class="fa-solid fa-briefcase text-cyan-400 w-4 text-center"></i> Office Exp Book
+        </button>
+        <button onclick="switchTab('kitchen')" id="btn-kitchen" class="nav-btn w-full text-left px-3.5 py-2 rounded-lg text-slate-300 hover:text-white flex items-center gap-2.5 text-xs font-semibold">
+          <i class="fa-solid fa-utensils text-rose-400 w-4 text-center"></i> Kitchen Exp Book
+        </button>
+        <button onclick="switchTab('hr')" id="btn-hr" class="nav-btn w-full text-left px-3.5 py-2 rounded-lg text-slate-300 hover:text-white flex items-center gap-2.5 text-xs font-semibold">
+          <i class="fa-solid fa-money-check-dollar text-teal-400 w-4 text-center"></i> HR Payroll Book
+        </button>
+
+        <p class="text-[9px] font-bold text-slate-500 px-3 uppercase tracking-wider mt-2.5 mb-1">List & Inventory</p>
+        <button onclick="switchTab('staff')" id="btn-staff" class="nav-btn w-full text-left px-3.5 py-2 rounded-lg text-slate-300 hover:text-white flex items-center gap-2.5 text-xs font-semibold">
+          <i class="fa-solid fa-user-tie text-purple-400 w-4 text-center"></i> Staff Directory
+        </button>
+        <button onclick="switchTab('student')" id="btn-student" class="nav-btn w-full text-left px-3.5 py-2 rounded-lg text-slate-300 hover:text-white flex items-center gap-2.5 text-xs font-semibold">
+          <i class="fa-solid fa-user-graduate text-indigo-400 w-4 text-center"></i> Student List
+        </button>
+        <button onclick="switchTab('uniform')" id="btn-uniform" class="nav-btn w-full text-left px-3.5 py-2 rounded-lg text-slate-300 hover:text-white flex items-center gap-2.5 text-xs font-semibold">
+          <i class="fa-solid fa-shirt text-amber-400 w-4 text-center"></i> Uniform Ledger
+        </button>
+        <button onclick="switchTab('promotion')" id="btn-promotion" class="nav-btn w-full text-left px-3.5 py-2 rounded-lg text-slate-300 hover:text-white flex items-center gap-2.5 text-xs font-semibold">
+          <i class="fa-solid fa-coins text-yellow-400 w-4 text-center"></i> Promotion List
+        </button>
+
+        <p class="text-[9px] font-bold text-slate-500 px-3 uppercase tracking-wider mt-2.5 mb-1">Reporting</p>
+        <button onclick="switchTab('report-financial')" id="btn-report-financial" class="nav-btn w-full text-left px-3.5 py-2 rounded-lg text-slate-300 hover:text-white flex items-center gap-2.5 text-xs font-semibold">
+          <i class="fa-solid fa-chart-pie text-emerald-400 w-4 text-center"></i> Financial Reports
+        </button>
+        <button onclick="switchTab('student-money')" id="btn-student-money" class="nav-btn w-full text-left px-3.5 py-2 rounded-lg text-slate-300 hover:text-white flex items-center gap-2.5 text-xs font-semibold">
+          <i class="fa-solid fa-sack-dollar text-yellow-400 w-4 text-center"></i> Student Money
+        </button>
+
+        <p class="text-[9px] font-bold text-slate-500 px-3 uppercase tracking-wider mt-2.5 mb-1">Cashier Sub-Ledger</p>
+        <button onclick="switchTab('cashier')" id="btn-cashier" class="nav-btn w-full text-left px-3.5 py-2 rounded-lg text-slate-300 hover:text-white flex items-center gap-2.5 text-xs font-semibold">
+          <i class="fa-solid fa-cash-register text-emerald-400 w-4 text-center"></i> Cashier Cash Book
+        </button>
+
+        <p class="text-[9px] font-bold text-slate-500 px-3 uppercase tracking-wider mt-2.5 mb-1">System Controls</p>
+        <button onclick="switchTab('settings')" id="btn-settings" class="nav-btn w-full text-left px-3.5 py-2 rounded-lg text-slate-300 hover:text-white flex items-center gap-2.5 text-xs font-semibold">
+          <i class="fa-solid fa-gears text-indigo-400 w-4 text-center"></i> System Settings
+        </button>
+      </nav>
+    </aside>
+
+    <!-- Main Workspace View Container -->
+    <div class="flex-1 flex flex-col overflow-hidden">
+      <header class="bg-[#0c1322] border-b border-slate-800 h-[64px] px-6 flex justify-between items-center z-10 shrink-0">
+        <h1 id="page-title" class="text-base md:text-lg font-extrabold text-slate-100 tracking-wide">Home Dashboard</h1>
+        <div id="live-metadata" class="text-xs font-bold text-emerald-400 bg-[#111c44] border border-emerald-500/20 px-3.5 py-1.5 rounded-lg">
+          FY 2026-2027 | Sat | --:-- | User: Admin
+        </div>
+      </header>
+
+      <main id="main-content" class="p-6 overflow-y-auto flex-1 bg-[#090d16] relative">
+        <div id="view-container"></div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ==================== 3. GLOBAL UTILITIES & NOTIFICATIONS ==================== -->
+  <!-- Loading Spinner Overlay -->
+  <div id="loading-overlay" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[150] flex flex-col items-center justify-center hidden">
+    <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-indigo-500 mb-3"></div>
+    <p class="text-xs font-bold text-slate-200 tracking-wide">Processing, please wait...</p>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-[200] flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- ==================== 4. GLOBAL SALARY GRADE MATRIX MODAL ==================== -->
+  <div id="grade-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+      <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
+        <h3 class="text-sm font-black text-amber-400 uppercase tracking-wider flex items-center gap-2">
+          <i class="fa-solid fa-sliders"></i> Edit Salary Grade Matrix Settings (Cloudflare D1 Database)
+        </h3>
+        <button onclick="closeGradeModal()" class="text-slate-500 hover:text-white transition"><i class="fa-solid fa-xmark text-sm"></i></button>
+      </div>
+
+      <form id="grade-form" onsubmit="saveGradeForm(event)" class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+        <div class="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-[11px] text-amber-300 font-semibold mb-2">
+          ⚠️ ဤနေရာတွင် ပြင်ဆင်လိုက်သော Grade နှုန်းထားများ၊ BONUS နှင့် FUND တို့သည် Cloudflare D1 Database ထဲတွင် အလိုအလျောက် သွားရောက် Update ဖြစ်ပြီး စနစ်တစ်ခုလုံးတွင် တိုက်ရိုက် သက်ရောက်သွားပါမည်။
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="flex flex-col gap-1">
+            <label class="font-bold text-slate-300">GRADE A</label>
+            <input type="number" id="grade-A" value="0" required class="w-full bg-[#0f172a] border border-slate-800 text-amber-300 font-bold rounded-lg p-2 outline-none focus:border-amber-500">
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="font-bold text-slate-300">GRADE B</label>
+            <input type="number" id="grade-B" value="0" required class="w-full bg-[#0f172a] border border-slate-800 text-amber-300 font-bold rounded-lg p-2 outline-none focus:border-amber-500">
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="font-bold text-slate-300">GRADE C</label>
+            <input type="number" id="grade-C" value="0" required class="w-full bg-[#0f172a] border border-slate-800 text-amber-300 font-bold rounded-lg p-2 outline-none focus:border-amber-500">
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="font-bold text-slate-300">GRADE D</label>
+            <input type="number" id="grade-D" value="0" required class="w-full bg-[#0f172a] border border-slate-800 text-amber-300 font-bold rounded-lg p-2 outline-none focus:border-amber-500">
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="font-bold text-slate-300">GRADE E</label>
+            <input type="number" id="grade-E" value="0" required class="w-full bg-[#0f172a] border border-slate-800 text-amber-300 font-bold rounded-lg p-2 outline-none focus:border-amber-500">
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="font-bold text-slate-300">GRADE F</label>
+            <input type="number" id="grade-F" value="0" required class="w-full bg-[#0f172a] border border-slate-800 text-amber-300 font-bold rounded-lg p-2 outline-none focus:border-amber-500">
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="font-bold text-slate-300">GRADE G</label>
+            <input type="number" id="grade-G" value="0" required class="w-full bg-[#0f172a] border border-slate-800 text-amber-300 font-bold rounded-lg p-2 outline-none focus:border-amber-500">
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="font-bold text-slate-300">GRADE H</label>
+            <input type="number" id="grade-H" value="0" required class="w-full bg-[#0f172a] border border-slate-800 text-amber-300 font-bold rounded-lg p-2 outline-none focus:border-amber-500">
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="font-bold text-slate-300">GRADE I</label>
+            <input type="number" id="grade-I" value="0" required class="w-full bg-[#0f172a] border border-slate-800 text-amber-300 font-bold rounded-lg p-2 outline-none focus:border-amber-500">
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="font-bold text-slate-300">GRADE J</label>
+            <input type="number" id="grade-J" value="0" required class="w-full bg-[#0f172a] border border-slate-800 text-amber-300 font-bold rounded-lg p-2 outline-none focus:border-amber-500">
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="font-bold text-slate-300">GRADE K</label>
+            <input type="number" id="grade-K" value="0" required class="w-full bg-[#0f172a] border border-slate-800 text-amber-300 font-bold rounded-lg p-2 outline-none focus:border-amber-500">
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="font-bold text-slate-300">GRADE L</label>
+            <input type="number" id="grade-L" value="0" required class="w-full bg-[#0f172a] border border-slate-800 text-amber-300 font-bold rounded-lg p-2 outline-none focus:border-amber-500">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 pt-3 border-t border-slate-800">
+          <div class="flex flex-col gap-1">
+            <label class="font-bold text-emerald-400">Fixed Bonus Rate (MMK)</label>
+            <input type="number" id="grade-bonus" value="0" required class="w-full bg-[#0f172a] border border-slate-800 text-emerald-400 font-bold rounded-lg p-2.5 outline-none focus:border-emerald-500">
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="font-bold text-teal-400">Fund Rate (0.05 = 5%)</label>
+            <input type="number" step="0.01" id="grade-fund" value="0" required class="w-full bg-[#0f172a] border border-slate-800 text-teal-400 font-bold rounded-lg p-2.5 outline-none focus:border-teal-500">
+          </div>
+        </div>
+
+        <div class="flex justify-end items-center gap-3 pt-4 border-t border-slate-800">
+          <button type="button" onclick="closeGradeModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">Cancel</button>
+          <button type="submit" class="px-5 py-2 rounded-lg text-xs font-black bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-600/10 transition-all">Save Matrix Settings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== 5. PRINT ENGINES (DUAL COPY) ==================== -->
+  <!-- A. DUAL-COPY STUDENT INVOICE PRINT AREA -->
+  <div id="invoice-print-area" class="bg-white text-black font-sans text-xs">
+    <!-- Copy 1: Customer Copy -->
+    <div class="invoice-section">
+      <div class="space-y-3">
+        <div class="text-center font-black text-sm tracking-widest border-b border-black pb-1 uppercase">CUSTOMER COPY (ကျောင်းသားမိဘအတွက်ပြေစာ)</div>
+        <div class="grid grid-cols-2 gap-4 font-bold">
+          <div>
+            <p>Name (အမည်) : <span id="print-customer-name" class="font-semibold px-2"></span></p>
+            <p class="mt-1">Class (အတန်း) : <span id="print-customer-class" class="font-semibold px-2"></span></p>
+            <p class="mt-1">Category (အမျိုးအစား) : <span id="print-customer-category" class="font-semibold px-2"></span></p>
+          </div>
+          <div class="text-right">
+            <p>Date : <span id="print-customer-date" class="font-semibold"></span></p>
+            <p class="mt-1">Student ID : <span id="print-customer-id" class="font-mono font-semibold"></span></p>
+          </div>
+        </div>
+        <table class="w-full text-left border-collapse border border-black mt-2">
+          <thead>
+            <tr class="bg-slate-100 border-b border-black">
+              <th class="border border-black p-1 text-center font-bold text-[9px] w-12">NO</th>
+              <th class="border border-black p-1 font-bold text-[9px]">DESCRIPTION</th>
+              <th class="border border-black p-1 text-center font-bold text-[9px] w-20">MONTH</th>
+              <th class="border border-black p-1 text-center font-bold text-[9px] w-28">METHOD</th>
+              <th class="border border-black p-1 text-right font-bold text-[9px] w-32">AMOUNT</th>
+            </tr>
+          </thead>
+          <tbody id="print-customer-table-body"></tbody>
+        </table>
+        <div class="text-right font-bold text-xs mt-1">Total: <span id="print-customer-total" class="border-b-2 border-double border-black px-2"></span></div>
+      </div>
+      <div class="grid grid-cols-2 gap-4 pt-4 pb-2">
+        <div class="text-center"><p class="border-t border-black w-32 mx-auto font-bold pt-1 text-[9px]">Received BY (ငွေကိုင်)</p></div>
+        <div class="text-center"><p class="border-t border-black w-32 mx-auto font-bold pt-1 text-[9px]">Paid By (ငွေပေးသွင်းသူ)</p></div>
+      </div>
+    </div>
+
+    <div class="invoice-divider border-t border-dashed border-slate-400 text-center text-slate-400 select-none text-[10px]">
+      ✂ - - - - - - - - - - - - - - - - - Cut Here - - - - - - - - - - - - - - - - - ✂
+    </div>
+
+    <!-- Copy 2: School Received Copy -->
+    <div class="invoice-section">
+      <div class="space-y-3">
+        <div class="text-center font-black text-sm tracking-widest border-b border-black pb-1 uppercase">RECEIVED COPY (ကျောင်းတွင်းသိမ်းဆည်းရန်ပြေစာ)</div>
+        <div class="grid grid-cols-2 gap-4 font-bold">
+          <div>
+            <p>Name (အမည်) : <span id="print-received-name" class="font-semibold px-2"></span></p>
+            <p class="mt-1">Class (အတန်း) : <span id="print-received-class" class="font-semibold px-2"></span></p>
+            <p class="mt-1">Category (အမျိုးအစား) : <span id="print-received-category" class="font-semibold px-2"></span></p>
+          </div>
+          <div class="text-right">
+            <p>Date : <span id="print-received-date" class="font-semibold"></span></p>
+            <p class="mt-1">Student ID : <span id="print-received-id" class="font-mono font-semibold"></span></p>
+          </div>
+        </div>
+        <table class="w-full text-left border-collapse border border-black mt-2">
+          <thead>
+            <tr class="bg-slate-100 border-b border-black">
+              <th class="border border-black p-1 text-center font-bold text-[9px] w-12">NO</th>
+              <th class="border border-black p-1 font-bold text-[9px]">DESCRIPTION</th>
+              <th class="border border-black p-1 text-center font-bold text-[9px] w-20">MONTH</th>
+              <th class="border border-black p-1 text-center font-bold text-[9px] w-28">METHOD</th>
+              <th class="border border-black p-1 text-right font-bold text-[9px] w-32">AMOUNT</th>
+            </tr>
+          </thead>
+          <tbody id="print-received-table-body"></tbody>
+        </table>
+        <div class="text-right font-bold text-xs mt-1">Total: <span id="print-received-total" class="border-b-2 border-double border-black px-2"></span></div>
+      </div>
+      <div class="grid grid-cols-2 gap-4 pt-4 pb-2">
+        <div class="text-center"><p class="border-t border-black w-32 mx-auto font-bold pt-1 text-[9px]">Received BY (ငွေကိုင်)</p></div>
+        <div class="text-center"><p class="border-t border-black w-32 mx-auto font-bold pt-1 text-[9px]">Paid By (ငွေပေးသွင်းသူ)</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- B. DUAL-COPY PAYSLIP PRINT AREA -->
+  <div id="payslip-print-area" class="bg-white text-black font-sans text-xs">
+    <!-- Copy 1: Employee Copy -->
+    <div class="payslip-section">
+      <div class="space-y-3">
+        <div class="text-center font-black text-base tracking-widest border-b-2 border-black pb-1 uppercase">PAYSLIP (EMPLOYEE COPY)</div>
+        <div class="grid grid-cols-2 gap-4 text-xs font-bold">
+          <div>
+            <p>Name : <span id="print-pay-desc-top" class="font-semibold px-2"></span></p>
+            <p class="mt-1">Category : <span id="print-pay-cat-top" class="font-semibold px-2 uppercase text-indigo-700"></span></p>
+          </div>
+          <div class="text-right">
+            <p>Date : <span id="print-pay-date-top" class="font-semibold"></span></p>
+            <p class="mt-1">Payment Month : <span id="print-pay-month-top" class="font-mono font-semibold"></span></p>
+          </div>
+        </div>
+
+        <div class="border border-black p-3 rounded my-2 bg-slate-50">
+          <div class="flex justify-between items-center text-sm font-extrabold">
+            <span>NET SALARY (လစာငွေ) :</span>
+            <span id="print-pay-net-top" class="border-b-2 border-double border-black px-2 text-base"></span>
+          </div>
+        </div>
+
+        <div id="print-pay-notes-top" class="border border-dashed border-slate-600 p-2 rounded text-[11px] space-y-1">
+          <p class="font-bold uppercase text-slate-800">NOTES / ACCRUED BALANCES:</p>
+          <div class="grid grid-cols-2 gap-2 font-semibold">
+            <p>Unpaid Bonus Balance : <span id="print-pay-bonus-top" class="font-bold"></span></p>
+            <p>Unpaid Fund Balance : <span id="print-pay-fund-top" class="font-bold"></span></p>
+          </div>
+          <p class="text-[9px] text-slate-600 italic mt-1">* Bonus & Fund တို့သည် HR Payroll Policy အတိုင်းဖြစ်ပါသည်။</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4 pt-4 pb-2">
+        <div class="text-center"><p class="border-t border-black w-36 mx-auto font-bold pt-1 text-[10px]">Paid By (ထုတ်ပေးသူ)</p></div>
+        <div class="text-center"><p class="border-t border-black w-36 mx-auto font-bold pt-1 text-[10px]">Received By (ထုတ်ယူသူ)</p></div>
+      </div>
+    </div>
+
+    <div class="payslip-divider border-t border-dashed border-slate-400 text-center select-none">
+      ✂ - - - - - - - - - - - - - - - - - Cut Here - - - - - - - - - - - - - - - - - ✂
+    </div>
+
+    <!-- Copy 2: Office Copy -->
+    <div class="payslip-section">
+      <div class="space-y-3">
+        <div class="text-center font-black text-base tracking-widest border-b-2 border-black pb-1 uppercase">PAYSLIP (OFFICE COPY)</div>
+        <div class="grid grid-cols-2 gap-4 text-xs font-bold">
+          <div>
+            <p>Name : <span id="print-pay-desc-bot" class="font-semibold px-2"></span></p>
+            <p class="mt-1">Category : <span id="print-pay-cat-bot" class="font-semibold px-2 uppercase text-indigo-700"></span></p>
+          </div>
+          <div class="text-right">
+            <p>Date : <span id="print-pay-date-bot" class="font-semibold"></span></p>
+            <p class="mt-1">Payment Month : <span id="print-pay-month-bot" class="font-mono font-semibold"></span></p>
+          </div>
+        </div>
+
+        <div class="border border-black p-3 rounded my-2 bg-slate-50">
+          <div class="flex justify-between items-center text-sm font-extrabold">
+            <span>NET SALARY (လစာငွေ) :</span>
+            <span id="print-pay-net-bot" class="border-b-2 border-double border-black px-2 text-base"></span>
+          </div>
+        </div>
+
+        <div id="print-pay-notes-bot" class="border border-dashed border-slate-600 p-2 rounded text-[11px] space-y-1">
+          <p class="font-bold uppercase text-slate-800">NOTES / ACCRUED BALANCES:</p>
+          <div class="grid grid-cols-2 gap-2 font-semibold">
+            <p>Unpaid Bonus Balance : <span id="print-pay-bonus-bot" class="font-bold"></span></p>
+            <p>Unpaid Fund Balance : <span id="print-pay-fund-bot" class="font-bold"></span></p>
+          </div>
+          <p class="text-[9px] text-slate-600 italic mt-1">* Bonus & Fund တို့သည် HR Payroll Policy အတိုင်းဖြစ်ပါသည်။</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4 pt-4 pb-2">
+        <div class="text-center"><p class="border-t border-black w-36 mx-auto font-bold pt-1 text-[10px]">Paid By (ထုတ်ပေးသူ)</p></div>
+        <div class="text-center"><p class="border-t border-black w-36 mx-auto font-bold pt-1 text-[10px]">Received By (ထုတ်ယူသူ)</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 6. CORE APPLICATION SCRIPTS ==================== -->
+  <script src="js/config.js?v=20260808b" defer></script>
+  <script src="js/api.js?v=20260808b" defer></script>
+  <script src="js/auth.js?v=20260808b" defer></script>
+  <script src="js/bank-cash.js?v=20260808b" defer></script>
+  <script src="js/office-kit.js?v=20260808b" defer></script>
+  <script src="js/cashier.js?v=20260808b" defer></script>
+  <script src="js/hr.js?v=20260808b" defer></script>
+  <script src="js/income.js?v=20260808b" defer></script>
+  <script src="js/staff.js?v=20260808b" defer></script>
+  <script src="js/student.js?v=20260808b" defer></script>
+  <script src="js/student-money.js?v=20260808b" defer></script>
+  <script src="js/uniform.js?v=20260808b" defer></script>
+  <script src="js/promotion.js?v=20260808b" defer></script>
+  <script src="js/reports.js?v=20260808b" defer></script>
+  <script src="js/settings.js?v=20260808b" defer></script>
+  <script src="js/app.js?v=20260808b" defer></script>
+  <script src="js/dashboard.js?v=20260808b" defer></script>
+</body>
+</html>

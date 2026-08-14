@@ -1,0 +1,480 @@
+/* css/style.css - GOLDEN ERP SYSTEM EYE-COMFORT DARK STYLES & PRINT ENGINE */
+
+/* 💡 Force Browser Elements Dark Scheme & Comfort Theme */
+:root { 
+  color-scheme: dark; 
+}
+
+/* ⬇️ ဤနေရာကြားထဲတွင် ကူးထည့်လိုက်ပါ ⬇️ */
+/* 💡 GUARANTEED GOLD GRADIENT TEXT WITH BROWSER FALLBACK */
+.text-gold-gradient {
+  color: #fbbf24 !important; /* Fallback: Browser က Gradient မပံ့ပိုးပါက ဒီအရောင် ပေါ်မည် */
+  background: linear-gradient(135deg, #fef08a 0%, #facc15 50%, #d97706 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+}
+
+/* 💡 Custom Eye-Friendly Scrollbar */
+::-webkit-scrollbar { 
+  width: 6px; 
+  height: 6px; 
+}
+::-webkit-scrollbar-track { 
+  background: #090d16; 
+}
+::-webkit-scrollbar-thumb { 
+  background: #1e293b; 
+  border-radius: 4px; 
+}
+::-webkit-scrollbar-thumb:hover { 
+  background: #334155; 
+}
+
+/* 💡 Sidebar Navigation Buttons */
+.nav-btn { 
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); 
+  font-size: 0.8125rem !important;
+  font-weight: 600 !important;
+  color: #94a3b8 !important;
+}
+.nav-btn:hover { 
+  padding-left: 1.25rem; 
+  background-color: rgba(30, 41, 59, 0.5) !important; 
+  color: #f1f5f9 !important;
+}
+.nav-btn.active { 
+  background-color: #1e293b !important; 
+  color: #f8fafc !important; 
+  font-weight: 700 !important; 
+  border-left: 4px solid #6366f1; 
+}
+
+/* 💡 Soften Sidebar Section Heading Labels */
+#sidebar-nav p {
+  font-size: 0.625rem !important; /* 10px */
+  font-weight: 700 !important;
+  letter-spacing: 0.08em !important;
+  color: #64748b !important;
+  margin-top: 1.25rem !important;
+  margin-bottom: 0.5rem !important;
+}
+
+/* 💡 Cards & Containers - High-Visibility Glassmorphism KPI Stats Cards */
+.stats-card { 
+  background: linear-gradient(135deg, #121d33 0%, #0c1424 100%) !important; 
+  border: 1.5px solid rgba(71, 85, 105, 0.45) !important;
+  border-radius: 0.85rem !important;
+  box-shadow: 0 6px 20px -4px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.08) !important;
+  /* ── Compact fixed height so all pages look identical ── */
+  min-height: 82px !important;
+  padding: 0.85rem 1.1rem !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.85rem !important;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.stats-card:hover {
+  transform: translateY(-2px) !important;
+  border-color: rgba(99, 102, 241, 0.5) !important;
+  box-shadow: 0 10px 25px -4px rgba(0, 0, 0, 0.6), 0 0 15px rgba(99, 102, 241, 0.15), inset 0 1px 0 0 rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Icon box — fixed size, glowing container */
+.stats-card > div:first-child {
+  flex-shrink: 0 !important;
+  width: 2.85rem !important;
+  height: 2.85rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 0.65rem !important;
+  box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.05), 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+.stats-card > div:first-child i {
+  font-size: 1.15rem !important;
+}
+
+/* Text area — fills remaining space, min-width 0 to allow shrink */
+.stats-card > div:last-child {
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Label — single line, small */
+.stats-card > div:last-child p {
+  font-size: 0.6rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.07em !important;
+  text-transform: uppercase !important;
+  color: #94a3b8 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  margin-bottom: 0.2rem !important;
+  line-height: 1.2 !important;
+}
+
+/* Amount / Value — auto-scale font, no wrap, nowrap MMK */
+.stats-card > div:last-child h3 {
+  font-size: clamp(0.85rem, 1.6vw, 1.1rem) !important;
+  font-weight: 800 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  line-height: 1.25 !important;
+  margin-top: 0 !important;
+  font-variant-numeric: lining-nums tabular-nums !important;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace !important;
+  letter-spacing: -0.01em !important;
+}
+.table-container { 
+  border-radius: 0.75rem; 
+  border: 1px solid rgba(30, 41, 59, 0.35) !important; 
+}
+
+/* 💡 Soften Harsh White Borders for Containers & Pagination Trays */
+div.border-slate-800, 
+div.border-slate-700,
+div.border-slate-850 {
+  border-color: rgba(51, 65, 85, 0.45) !important;
+}
+
+/* 💡 Header Height & Horizontal Border Line Alignment Fix */
+aside > div:first-child,
+header,
+#app-header,
+div#erp-workspace header {
+  height: 64px !important;
+  border-bottom: 1px solid rgba(30, 41, 59, 0.35) !important;
+}
+
+/* 💡 Table Styling & Softened Eye-Comfort Contrast */
+table thead th {
+  position: sticky; 
+  top: 0; 
+  z-index: 20;
+  background-color: #0c1322 !important;
+  padding: 12px 16px; 
+  font-size: 0.725rem !important;
+  text-transform: uppercase; 
+  letter-spacing: 0.05em; 
+  color: #94a3b8 !important;
+  border-bottom: 1px solid rgba(30, 41, 59, 0.4) !important;
+}
+table tbody td {
+  padding: 10px 16px; 
+  border-bottom: 1px solid rgba(30, 41, 59, 0.25) !important;
+  font-size: 0.8rem !important; 
+  white-space: nowrap !important;
+  color: #cbd5e1 !important;
+}
+table tbody tr:hover { 
+  background-color: rgba(30, 41, 59, 0.2) !important; 
+}
+
+/* 💡 FIX STICKY ACTION COLUMN OPAQUE BACKGROUND (PREVENTS SCROLL OVERLAP BLEED) */
+table th.sticky,
+table td.sticky,
+th.right-0,
+td.right-0 {
+  position: sticky !important;
+  right: 0 !important;
+  background-color: #0c1322 !important;
+  opacity: 1 !important;
+  z-index: 25 !important;
+  border-left: 1px solid rgba(30, 41, 59, 0.5) !important;
+}
+
+/* 💡 Soften Stark Pure White Text Globally for Eye Comfort */
+.text-white {
+  color: #f1f5f9 !important;
+}
+
+/* 💡 DEBIT, CREDIT & BALANCE COLUMN COLOR HIGHLIGHTS */
+.text-emerald-400,
+td.text-emerald-400,
+span.text-emerald-400 {
+  color: #34d399 !important; /* Emerald Green for Debit / Income */
+}
+
+.text-rose-400,
+td.text-rose-400,
+span.text-rose-400 {
+  color: #f87171 !important; /* Rose Red for Credit / Expense / Liabilities */
+}
+
+.text-indigo-400,
+td.text-indigo-400,
+span.text-indigo-400 {
+  color: #818cf8 !important; /* Indigo Blue for Balances */
+}
+
+.text-teal-400,
+td.text-teal-400,
+span.text-teal-400 {
+  color: #2dd4bf !important; /* Teal for Fund */
+}
+
+/* 💡 ACTION DELETE BUTTON RED HIGHLIGHT */
+button[onclick*="delete"] i,
+button[onclick*="Delete"] i,
+.btn-delete i,
+.action-delete i {
+  color: #f87171 !important;
+  transition: transform 0.15s ease-in-out;
+}
+button[onclick*="delete"]:hover i,
+button[onclick*="Delete"]:hover i,
+.btn-delete:hover i {
+  color: #ef4444 !important;
+  transform: scale(1.15);
+}
+
+/* 💡 GLOBAL MODAL OPAQUE BACKGROUND FIX - PREVENTS BACKGROUND TABLE BLEED */
+#bck-modal > div,
+#office-modal > div,
+#income-modal > div,
+#student-modal > div,
+#staff-modal > div,
+#promo-modal > div,
+#uniform-modal > div,
+#cashier-modal > div,
+#grade-modal > div,
+div[id$="-modal"] > div {
+  background-color: #0c1322 !important;
+  opacity: 1 !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85) !important;
+  border: 1px solid rgba(30, 41, 59, 0.5) !important;
+}
+
+.backdrop-blur-sm,
+div[id$="-modal"].fixed.inset-0 {
+  background-color: rgba(9, 13, 22, 0.85) !important;
+}
+
+/* =============================================================
+   💡 ENTERPRISE FORM FIELD SYSTEM — Professional Modal Inputs
+   Clear field boundaries, strong labels, pro focus states
+   ============================================================= */
+
+/* Base inputs inside modals */
+div[id$="-modal"] input,
+div[id$="-modal"] select,
+div[id$="-modal"] textarea {
+  display: block !important;
+  width: 100% !important;
+  background-color: #080e1c !important;          /* Deeper inset feel */
+  border: 1.5px solid rgba(71, 85, 105, 0.55) !important;  /* Clearly visible border */
+  border-radius: 8px !important;
+  color: #e2e8f0 !important;
+  font-size: 0.8125rem !important;
+  padding: 0.6rem 0.875rem !important;
+  min-height: 2.5rem !important;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.15s ease !important;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.35) !important;  /* Inset depth */
+  letter-spacing: 0.01em !important;
+}
+
+/* Select arrow color fix */
+div[id$="-modal"] select {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e") !important;
+  background-position: right 0.65rem center !important;
+  background-repeat: no-repeat !important;
+  background-size: 1.1em !important;
+  padding-right: 2.25rem !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+}
+
+/* Textarea */
+div[id$="-modal"] textarea {
+  min-height: 4.5rem !important;
+  resize: vertical !important;
+  line-height: 1.55 !important;
+}
+
+/* Number / Amount inputs — slightly brighter */
+div[id$="-modal"] input[type="number"] {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace !important;
+  font-variant-numeric: lining-nums tabular-nums !important;
+  font-size: 0.875rem !important;
+  letter-spacing: 0.04em !important;
+  color: #a5f3fc !important;  /* Soft cyan for amount fields */
+  border-color: rgba(56, 189, 248, 0.25) !important;
+}
+
+/* Date inputs */
+div[id$="-modal"] input[type="date"] {
+  color-scheme: dark !important;
+  cursor: pointer !important;
+  font-size: 0.8125rem !important;
+}
+
+/* ─── Focus State ──────────────────────────── */
+div[id$="-modal"] input:focus,
+div[id$="-modal"] select:focus,
+div[id$="-modal"] textarea:focus {
+  border-color: #6366f1 !important;
+  background-color: #0a1128 !important;
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.18), inset 0 2px 6px rgba(0,0,0,0.4) !important;
+  outline: none !important;
+}
+
+div[id$="-modal"] input[type="number"]:focus {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 3px rgba(56,189,248,0.15), inset 0 2px 6px rgba(0,0,0,0.4) !important;
+}
+
+/* ─── Placeholder ──────────────────────────── */
+div[id$="-modal"] input::placeholder,
+div[id$="-modal"] textarea::placeholder {
+  color: #3d4f6b !important;
+  font-style: italic !important;
+  opacity: 1 !important;
+}
+
+/* ─── Modal Form Labels ─────────────────────── */
+div[id$="-modal"] label {
+  display: block !important;
+  font-size: 0.6875rem !important;     /* 11px */
+  font-weight: 700 !important;
+  letter-spacing: 0.07em !important;
+  text-transform: uppercase !important;
+  color: #64748b !important;
+  margin-bottom: 0.35rem !important;
+}
+
+/* ─── Field Group Spacing ───────────────────── */
+div[id$="-modal"] .grid > div,
+div[id$="-modal"] .space-y-4 > div,
+div[id$="-modal"] .space-y-3 > div {
+  position: relative !important;
+}
+
+/* ─── Hover State (pre-focus affordance) ─────── */
+div[id$="-modal"] input:not(:focus):hover,
+div[id$="-modal"] select:not(:focus):hover,
+div[id$="-modal"] textarea:not(:focus):hover {
+  border-color: rgba(99, 102, 241, 0.4) !important;
+  background-color: #090f1e !important;
+}
+
+/* ─── Global plain page inputs (search bars, date range, etc.) ─ */
+input, select, textarea {
+  background-color: #0b1120 !important;
+  border: 1.5px solid rgba(51, 65, 85, 0.6) !important;
+  color: #e2e8f0 !important;
+  font-size: 0.75rem !important;
+  font-variant-numeric: lining-nums tabular-nums !important;
+  border-radius: 6px !important;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: #6366f1 !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(99,102,241,0.18) !important;
+}
+textarea::placeholder, input::placeholder {
+  color: #3d4f6b !important;
+  opacity: 1 !important;
+}
+
+/* 💡 Force Monospace English Digits on all Number Fields */
+input[type="number"], input.font-mono, td.font-mono, span.font-mono, .font-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+  font-variant-numeric: lining-nums tabular-nums !important;
+}
+
+/* 💡 View Panel Animation */
+.view-panel { 
+  animation: fadeIn 0.2s ease-out; 
+}
+@keyframes fadeIn { 
+  from { opacity: 0; transform: translateY(4px); } 
+  to { opacity: 1; transform: translateY(0); } 
+}
+
+/* 💡 Search Box Width Responsive Rule */
+@media (min-width: 768px) {
+  .search-container .relative.w-full,
+  div[class*="border-slate-800"] > .relative.w-full {
+    max-width: 500px !important;
+  }
+}
+
+/* 💡 PERMISSION CONTROL - HIDE DELETE BUTTONS WHEN CAN_DELETE IS FALSE */
+body.hide-delete-btn .btn-delete,
+body.hide-delete-btn .action-delete,
+body.hide-delete-btn button[onclick*="delete"],
+body.hide-delete-btn button[onclick*="Delete"],
+body.hide-delete-btn button[title*="Delete"],
+body.hide-delete-btn button[title*="delete"],
+body.hide-delete-btn a[onclick*="delete"] {
+  display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+/* 💡 GLOBAL PRINT STYLING - Default Hidden on Screen */
+#invoice-print-area, #payslip-print-area {
+  display: none !important;
+}
+
+/* 💡 A4 DUAL-COPY PRINT ENGINE */
+@media print {
+  body > *:not(.active-print) {
+    display: none !important;
+  }
+
+  #invoice-print-area.active-print,
+  #payslip-print-area.active-print {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100vh !important;
+    background-color: white !important;
+    color: black !important;
+    padding: 10px !important;
+    z-index: 999999 !important;
+    visibility: visible !important;
+    font-family: sans-serif !important;
+  }
+
+  .invoice-section, .payslip-section {
+    height: 46vh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    border: 1px solid black !important;
+    padding: 12px !important;
+    border-radius: 6px !important;
+  }
+
+  .invoice-divider, .payslip-divider {
+    height: 4vh !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 10px !important;
+    color: #475569 !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  table th, table td {
+    padding: 4px 6px !important;
+    font-size: 10px !important;
+    border: 1px solid black !important;
+    color: black !important;
+    background-color: transparent !important;
+  }
+}

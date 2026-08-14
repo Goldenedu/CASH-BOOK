@@ -1,0 +1,115 @@
+<!-- views/settings.html --> 
+<div class="space-y-5 max-w-7xl mx-auto">
+
+  <!-- 💡 1. Setting Panel Header Banner -->
+  <div class="p-4 rounded-xl shadow-lg flex items-center justify-between gap-3 bg-[#0c1322] border border-indigo-500/30">
+    <div class="flex items-center gap-3">
+      <div class="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">
+        <i class="fa-solid fa-gears text-base"></i>
+      </div>
+      <div>
+        <h2 class="text-xs font-black tracking-wide uppercase text-indigo-300">System Control Center</h2>
+        <p class="text-[10px] mt-0.5 leading-relaxed text-slate-400">ERP စနစ်၏ ဘဏ်/လက်ငင်းငွေစာရင်း ထိန်းချုပ်မှုများ၊ ဓမ္မသတိပေးစာနှင့် အချက်အလက်များ အရန်သင့် သိမ်းဆည်းခြင်း စင်တာ ဖြစ်ပါသည်။</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Main Grid Layout (Row 1: Balances Control & Mindfulness Quote with Rich Color Styling) -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+    <!-- 💡 ROW 1 - LEFT: BALANCES CONTROL -->
+    <div class="p-5 rounded-xl shadow-xl flex flex-col space-y-3 h-full bg-[#0c1322] border border-slate-800">
+      <div class="flex justify-between items-center pb-2.5 border-b border-slate-800">
+        <h3 class="text-xs font-black uppercase tracking-wider flex items-center gap-2 text-sky-400">
+          <i class="fa-solid fa-scale-balanced text-sm"></i> Balances Control (Real-Time Comparison)
+        </h3>
+        <button onclick="loadSettingsData(true)" class="p-1.5 rounded-md text-[10px] font-bold transition-all bg-slate-800 border border-slate-700 text-slate-300 hover:text-white" title="Refresh Balances">
+          <i class="fa-solid fa-rotate text-xs"></i>
+        </button>
+      </div>
+
+      <div class="overflow-x-auto table-container flex-grow">
+        <table class="w-full text-left border-collapse text-xs min-w-[380px]">
+          <thead>
+            <tr class="text-slate-400 font-bold uppercase text-[10px] bg-[#0e172a] border-b border-slate-800">
+              <th class="py-2.5 px-3">Book Name</th>
+              <th class="py-2.5 px-3 text-right">Accountant</th>
+              <th class="py-2.5 px-3 text-right">Cashier</th>
+              <th class="py-2.5 px-3 text-right">Control</th>
+            </tr>
+          </thead>
+          <tbody id="settings-balances-table-body" class="divide-y divide-slate-800/30 text-slate-200">
+            <tr><td colspan="4" class="py-4 text-center italic text-slate-500">Balances Control အချက်အလက်များ ဖတ်ယူနေပါသည်...</td></tr>
+          </tbody>
+          <tfoot id="settings-balances-table-foot"></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- 💡 ROW 1 - RIGHT: ALWAYS BE MINDFUL (Bigger Text & Spacious Line Spacing) -->
+    <div class="p-5 rounded-xl shadow-xl flex flex-col space-y-3 relative overflow-hidden h-full justify-between"
+      style="background: linear-gradient(145deg, #0c1322 0%, #18192d 50%, #1c1508 100%); border: 1px solid rgba(245, 158, 11, 0.35);">
+      <div>
+        <div class="flex items-center gap-2.5 pb-2.5" style="border-bottom: 1px solid rgba(245, 158, 11, 0.2);">
+          <div class="p-2.5 rounded-lg" style="background-color: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); color: #fbbf24;">
+            <i class="fa-solid fa-dharmachakra text-base"></i>
+          </div>
+          <div>
+            <h3 class="text-xs font-black uppercase tracking-widest" style="color: #fbbf24;">Always Be Mindful</h3>
+            <p class="text-[10px] uppercase tracking-wider font-semibold" style="color: #f59e0b;">Mindfulness in Action</p>
+          </div>
+        </div>
+
+        <!-- Quote Box with Bigger Text (text-sm / 14px) and Spacious Line Spacing (space-y-2.5) -->
+        <div class="p-4 rounded-xl space-y-2.5 font-serif italic text-xs sm:text-sm shadow-inner mt-3" style="background-color: rgba(9, 13, 22, 0.7); border: 1px solid rgba(245, 158, 11, 0.25);">
+          <p style="color: #fef08a;" class="leading-relaxed">In every sight, -- မင်း ဘာပဲမြင်မြင် ... </p>
+          <p style="color: #7dd3fc;" class="leading-relaxed">In every sound, -- မင်း ဘာပဲကြားကြား ... </p>
+          <p style="color: #6ee7b7;" class="leading-relaxed">In every smell, -- မင်း ဘယ်လို အနံ့ပဲရရ ...</p>
+          <p style="color: #fda4af;" class="leading-relaxed">In every taste, -- မင်း ဘာပဲစားစား ... </p>
+          <p style="color: #5eead4;" class="leading-relaxed">In every touch, -- မင်း ဘာနဲ့ပဲ ထိတွေ့ရပါစေ ... </p>
+          <p style="color: #fbbf24; border-top: 1px solid rgba(245, 158, 11, 0.25);" class="font-extrabold not-italic pt-2 text-xs sm:text-sm leading-relaxed">In every thought -- မင်း ဘာပဲ တွေးတွေး... —stay mindful. -- အမြဲသတိ ထားပါလေ ...</p>
+        </div>
+      </div>
+
+      <div class="pt-2.5 flex justify-between items-center text-xs" style="border-top: 1px solid rgba(245, 158, 11, 0.2);">
+        <span class="font-black" style="color: #fbbf24;">Appamadena sampadetha <span class="font-sans font-normal italic text-[10px]" style="color: #f59e0b;">— The Buddha</span></span>
+        <span class="text-[9px] font-black px-3 py-1 rounded-full font-sans uppercase" style="background-color: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);">ERP Wisdom</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 💡 ROW 2 (FULL WIDTH): CONSOLIDATED FY DATA EXPORT & BACKUP CENTER (Beautiful Spacious Grid Layout) -->
+  <div class="bg-[#0c1322] border border-slate-800 p-5 rounded-2xl shadow-xl space-y-4">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-3 gap-2">
+      <div>
+        <h3 class="text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+          <i class="fa-solid fa-file-csv text-base"></i> FY Data Export & Backup Center
+        </h3>
+        <p class="text-[10px] text-slate-400 mt-0.5">D1 Database ထဲမှ စာရင်းအုပ်များကို FY အလိုက် Real CSV ဖိုင် ဒေါင်းလုဒ်ဆွဲခြင်း နှင့် အီးမေးလ် ပေးပို့ခြင်း စင်တာ</p>
+      </div>
+      <span class="text-[10px] font-bold text-emerald-300 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+        <i class="fa-solid fa-database mr-1"></i> Dynamic FY Auto-Populated
+      </span>
+    </div>
+
+    <!-- Export Table with Full Width & No Cutting Off -->
+    <div class="overflow-x-auto table-container">
+      <table class="w-full text-left border-collapse text-xs min-w-[750px]">
+        <thead>
+          <tr class="bg-[#0e172a] text-slate-400 font-bold uppercase text-[10px] border-b border-slate-800">
+            <th class="py-3 px-4 w-12 text-center">NO</th>
+            <th class="py-3 px-4 min-w-[300px]">Ledger / Book Group Name</th>
+            <th class="py-3 px-4 w-40">Category Group</th>
+            <th class="py-3 px-4 w-44 text-center">Select FY</th>
+            <th class="py-3 px-4 w-64 text-center">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="settings-export-table-body" class="divide-y divide-slate-800/40 text-slate-200">
+          <!-- Dynamic 2 Rows via js/settings.js -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>

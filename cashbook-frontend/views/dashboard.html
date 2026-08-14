@@ -1,0 +1,233 @@
+<!-- views/dashboard.html --> 
+<div class="space-y-5">
+
+  <!-- ၁။ Top KPI Cards Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <!-- Total Income -->
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400">
+        <i class="fa-solid fa-arrow-trend-up text-xl"></i>
+      </div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Total Income</p>
+        <h3 id="db-total-income" class="text-base font-extrabold text-emerald-400 mt-1">0 MMK</h3>
+      </div>
+    </div>
+
+    <!-- Total Expense -->
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-rose-500/10 text-rose-400">
+        <i class="fa-solid fa-arrow-trend-down text-xl"></i>
+      </div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Total Expense</p>
+        <h3 id="db-total-expense" class="text-base font-extrabold text-rose-400 mt-1">0 MMK</h3>
+      </div>
+    </div>
+
+    <!-- Net Profit -->
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-indigo-500/10 text-indigo-400">
+        <i class="fa-solid fa-scale-balanced text-xl"></i>
+      </div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Net Profit</p>
+        <h3 id="db-net-profit" class="text-base font-extrabold text-white mt-1">0 MMK</h3>
+      </div>
+    </div>
+
+    <!-- Active Force / Total Entries -->
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-sky-500/10 text-sky-400">
+        <i class="fa-solid fa-users text-xl"></i>
+      </div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Total Active Force</p>
+        <h3 id="db-total-entries" class="text-base font-extrabold text-white mt-1">0</h3>
+      </div>
+    </div>
+  </div>
+
+  <!-- ၂။ Row 2: Daily Balances & Liabilities -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+    <!-- (က) Daily Balances -->
+    <div class="bg-[#0c1322] border border-slate-800 p-5 rounded-2xl shadow-xl space-y-4">
+      <h3 class="text-xs font-black text-indigo-400 tracking-wider flex items-center gap-2 uppercase">
+        <i class="fa-solid fa-wallet text-sm"></i> (၁) Daily Balances (စာအုပ်အလိုက် လက်ရှိလက်ကျန်ငွေ)
+      </h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="border-b border-slate-800 text-slate-500">
+              <th class="py-2.5 px-3 font-bold uppercase">Cash/Bank Book Name</th>
+              <th class="py-2.5 px-3 text-right font-bold uppercase">Current Balances</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/40 text-slate-300">
+            <tr>
+              <td class="py-2.5 px-3 font-medium">1. Bank Book (ဘဏ်စာအုပ်)</td>
+              <td id="db-bal-bank" class="py-2.5 px-3 text-right font-bold text-slate-200">0 MMK</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 px-3 font-medium">2. Cash Book (လက်ငင်းငွေသားစာအုပ်)</td>
+              <td id="db-bal-cash" class="py-2.5 px-3 text-right font-bold text-slate-200">0 MMK</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 px-3 font-medium">3. Office Exp Book (ရုံးတွင်းအသုံးစရိတ်)</td>
+              <td id="db-bal-office" class="py-2.5 px-3 text-right font-bold text-slate-200">0 MMK</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 px-3 font-medium">4. Kitchen Exp Book (မီးဖိုချောင်အသုံးစရိတ်)</td>
+              <td id="db-bal-kitchen" class="py-2.5 px-3 text-right font-bold text-slate-200">0 MMK</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 px-3 font-medium">5. HR Payroll Exp Book (ဝန်ထမ်းလစာအသုံးစရိတ်)</td>
+              <td id="db-bal-payroll" class="py-2.5 px-3 text-right font-bold text-slate-200">0 MMK</td>
+            </tr>
+            <tr class="bg-indigo-500/5 font-black text-indigo-400 border-t border-indigo-500/20">
+              <td class="py-3 px-3 text-xs uppercase tracking-wider">Total Balances (စုစုပေါင်းလက်ကျန်ငွေ)</td>
+              <td id="db-bal-total" class="py-3 px-3 text-right text-xs">0 MMK</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- (ခ) Liabilities -->
+    <div class="bg-[#0c1322] border border-slate-800 p-5 rounded-2xl shadow-xl space-y-4">
+      <h3 class="text-xs font-black text-rose-400 tracking-wider flex items-center gap-2 uppercase">
+        <i class="fa-solid fa-hand-holding-dollar text-sm"></i> (၂) Liabilities (ပေးရန်ကြွေးမြီ စာရင်းများ)
+      </h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="border-b border-slate-800 text-slate-500">
+              <th class="py-2.5 px-3 font-bold uppercase">Debt Classification</th>
+              <th class="py-2.5 px-3 text-right font-bold uppercase">Outstanding Amount</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/40 text-slate-300">
+            <tr>
+              <td class="py-2.5 px-3 font-medium">1. Bank Loan (ဘဏ်ချေးငွေပေးရန်ကျန်)</td>
+              <td id="db-lia-bank" class="py-2.5 px-3 text-right font-bold text-rose-400">0 MMK</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 px-3 font-medium">2. Cash Loan (ပြင်ပချေးငွေပေးရန်ကျန်)</td>
+              <td id="db-lia-cash" class="py-2.5 px-3 text-right font-bold text-rose-400">0 MMK</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 px-3 font-medium">3. Office Liabilities (ကုန်ပစ္စည်းဝယ်ယူရန် ပေးရန်ကျန်)</td>
+              <td id="db-lia-office" class="py-2.5 px-3 text-right font-bold text-rose-400">0 MMK</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 px-3 font-medium">4. HR Unpaid Bonus (ပေးရန်ကျန် ဝန်ထမ်းအပိုဆုကြေး)</td>
+              <td id="db-lia-bonus" class="py-2.5 px-3 text-right font-bold text-rose-400">0 MMK</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 px-3 font-medium">5. HR Unpaid Fund (ပေးရန်ကျန် ဝန်ထမ်းအရန်ရန်ပုံငွေ)</td>
+              <td id="db-lia-fund" class="py-2.5 px-3 text-right font-bold text-rose-400">0 MMK</td>
+            </tr>
+            <tr class="bg-rose-500/5 font-black text-rose-400 border-t border-rose-500/20">
+              <td class="py-3 px-3 text-xs uppercase tracking-wider">Total Liabilities (စုစုပေါင်းပေးရန်ကြွေး)</td>
+              <td id="db-lia-total" class="py-3 px-3 text-right text-xs">0 MMK</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ၃။ Row 3: Receivables & Active Demographics -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+    <!-- (က) Receivables -->
+    <div class="bg-[#0c1322] border border-slate-800 p-5 rounded-2xl shadow-xl space-y-4">
+      <h3 class="text-xs font-black text-emerald-400 tracking-wider flex items-center gap-2 uppercase">
+        <i class="fa-solid fa-file-invoice text-sm"></i> (၃) Receivables (ရရန်ကြွေးမြီ/ကြိုတင်ပေး စာရင်းများ)
+      </h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="border-b border-slate-800 text-slate-500">
+              <th class="py-2.5 px-3 font-bold uppercase">Asset / Advance Type</th>
+              <th class="py-2.5 px-3 text-right font-bold uppercase">Outstanding Amount</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/40 text-slate-300">
+            <tr>
+              <td class="py-2.5 px-3 font-medium">1. Advance Snack Shop (မုန့်ဆိုင်ကြိုတင်ငွေ)</td>
+              <td id="db-rec-snack" class="py-2.5 px-3 text-right font-bold text-emerald-400">0 MMK</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 px-3 font-medium">2. Advance Uniform (ယူနီဖောင်းစရံကြိုတင်ငွေ)</td>
+              <td id="db-rec-uniform" class="py-2.5 px-3 text-right font-bold text-emerald-400">0 MMK</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 px-3 font-medium">3. Others Advance (အထွေထွေ ကြိုတင်ထုတ်ပေးငွေ)</td>
+              <td id="db-rec-other" class="py-2.5 px-3 text-right font-bold text-emerald-400">0 MMK</td>
+            </tr>
+            <tr class="bg-emerald-500/5 font-black text-emerald-400 border-t border-emerald-500/20">
+              <td class="py-3 px-3 text-xs uppercase tracking-wider">Total Receivables (စုစုပေါင်းရရန်ကြွေး)</td>
+              <td id="db-rec-total" class="py-3 px-3 text-right text-xs">0 MMK</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- (ခ) Active Demographic Info (100% Perfectly Aligned Columns) -->
+    <div class="bg-[#0c1322] border border-slate-800 p-5 rounded-2xl shadow-xl space-y-4">
+      <h3 class="text-xs font-black text-sky-400 tracking-wider flex items-center gap-2 uppercase">
+        <i class="fa-solid fa-users text-sm"></i> (၄) Active Demographic Info (ကျောင်းသား / ဝန်ထမ်း အင်အားစာရင်း)
+      </h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="border-b border-slate-800 text-slate-500">
+              <th class="py-2.5 px-3 font-bold uppercase">Active Category</th>
+              <th class="py-2.5 px-3 text-center font-bold uppercase">Male</th>
+              <th class="py-2.5 px-3 text-center font-bold uppercase">Female</th>
+              <th class="py-2.5 px-3 text-right font-bold uppercase">Total Active</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/40 text-slate-300">
+            <tr>
+              <td class="py-2.5 px-3 font-medium">1. Active Students (ကျောင်းသား)</td>
+              <td id="db-stu-male" class="py-2.5 px-3 text-center font-bold text-slate-300">0</td>
+              <td id="db-stu-female" class="py-2.5 px-3 text-center font-bold text-slate-300">0</td>
+              <td id="db-stu-total" class="py-2.5 px-3 text-right font-black text-sky-400">0</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 px-3 font-medium">2. Active Staff (Full Time ဝန်ထမ်း)</td>
+              <td id="db-ft-male" class="py-2.5 px-3 text-center font-bold text-slate-300">0</td>
+              <td id="db-ft-female" class="py-2.5 px-3 text-center font-bold text-slate-300">0</td>
+              <td id="db-ft-total" class="py-2.5 px-3 text-right font-black text-sky-400">0</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 px-3 font-medium">3. Active Staff (Part Time ဝန်ထမ်း)</td>
+              <td id="db-pt-male" class="py-2.5 px-3 text-center font-bold text-slate-300">0</td>
+              <td id="db-pt-female" class="py-2.5 px-3 text-center font-bold text-slate-300">0</td>
+              <td id="db-pt-total" class="py-2.5 px-3 text-right font-black text-sky-400">0</td>
+            </tr>
+            <tr class="bg-sky-500/5 font-black text-sky-400 border-t border-sky-500/20">
+              <td class="py-3 px-3 uppercase tracking-wider">Total (စုစုပေါင်းအင်အား)</td>
+              <td id="db-demo-tot-male" class="py-3 px-3 text-center">0</td>
+              <td id="db-demo-tot-female" class="py-3 px-3 text-center">0</td>
+              <td id="db-demo-tot-all" class="py-3 px-3 text-right font-black text-xs">0</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ၄။ Refresh Action Bar -->
+  <div class="flex justify-end items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl">
+    <button onclick="loadDashboardData(false, true)"
+      class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-2 shadow-lg shadow-indigo-600/10 transition-all">
+      <i class="fa-solid fa-rotate text-xs"></i> Refresh Live Dashboard Data
+    </button>
+  </div>
+
+</div>

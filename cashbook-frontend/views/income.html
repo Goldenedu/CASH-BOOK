@@ -1,0 +1,221 @@
+<!-- views/income.html -->
+<div class="space-y-5">
+
+  <!-- ၁။ Top KPI Cards Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400"><i class="fa-solid fa-arrow-trend-up text-xl"></i></div>
+      <div><p class="text-[10px] uppercase font-bold text-slate-500">Total Income</p><h3 id="inc-total-income" class="text-base font-extrabold text-white mt-1">0 MMK</h3></div>
+    </div>
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-rose-500/10 text-rose-400"><i class="fa-solid fa-arrow-trend-down text-xl"></i></div>
+      <div><p class="text-[10px] uppercase font-bold text-slate-500">Total Expense</p><h3 id="inc-total-expense" class="text-base font-extrabold text-white mt-1">0 MMK</h3></div>
+    </div>
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-indigo-500/10 text-indigo-400"><i class="fa-solid fa-scale-balanced text-xl"></i></div>
+      <div><p class="text-[10px] uppercase font-bold text-slate-500">Balances</p><h3 id="inc-balance" class="text-base font-extrabold text-white mt-1">0 MMK</h3></div>
+    </div>
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-sky-500/10 text-sky-400"><i class="fa-solid fa-list-check text-xl"></i></div>
+      <div><p class="text-[10px] uppercase font-bold text-slate-500">Total Entries</p><h3 id="inc-entries-count" class="text-base font-extrabold text-white mt-1">0</h3></div>
+    </div>
+  </div>
+
+  <!-- ၂။ Search & Action Controls Bar -->
+  <div class="flex flex-col lg:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
+    <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
+      <div class="relative w-full sm:w-64">
+        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
+        <input type="text" id="income-search" oninput="onSearchInputIncome()" placeholder="Search student name, FYID, student ID..." class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white focus:outline-none focus:border-indigo-500 transition-all">
+      </div>
+
+      <!-- 💡 DATE RANGE FILTER CONTROLS -->
+      <div class="flex items-center gap-1.5 w-full sm:w-auto bg-[#0f172a] border border-slate-800 p-1 rounded-lg text-xs">
+        <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">From:</span>
+        <input type="date" id="income-date-from" onchange="onSearchInputIncome()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
+        <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">To:</span>
+        <input type="date" id="income-date-to" onchange="onSearchInputIncome()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
+        <button onclick="clearDateFilterIncome()" class="p-1 text-slate-400 hover:text-rose-400 transition" title="Clear Date Filter"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2.5 w-full lg:w-auto justify-end">
+      <button onclick="loadIncomeData(false)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all" title="Refresh Data"><i class="fa-solid fa-rotate text-xs"></i> Refresh</button>
+      <button onclick="exportToCSVIncome()" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all"><i class="fa-solid fa-file-export text-xs"></i> Export CSV</button>
+      <button onclick="openAddModalIncome()" class="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/10 transition-all"><i class="fa-solid fa-plus text-xs"></i> Add Income Entry</button>
+    </div>
+  </div>
+
+  <!-- ၃။ 19-Column Table Grid -->
+  <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
+    <table class="w-full text-left border-collapse min-w-[1900px]">
+      <thead>
+        <tr class="bg-[#0e172a]">
+          <th scope="col" class="w-12 text-center text-slate-400 text-xs py-3">NO</th>
+          <th scope="col" class="w-28 text-slate-400 text-xs py-3">EFFECT DATE</th>
+          <th scope="col" class="w-28 text-slate-400 text-xs py-3">DATE</th>
+          <th scope="col" class="w-24 text-slate-400 text-xs py-3">FY</th>
+          <th scope="col" class="w-24 text-slate-400 text-xs py-3">ID</th>
+          <th scope="col" class="w-32 text-slate-400 text-xs py-3">FYID</th>
+          <th scope="col" class="min-w-[200px] text-slate-400 text-xs py-3">FYID NAME</th>
+          <th scope="col" class="w-32 text-slate-400 text-xs py-3">CLASS</th>
+          <th scope="col" class="w-32 text-slate-400 text-xs py-3">CATEGORY</th>
+          <th scope="col" class="w-36 text-slate-400 text-xs py-3">ACCOUNT NAME</th>
+          <th scope="col" class="w-24 text-slate-400 text-xs py-3">METHOD</th>
+          <th scope="col" class="w-32 text-right text-rose-400 text-xs py-3">DEBIT (ပြန်အမ်း)</th>
+          <th scope="col" class="w-32 text-right text-emerald-400 text-xs py-3">CREDIT (ဝင်ငွေ)</th>
+          <th scope="col" class="w-32 text-right text-indigo-400 text-xs py-3">AUT AMOUNT</th>
+          <th scope="col" class="w-24 text-slate-400 text-xs py-3">PROMO</th>
+          <th scope="col" class="w-24 text-slate-400 text-xs py-3">MY</th>
+          <th scope="col" class="w-36 text-slate-400 text-xs py-3">VR NO</th>
+          <th scope="col" class="min-w-[150px] text-slate-400 text-xs py-3">REMARK</th>
+          <th scope="col" class="w-32 text-center text-slate-400 text-xs py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">ACTION</th>
+        </tr>
+      </thead>
+      <tbody id="income-table-body" class="divide-y divide-slate-800/40 text-slate-300">
+        <!-- Dynamic Rows generated by js/income.js -->
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ၄။ Pagination Tray -->
+  <div class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
+    <div id="inc-pagination-info" class="text-xs font-semibold text-slate-400 tracking-wide">Showing entries...</div>
+    <div class="flex items-center gap-2">
+      <button onclick="changePageIncome(-1)" id="inc-btn-prev" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all text-xs"><i class="fa-solid fa-chevron-left text-[10px]"></i> Previous</button>
+      <button onclick="changePageIncome(1)" id="inc-btn-next" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all text-xs">Next <i class="fa-solid fa-chevron-right text-[10px]"></i></button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ၅။ ADD / EDIT INCOME ENTRY MODAL -->
+<div id="income-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+    <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
+      <h3 id="inc-form-title" class="text-sm font-black text-white uppercase tracking-wider">Add Income Entry</h3>
+      <button onclick="closeIncomeModal()" class="text-slate-500 hover:text-white transition"><i class="fa-solid fa-xmark text-sm"></i></button>
+    </div>
+
+    <form id="income-form" onsubmit="saveIncomeForm(event)" class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+      <input type="hidden" id="inc-uniqueId">
+
+      <div class="grid grid-cols-3 gap-4">
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Select FY</label>
+          <select id="inc-fy" onchange="onStudentIdOrFYChangeIncome()" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500 font-bold"></select>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Student ID</label>
+          <input type="number" id="inc-id-search" lang="en" oninput="onStudentIdOrFYChangeIncome()" required placeholder="e.g. 1" class="w-full font-bold text-slate-100 font-mono bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Date</label>
+          <input type="date" id="inc-date" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Generated FYID</label>
+          <input type="text" id="inc-fyid-show" readonly placeholder="Auto-generated..." class="w-full bg-slate-950/40 text-indigo-400 border border-slate-800 cursor-not-allowed font-bold font-mono rounded-lg p-2.5">
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Student Name</label>
+          <input type="text" id="inc-fyidname-show" readonly placeholder="Auto-detecting..." class="w-full bg-slate-950/40 text-slate-300 border border-slate-800 cursor-not-allowed font-bold rounded-lg p-2.5">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Effect Date</label>
+          <input type="date" id="inc-effdate" class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Class</label>
+          <input type="text" id="inc-class" readonly class="w-full bg-slate-950/40 text-slate-400 border border-slate-800 cursor-not-allowed font-bold rounded-lg p-2.5">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Category</label>
+          <select id="inc-category" onchange="onAccountNameOrCategoryChangeIncome()" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+            <option value="Boarder">Boarder</option>
+            <option value="Semi Boarder">Semi Boarder</option>
+            <option value="Day Student">Day Student</option>
+            <option value="Others">Others</option>
+          </select>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Promo Plan</label>
+          <input type="text" id="inc-promo" readonly class="w-full bg-slate-950/40 text-slate-400 border border-slate-800 cursor-not-allowed font-bold rounded-lg p-2.5">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Account Name</label>
+          <select id="inc-account" onchange="onAccountNameOrCategoryChangeIncome()" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+            <option value="Registration">Registration</option>
+            <option value="Services">Services</option>
+            <option value="Ferry">Ferry</option>
+            <option value="Night Study Fees">Night Study Fees</option>
+            <option value="Others">Others</option>
+          </select>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-indigo-400 uppercase tracking-wide">Standard AUT Amount</label>
+          <input type="number" id="inc-autamount" lang="en" readonly class="w-full bg-indigo-500/10 text-indigo-400 font-extrabold text-right font-mono border border-indigo-500/20 cursor-not-allowed rounded-lg p-2.5">
+        </div>
+      </div>
+
+      <!-- Split Payment Checkbox -->
+      <div class="flex items-center gap-2 py-2 px-3 bg-slate-900 border border-slate-800 rounded-lg">
+        <input type="checkbox" id="inc-is-split" onchange="toggleSplitPaymentIncome()" class="cursor-pointer h-4 w-4">
+        <label for="inc-is-split" class="text-xs font-bold text-slate-200 cursor-pointer">ခွဲပြီးပေးချေမည် (Cash + Bank ရောပေးမည်)</label>
+      </div>
+
+      <!-- Option 1: Normal Payment -->
+      <div class="grid grid-cols-3 gap-4" id="inc-normal-payment-div">
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Method</label>
+          <select id="inc-method" class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+            <option value="Cash">Cash</option>
+            <option value="Bank">Bank</option>
+          </select>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-rose-400 uppercase tracking-wide">Debit (ပြန်အမ်း)</label>
+          <input type="number" id="inc-debit" value="0" lang="en" class="w-full text-right text-rose-400 font-bold font-mono bg-[#0f172a] border border-slate-800 rounded-lg p-2.5">
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-emerald-400 uppercase tracking-wide">Credit (ပေးချေငွေ)</label>
+          <input type="number" id="inc-credit" value="0" lang="en" class="w-full text-right text-emerald-400 font-bold font-mono bg-[#0f172a] border border-slate-800 rounded-lg p-2.5">
+        </div>
+      </div>
+
+      <!-- Option 2: Split Payment -->
+      <div class="grid grid-cols-2 gap-4 hidden" id="inc-split-payment-div">
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-emerald-400 uppercase tracking-wide">Cash Paid Amount</label>
+          <input type="number" id="inc-cash-amount" value="0" lang="en" class="w-full text-right font-bold text-emerald-400 font-mono bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-2.5">
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-sky-400 uppercase tracking-wide">Bank Paid Amount</label>
+          <input type="number" id="inc-bank-amount" value="0" lang="en" class="w-full text-right font-bold text-sky-400 font-mono bg-sky-500/5 border border-sky-500/20 rounded-lg p-2.5">
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-1">
+        <label class="font-bold text-slate-400 uppercase tracking-wide">Remark (မှတ်ချက်)</label>
+        <textarea id="inc-remark" rows="2" placeholder="အသေးစိတ် မှတ်ချက်..." class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500"></textarea>
+      </div>
+
+      <div class="flex justify-end items-center gap-3 pt-4 border-t border-slate-800">
+        <button type="button" onclick="closeIncomeModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">Cancel</button>
+        <button type="submit" class="px-5 py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10 transition-all">Confirm</button>
+      </div>
+    </form>
+  </div>
+</div>

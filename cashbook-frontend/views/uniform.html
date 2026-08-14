@@ -1,0 +1,173 @@
+<!-- views/uniform.html -->
+<div class="space-y-5">
+
+  <!-- ၁။ Top KPI Stats Cards Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-teal-500/10 text-teal-400"><i class="fa-solid fa-shirt text-xl"></i></div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Selling Unit</p>
+        <h3 id="uni-selling-unit" class="text-base font-extrabold text-white mt-1">0</h3>
+      </div>
+    </div>
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400"><i class="fa-solid fa-boxes-stacked text-xl"></i></div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Current Qty</p>
+        <h3 id="uni-current-qty" class="text-base font-extrabold text-white mt-1">0</h3>
+      </div>
+    </div>
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-indigo-500/10 text-indigo-400"><i class="fa-solid fa-piggy-bank text-xl"></i></div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Total Stock Value</p>
+        <h3 id="uni-stock-value" class="text-base font-extrabold text-white mt-1">0 MMK</h3>
+      </div>
+    </div>
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-sky-500/10 text-sky-400"><i class="fa-solid fa-list-check text-xl"></i></div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Total Products</p>
+        <h3 id="uni-total-products" class="text-base font-extrabold text-white mt-1">0</h3>
+      </div>
+    </div>
+  </div>
+
+  <!-- ၂။ Control Search & Action Bar -->
+  <div class="flex flex-col md:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
+    <div class="relative w-full md:w-[500px]">
+      <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
+      <!-- 💡 UPDATED SEARCH PLACEHOLDER FOR STRICT CRITERIA (Product ID, Name, Type, Size) -->
+      <input type="text" id="uniform-search" oninput="onSearchInputUniform()" placeholder="Search product ID, name, type, size..." class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white focus:outline-none focus:border-indigo-500 transition-all">
+    </div>
+
+    <div class="flex items-center gap-2.5 w-full md:w-auto justify-end">
+      <button onclick="loadUniformData(false)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all" title="Refresh Data">
+        <i class="fa-solid fa-rotate text-xs"></i> Refresh
+      </button>
+
+      <button onclick="exportToCSVUniform()" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
+        <i class="fa-solid fa-file-export text-xs"></i> Export CSV
+      </button>
+
+      <button onclick="openAddModalUniform()" class="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/10 transition-all">
+        <i class="fa-solid fa-plus text-xs"></i> Add New Product
+      </button>
+    </div>
+  </div>
+
+  <!-- ၃။ 13-Column Uniform Inventory Table Grid -->
+  <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
+    <table class="w-full text-left border-collapse min-w-[1500px]">
+      <thead>
+        <tr class="bg-[#0e172a]">
+          <th scope="col" class="w-12 text-center text-slate-400 text-xs py-3">NO</th>
+          <th scope="col" class="w-28 text-slate-400 text-xs py-3">PRODUCT ID</th>
+          <th scope="col" class="min-w-[200px] text-slate-400 text-xs py-3">PRODUCT NAME</th>
+          <th scope="col" class="w-28 text-slate-400 text-xs py-3">TYPE</th>
+          <th scope="col" class="w-28 text-slate-400 text-xs py-3">SIZE</th>
+          <th scope="col" class="w-28 text-right text-slate-400 text-xs py-3">OPENING STOCK</th>
+          <th scope="col" class="w-32 text-right text-slate-400 text-xs py-3">UNIT PRICE</th>
+          <th scope="col" class="w-32 text-right text-slate-400 text-xs py-3">TOTAL AMOUNT</th>
+          <th scope="col" class="w-32 text-right text-slate-400 text-xs py-3">SELLING PRICE</th>
+          <th scope="col" class="w-32 text-right text-emerald-400 text-xs py-3">PROFIT AMOUNT</th>
+          <th scope="col" class="w-28 text-right text-teal-400 text-xs py-3">SELLING UNIT</th>
+          <th scope="col" class="w-28 text-right text-slate-400 text-xs py-3">CURRENT QTY</th>
+          <th scope="col" class="w-36 text-right text-indigo-400 text-xs py-3">TOTAL STOCK VALUE</th>
+          <th scope="col" class="w-24 text-center text-slate-400 text-xs py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">ACTION</th>
+        </tr>
+      </thead>
+      <tbody id="uniform-table-body" class="divide-y divide-slate-800/40 text-slate-300">
+        <!-- Dynamic Rows generated by js/uniform.js -->
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ၄။ Pagination Tray -->
+  <div class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
+    <div id="uni-pagination-info" class="text-xs font-semibold text-slate-400 tracking-wide">
+      Showing entries...
+    </div>
+    
+    <div class="flex items-center gap-2">
+      <button onclick="changePageUniform(-1)" id="uni-btn-prev" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+        <i class="fa-solid fa-chevron-left text-[10px]"></i> Previous
+      </button>
+      <button onclick="changePageUniform(1)" id="uni-btn-next" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+        Next <i class="fa-solid fa-chevron-right text-[10px]"></i>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ၅။ Add / Edit Uniform Product Modal -->
+<div id="uniform-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+    <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
+      <h3 id="uni-form-title" class="text-sm font-black text-white uppercase tracking-wider">Add New Uniform Product</h3>
+      <button onclick="closeUniformModal()" class="text-slate-500 hover:text-white transition"><i class="fa-solid fa-xmark text-sm"></i></button>
+    </div>
+
+    <form id="uniform-form" onsubmit="saveUniformForm(event)" class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+      <input type="hidden" id="uni-uniqueId">
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Product ID (Auto Generated)</label>
+          <input type="text" id="uni-pid" readonly class="w-full font-mono font-bold bg-slate-950/40 text-slate-400 border border-slate-800 cursor-not-allowed rounded-lg p-2.5">
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Product Name</label>
+          <select id="uni-name" required class="w-full font-bold text-slate-100 bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+            <option value="Basic Class">Basic Class</option>
+            <option value="Middle Class">Middle Class</option>
+            <option value="High Class">High Class</option>
+            <option value="Middle & High Class">Middle & High Class</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Type (အမျိုးအစား)</label>
+          <select id="uni-type" required class="w-full font-bold text-slate-100 bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+            <option value="Pair-Male">Pair-Male</option>
+            <option value="Pair-Female">Pair-Female</option>
+            <option value="Shirt-Male">Shirt-Male</option>
+            <option value="Shirt-Female">Shirt-Female</option>
+            <option value="Trouser-Male">Trouser-Male</option>
+            <option value="Trouser-Female">Trouser-Female</option>
+            <option value="Shirt">Shirt</option>
+            <option value="Trouser">Trouser</option>
+          </select>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Size (ဆိုက် - လက်ရိုက်)</label>
+          <input type="text" id="uni-size" required placeholder="S, M, L, XL, 26, 28..." class="w-full font-bold text-slate-100 bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Opening Stock</label>
+          <input type="number" id="uni-stock" value="0" required class="w-full text-right font-bold text-slate-100 font-mono bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Unit Price (ဝယ်ရင်းဈေး)</label>
+          <input type="number" id="uni-price" value="0" required class="w-full text-right font-bold text-rose-400 font-mono bg-rose-500/5 border border-rose-500/20 rounded-lg p-2.5 outline-none focus:border-rose-500">
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-1">
+        <label class="font-bold text-emerald-400 uppercase tracking-wide">Selling Price (ရောင်းဈေး)</label>
+        <input type="number" id="uni-sellprice" value="0" required class="w-full text-right font-bold text-emerald-400 font-mono bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-2.5 outline-none focus:border-emerald-500">
+      </div>
+
+      <div class="flex justify-end items-center gap-3 pt-4 border-t border-slate-800">
+        <button type="button" onclick="closeUniformModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">Cancel</button>
+        <button type="submit" class="px-5 py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10 transition-all">Confirm</button>
+      </div>
+    </form>
+  </div>
+</div>
