@@ -16,7 +16,7 @@ import * as ReportHandlers from './handlers-reports.js';
 import * as StudentMoneyHandlers from './handlers-money.js';
 import * as SettingsHandlers from './handlers-settings.js';
 import * as DashboardHandlers from './handlers-dashboard.js';
-import { validateLedgerInput } from '../validators/validation.js';
+import { validateLedgerInput } from './validation.js';
 
 // 💡 1. RESOURCE-SPECIFIC SERVER-SIDE RBAC PERMISSION MATRIX
 const ROLE_PERMS = {
