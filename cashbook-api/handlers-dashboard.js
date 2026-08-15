@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - DASHBOARD HANDLER (D1 DATABASE)
- * File: handlers-dashboard.js 
+ * File: handlers-dashboard.js  
  * 💡 Features: Crash-Proof Safe Dashboard Analytics (Total Income, Total Expense, Net Profit, Active Force),
  *              Daily Balances, Liabilities, Receivables & Gender Demographics (Male/Female/Total)
  */
