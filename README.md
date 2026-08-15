@@ -47,16 +47,11 @@
 
 ---
 
-## 🔐 Default Login Credentials
 
-| Role | Default Password | Access Level |
-| :--- | :--- | :--- |
-| **Owner / Admin** | `golden@123` | Full Access (Add, Edit, Delete, Grade Matrix, Backups) |
-| **Finance / Accountant** | `golden@123` | Financial Management & Balances Control |
-| **HR** | `golden@123` | Staff Directory, HR Payroll & Grade Matrix |
-| **Cashier** | `golden@123` | Cashier Sub-Ledgers & Today Income Receipts |
-| **Staff / Viewer** | `golden@123` | Restricted / Read-Only Access |
-
+## 🔐 Login Access Information
+* **Authentication:** Role-Based Access Control (RBAC)
+* **Access Credentials:** Provided by Golden Education Administration Office only.
+* *(Default passwords must be set privately by authorized administrators).*
 *(Note: Default passwords automatically upgrade to PBKDF2 cryptographic hashes upon first login).*
 
 ---
