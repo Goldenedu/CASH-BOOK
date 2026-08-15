@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - MAIN INCOME BOOK HANDLER (CLOUDFLARE D1)
- * File: handlers-income.js
+ * File: handlers-income.js 
  * 💡 Features: Book Name "Main Income Book" Full Title Alignment across all posting books,
  *              Detailed Description Format ([Student Refund] ID 3 မောင်စိုးသိန်း Grade 12 Boarder - Services),
  *              Active FY Stats (Effect Date Basis), FY Integer NO Reset, 2-Row Split Payment Support,
