@@ -1,6 +1,6 @@
 # ==============================================================================
 # GOLDEN ERP SYSTEM - CLOUDFLARE WORKER CONFIGURATION
-# File: wrangler.toml  
+# File: wrangler.toml   
 # ==============================================================================
 
 name = "cashbook-app-api"
