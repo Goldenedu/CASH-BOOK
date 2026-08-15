@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - STUDENT D1 SQL HANDLER MODULE
- * File: handlers-student.js
+ * File: handlers-student.js 
  * 💡 Features: FY-Scoped Student Lookup (SELECT * FROM student WHERE fy = ?), Strict 4-Digit FYID Padding (2627-STU-0002),
  *              Accurate Pagination Offset Engine, History Lookup & Precision Gender Auto-Detection
  */
