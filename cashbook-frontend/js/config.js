@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - GLOBAL CONFIGURATION & CONSTANTS 
- * File: js/config.js 
+ * File: js/config.js  
  * 💡 Central System Configuration, API Endpoints, Sheet Schemas & Dropdown Master Lists
  */
 
