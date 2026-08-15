@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - STUDENT MONEY LEDGER MODULE
- * File: js/student-money.js
+ * File: js/student-money.js 
  * 💡 Features: FY-Scoped Student Lookup, Dynamic Table Grid, Pagination & D1 Sync
  *              DEBIT = Income (Green), CREDIT = Expense (Red), Balance = DEBIT - CREDIT
  */
