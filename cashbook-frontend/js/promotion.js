@@ -1,5 +1,5 @@
 /**
- * GOLDEN ERP SYSTEM - PROMOTION MATRIX MODULE
+ * GOLDEN ERP SYSTEM - PROMOTION MATRIX MODULE 
  * File: js/promotion.js
  * 💡 Promotion Rate Matrix Controller with Precise Search Filters & Formal Corporate Tone
  */
