@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - MAIN SPA ROUTER & APPLICATION CONTROLLER (D1 DATABASE EDITION)
- * File: js/app.js
+ * File: js/app.js 
  * 💡 Features: Instant Router, Centralized Grade Matrix Modal Loader & Modularized Views
  */
 
