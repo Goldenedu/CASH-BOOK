@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - OFFICE & KITCHEN EXPENSE HANDLER (CLOUDFLARE D1)
- * File: handlers-office-kit.js
+ * File: handlers-office-kit.js 
  * 💡 Features: Config.js Aligned (office: 19 cols, kitchen: 16/17 cols, payroll: 18 cols),
  *              Bulletproof Uniform Stock Reversion (Product ID Regex Extraction),
  *              Multi-Book Balance Recalculation, Date-Based VR No & Auto-Posting Engine
