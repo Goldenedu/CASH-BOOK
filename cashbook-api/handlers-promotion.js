@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - PROMOTION MATRIX HANDLER (CLOUDFLARE D1)
- * File: handlers-promotion.js
+ * File: handlers-promotion.js 
  * 💡 Features: Promotion Rates CRUD Engine with Snake_case & CamelCase D1 Schema Normalization,
  *              FY-Scoped Filtering, Duplicate Rate Prevention & Integer Sequence NO Reset
  */
