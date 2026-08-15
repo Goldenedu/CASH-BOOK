@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - HOME DASHBOARD CONTROLLER
- * File: js/dashboard.js
+ * File: js/dashboard.js 
  * 💡 Features: Active FY Scoped Analytics, Daily Balances, Liabilities, Receivables,
  *              and Gender Demographic Breakdown (Male / Female / Total)
  */
