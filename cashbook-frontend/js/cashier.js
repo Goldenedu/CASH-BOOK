@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - CASHIER CASH BOOK MODULE
- * File: js/cashier.js
+ * File: js/cashier.js 
  * 💡 Features: 6 Sub-Books Routing, 17/19-Column Dynamic Schema, Responsibility Person Engine & Cross-Module Invoice Printer
  */
 
