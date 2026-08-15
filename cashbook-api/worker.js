@@ -2,7 +2,7 @@
  * GOLDEN ERP SYSTEM - CLOUDFLARE WORKER MAIN ROUTER (D1 MODULAR EDITION)
  * File: worker.js
  * 💡 Features: Universal Dynamic CORS Engine, Immediate Preflight Responder,
- *              PBKDF2 Password Security, Strict RBAC Permissions & Full Route Handlers
+ *              PBKDF2 Password Security, Strict RBAC Permissions & Full 35+ Route Handlers
  */
 
 import * as StudentHandlers from './handlers-student.js';
@@ -177,7 +177,7 @@ export default {
       "Content-Type": "application/json"
     };
 
-    // 💡 2. IMMEDIATE OPTIONS PREFLIGHT RESPONSE (Returns immediately before DB/Auth checks)
+    // 💡 2. IMMEDIATE OPTIONS PREFLIGHT RESPONSE
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
@@ -191,8 +191,7 @@ export default {
         }), { status: 500, headers: corsHeaders });
       }
 
-      // Default safe fallback secret if not configured in environment variables
-      const authSecret = env.AUTH_SECRET || "GoldenSecretKey2026SecureJWT_AutoFallback";
+      const authSecret = env.AUTH_SECRET || "GoldenSecretKey2026SecureJWT";
 
       let body = {};
       let action = "";
