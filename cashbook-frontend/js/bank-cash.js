@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - BANK & CASH BOOK CONTROLLER
- * File: js/bank-cash.js
+ * File: js/bank-cash.js 
  * 💡 Features: Strict Search Engine, Self-Transfer Prevention, Auto-Description Generator & Overwrite Bug Fixed
  */
 
