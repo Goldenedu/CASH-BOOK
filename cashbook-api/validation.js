@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - INPUT VALIDATION & SANITIZATION ENGINE 
- * File: validation.js (or validators/validation.js)   
+ * File: validation.js (or validators/validation.js)    
  * 💡 Serverless Input Validation, Formula Injection Sanitizer & Formal Error Handling Engine
  * 🛠️ SECURED: Pure Number Exemption, Base64/Token File Corruption Protection & Comma-Safe Amount Parser
  */
