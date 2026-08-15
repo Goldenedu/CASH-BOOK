@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - CASHIER SUB-LEDGER HANDLER (CLOUDFLARE D1)
- * File: handlers-cashier.js
+ * File: handlers-cashier.js 
  * 💡 Features: 17-Column Schema Aligned (responsibility_person), User-Defined Responsibility Person Support,
  *              Active FY Stats, FY Integer NO Reset, Date-Based Voucher No (VR No) & Sub-Ledger Cross-Transfer Engine
  */
