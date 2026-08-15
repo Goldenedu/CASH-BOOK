@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - STAFF MODULE (D1 DATABASE COMPATIBLE)
- * File: js/staff.js
+ * File: js/staff.js 
  * 💡 Features: Live Cloudflare D1 Salary Grade Matrix Sync, Auto Basic Amt Fill, Live Net Salary Calculator & Integer NO Fix
  */
 
