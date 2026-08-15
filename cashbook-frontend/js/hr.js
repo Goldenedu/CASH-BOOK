@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - HR PAYROLL EXP BOOK CONTROLLER (D1 DATABASE EDITION)
- * File: js/hr.js  
+ * File: js/hr.js   
  * 💡 Features: Bulletproof D1 Staff ID Lookup, Auto Credit (Total Salary) & Auto-Fill Engine
  */
 
