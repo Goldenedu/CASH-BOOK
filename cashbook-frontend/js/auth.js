@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - AUTHENTICATION & ROLE ENGINE
- * File: js/auth.js
+ * File: js/auth.js 
  * 💡 SECURED (D1 Database Edition): JWT Verification & Bulletproof RBAC Matrix
  */
 
