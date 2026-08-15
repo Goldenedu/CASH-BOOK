@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - MAIN INCOME BOOK MODULE
- * File: js/income.js
+ * File: js/income.js 
  * 💡 Features: FY-Scoped Student Lookup, Promo Matrix AUT Rate Calculator, Split Payment & Universal Invoice Printer
  */
 
