@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - MAIN BANK & CASH BOOKS HANDLER (CLOUDFLARE D1)
- * File: handlers-bank-cash.js
+ * File: handlers-bank-cash.js 
  * 💡 Features: Config-Aligned Schema Mapping (payroll: 18 cols, office: 19 cols, bank/cash/kitchen: 16 cols),
  *              FY-Based Stats, Date-Based Voucher No (VR No), Batch Running Balance Engine & Cross-Book Transfer Sync
  */
