@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - CLOUDFLARE WORKER MAIN ROUTER (D1 MODULAR EDITION)
- * File: worker.js 
+ * File: worker.js  
  * 💡 Features: Universal Dynamic CORS Engine, Immediate Preflight Responder,
  *              PBKDF2 Password Security, Strict RBAC Permissions & Full 35+ Route Handlers
  */
