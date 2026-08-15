@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - OFFICE EXPENSE & INVENTORY MODULE 
- * File: js/office-kit.js
+ * File: js/office-kit.js 
  * 💡 Features: Cloudflare D1 Database Sync, Direct Uniform Inventory Binding, Profit Calculator & Multi-Book Context Engine
  */
 
