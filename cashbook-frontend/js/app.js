@@ -441,6 +441,39 @@ async function saveGradeForm(event) {
   }
 }
 
+/**
+ * 💡 Universal Animated Refresh Button Controller
+ * Adds smooth spinning animation & real-time server fetch feedback to all Refresh buttons
+ */
+document.addEventListener('click', function(e) {
+  const refreshBtn = e.target.closest('button');
+  if (!refreshBtn) return;
+
+  const btnText = refreshBtn.innerText || '';
+  const hasRotateIcon = refreshBtn.querySelector('.fa-rotate, .fa-arrows-rotate, .fa-sync');
+
+  // Refresh ဟုပါသော ခလုတ်အားလုံးကို အလိုအလျောက် Animation ထည့်ပေးခြင်း
+  if (btnText.includes('Refresh') || hasRotateIcon) {
+    const icon = refreshBtn.querySelector('i');
+    if (icon) icon.classList.add('fa-spin');
+    refreshBtn.disabled = true;
+
+    // Clear Cache to force fresh server data
+    if (typeof window.clearAllApiCache === 'function') {
+      window.clearAllApiCache();
+    }
+
+    setTimeout(() => {
+      if (icon) icon.classList.remove('fa-spin');
+      refreshBtn.disabled = false;
+      if (typeof window.showToast === 'function') {
+        window.showToast("SUCCESS", "🔄 စာရင်း အချက်အလက်များ အသစ်ပြန်လည် ရယူပြီးပါပြီ။");
+      }
+    }, 600);
+  }
+});
+
+// 💡 EXPOSE GLOBALLY TO WINDOW (ဖိုင်၏ အောက်ဆုံးတွင် ထားရှိခြင်း)
 window.openGradeModal = openGradeModal;
 window.closeGradeModal = closeGradeModal;
 window.saveGradeForm = saveGradeForm;
