@@ -1,8 +1,10 @@
 /**
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - CLOUDFLARE WORKER MAIN ROUTER (D1 MODULAR EDITION)
  * File: worker.js  
  * 💡 Features: Universal Dynamic CORS Engine, Immediate Preflight Responder,
  *              PBKDF2 Password Security, Strict RBAC Permissions & Full 35+ Route Handlers
+ * ==============================================================================
  */
 
 import * as StudentHandlers from './handlers-student.js';
@@ -154,7 +156,7 @@ async function verifyPassword(password, stored) {
       "raw", new TextEncoder().encode(password), { name: "PBKDF2" }, false, ["deriveBits"]
     );
     const derivedBits = await crypto.subtle.deriveBits(
-      { name: "PBKDF2", salt, iterations, hash: "SHA-256" }, keyMaterial, 256
+      { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" }, keyMaterial, 256
     );
     const computedHex = bytesToHex(new Uint8Array(derivedBits));
     return { ok: timingSafeEqualStr(computedHex, hashHex), needsRehash: false };
@@ -166,7 +168,7 @@ async function verifyPassword(password, stored) {
 
 export default {
   async fetch(request, env, ctx) {
-    // 💡 1. UNIVERSAL BULLETPROOF CORS ENGINE
+    // 💡 1. UNIVERSAL DYNAMIC CORS ENGINE
     const origin = request.headers.get("Origin") || "*";
 
     const corsHeaders = {
