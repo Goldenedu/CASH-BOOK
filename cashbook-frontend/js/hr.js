@@ -1,13 +1,15 @@
 /**
  * GOLDEN ERP SYSTEM - HR PAYROLL EXP BOOK CONTROLLER (D1 DATABASE EDITION)
  * File: js/hr.js   
- * 💡 Features: Bulletproof D1 Staff ID Lookup, Auto Credit (Total Salary) & Auto-Fill Engine
+ * 💡 Features: Bulletproof D1 Staff ID Lookup, Auto Credit (Total Salary),
+ *              Full Dataset Limit (1000 rows) & Clean ReferenceError-Free Stats Engine
  */
 
 var gHrPayrollData = [];
 var gHrPayrollFilteredData = [];
 var gHrPayrollPage = 1;
 var gHrPayrollLimit = 100;
+var gHrPayrollTotalRows = 0;
 
 var gHrStaffFT = []; // Full-Time Staff Cache
 var gHrStaffPT = []; // Part-Time Staff Cache
@@ -17,13 +19,17 @@ async function loadHrPayrollData(useCache = true) {
   try {
     if (typeof toggleLoading === 'function') toggleLoading(true);
 
+    // 💡 Fetch up to 1000 rows so all 375 records load completely
     const response = await callApi('getExpenseData', {
       bookName: 'HR Payroll Exp Book',
+      page: 1,
+      limit: 1000,
       forceRefresh: !useCache
     }, 'GET');
 
     if (response && response.success) {
       gHrPayrollData = response.data || [];
+      gHrPayrollTotalRows = response.totalRows || gHrPayrollData.length || 0;
       
       let totInc = 0;
       let totExp = 0;
@@ -32,7 +38,16 @@ async function loadHrPayrollData(useCache = true) {
         totExp += Number(r.credit || 0);
       });
 
-      renderHrPayrollStats({ totalIncome: totInc, totalExpense: totExp, balance: totInc - totExp });
+      const serverStats = response.stats || {};
+      const finalIncome = serverStats.totalIncome !== undefined && serverStats.totalIncome > 0 ? serverStats.totalIncome : totInc;
+      const finalExpense = serverStats.totalExpense !== undefined && serverStats.totalExpense > 0 ? serverStats.totalExpense : totExp;
+
+      renderHrPayrollStats({
+        totalIncome: finalIncome,
+        totalExpense: finalExpense,
+        balance: finalIncome - finalExpense
+      });
+
       applyHrPayrollSearchAndRender();
     }
 
@@ -83,6 +98,7 @@ async function ensureStaffCacheForCategory(isPartTime) {
   }
 }
 
+// 💡 FIX: ReferenceError ရှင်းလင်းထားသော Stats Renderer
 function renderHrPayrollStats(stats) {
   const elInc = document.getElementById('hr-pay-total-income');
   const elExp = document.getElementById('hr-pay-total-expense');
@@ -92,7 +108,7 @@ function renderHrPayrollStats(stats) {
   if (elInc) elInc.textContent = `${Number(stats.totalIncome || 0).toLocaleString('en-US')} MMK`;
   if (elExp) elExp.textContent = `${Number(stats.totalExpense || 0).toLocaleString('en-US')} MMK`;
   if (elBal) elBal.textContent = `${Number(stats.balance || 0).toLocaleString('en-US')} MMK`;
-  if (elCount) elCount.textContent = (totalRowsCount || gHrPayrollTotalRows || gHrPayrollData.length).toLocaleString('en-US');
+  if (elCount) elCount.textContent = (gHrPayrollTotalRows || gHrPayrollData.length || 0).toLocaleString('en-US');
 }
 
 function applyHrPayrollSearchAndRender() {
@@ -156,7 +172,7 @@ function renderHrPayrollTable() {
   pageItems.forEach((item, index) => {
     const tr = document.createElement('tr');
     tr.className = 'hover:bg-slate-800/30 transition-all border-b border-slate-800/40 text-xs text-slate-300';
-    const displayNo = item.no || (startIndex + index + 1);
+    const displayNo = Math.floor(parseFloat(item.no || (startIndex + index + 1)));
     const uid = item.uniqueid || item.uniqueId || '';
     const vrNo = item.vr_no || item.vrNo || '-';
     const unpaidBonus = Number(item.unpaid_bonus ?? item.unpaidBonus ?? 0);
@@ -212,7 +228,6 @@ function escapeHtmlHr(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// 💡 BULLETPROOF STAFF LOOKUP & AUTO-FILL ENGINE
 async function onStaffIdChangePayroll() {
   const staffIdInput = document.getElementById('hr-pay-staff-id');
   const categorySelect = document.getElementById('hr-pay-category');
@@ -339,9 +354,6 @@ function closeHrPayrollModal() {
   if (modalEl) modalEl.classList.add('hidden');
 }
 
-/**
- * 💡 Save HR Payroll Form Entry to Cloudflare D1 Database
- */
 async function saveHrPayrollForm(e) {
   if (e && e.preventDefault) e.preventDefault();
 
