@@ -1,16 +1,18 @@
 /**
  * GOLDEN ERP SYSTEM - CASHIER CASH BOOK MODULE
  * File: js/cashier.js 
- * 💡 Features: 6 Sub-Books Routing, 17/19-Column Dynamic Schema, Responsibility Person Engine & Cross-Module Invoice Printer
+ * 💡 Features: Full Dataset Loader (2000 rows limit), Accurate Total Entries Card (705+ rows),
+ *              6 Sub-Books Routing, 17/19-Column Dynamic Schema & Cross-Module Invoice Printer
  */
 
 var currentCashierSubBook = 'CABank'; // 'CABank' | 'CACash' | 'CAOffice' | 'CAKitchen' | 'CAPayroll' | 'todayIncome'
 var allCashierData = [];
 var filteredCashierData = [];
 var currentCashierPage = 1;
-var CASHIER_PAGE_SIZE = 15;
+var CASHIER_PAGE_SIZE = 50;
 var searchTimeoutCashier = null;
-var isCashierSubmitting = false; // 💡 Double Submit Protection Flag
+var isCashierSubmitting = false;
+var currentCashierTotalRows = 0; // 💡 Accurate Total Rows Tracker
 
 /**
  * 💡 Safe Native DOM HTML Escaper
@@ -44,7 +46,7 @@ function initCashierView(bookName, useCache) {
 }
 
 /**
- * 💡 Switch Cashier Sub-Tabs (CACash, CABank, CAOffice, CAKitchen, CAPayroll, todayIncome)
+ * 💡 Switch Cashier Sub-Tabs
  */
 function switchCashierSubTab(subTab, useCache) {
   currentCashierSubBook = subTab || 'CABank';
@@ -81,7 +83,7 @@ function switchCashierSubTab(subTab, useCache) {
 }
 
 /**
- * 💡 Load Cashier Data
+ * 💡 Load Cashier Data (Fetches full dataset up to 2000 rows)
  */
 async function loadCashierData(useCache) {
   useCache = useCache !== undefined ? useCache : true;
@@ -98,15 +100,20 @@ async function loadCashierData(useCache) {
       toggleLoading(true);
     }
 
+    // 💡 FIX: Fetch up to 2000 rows so all 705+ records load completely
     const response = await callApi('getCashierData', {
       bookName: currentCashierSubBook,
+      page: 1,
+      limit: 2000,
       forceRefresh: !useCache
     });
 
     if (response && response.success) {
       allCashierData = response.data || [];
-      window.allCashierData = allCashierData; // 💡 Expose to window for cross-module printing
-      renderStatsCashier(response.stats || { totalIncome: 0, totalExpense: 0, balance: 0 });
+      window.allCashierData = allCashierData;
+      currentCashierTotalRows = response.totalRows || allCashierData.length || 0;
+
+      renderStatsCashier(response.stats || { totalIncome: 0, totalExpense: 0, balance: 0 }, currentCashierTotalRows);
       applyCashierSearchAndRender();
     }
   } catch (error) {
@@ -118,7 +125,7 @@ async function loadCashierData(useCache) {
 }
 
 /**
- * 💡 Load Today's Student Income Entries Live Feed for Invoice Printing
+ * 💡 Load Today's Student Income Entries Live Feed
  */
 async function loadTodayIncomeForCashier(useCache) {
   useCache = useCache !== undefined ? useCache : true;
@@ -126,12 +133,15 @@ async function loadTodayIncomeForCashier(useCache) {
     if (typeof toggleLoading === 'function') toggleLoading(true);
 
     const response = await callApi('getTodayIncomeForCashier', {
+      page: 1,
+      limit: 2000,
       forceRefresh: !useCache
     });
 
     if (response && response.success) {
       allCashierData = response.data || [];
-      window.allCashierData = allCashierData; // 💡 Expose to window for cross-module printing
+      window.allCashierData = allCashierData;
+      currentCashierTotalRows = response.totalRows || allCashierData.length || 0;
       
       let totalInc = 0, totalExp = 0;
       allCashierData.forEach(r => {
@@ -139,7 +149,7 @@ async function loadTodayIncomeForCashier(useCache) {
         totalExp += Number(r.debit || 0);
       });
 
-      renderStatsCashier({ totalIncome: totalInc, totalExpense: totalExp, balance: totalInc - totalExp });
+      renderStatsCashier({ totalIncome: totalInc, totalExpense: totalExp, balance: totalInc - totalExp }, currentCashierTotalRows);
       applyCashierSearchAndRender();
     }
   } catch (error) {
@@ -151,9 +161,9 @@ async function loadTodayIncomeForCashier(useCache) {
 }
 
 /**
- * 💡 Render KPI Header Stats Cards
+ * 💡 Render KPI Header Stats Cards (Accurately displays 705+ rows)
  */
-function renderStatsCashier(stats) {
+function renderStatsCashier(stats, totalRowsCount) {
   const elInc = document.getElementById('ca-total-income');
   const elExp = document.getElementById('ca-total-expense');
   const elBal = document.getElementById('ca-balance');
@@ -162,7 +172,9 @@ function renderStatsCashier(stats) {
   if (elInc) elInc.textContent = `${Number(stats.totalIncome || 0).toLocaleString('en-US')} MMK`;
   if (elExp) elExp.textContent = `${Number(stats.totalExpense || 0).toLocaleString('en-US')} MMK`;
   if (elBal) elBal.textContent = `${Number(stats.balance || 0).toLocaleString('en-US')} MMK`;
-  if (elCount) elCount.textContent = allCashierData.length.toLocaleString('en-US');
+  
+  // 💡 FIX: Accurately display actual total rows from database
+  if (elCount) elCount.textContent = (totalRowsCount || currentCashierTotalRows || allCashierData.length).toLocaleString('en-US');
 }
 
 /**
@@ -283,7 +295,7 @@ function renderCashierTableHead() {
 }
 
 /**
- * 💡 Render Table Grid Rows with Auto Action Lock for Linked Entries
+ * 💡 Render Table Grid Rows
  */
 function renderCashierTable() {
   renderCashierTableHead();
@@ -433,9 +445,6 @@ function onTransferTargetChangeCashier() {
   autoFillTransferDescriptionCashier();
 }
 
-/**
- * 💡 Auto Fill Transfer Description
- */
 function autoFillTransferDescriptionCashier() {
   const cat = document.getElementById('ca-category')?.value;
   const transferTo = document.getElementById('ca-transfer')?.value;
@@ -446,9 +455,6 @@ function autoFillTransferDescriptionCashier() {
   }
 }
 
-/**
- * 💡 Open Add Modal
- */
 function openAddModalCashier() {
   const form = document.getElementById('cashier-form');
   if (form) form.reset();
@@ -479,9 +485,6 @@ function closeCashierModal() {
   if (modal) modal.classList.add('hidden');
 }
 
-/**
- * 💡 Save Form Handler with Double Submit Lock
- */
 async function saveCashierForm(e) {
   if (e && e.preventDefault) e.preventDefault();
 
@@ -525,9 +528,6 @@ async function saveCashierForm(e) {
   }
 }
 
-/**
- * 💡 Edit Entry
- */
 function editCashierEntry(uniqueId) {
   const row = allCashierData.find(item => item.uniqueId === uniqueId);
   if (!row) {
@@ -568,9 +568,6 @@ function editCashierEntry(uniqueId) {
   if (titleEl) titleEl.textContent = `Edit Entry (${currentCashierSubBook})`;
 }
 
-/**
- * 💡 Delete Entry
- */
 async function deleteCashierEntry(uniqueId) {
   if (!confirm("ဤ စာရင်းအား အပြီးတိုင် ဖျက်သိမ်းလိုပါသလား။")) return;
 
@@ -592,9 +589,6 @@ async function deleteCashierEntry(uniqueId) {
   }
 }
 
-/**
- * 💡 CSV Export Engine
- */
 function exportToCSVCashier() {
   if (!allCashierData || allCashierData.length === 0) {
     if (typeof showToast === 'function') showToast("ERROR", "ထုတ်ယူရန် မည်သည့် စာရင်းမျှ မရှိပါ။");
