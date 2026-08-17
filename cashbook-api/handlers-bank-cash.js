@@ -1,8 +1,9 @@
 /**
  * GOLDEN ERP SYSTEM - MAIN BANK & CASH BOOKS HANDLER (CLOUDFLARE D1)
  * File: handlers-bank-cash.js  
- * 💡 Features: Config-Aligned Schema Mapping (payroll: 18 cols, office: 19 cols, bank/cash/kitchen: 16 cols),
- *              FY-Based Stats, Date-Based Voucher No (VR No), Batch Running Balance Engine & Cross-Book Transfer Sync
+ * 💡 Features: Direct Migration Mode (Bypasses cascading cross-transfers during bulk sync),
+ *              Config-Aligned Schema Mapping (payroll: 18 cols, office: 19 cols, bank/cash/kitchen: 16 cols),
+ *              FY-Based Stats, Date-Based Voucher No (VR No), Batch Running Balance & Idempotent Upsert Engine
  */
 
 const BOOK_TABLE_MAP = {
@@ -84,10 +85,8 @@ async function recalculateLedgerBalances(db, tableName) {
       }
     }
 
-    const chunkSize = 100;
-    for (let i = 0; i < statements.length; i += chunkSize) {
-      const chunk = statements.slice(i, i + chunkSize);
-      await db.batch(chunk);
+    for (let i = 0; i < statements.length; i += 100) {
+      await db.batch(statements.slice(i, i + 100));
     }
   } catch (e) {
     console.warn(`Running Balance & NO Recalculation Warning for ${tableName}:`, e);
@@ -105,10 +104,7 @@ async function generateVoucherNo(db, tableName, prefix, entryDate) {
     ddmmyy = `${parts[2]}${parts[1]}${y}`;
   } else {
     const now = new Date();
-    const dd = String(now.getDate()).padStart(2, '0');
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const yy = String(now.getFullYear()).slice(-2);
-    ddmmyy = `${dd}${mm}${yy}`;
+    ddmmyy = `${String(now.getDate()).padStart(2, '0')}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getFullYear()).slice(-2)}`;
   }
 
   const pattern = `${prefix}-${ddmmyy}-%`;
@@ -142,14 +138,12 @@ async function cleanLinkedTransfer(db, uniqueid) {
     try {
       await db.prepare(`DELETE FROM ${tbl} WHERE uniqueid = ?`).bind(transferUid).run();
       await recalculateLedgerBalances(db, tbl);
-    } catch (e) {
-      // Ignore
-    }
+    } catch (e) {}
   }
 }
 
 /**
- * 💡 Cross-Book Transfer Auto-Posting Engine (Exact Schema Alignment)
+ * 💡 Cross-Book Transfer Auto-Posting Engine (Exact Schema Alignment with INSERT OR REPLACE)
  */
 async function postCrossBookTransfer(db, body, sourceBookName, entryDate, my, fy, createdBy, uniqueid) {
   if (String(body.category || '').trim() !== 'Transfer' || !body.transfer) return;
@@ -164,7 +158,6 @@ async function postCrossBookTransfer(db, body, sourceBookName, entryDate, my, fy
   const debit = parseFloat(body.debit || 0);
   const credit = parseFloat(body.credit || 0);
 
-  // Invert flows: Inflow becomes Outflow and vice versa
   const targetDebit = credit;
   const targetCredit = debit;
 
@@ -177,7 +170,7 @@ async function postCrossBookTransfer(db, body, sourceBookName, entryDate, my, fy
   if (targetTable === 'office') {
     // 19 Columns
     await db.prepare(`
-      INSERT INTO office (
+      INSERT OR REPLACE INTO office (
         no, date, category, description, unit, unit_price, method, debit, credit, balances, liabilities, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
@@ -188,24 +181,24 @@ async function postCrossBookTransfer(db, body, sourceBookName, entryDate, my, fy
   } else if (targetTable === 'payroll') {
     // 18 Columns (Includes unpaid_bonus & unpaid_fund)
     await db.prepare(`
-      INSERT INTO payroll (
+      INSERT OR REPLACE INTO payroll (
         no, date, category, description, method, debit, credit, balances, unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, '', ?, ?, ?, datetime('now'), ?)
     `).bind(
       targetNo, entryDate, 'Transfer', targetDesc, body.method || 'Cash',
-      targetDebit, targetCredit, 0, 0, 0, sourceBookName, targetVrNo, my, normFy,
-      sourceBookName, createdBy, new Date().toISOString(), transferUid
+      targetDebit, targetCredit, 0, 0, sourceBookName, targetVrNo, normalizeFyStr(fy),
+      sourceBookName, createdBy, transferUid
     ).run();
   } else {
     // 16 Columns for bank, cash, kitchen
     await db.prepare(`
-      INSERT INTO ${targetTable} (
+      INSERT OR REPLACE INTO ${targetTable} (
         no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, '', ?, ?, ?, datetime('now'), ?)
     `).bind(
       targetNo, entryDate, 'Transfer', targetDesc, body.method || 'Cash',
-      targetDebit, targetCredit, 0, sourceBookName, targetVrNo, my, normFy,
-      sourceBookName, createdBy, new Date().toISOString(), transferUid
+      targetDebit, targetCredit, sourceBookName, targetVrNo, normalizeFyStr(fy),
+      sourceBookName, createdBy, transferUid
     ).run();
   }
 
@@ -320,7 +313,7 @@ export async function getBankCashData(db, body) {
 }
 
 /**
- * 💡 Save Bank / Cash Entry
+ * 💡 Save Bank / Cash Entry (Supports isMigration Mode)
  */
 export async function saveBankCashEntry(db, session, body) {
   try {
@@ -345,18 +338,31 @@ export async function saveBankCashEntry(db, session, body) {
     const prefix = getTablePrefix(tableName);
     const vrNo = body.vrNo || await generateVoucherNo(db, tableName, prefix, entryDate);
 
+    // 💡 CHECK FOR DIRECT MIGRATION MODE (Bypasses Live Cross-Book Transfers)
+    const isMigration = Boolean(body.isMigration || body.directImport || body.skipAutoPost);
+
     const stmt = `
-      INSERT INTO ${tableName} (
+      INSERT OR REPLACE INTO ${tableName} (
         no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, '', ?, ?, ?, datetime('now'), ?)
     `;
 
     await db.prepare(stmt).bind(
       newNo, entryDate, body.category || 'Income', body.description || '',
       body.method || (tableName === 'bank' ? 'Bank' : 'Cash'), debit, credit,
-      0, body.transfer || '', vrNo, my, fy, rawBook, createdBy, new Date().toISOString(), uniqueid
+      body.transfer || '', vrNo, normalizeFyStr(body.fy), rawBook, createdBy, uniqueid
     ).run();
 
+    if (isMigration) {
+      return {
+        success: true,
+        message: "စာရင်းသစ် အောင်မြင်စွာ တိုက်ရိုက် သွင်းယူပြီးပါပြီ။",
+        uniqueId: uniqueid,
+        vrNo: vrNo
+      };
+    }
+
+    // 💡 LIVE OPERATIONAL MODE (Normal Daily Manual Use)
     await recalculateLedgerBalances(db, tableName);
     await postCrossBookTransfer(db, body, rawBook, entryDate, my, fy, createdBy, uniqueid);
 
