@@ -501,8 +501,8 @@ export async function saveIncomeEntry(db, session, body) {
     const isMigration = Boolean(body.isMigration || body.directImport || body.skipAutoPost);
 
     if (isMigration) {
-      // 🚀 PURE RAW INSERT: Only inserts into income table without touching other books
-      const no = await generateFyNo(db, 'income', fy);
+      // 🚀 Google Sheet ကော်လံ A ထဲက NO (1 မှ 5508) အတိုင်း တိုက်ရိုက် အမှန်ယူခြင်း
+      const no = body.no ? parseInt(body.no, 10) : (await generateFyNo(db, 'income', fy));
       const vrNo = body.vrNo || await generateVoucherNo(db, 'income', 'INC', entryDate);
       const debit = parseFloat(body.debit || 0);
       const credit = parseFloat(body.credit || 0);
