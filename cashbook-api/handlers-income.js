@@ -1,10 +1,9 @@
 /**
  * GOLDEN ERP SYSTEM - MAIN INCOME BOOK HANDLER (CLOUDFLARE D1)
  * File: handlers-income.js 
- * 💡 Features: Book Name "Main Income Book" Full Title Alignment across all posting books,
- *              Detailed Description Format ([Student Refund] ID 3 မောင်စိုးသိန်း Grade 12 Boarder - Services),
- *              Active FY Stats (Effect Date Basis), FY Integer NO Reset, 2-Row Split Payment Support,
- *              Dynamic Daily Income Rollup for Main Books & Line-by-Line Cashier Sub-Ledger Posting
+ * 💡 Features: Direct Migration Mode (Bypasses cascading triggers during bulk import),
+ *              Live UI Auto-Posting (Cashier & Daily Rollup), Idempotent Upsert (INSERT OR REPLACE),
+ *              2-Row Split Payment Engine & FY Balance Recalculation
  */
 
 /**
@@ -146,10 +145,8 @@ async function recalculateLedgerBalances(db, tableName) {
       }
     }
 
-    const chunkSize = 100;
-    for (let i = 0; i < statements.length; i += chunkSize) {
-      const chunk = statements.slice(i, i + chunkSize);
-      await db.batch(chunk);
+    for (let i = 0; i < statements.length; i += 100) {
+      await db.batch(statements.slice(i, i + 100));
     }
   } catch (e) {
     console.warn(`Running Balance & NO Recalculation Warning for ${tableName}:`, e);
@@ -167,10 +164,7 @@ async function generateVoucherNo(db, tableName, prefix, entryDate) {
     ddmmyy = `${parts[2]}${parts[1]}${y}`;
   } else {
     const now = new Date();
-    const dd = String(now.getDate()).padStart(2, '0');
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const yy = String(now.getFullYear()).slice(-2);
-    ddmmyy = `${dd}${mm}${yy}`;
+    ddmmyy = `${String(now.getDate()).padStart(2, '0')}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getFullYear()).slice(-2)}`;
   }
 
   const pattern = `${prefix}-${ddmmyy}-%`;
@@ -194,12 +188,12 @@ async function generateFyNo(db, tableName, fy) {
 }
 
 /**
- * 💡 Insert Single Record into Income Table
+ * 💡 Insert Single Record into Income Table (Auto Replaces if uniqueid exists)
  */
 async function insertIncomeRecord(db, p) {
   const normFy = normalizeFyStr(p.fy);
   const stmt = `
-    INSERT INTO income (
+    INSERT OR REPLACE INTO income (
       no, effect_date, date, fy, student_id, fyid, fyid_name, class, category, account_name, method, debit, credit, aut_amount, promo, my, vr_no, remark, created_by, created_at, uniqueid
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
@@ -234,9 +228,7 @@ async function cleanLinkedIncomeEntries(db, uniqueid) {
     for (const uid of uids) {
       try {
         await db.prepare(`DELETE FROM ${tbl} WHERE uniqueid = ?`).bind(uid).run();
-      } catch (e) {
-        // Ignore
-      }
+      } catch (e) {}
     }
   }
 }
@@ -255,11 +247,10 @@ async function postCashierIndividualLine(db, targetMethod, amount, body, entryDa
   const caVrNo = await generateVoucherNo(db, caTable, caPrefix, entryDate);
   const caNo = await generateFyNo(db, caTable, normFy);
   const caUid = `INCCASHIER_${uidSuffix}`;
-
   const caDesc = buildStudentDetailedDesc(body, null);
 
   await db.prepare(`
-    INSERT INTO ${caTable} (
+    INSERT OR REPLACE INTO ${caTable} (
       no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
@@ -306,7 +297,7 @@ async function upsertDailyIncomeRollup(db, tableName, entryDate, fy, netAmount, 
     const no = await generateFyNo(db, tableName, normFy);
 
     await db.prepare(`
-      INSERT INTO ${tableName} (
+      INSERT OR REPLACE INTO ${tableName} (
         no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
@@ -366,20 +357,17 @@ async function postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdB
   const method = String(body.method || 'Cash').toLowerCase();
   const debit = parseFloat(body.debit || 0);
 
-  // 💡 1. HANDLE STUDENT REFUND / REIMBURSEMENT (DEBIT > 0)
   if (debit > 0) {
     const refundTable = (method === 'bank') ? 'bank' : 'cash';
     const refundPrefix = (method === 'bank') ? 'BNK' : 'CAH';
-
     const refundDesc = buildStudentDetailedDesc(body, 'Student Refund');
 
-    // A. Main Book Refund Outflow
     const mainVrNo = await generateVoucherNo(db, refundTable, refundPrefix, entryDate);
     const mainNo = await generateFyNo(db, refundTable, normFy);
     const mainRefUid = `INCMAIN_REFUND_${uniqueid}`;
 
     await db.prepare(`
-      INSERT INTO ${refundTable} (
+      INSERT OR REPLACE INTO ${refundTable} (
         no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
@@ -387,7 +375,6 @@ async function postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdB
       mainVrNo, my, normFy, 'Main Income Book', createdBy, new Date().toISOString(), mainRefUid
     ).run();
 
-    // B. Cashier Sub-Ledger Refund Outflow
     const caTable = (method === 'bank') ? 'ca_bank' : 'ca_cash';
     const caPrefix = (method === 'bank') ? 'CAB' : 'CAC';
     const caVrNo = await generateVoucherNo(db, caTable, caPrefix, entryDate);
@@ -395,7 +382,7 @@ async function postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdB
     const caRefUid = `INCCASHIER_REFUND_${uniqueid}`;
 
     await db.prepare(`
-      INSERT INTO ${caTable} (
+      INSERT OR REPLACE INTO ${caTable} (
         no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
@@ -407,7 +394,6 @@ async function postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdB
     await recalculateLedgerBalances(db, caTable);
   }
 
-  // 💡 2. HANDLE DAILY ROLLUP FOR PAYMENTS
   await syncDailyIncomeRollupForDate(db, entryDate, normFy, createdBy);
 }
 
@@ -433,18 +419,6 @@ export async function getIncomeData(db, body) {
 
     let totalIncome = parseFloat(statsResult.totalIncome || 0);
     let totalExpense = parseFloat(statsResult.totalExpense || 0);
-
-    if (totalIncome === 0 && totalExpense === 0) {
-      const allStats = await db.prepare(`
-        SELECT 
-          COALESCE(SUM(credit), 0) as totalIncome,
-          COALESCE(SUM(debit), 0) as totalExpense
-        FROM income
-      `).first() || { totalIncome: 0, totalExpense: 0 };
-      totalIncome = parseFloat(allStats.totalIncome || 0);
-      totalExpense = parseFloat(allStats.totalExpense || 0);
-    }
-
     const balance = totalIncome - totalExpense;
 
     let whereClauses = [];
@@ -457,16 +431,10 @@ export async function getIncomeData(db, body) {
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-
     const countRow = await db.prepare(`SELECT COUNT(*) as count FROM income ${whereSql}`).bind(...params).first();
     const totalRows = countRow ? countRow.count : 0;
 
-    const dataQuery = `
-      SELECT * FROM income 
-      ${whereSql} 
-      ORDER BY id DESC 
-      LIMIT ? OFFSET ?
-    `;
+    const dataQuery = `SELECT * FROM income ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`;
     const rowsRes = await db.prepare(dataQuery).bind(...params, limit, offset).all();
     const rawRows = rowsRes.results || [];
 
@@ -499,11 +467,7 @@ export async function getIncomeData(db, body) {
       totalRows: totalRows,
       page: page,
       limit: limit,
-      stats: {
-        totalIncome: totalIncome,
-        totalExpense: totalExpense,
-        balance: balance
-      }
+      stats: { totalIncome, totalExpense, balance }
     };
   } catch (err) {
     console.error("Error in getIncomeData handler:", err);
@@ -515,7 +479,7 @@ export async function getIncomeData(db, body) {
 }
 
 /**
- * 💡 Save New Income Entry (Supports 2-Row Split Payments)
+ * 💡 Save Income Entry (Supports isMigration Mode to prevent Duplicate Cashier Posts)
  */
 export async function saveIncomeEntry(db, session, body) {
   try {
@@ -533,8 +497,33 @@ export async function saveIncomeEntry(db, session, body) {
     const cleanStudentId = parseCleanIntId(body.id || body.studentId);
     const cleanFyid = sanitizeFyidStr(body.fyid || '');
 
+    // 💡 CHECK FOR DIRECT MIGRATION MODE (Bypasses Live Cross-Book Cascading Triggers)
+    const isMigration = Boolean(body.isMigration || body.directImport || body.skipAutoPost);
+
+    if (isMigration) {
+      // 🚀 PURE RAW INSERT: Only inserts into income table without touching other books
+      const no = await generateFyNo(db, 'income', fy);
+      const vrNo = body.vrNo || await generateVoucherNo(db, 'income', 'INC', entryDate);
+      const debit = parseFloat(body.debit || 0);
+      const credit = parseFloat(body.credit || 0);
+
+      await insertIncomeRecord(db, {
+        no, effDate, entryDate, fy, studentId: cleanStudentId, fyid: cleanFyid,
+        fyidName: body.fyidName || '', class: body.class || '', category: body.category || 'Boarder',
+        accountName: body.accountName || 'Registration', method: body.method || 'Cash', debit, credit,
+        autAmount: parseFloat(body.autAmount || 0), promo: body.promo || '', my, vrNo,
+        remark: body.remark || '', createdBy, uniqueid
+      });
+
+      return {
+        success: true,
+        message: "ဝင်ငွေစာရင်းသစ် အောင်မြင်စွာ တိုက်ရိုက် သွင်းယူပြီးပါပြီ။",
+        uniqueId: uniqueid
+      };
+    }
+
+    // 💡 LIVE UI OPERATIONAL MODE (Normal Daily Use with Full Automation)
     if (body.isSplit) {
-      // 💡 2-Row Split Payment Logic
       const cashAmt = parseFloat(body.cashAmount || 0);
       const bankAmt = parseFloat(body.bankAmount || 0);
 
@@ -572,7 +561,6 @@ export async function saveIncomeEntry(db, session, body) {
         await postCashierIndividualLine(db, 'Bank', bankAmt, body, entryDate, my, fy, createdBy, `${uniqueid}_BANK`);
       }
     } else {
-      // 💡 Single Normal Payment or Refund
       const no = await generateFyNo(db, 'income', fy);
       const vrNo = body.vrNo || await generateVoucherNo(db, 'income', 'INC', entryDate);
       const debit = parseFloat(body.debit || 0);
@@ -593,8 +581,6 @@ export async function saveIncomeEntry(db, session, body) {
     }
 
     await recalculateLedgerBalances(db, 'income');
-
-    // 💡 Auto-post linked entries for Payment Rollup & Student Refunds
     await postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdBy, uniqueid);
 
     return {
@@ -627,7 +613,6 @@ export async function updateIncomeEntry(db, session, body) {
     const oldFy = oldRow?.fy || null;
 
     await cleanLinkedIncomeEntries(db, uniqueid);
-
     const res = await saveIncomeEntry(db, session, body);
 
     const entryDate = body.date || new Date().toISOString().split('T')[0];
@@ -638,7 +623,6 @@ export async function updateIncomeEntry(db, session, body) {
     }
 
     return res;
-
   } catch (err) {
     console.error("Error in updateIncomeEntry handler:", err);
     return {
