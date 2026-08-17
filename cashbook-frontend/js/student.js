@@ -1,26 +1,24 @@
 /**
  * GOLDEN ERP SYSTEM - STUDENT LIST & DEMOGRAPHICS MODULE (D1 DATABASE COMPATIBLE)
  * File: js/student.js 
- * 💡 Features: All-FY Table List Rendering, Active FY KPI Cards Analytics, FYID Sanitizer (2627-STU-0002), Integer NO, Gender Auto-Detect & Old Student Lookup
+ * 💡 Features: Full Dataset Loader (5000 rows limit), Active FY Accurate KPI Cards Analytics,
+ *              Clean FYID Display, Sequential Integer NO, Gender Auto-Detect & Old Student Lookup
  */
 
 window.StudentState = {
   page: 1,
-  limit: 30,
+  limit: 50, // Display pagination per page
   totalRows: 0,
   activeData: [],
   searchVal: '',
-  fyFilter: '', // Default "" = All FY for Table List
+  fyFilter: '',
   stats: { totalActive: 0, totalInactive: 0, total: 0 }
 };
 
 var searchTimeoutStudent = null;
 var lookupTimeoutStudent = null;
-var isStudentSubmitting = false; // 💡 Double Submit Protection Flag
+var isStudentSubmitting = false;
 
-/**
- * 💡 Class Promotion Mapping Engine
- */
 const CLASS_PROMOTION_MAP = {
   'Pre School': 'KG Student',
   'KG Student': 'Grade 1',
@@ -38,9 +36,6 @@ const CLASS_PROMOTION_MAP = {
   'Grade 12': 'Grade 12'
 };
 
-/**
- * 💡 Safe Native DOM HTML Escaper
- */
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
   if (typeof window.escapeHtml === 'function' && window.escapeHtml !== escapeHtml) {
@@ -51,9 +46,6 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-/**
- * 💡 Gender Auto-Detection by Myanmar Name Prefix
- */
 function autoDetectGender(nameStr) {
   if (!nameStr) return 'Male';
   const clean = String(nameStr).trim();
@@ -100,7 +92,6 @@ function filterStudentData(list = [], searchVal = '', fyFilter = '') {
       const nameMatch = String(row.name || '').toLowerCase().includes(q) || String(row.fyid_name || row.fyidName || '').toLowerCase().includes(q);
       const fyidMatch = String(row.fyid || '').toLowerCase().includes(q);
       const idMatch = String(row.student_id || row.studentId || row.id || '').toLowerCase().includes(q);
-
       return nameMatch || fyidMatch || idMatch;
     });
   }
@@ -108,15 +99,19 @@ function filterStudentData(list = [], searchVal = '', fyFilter = '') {
   return filtered;
 }
 
+/**
+ * 💡 Load Full Student Dataset (Fetches up to 5,000 students for complete analytics)
+ */
 async function loadStudentData(isSilent = false) {
   if (!isSilent && typeof toggleLoading === 'function') toggleLoading(true);
 
   const state = window.StudentState;
 
   try {
+    // 💡 FIX: Fetch up to 5000 students so all 1,200+ records load completely
     const response = await callApi('getStudentData', {
-      page: state.page,
-      limit: state.limit,
+      page: 1,
+      limit: 5000,
       searchVal: state.searchVal
     }, 'GET');
 
@@ -125,7 +120,9 @@ async function loadStudentData(isSilent = false) {
       state.totalRows = response.totalRows || response.data.length || 0;
 
       populateMainFYFilterStudent();
-      updateStatsStudent();
+      
+      // Update Stats using full dataset
+      updateStatsStudent(response.stats);
       renderStudentTable();
     }
   } catch (err) {
@@ -147,7 +144,7 @@ function populateMainFYFilterStudent() {
   fySet.add('2026-2027');
 
   rawData.forEach(r => {
-    if (r.fy) fySet.add(r.fy.trim());
+    if (r.fy) fySet.add(String(r.fy).trim().replace(/^FY\s*/i, ''));
   });
 
   const currentSelected = select.value !== undefined ? select.value : (window.StudentState.fyFilter || '');
@@ -169,14 +166,17 @@ function onFyFilterChangeStudent() {
   }
 }
 
-function updateStatsStudent() {
+/**
+ * 💡 Render Accurate KPI Summary Cards
+ */
+function updateStatsStudent(serverStats) {
   const rawData = window.StudentState.activeData || [];
   const selectedFy = document.getElementById('student-filter-fy')?.value;
-  const targetFyForKpi = selectedFy || '2026-2027';
+  const targetFyForKpi = selectedFy || '';
 
   let fyList = rawData;
   if (targetFyForKpi && targetFyForKpi.trim()) {
-    fyList = rawData.filter(r => String(r.fy || '').trim().toLowerCase() === targetFyForKpi.trim().toLowerCase());
+    fyList = rawData.filter(r => String(r.fy || '').trim().toLowerCase().includes(targetFyForKpi.trim().toLowerCase()));
   }
 
   let actCount = 0;
@@ -205,14 +205,18 @@ function updateStatsStudent() {
   if (countEl) countEl.innerText = Number(fyList.length).toLocaleString('en-US');
 }
 
+/**
+ * 💡 Render Table Grid Rows with Pagination
+ */
 function renderStudentTable() {
   const tableBody = document.getElementById('student-table-body');
   if (!tableBody) return;
 
-  const rawData = window.StudentState.activeData || [];
+  const state = window.StudentState;
+  const rawData = state.activeData || [];
   const searchInput = document.getElementById('student-search');
-  const searchVal = searchInput ? searchInput.value.trim() : (window.StudentState.searchVal || '');
-  const fyFilter = document.getElementById('student-filter-fy')?.value || window.StudentState.fyFilter || '';
+  const searchVal = searchInput ? searchInput.value.trim() : (state.searchVal || '');
+  const fyFilter = document.getElementById('student-filter-fy')?.value || state.fyFilter || '';
 
   const filteredData = filterStudentData(rawData, searchVal, fyFilter);
 
@@ -223,9 +227,14 @@ function renderStudentTable() {
     return;
   }
 
+  // Display pagination slice
+  const startIndex = (state.page - 1) * state.limit;
+  const endIndex = Math.min(startIndex + state.limit, filteredData.length);
+  const pageItems = filteredData.slice(startIndex, endIndex);
+
   const isViewer = (window.AppState ? window.AppState.currentUserRole : '') === "Viewer";
 
-  tableBody.innerHTML = filteredData.map((row, idx) => {
+  tableBody.innerHTML = pageItems.map((row, idx) => {
     let displayDate = row.date || "";
     if (displayDate) {
       let parts = displayDate.split('-');
@@ -250,7 +259,6 @@ function renderStudentTable() {
 
     const detectedGender = row.gender || autoDetectGender(row.name);
 
-    // 💡 FYID Display Sanitizer
     let displayFyid = row.fyid || '-';
     if (displayFyid.includes('.0')) {
       displayFyid = displayFyid.replace(/\.0/g, '');
@@ -261,8 +269,8 @@ function renderStudentTable() {
       }
     }
 
-    const rawNo = row.no !== undefined && row.no !== null && row.no !== "" ? row.no : (idx + 1);
-    const displayNo = parseInt(rawNo, 10) || (idx + 1);
+    const rawNo = row.no !== undefined && row.no !== null && row.no !== "" ? row.no : (startIndex + idx + 1);
+    const displayNo = Math.floor(parseFloat(rawNo));
 
     return `
       <tr class="hover:bg-slate-800/20 text-slate-300">
@@ -309,16 +317,24 @@ function updatePaginationStudent(currentCount) {
     const end = Math.min(state.page * state.limit, totalToDisplay);
     info.innerHTML = `Showing <span class="text-indigo-400 font-extrabold">${start}</span> to <span class="text-indigo-400 font-extrabold">${end}</span> of <span class="text-indigo-400 font-extrabold">${totalToDisplay}</span> entries`;
   }
+
+  const prevBtn = document.getElementById('stu-btn-prev');
+  if (prevBtn) prevBtn.disabled = (state.page <= 1);
+
+  const nextBtn = document.getElementById('stu-btn-next');
+  if (nextBtn) nextBtn.disabled = (state.page * state.limit >= (currentCount || state.totalRows));
 }
 
 function changePageStudent(dir) {
   const state = window.StudentState;
+  const totalFiltered = filterStudentData(state.activeData, state.searchVal, state.fyFilter).length;
+  
   if (dir === -1 && state.page > 1) {
     state.page--;
-    loadStudentData(false);
-  } else if (dir === 1 && (state.page * state.limit) < state.totalRows) {
+    renderStudentTable();
+  } else if (dir === 1 && (state.page * state.limit) < totalFiltered) {
     state.page++;
-    loadStudentData(false);
+    renderStudentTable();
   }
 }
 
@@ -327,6 +343,7 @@ function onSearchInputStudent() {
   searchTimeoutStudent = setTimeout(() => {
     const searchInput = document.getElementById('student-search');
     window.StudentState.searchVal = searchInput ? searchInput.value.trim() : '';
+    window.StudentState.page = 1;
     renderStudentTable();
   }, 200);
 }
@@ -431,9 +448,6 @@ function onOldStudentIdLookup() {
   }, 400);
 }
 
-/**
- * 💡 Save / Update Student Form with Double Submit Lock
- */
 async function saveStudentForm(e) {
   if (e && e.preventDefault) e.preventDefault();
 
@@ -625,7 +639,7 @@ function exportToCSVStudent() {
     let stat = isTransformed ? 'Inactive' : (row.status || 'Active');
 
     const rawNo = row.no !== undefined && row.no !== null && row.no !== "" ? row.no : (idx + 1);
-    const displayNo = parseInt(rawNo, 10) || (idx + 1);
+    const displayNo = Math.floor(parseFloat(rawNo));
     const genderVal = row.gender || autoDetectGender(row.name);
 
     csv += `${displayNo},${row.stu_status || row.stuStatus || ''},${row.date || ''},${row.fy || ''},${row.student_id || row.id || ''},${row.fyid || ''},${name},${cls},${cat},${row.promo || ''},${stat},${genderVal},${transDate},${parents},${row.phone_no || row.phoneNo || ''},${addr},${row.uniqueid || row.uniqueId || ''}\n`;
