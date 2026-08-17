@@ -2,8 +2,8 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - CLOUDFLARE WORKER MAIN ROUTER (D1 MODULAR EDITION)
  * File: worker.js  
- * 💡 Features: Idempotent Upsert Engine (INSERT OR REPLACE), Unique-Constraint Protected,
- *              Universal Dynamic CORS, PBKDF2 Password Security & Full 35+ Route Handlers
+ * 💡 Features: Universal Dynamic CORS Engine, Immediate Preflight Responder,
+ *              PBKDF2 Password Security, Strict RBAC Permissions & Full 35+ Route Handlers
  * ==============================================================================
  */
 
@@ -70,7 +70,10 @@ function base64UrlDecodeToBytes(str) {
 }
 
 async function hmacKey(secret) {
-  return crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
+  return crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]
+  );
 }
 
 // 💡 JWT Signing & Verification
@@ -78,9 +81,12 @@ async function createJwtToken(payload, secret) {
   const header = { alg: "HS256", typ: "JWT" };
   const encodedHeader = base64UrlEncode(JSON.stringify(header));
   const encodedPayload = base64UrlEncode(JSON.stringify({ ...payload, exp: Math.floor(Date.now() / 1000) + (8 * 3600) }));
+
   const key = await hmacKey(secret);
   const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`));
-  return `${encodedHeader}.${encodedPayload}.${base64UrlEncode(new Uint8Array(signature))}`;
+  const encodedSignature = base64UrlEncode(new Uint8Array(signature));
+
+  return `${encodedHeader}.${encodedPayload}.${encodedSignature}`;
 }
 
 async function verifyJwtToken(token, secret) {
@@ -89,20 +95,30 @@ async function verifyJwtToken(token, secret) {
     const parts = token.split(".");
     if (parts.length !== 3) return null;
     const [encodedHeader, encodedPayload, encodedSignature] = parts;
+
     const key = await hmacKey(secret);
     const signatureBytes = base64UrlDecodeToBytes(encodedSignature);
-    const isValid = await crypto.subtle.verify("HMAC", key, signatureBytes, new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`));
+    const isValid = await crypto.subtle.verify(
+      "HMAC", key, signatureBytes,
+      new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`)
+    );
     if (!isValid) return null;
+
     const payload = JSON.parse(base64UrlDecodeToString(encodedPayload));
     if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
     return payload;
-  } catch (e) { return null; }
+  } catch (e) {
+    return null;
+  }
 }
 
 // 💡 Password Hashing (PBKDF2-SHA256 via Web Crypto)
 const PBKDF2_ITERATIONS = 100000;
 
-function bytesToHex(bytes) { return Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join(""); }
+function bytesToHex(bytes) {
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 function hexToBytes(hex) {
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
@@ -111,9 +127,15 @@ function hexToBytes(hex) {
 
 async function hashPassword(password, saltBytes) {
   const salt = saltBytes || crypto.getRandomValues(new Uint8Array(16));
-  const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), { name: "PBKDF2" }, false, ["deriveBits"]);
-  const derivedBits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" }, keyMaterial, 256);
-  return `pbkdf2$${PBKDF2_ITERATIONS}$${bytesToHex(salt)}$${bytesToHex(new Uint8Array(derivedBits))}`;
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(password), { name: "PBKDF2" }, false, ["deriveBits"]
+  );
+  const derivedBits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
+    keyMaterial, 256
+  );
+  const hashHex = bytesToHex(new Uint8Array(derivedBits));
+  return `pbkdf2$${PBKDF2_ITERATIONS}$${bytesToHex(salt)}$${hashHex}`;
 }
 
 function timingSafeEqualStr(a, b) {
@@ -125,13 +147,21 @@ function timingSafeEqualStr(a, b) {
 
 async function verifyPassword(password, stored) {
   if (!stored) return { ok: false, needsRehash: false };
+
   if (stored.startsWith("pbkdf2$")) {
     const [, iterStr, saltHex, hashHex] = stored.split("$");
+    const iterations = parseInt(iterStr, 10);
     const salt = hexToBytes(saltHex);
-    const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), { name: "PBKDF2" }, false, ["deriveBits"]);
-    const derivedBits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations: parseInt(iterStr, 10), hash: "SHA-256" }, keyMaterial, 256);
-    return { ok: timingSafeEqualStr(bytesToHex(new Uint8Array(derivedBits)), hashHex), needsRehash: false };
+    const keyMaterial = await crypto.subtle.importKey(
+      "raw", new TextEncoder().encode(password), { name: "PBKDF2" }, false, ["deriveBits"]
+    );
+    const derivedBits = await crypto.subtle.deriveBits(
+      { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" }, keyMaterial, 256
+    );
+    const computedHex = bytesToHex(new Uint8Array(derivedBits));
+    return { ok: timingSafeEqualStr(computedHex, hashHex), needsRehash: false };
   }
+
   const ok = timingSafeEqualStr(String(stored), String(password));
   return { ok, needsRehash: ok };
 }
@@ -149,6 +179,7 @@ export default {
       "Content-Type": "application/json"
     };
 
+    // 💡 2. IMMEDIATE OPTIONS PREFLIGHT RESPONSE
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
