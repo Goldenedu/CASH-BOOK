@@ -8,7 +8,7 @@
 var gHrPayrollData = [];
 var gHrPayrollFilteredData = [];
 var gHrPayrollPage = 1;
-var gHrPayrollLimit = 100;
+var gHrPayrollLimit = 150;
 var gHrPayrollTotalRows = 0;
 
 var gHrStaffFT = []; // Full-Time Staff Cache
