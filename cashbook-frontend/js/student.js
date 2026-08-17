@@ -1,13 +1,13 @@
 /**
  * GOLDEN ERP SYSTEM - STUDENT LIST & DEMOGRAPHICS MODULE (D1 DATABASE COMPATIBLE)
  * File: js/student.js 
- * 💡 Features: Full Dataset Loader (5000 rows limit), Active FY Accurate KPI Cards Analytics,
- *              Clean FYID Display, Sequential Integer NO, Gender Auto-Detect & Old Student Lookup
+ * 💡 Features: Full Dataset Loader (5000 rows limit), Active FY Accurate KPI Analytics,
+ *              Strict Sequential NO Sorting (1214, 1213, 1212...), Gender Auto-Detect & Clean Display
  */
 
 window.StudentState = {
   page: 1,
-  limit: 50, // Display pagination per page
+  limit: 100,
   totalRows: 0,
   activeData: [],
   searchVal: '',
@@ -96,19 +96,22 @@ function filterStudentData(list = [], searchVal = '', fyFilter = '') {
     });
   }
 
+  // 💡 FIX: Strict NO Sequential Sorting (အမြဲတမ်း NO အကြီးဆုံးမှ အငယ်သို့ အစဉ်လိုက် စီပေးခြင်း)
+  filtered.sort((a, b) => {
+    const noA = parseInt(a.no, 10) || 0;
+    const noB = parseInt(b.no, 10) || 0;
+    return noB - noA; // Descending: 1214, 1213, 1212...
+  });
+
   return filtered;
 }
 
-/**
- * 💡 Load Full Student Dataset (Fetches up to 5,000 students for complete analytics)
- */
 async function loadStudentData(isSilent = false) {
   if (!isSilent && typeof toggleLoading === 'function') toggleLoading(true);
 
   const state = window.StudentState;
 
   try {
-    // 💡 FIX: Fetch up to 5000 students so all 1,200+ records load completely
     const response = await callApi('getStudentData', {
       page: 1,
       limit: 5000,
@@ -120,8 +123,6 @@ async function loadStudentData(isSilent = false) {
       state.totalRows = response.totalRows || response.data.length || 0;
 
       populateMainFYFilterStudent();
-      
-      // Update Stats using full dataset
       updateStatsStudent(response.stats);
       renderStudentTable();
     }
@@ -161,14 +162,12 @@ function onFyFilterChangeStudent() {
   const select = document.getElementById('student-filter-fy');
   if (select) {
     window.StudentState.fyFilter = select.value;
+    window.StudentState.page = 1;
     updateStatsStudent();
     renderStudentTable();
   }
 }
 
-/**
- * 💡 Render Accurate KPI Summary Cards
- */
 function updateStatsStudent(serverStats) {
   const rawData = window.StudentState.activeData || [];
   const selectedFy = document.getElementById('student-filter-fy')?.value;
@@ -205,9 +204,6 @@ function updateStatsStudent(serverStats) {
   if (countEl) countEl.innerText = Number(fyList.length).toLocaleString('en-US');
 }
 
-/**
- * 💡 Render Table Grid Rows with Pagination
- */
 function renderStudentTable() {
   const tableBody = document.getElementById('student-table-body');
   if (!tableBody) return;
@@ -227,14 +223,13 @@ function renderStudentTable() {
     return;
   }
 
-  // Display pagination slice
   const startIndex = (state.page - 1) * state.limit;
   const endIndex = Math.min(startIndex + state.limit, filteredData.length);
   const pageItems = filteredData.slice(startIndex, endIndex);
 
   const isViewer = (window.AppState ? window.AppState.currentUserRole : '') === "Viewer";
 
-  tableBody.innerHTML = pageItems.map((row, idx) => {
+  tableBody.innerHTML = pageItems.map((row) => {
     let displayDate = row.date || "";
     if (displayDate) {
       let parts = displayDate.split('-');
@@ -269,8 +264,7 @@ function renderStudentTable() {
       }
     }
 
-    const rawNo = row.no !== undefined && row.no !== null && row.no !== "" ? row.no : (startIndex + idx + 1);
-    const displayNo = Math.floor(parseFloat(rawNo));
+    const displayNo = parseInt(row.no, 10) || 1;
 
     return `
       <tr class="hover:bg-slate-800/20 text-slate-300">
@@ -487,7 +481,7 @@ async function saveStudentForm(e) {
     parentsName: document.getElementById('stu-parents')?.value || "",
     phoneNo: document.getElementById('stu-phone')?.value || "",
     address: document.getElementById('stu-address')?.value || "",
-    createdBy: (window.AppState ? window.AppState.currentUser : '') || "System"
+    createdBy: (window.AppState ? window.AppState.currentUser : '') || "Admin"
   };
 
   closeStudentModal();
@@ -638,8 +632,7 @@ function exportToCSVStudent() {
     let isTransformed = !!transDate;
     let stat = isTransformed ? 'Inactive' : (row.status || 'Active');
 
-    const rawNo = row.no !== undefined && row.no !== null && row.no !== "" ? row.no : (idx + 1);
-    const displayNo = Math.floor(parseFloat(rawNo));
+    const displayNo = parseInt(row.no, 10) || (idx + 1);
     const genderVal = row.gender || autoDetectGender(row.name);
 
     csv += `${displayNo},${row.stu_status || row.stuStatus || ''},${row.date || ''},${row.fy || ''},${row.student_id || row.id || ''},${row.fyid || ''},${name},${cls},${cat},${row.promo || ''},${stat},${genderVal},${transDate},${parents},${row.phone_no || row.phoneNo || ''},${addr},${row.uniqueid || row.uniqueId || ''}\n`;
