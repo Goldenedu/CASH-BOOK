@@ -1,9 +1,9 @@
 /**
  * GOLDEN ERP SYSTEM - OFFICE & KITCHEN EXPENSE HANDLER (CLOUDFLARE D1)
  * File: handlers-office-kit.js 
- * 💡 Features: Config.js Aligned (office: 19 cols, kitchen: 16/17 cols, payroll: 18 cols),
- *              Bulletproof Uniform Stock Reversion (Product ID Regex Extraction),
- *              Multi-Book Balance Recalculation, Date-Based VR No & Auto-Posting Engine
+ * 💡 Features: Config.js Aligned (office: 19 cols, kitchen: 16 cols without liabilities, payroll: 18 cols),
+ *              Direct Migration Mode (Bypasses cascading triggers during bulk sync),
+ *              Bulletproof Uniform Stock Reversion, Date-Based VR No & Idempotent Upsert Engine
  */
 
 const BOOK_TABLE_MAP = {
@@ -39,22 +39,15 @@ function normalizeFyStr(fy) {
 
 /**
  * 💡 Extract Uniform Product ID from Description String
- * Example: "PID 001 Basic Class Pair - 2Nos" -> "001" or "PID 001"
  */
 function extractProductIdFromDescription(description) {
   if (!description) return null;
   const str = String(description).trim();
   
   const match = str.match(/PID\s*(\d+)/i);
-  if (match && match[1]) {
-    return match[1].trim();
-  }
-  
+  if (match && match[1]) return match[1].trim();
   const numMatch = str.match(/^(\d+)\s/);
-  if (numMatch && numMatch[1]) {
-    return numMatch[1];
-  }
-  
+  if (numMatch && numMatch[1]) return numMatch[1];
   return null;
 }
 
@@ -67,13 +60,9 @@ async function recalculateLedgerBalances(db, tableName) {
     const fysRes = await db.prepare(`SELECT DISTINCT fy FROM ${tableName}`).all();
     const rawFys = (fysRes.results || []).map(r => normalizeFyStr(r.fy)).filter(Boolean);
     const fys = Array.from(new Set(rawFys));
-
-    if (fys.length === 0) {
-      fys.push('FY 2026-2027');
-    }
+    if (fys.length === 0) fys.push('FY 2026-2027');
 
     const statements = [];
-
     for (const fyVal of fys) {
       const rows = await db.prepare(
         `SELECT id, debit, credit FROM ${tableName} WHERE fy = ? OR fy = ? ORDER BY date ASC, id ASC`
@@ -87,7 +76,6 @@ async function recalculateLedgerBalances(db, tableName) {
         const debit = parseFloat(row.debit || 0);
         const credit = parseFloat(row.credit || 0);
         currentBal = currentBal + debit - credit;
-
         statements.push(
           db.prepare(`UPDATE ${tableName} SET balances = ?, no = ?, fy = ? WHERE id = ?`).bind(currentBal, seqNo, fyVal, row.id)
         );
@@ -95,10 +83,8 @@ async function recalculateLedgerBalances(db, tableName) {
       }
     }
 
-    const chunkSize = 100;
-    for (let i = 0; i < statements.length; i += chunkSize) {
-      const chunk = statements.slice(i, i + chunkSize);
-      await db.batch(chunk);
+    for (let i = 0; i < statements.length; i += 100) {
+      await db.batch(statements.slice(i, i + 100));
     }
   } catch (e) {
     console.warn(`Running Balance & NO Recalculation Warning for ${tableName}:`, e);
@@ -116,10 +102,7 @@ async function generateVoucherNo(db, tableName, prefix, entryDate) {
     ddmmyy = `${parts[2]}${parts[1]}${y}`;
   } else {
     const now = new Date();
-    const dd = String(now.getDate()).padStart(2, '0');
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const yy = String(now.getFullYear()).slice(-2);
-    ddmmyy = `${dd}${mm}${yy}`;
+    ddmmyy = `${String(now.getDate()).padStart(2, '0')}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getFullYear()).slice(-2)}`;
   }
 
   const pattern = `${prefix}-${ddmmyy}-%`;
@@ -143,11 +126,10 @@ async function generateFyNo(db, tableName, fy) {
 }
 
 /**
- * 💡 Sync Uniform Ledger Stock (Bulletproof PID & ID Matching)
+ * 💡 Sync Uniform Ledger Stock
  */
 async function syncUniformStock(db, productId, unitDelta) {
   if (!productId || unitDelta === 0) return;
-  
   try {
     const rawPid = String(productId).trim();
     const cleanNum = rawPid.replace(/^PID\s*/i, '').trim();
@@ -221,7 +203,7 @@ async function postLinkedAutoEntries(db, body, entryDate, my, fy, createdBy, uni
     const mainDesc = `[Uniform Profit] ${body.description || ''}`.trim();
 
     await db.prepare(`
-      INSERT INTO ${mainTable} (
+      INSERT OR REPLACE INTO ${mainTable} (
         no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
@@ -242,7 +224,7 @@ async function postLinkedAutoEntries(db, body, entryDate, my, fy, createdBy, uni
     const caDesc = String(body.description || '').trim();
 
     await db.prepare(`
-      INSERT INTO ${caTable} (
+      INSERT OR REPLACE INTO ${caTable} (
         no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
@@ -255,7 +237,7 @@ async function postLinkedAutoEntries(db, body, entryDate, my, fy, createdBy, uni
 }
 
 /**
- * 💡 Fetch Expense Data (Includes Amount Search Filtering)
+ * 💡 Fetch Expense Data
  */
 export async function getExpenseData(db, body) {
   try {
@@ -265,7 +247,6 @@ export async function getExpenseData(db, body) {
     const page = parseInt(body.page || 1, 10);
     const limit = parseInt(body.limit || 30, 10);
     const offset = (page - 1) * limit;
-
     const activeFy = normalizeFyStr(body.fy || "FY 2026-2027");
 
     const statsResult = await db.prepare(`
@@ -278,24 +259,11 @@ export async function getExpenseData(db, body) {
 
     let totalIncome = parseFloat(statsResult.totalIncome || 0);
     let totalExpense = parseFloat(statsResult.totalExpense || 0);
-
-    if (totalIncome === 0 && totalExpense === 0) {
-      const allStats = await db.prepare(`
-        SELECT 
-          COALESCE(SUM(debit), 0) as totalIncome,
-          COALESCE(SUM(credit), 0) as totalExpense
-        FROM ${tableName}
-      `).first() || { totalIncome: 0, totalExpense: 0 };
-      totalIncome = parseFloat(allStats.totalIncome || 0);
-      totalExpense = parseFloat(allStats.totalExpense || 0);
-    }
-
     const balance = totalIncome - totalExpense;
 
     let whereClauses = [];
     let params = [];
 
-    // 💡 Enhanced Multi-Field Search (including Debit and Credit values)
     if (searchVal) {
       whereClauses.push(`(description LIKE ? OR category LIKE ? OR vr_no LIKE ? OR method LIKE ? OR transfer LIKE ? OR CAST(debit AS TEXT) LIKE ? OR CAST(credit AS TEXT) LIKE ?)`);
       const p = `%${searchVal}%`;
@@ -303,16 +271,10 @@ export async function getExpenseData(db, body) {
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-
     const countRow = await db.prepare(`SELECT COUNT(*) as count FROM ${tableName} ${whereSql}`).bind(...params).first();
     const totalRows = countRow ? countRow.count : 0;
 
-    const dataQuery = `
-      SELECT * FROM ${tableName} 
-      ${whereSql} 
-      ORDER BY id DESC 
-      LIMIT ? OFFSET ?
-    `;
+    const dataQuery = `SELECT * FROM ${tableName} ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`;
     const rowsRes = await db.prepare(dataQuery).bind(...params, limit, offset).all();
     const rawRows = rowsRes.results || [];
 
@@ -351,23 +313,16 @@ export async function getExpenseData(db, body) {
       totalRows: totalRows,
       page: page,
       limit: limit,
-      stats: {
-        totalIncome: totalIncome,
-        totalExpense: totalExpense,
-        balance: balance
-      }
+      stats: { totalIncome, totalExpense, balance }
     };
   } catch (err) {
     console.error("Error in getExpenseData handler:", err);
-    return {
-      success: false,
-      message: "Expense ဒေတာ ရယူရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message
-    };
+    return { success: false, message: "Expense ဒေတာ ရယူရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message };
   }
 }
 
 /**
- * 💡 Save New Expense Entry
+ * 💡 Save New Expense Entry (Kitchen 16-cols without liabilities)
  */
 export async function saveExpenseEntry(db, session, body) {
   try {
@@ -392,55 +347,68 @@ export async function saveExpenseEntry(db, session, body) {
     const liabilities = parseFloat(body.liabilities || 0);
 
     const newNo = await generateFyNo(db, tableName, fy);
-
     const bookPrefix = tableName === 'kitchen' ? 'KIT' : (tableName === 'payroll' ? 'SAL' : 'OFF');
     const vrNo = body.vrNo || await generateVoucherNo(db, tableName, bookPrefix, entryDate);
 
+    // 💡 CHECK FOR DIRECT MIGRATION MODE
+    const isMigration = Boolean(body.isMigration || body.directImport || body.skipAutoPost);
+
     if (tableName === 'kitchen') {
+      // ✅ 16 Columns (NO liabilities column for Kitchen)
       const kitchenStmt = `
-        INSERT INTO kitchen (
-          no, date, category, description, method, debit, credit, balances, liabilities, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT OR REPLACE INTO kitchen (
+          no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, '', ?, ?, ?, datetime('now'), ?)
       `;
       await db.prepare(kitchenStmt).bind(
         newNo, entryDate, body.category || 'General', body.description || '',
-        body.method || 'Cash', debit, credit, 0, liabilities, body.transfer || '',
-        vrNo, my, fy, rawBook, createdBy, new Date().toISOString(), uniqueid
+        body.method || 'Cash', debit, credit, body.transfer || '',
+        vrNo, fy, rawBook, createdBy, uniqueid
       ).run();
     } else if (tableName === 'payroll') {
+      // 18 Columns for Payroll
       const payrollStmt = `
-        INSERT INTO payroll (
+        INSERT OR REPLACE INTO payroll (
           no, date, category, description, method, debit, credit, balances, unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, '', ?, ?, ?, datetime('now'), ?)
       `;
       await db.prepare(payrollStmt).bind(
-        newNo, entryDate, body.category || 'General', body.description || '',
-        body.method || 'Cash', debit, credit, 0, parseFloat(body.unpaidBonus || 0), parseFloat(body.unpaidFund || 0),
-        body.transfer || '', vrNo, my, fy, rawBook, createdBy, new Date().toISOString(), uniqueid
+        newNo, entryDate, body.category || 'Full Time Salary', body.description || '',
+        body.method || 'Cash', debit, credit, parseFloat(body.unpaidBonus || 0), parseFloat(body.unpaidFund || 0),
+        body.transfer || '', vrNo, normalizeFyStr(body.fy), rawBook, createdBy, uniqueid
       ).run();
     } else {
+      // 19 Columns for Office (Includes liabilities)
       const officeStmt = `
-        INSERT INTO office (
+        INSERT OR REPLACE INTO office (
           no, date, category, description, unit, unit_price, method, debit, credit, balances, liabilities, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, '', ?, ?, ?, datetime('now'), ?)
       `;
       await db.prepare(officeStmt).bind(
         newNo, entryDate, body.category || 'General', body.description || '',
-        unit, unitPrice, body.method || 'Cash', debit, credit, 0, liabilities,
-        body.transfer || '', vrNo, my, fy, rawBook, createdBy, new Date().toISOString(), uniqueid
+        unit, unitPrice, body.method || 'Cash', debit, credit, liabilities,
+        body.transfer || '', vrNo, fy, rawBook, createdBy, uniqueid
       ).run();
     }
 
+    if (isMigration) {
+      return {
+        success: true,
+        message: "စာရင်းသစ် အောင်မြင်စွာ တိုက်ရိုက် သွင်းယူပြီးပါပြီ။",
+        uniqueId: uniqueid,
+        vrNo: vrNo
+      };
+    }
+
+    // 💡 LIVE OPERATIONAL MODE
     await recalculateLedgerBalances(db, tableName);
 
-    // 1. Sync Uniform Stock
     const isUniform = (body.category === "Advance Uniform" || body.category === "Advance Unifrom");
     const targetPid = body.id || extractProductIdFromDescription(body.description);
     if (isUniform && targetPid && unit > 0) {
       await syncUniformStock(db, targetPid, unit);
     }
 
-    // 2. Post Linked Auto Entries
     await postLinkedAutoEntries(db, body, entryDate, my, fy, createdBy, uniqueid);
 
     return {
@@ -451,15 +419,12 @@ export async function saveExpenseEntry(db, session, body) {
     };
   } catch (err) {
     console.error("Error in saveExpenseEntry handler:", err);
-    return {
-      success: false,
-      message: "စာရင်း သိမ်းဆည်းရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message
-    };
+    return { success: false, message: "စာရင်း သိမ်းဆည်းရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message };
   }
 }
 
 /**
- * 💡 Update Expense Entry (Safe Stock Reversion via Description RegEx)
+ * 💡 Update Expense Entry (Kitchen has NO liabilities column)
  */
 export async function updateExpenseEntry(db, session, body) {
   try {
@@ -467,11 +432,8 @@ export async function updateExpenseEntry(db, session, body) {
     const tableName = getTableName(rawBook);
     const uniqueid = body.uniqueId || body.uniqueid;
 
-    if (!uniqueid) {
-      return { success: false, message: "Unique ID မပါဝင်ပါ။" };
-    }
+    if (!uniqueid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
 
-    // 1. Fetch Old Entry to Revert Stock using Extracted Product ID
     const oldRow = await db.prepare(`SELECT * FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (oldRow && (oldRow.category === "Advance Uniform" || oldRow.category === "Advance Unifrom")) {
       const oldUnit = parseFloat(oldRow.unit || 0);
@@ -481,7 +443,6 @@ export async function updateExpenseEntry(db, session, body) {
       }
     }
 
-    // 2. Clean Old Linked Auto Entries
     await cleanLinkedAutoEntries(db, uniqueid);
 
     const entryDate = body.date || new Date().toISOString().split('T')[0];
@@ -500,67 +461,38 @@ export async function updateExpenseEntry(db, session, body) {
     const liabilities = parseFloat(body.liabilities || 0);
 
     if (tableName === 'kitchen') {
-      const kitchenStmt = `
-        UPDATE kitchen SET
-          date = ?, category = ?, description = ?, method = ?, debit = ?, credit = ?,
-          liabilities = ?, transfer = ?, my = ?, fy = ?
-        WHERE uniqueid = ?
-      `;
-      await db.prepare(kitchenStmt).bind(
-        entryDate, body.category || 'General', body.description || '', body.method || 'Cash',
-        debit, credit, liabilities, body.transfer || '', my, fy, uniqueid
-      ).run();
+      // ✅ NO liabilities column for Kitchen
+      await db.prepare(`
+        UPDATE kitchen SET date=?, category=?, description=?, method=?, debit=?, credit=?, transfer=?, fy=? WHERE uniqueid=?
+      `).bind(entryDate, body.category || 'General', body.description || '', body.method || 'Cash', debit, credit, body.transfer || '', fy, uniqueid).run();
     } else if (tableName === 'payroll') {
-      const payrollStmt = `
-        UPDATE payroll SET
-          date = ?, category = ?, description = ?, method = ?, debit = ?, credit = ?,
-          unpaid_bonus = ?, unpaid_fund = ?, transfer = ?, my = ?, fy = ?
-        WHERE uniqueid = ?
-      `;
-      await db.prepare(payrollStmt).bind(
-        entryDate, body.category || 'General', body.description || '', body.method || 'Cash',
-        debit, credit, parseFloat(body.unpaidBonus || 0), parseFloat(body.unpaidFund || 0),
-        body.transfer || '', my, fy, uniqueid
-      ).run();
+      await db.prepare(`
+        UPDATE payroll SET date=?, category=?, description=?, method=?, debit=?, credit=?, unpaid_bonus=?, unpaid_fund=?, transfer=?, fy=? WHERE uniqueid=?
+      `).bind(entryDate, body.category || 'Full Time Salary', body.description || '', body.method || 'Cash', debit, credit, parseFloat(body.unpaidBonus || 0), parseFloat(body.unpaidFund || 0), body.transfer || '', fy, uniqueid).run();
     } else {
-      const officeStmt = `
-        UPDATE office SET
-          date = ?, category = ?, description = ?, unit = ?, unit_price = ?,
-          method = ?, debit = ?, credit = ?, liabilities = ?, transfer = ?, my = ?, fy = ?
-        WHERE uniqueid = ?
-      `;
-      await db.prepare(officeStmt).bind(
-        entryDate, body.category || 'General', body.description || '', unit, unitPrice,
-        body.method || 'Cash', debit, credit, liabilities, body.transfer || '', my, fy, uniqueid
-      ).run();
+      await db.prepare(`
+        UPDATE office SET date=?, category=?, description=?, unit=?, unit_price=?, method=?, debit=?, credit=?, liabilities=?, transfer=?, fy=? WHERE uniqueid=?
+      `).bind(entryDate, body.category || 'General', body.description || '', unit, unitPrice, body.method || 'Cash', debit, credit, liabilities, body.transfer || '', fy, uniqueid).run();
     }
 
     await recalculateLedgerBalances(db, tableName);
 
-    // 3. Deduct New Stock
     const isUniform = (body.category === "Advance Uniform" || body.category === "Advance Unifrom");
     const targetPid = body.id || extractProductIdFromDescription(body.description);
     if (isUniform && targetPid && unit > 0) {
       await syncUniformStock(db, targetPid, unit);
     }
 
-    // 4. Re-post Updated Linked Auto Entries & Recalculate Linked Books
     await postLinkedAutoEntries(db, body, entryDate, my, fy, session?.name || 'Admin', uniqueid);
     await recalculateLedgerBalances(db, 'cash');
     await recalculateLedgerBalances(db, 'bank');
     await recalculateLedgerBalances(db, 'ca_cash');
     await recalculateLedgerBalances(db, 'ca_bank');
 
-    return {
-      success: true,
-      message: "စာရင်း အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။"
-    };
+    return { success: true, message: "စာရင်း အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။" };
   } catch (err) {
     console.error("Error in updateExpenseEntry handler:", err);
-    return {
-      success: false,
-      message: "စာရင်း ပြင်ဆင်ရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message
-    };
+    return { success: false, message: "စာရင်း ပြင်ဆင်ရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message };
   }
 }
 
@@ -573,11 +505,8 @@ export async function deleteExpenseEntry(db, session, body) {
     const tableName = getTableName(rawBook);
     const uniqueid = body.uniqueId || body.uniqueid;
 
-    if (!uniqueid) {
-      return { success: false, message: "Unique ID မပါဝင်ပါ။" };
-    }
+    if (!uniqueid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
 
-    // 1. Revert Stock in Uniform Ledger via Extracted Product ID
     const oldRow = await db.prepare(`SELECT * FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (oldRow && (oldRow.category === "Advance Uniform" || oldRow.category === "Advance Unifrom")) {
       const oldUnit = parseFloat(oldRow.unit || 0);
@@ -587,28 +516,18 @@ export async function deleteExpenseEntry(db, session, body) {
       }
     }
 
-    // 2. Delete Main Entry
     await db.prepare(`DELETE FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).run();
-
-    // 3. Delete Linked Auto Entries
     await cleanLinkedAutoEntries(db, uniqueid);
 
-    // 4. Recalculate all affected ledgers
     await recalculateLedgerBalances(db, tableName);
     await recalculateLedgerBalances(db, 'cash');
     await recalculateLedgerBalances(db, 'bank');
     await recalculateLedgerBalances(db, 'ca_cash');
     await recalculateLedgerBalances(db, 'ca_bank');
 
-    return {
-      success: true,
-      message: "စာရင်း အောင်မြင်စွာ ဖျက်သိမ်းပြီးပါပြီ။"
-    };
+    return { success: true, message: "စာရင်း အောင်မြင်စွာ ဖျက်သိမ်းပြီးပါပြီ။" };
   } catch (err) {
     console.error("Error in deleteExpenseEntry handler:", err);
-    return {
-      success: false,
-      message: "စာရင်း ဖျက်သိမ်းရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message
-    };
+    return { success: false, message: "စာရင်း ဖျက်သိမ်းရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message };
   }
 }
