@@ -7,7 +7,7 @@
 var gHrPayrollData = [];
 var gHrPayrollFilteredData = [];
 var gHrPayrollPage = 1;
-var gHrPayrollLimit = 15;
+var gHrPayrollLimit = 100;
 
 var gHrStaffFT = []; // Full-Time Staff Cache
 var gHrStaffPT = []; // Part-Time Staff Cache
@@ -92,7 +92,7 @@ function renderHrPayrollStats(stats) {
   if (elInc) elInc.textContent = `${Number(stats.totalIncome || 0).toLocaleString('en-US')} MMK`;
   if (elExp) elExp.textContent = `${Number(stats.totalExpense || 0).toLocaleString('en-US')} MMK`;
   if (elBal) elBal.textContent = `${Number(stats.balance || 0).toLocaleString('en-US')} MMK`;
-  if (elCount) elCount.textContent = gHrPayrollData.length.toLocaleString('en-US');
+  if (elCount) elCount.textContent = (totalRowsCount || gHrPayrollTotalRows || gHrPayrollData.length).toLocaleString('en-US');
 }
 
 function applyHrPayrollSearchAndRender() {
