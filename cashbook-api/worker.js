@@ -2,8 +2,8 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - CLOUDFLARE WORKER MAIN ROUTER (D1 MODULAR EDITION)
  * File: worker.js  
- * 💡 Features: Universal Dynamic CORS Engine, Immediate Preflight Responder,
- *              PBKDF2 Password Security, Strict RBAC Permissions & Full 35+ Route Handlers
+ * 💡 Features: Fail-Closed JWT Security, Strict RBAC Matrix, PII Data Protection,
+ *              CORS Whitelist Protection, Masked Error Logging & Full 35+ Route Handlers
  * ==============================================================================
  */
 
@@ -168,11 +168,14 @@ async function verifyPassword(password, stored) {
 
 export default {
   async fetch(request, env, ctx) {
-    // 💡 1. UNIVERSAL DYNAMIC CORS ENGINE
-    const origin = request.headers.get("Origin") || "*";
+    // 💡 1. CORS ORIGIN WHITELIST ENGINE (Connects with wrangler.toml ALLOWED_ORIGIN)
+    const requestOrigin = request.headers.get("Origin") || "";
+    const allowedList = String(env.ALLOWED_ORIGIN || "*").split(",").map(s => s.trim()).filter(Boolean);
+    const isAllowed = allowedList.includes("*") || allowedList.includes(requestOrigin);
+    const resolvedOrigin = isAllowed ? (requestOrigin || allowedList[0] || "*") : allowedList[0];
 
     const corsHeaders = {
-      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Origin": resolvedOrigin,
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, token, authToken, role",
       "Access-Control-Max-Age": "86400",
@@ -193,7 +196,15 @@ export default {
         }), { status: 500, headers: corsHeaders });
       }
 
-      const authSecret = env.AUTH_SECRET || "GoldenSecretKey2026SecureJWT";
+      // 💡 3. FAIL-CLOSED JWT SECRET SECURITY (No hardcoded fallback)
+      const authSecret = env.AUTH_SECRET;
+      if (!authSecret) {
+        console.error("CRITICAL CONFIG ERROR: env.AUTH_SECRET is not configured in Cloudflare Worker.");
+        return new Response(JSON.stringify({
+          success: false,
+          message: "Server Configuration Error: AUTH_SECRET မသတ်မှတ်ရသေးပါ။ Cloudflare Worker Settings > Variables တွင် ထည့်သွင်းပေးပါ။"
+        }), { status: 500, headers: corsHeaders });
+      }
 
       let body = {};
       let action = "";
@@ -311,9 +322,9 @@ export default {
           result = await StudentHandlers.deleteStudentEntry(db, userSession, body);
           break;
 
-        // 👨‍🏫 4. HR PAYROLL & STAFF ROUTES
+        // 👨‍🏫 4. HR PAYROLL & STAFF ROUTES (PII Protected)
         case 'getStaffData':
-          result = await PayrollStaffHandlers.getStaffData(db, body);
+          result = await PayrollStaffHandlers.getStaffData(db, body, userSession);
           break;
 
         case 'saveStaffEntry':
@@ -513,13 +524,15 @@ export default {
           result = await StudentMoneyHandlers.deleteStudentMoneyEntry(db, userSession, body);
           break;
 
-        // ⚙️ 13. SYSTEM SETTINGS & CONTROLS ROUTES
+        // ⚙️ 13. SYSTEM SETTINGS & CONTROLS ROUTES (Permission Guarded)
         case 'getSettingsData':
           result = await SettingsHandlers.getSettingsData(db, body);
           break;
 
         case 'exportBookDataByFy':
         case 'exportGroupDataByFy':
+          // 💡 4. PERMISSION GUARD ON BULK EXPORT
+          if (!can(userSession, 'backup')) return forbidden(corsHeaders);
           result = await SettingsHandlers.exportGroupDataByFy(db, body);
           break;
 
@@ -536,11 +549,11 @@ export default {
       return new Response(JSON.stringify(result || { success: true }), { headers: corsHeaders });
 
     } catch (err) {
+      // 💡 5. MASKED ERROR DISCLOSURE (Logs internally, returns safe generic message to client)
       console.error("Worker Execution Catch:", err);
       return new Response(JSON.stringify({
         success: false,
-        message: "Server အတွင်း အမှားအယွင်း ဖြစ်ပေါ်နေပါသည်။",
-        detail: err.message || String(err)
+        message: "Server အတွင်း အမှားအယွင်း ဖြစ်ပေါ်နေပါသည်။"
       }), { status: 500, headers: corsHeaders });
     }
   }
