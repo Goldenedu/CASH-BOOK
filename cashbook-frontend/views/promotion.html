@@ -8,7 +8,6 @@
       <!-- Search Input -->
       <div class="relative w-full sm:w-64">
         <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
-        <!-- 💡 UPDATED SEARCH PLACEHOLDER FOR STRICT CRITERIA (Class, Category, FY, Remark) -->
         <input type="text" id="promo-search" oninput="onSearchInputPromotion()" placeholder="Search class, category, FY, remark..." class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white focus:outline-none focus:border-indigo-500 transition-all">
       </div>
 
@@ -44,7 +43,7 @@
   </div>
 
   <!-- ၂။ Promotion Matrix Table Grid -->
-  <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
+  <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto rounded-t-xl">
     <table class="w-full text-left border-collapse min-w-[1600px]">
       <thead>
         <tr class="bg-[#0e172a]">
@@ -71,13 +70,19 @@
     </table>
   </div>
 
-  <!-- ၃။ Info Footer -->
-  <div class="flex justify-between items-center bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
-    <div class="text-xs font-semibold text-slate-400 tracking-wide">
-      Showing <span class="text-indigo-400 font-bold" id="promo-total-count">0</span> matching fee rates
+  <!-- ၃။ 💡 Dynamic Pagination Footer Bar (promoLimit = 30 စနစ်) -->
+  <div class="flex flex-col sm:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-b-xl gap-3">
+    <div id="promo-pagination-info" class="text-xs font-semibold text-slate-400 tracking-wide">
+      Showing <span class="text-indigo-400 font-extrabold">0</span> to <span class="text-indigo-400 font-extrabold">0</span> of <span class="text-indigo-400 font-extrabold" id="promo-total-count">0</span> entries
     </div>
-    <div class="text-[10px] text-slate-500 uppercase tracking-widest font-black">
-      Fee Matrix Reference Table
+    
+    <div class="flex items-center gap-2">
+      <button id="promo-btn-prev" onclick="changePagePromotion(-1)" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold rounded-lg transition-all flex items-center gap-1 shadow-sm">
+        <i class="fa-solid fa-chevron-left text-[10px]"></i> Previous
+      </button>
+      <button id="promo-btn-next" onclick="changePagePromotion(1)" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold rounded-lg transition-all flex items-center gap-1 shadow-sm">
+        Next <i class="fa-solid fa-chevron-right text-[10px]"></i>
+      </button>
     </div>
   </div>
 
@@ -101,13 +106,13 @@
           <select id="promo-fy" required class="w-full font-bold text-slate-100 bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-indigo-500"></select>
         </div>
         
-        <!-- 💡 2. Class Dropdown (config.js မှ Dynamic) -->
+        <!-- 💡 2. Class Dropdown -->
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Class</label>
           <select id="promo-class" required class="w-full font-bold text-slate-100 bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-indigo-500"></select>
         </div>
 
-        <!-- 💡 3. Category Dropdown (config.js မှ Dynamic) -->
+        <!-- 💡 3. Category Dropdown -->
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Category</label>
           <select id="promo-category" required class="w-full font-bold text-slate-100 bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-indigo-500"></select>
