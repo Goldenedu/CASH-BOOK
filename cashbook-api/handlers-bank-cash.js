@@ -1,9 +1,9 @@
 /**
  * GOLDEN ERP SYSTEM - MAIN BANK & CASH BOOKS HANDLER (CLOUDFLARE D1)
  * File: handlers-bank-cash.js  
- * 💡 Features: Direct Migration Mode (Bypasses cascading cross-transfers during bulk sync),
- *              Config-Aligned Schema Mapping (payroll: 18 cols, office: 19 cols, bank/cash/kitchen: 16 cols),
- *              FY-Based Stats, Date-Based Voucher No (VR No), Batch Running Balance & Idempotent Upsert Engine
+ * 💡 Features: Direct isMigration Mode (Preserves Column A NO 1..656 & Bypasses Auto-Transfers during bulk sync),
+ *              Accurate Balances Calculation (Total Income - Total Expense), Config-Aligned Schema Mapping,
+ *              FY-Based Stats, Date-Based VR No, Batch Running Balance & Idempotent Upsert Engine
  */
 
 const BOOK_TABLE_MAP = {
@@ -166,7 +166,6 @@ async function postCrossBookTransfer(db, body, sourceBookName, entryDate, my, fy
   const targetNo = await generateFyNo(db, targetTable, normFy);
   const targetDesc = `[Transfer from ${sourceBookName}] ${body.description || ''}`.trim();
 
-  // 💡 Schema Branching by Table Columns
   if (targetTable === 'office') {
     // 19 Columns
     await db.prepare(`
@@ -241,8 +240,9 @@ export async function getBankCashData(db, body) {
       totalExpense = parseFloat(allStats.totalExpense || 0);
     }
 
-    const latestBalRow = await db.prepare(`SELECT balances FROM ${tableName} ORDER BY id DESC LIMIT 1`).first();
-    const balance = latestBalRow ? parseFloat(latestBalRow.balances || 0) : (totalIncome - totalExpense);
+    // 💡 FIX: Strict Net Balance Calculation (Total Income - Total Expense)
+    // Prevents displaying "0 MMK" when individual row balances are not yet recalculating
+    const balance = totalIncome - totalExpense;
 
     let whereClauses = [];
     let params = [];
@@ -313,7 +313,7 @@ export async function getBankCashData(db, body) {
 }
 
 /**
- * 💡 Save Bank / Cash Entry (Supports isMigration Mode)
+ * 💡 Save Bank / Cash Entry (Preserves Column A NO 1..656 during isMigration Mode)
  */
 export async function saveBankCashEntry(db, session, body) {
   try {
@@ -334,23 +334,24 @@ export async function saveBankCashEntry(db, session, body) {
     const debit = parseFloat(body.debit || 0);
     const credit = parseFloat(body.credit || 0);
 
-    const newNo = await generateFyNo(db, tableName, fy);
-    const prefix = getTablePrefix(tableName);
-    const vrNo = body.vrNo || await generateVoucherNo(db, tableName, prefix, entryDate);
-
     // 💡 CHECK FOR DIRECT MIGRATION MODE (Bypasses Live Cross-Book Transfers)
     const isMigration = Boolean(body.isMigration || body.directImport || body.skipAutoPost);
+
+    // 💡 FIX: Use exact sequential NO from Google Sheet Column A when migrating
+    const newNo = (isMigration && body.no) ? parseInt(body.no, 10) : await generateFyNo(db, tableName, fy);
+    const prefix = getTablePrefix(tableName);
+    const vrNo = body.vrNo || await generateVoucherNo(db, tableName, prefix, entryDate);
 
     const stmt = `
       INSERT OR REPLACE INTO ${tableName} (
         no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, '', ?, ?, ?, datetime('now'), ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
     `;
 
     await db.prepare(stmt).bind(
       newNo, entryDate, body.category || 'Income', body.description || '',
       body.method || (tableName === 'bank' ? 'Bank' : 'Cash'), debit, credit,
-      body.transfer || '', vrNo, normalizeFyStr(body.fy), rawBook, createdBy, uniqueid
+      body.transfer || '', vrNo, my, normalizeFyStr(body.fy), rawBook, createdBy, uniqueid
     ).run();
 
     if (isMigration) {
