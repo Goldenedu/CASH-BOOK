@@ -6,7 +6,7 @@
  */
 
 var stmPage = 1;
-var stmLimit = 50;
+var stmLimit = 20;
 var stmTotalRows = 0;
 var stmActiveData = [];
 var stmStudentsCache = {};
