@@ -1,6 +1,7 @@
 # ==============================================================================
 # GOLDEN ERP SYSTEM - CLOUDFLARE WORKER CONFIGURATION
 # File: wrangler.toml  
+# 💡 Features: Restricted CORS Whitelist, D1 Database Binding & Production Environments
 # ==============================================================================
 
 name = "cashbook-app-api"
@@ -8,12 +9,19 @@ main = "worker.js"
 compatibility_date = "2026-08-01"
 compatibility_flags = ["nodejs_compat"]
 
-# 💡 CLOUDFLARE D1 DATABASE BINDING
+# 💡 1. CLOUDFLARE D1 DATABASE BINDING
 [[d1_databases]]
 binding = "DB"
 database_name = "school-db"
 database_id = "945c2d8b-f2ac-496a-a7bd-018c18be84bf"
 
-# 💡 ENVIRONMENT VARIABLES
+# 💡 2. ENVIRONMENT VARIABLES (CORS Whitelist Protection)
 [vars]
-ALLOWED_ORIGIN = "*"
+ALLOWED_ORIGIN = "https://cash-book-c4o.pages.dev,http://localhost:8787,http://127.0.0.1:5500,http://localhost:3000"
+
+# ==============================================================================
+# 💡 3. REQUIRED WORKER SECRETS (Set via Cloudflare Dashboard or CLI)
+# ------------------------------------------------------------------------------
+# 1. AUTH_SECRET      -> JWT Cryptographic Secret (e.g., npx wrangler secret put AUTH_SECRET)
+# 2. RESEND_API_KEY   -> Resend Email API Key (e.g., npx wrangler secret put RESEND_API_KEY)
+# ==============================================================================
