@@ -7,7 +7,7 @@
 
 window.StudentState = {
   page: 1,
-  limit: 100,
+  limit: 20,
   totalRows: 0,
   activeData: [],
   searchVal: '',
