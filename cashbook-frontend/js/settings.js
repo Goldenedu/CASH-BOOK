@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - SYSTEM SETTINGS & CONTROLS CONTROLLER
- * File: js/settings.js  
+ * File: js/settings.js   
  * 💡 Features: Live D1 Balances Control, 13-Tab/5-Tab Grouped Excel (.xlsx) Generator, Email Backup & 20MB Auto File Size Safety Guard
  */
 
