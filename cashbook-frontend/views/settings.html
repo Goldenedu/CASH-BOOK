@@ -14,7 +14,7 @@
     </div>
   </div>
 
-  <!-- 2. Main Grid Layout (Row 1: Balances Control & Mindfulness Quote with Rich Color Styling) -->
+  <!-- 2. Main Grid Layout (Row 1: Balances Control & Mindfulness Quote) -->
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
     <!-- 💡 ROW 1 - LEFT: BALANCES CONTROL -->
@@ -46,7 +46,7 @@
       </div>
     </div>
 
-    <!-- 💡 ROW 1 - RIGHT: ALWAYS BE MINDFUL (Bigger Text & Spacious Line Spacing) -->
+    <!-- 💡 ROW 1 - RIGHT: ALWAYS BE MINDFUL -->
     <div class="p-5 rounded-xl shadow-xl flex flex-col space-y-3 relative overflow-hidden h-full justify-between"
       style="background: linear-gradient(145deg, #0c1322 0%, #18192d 50%, #1c1508 100%); border: 1px solid rgba(245, 158, 11, 0.35);">
       <div>
@@ -60,7 +60,6 @@
           </div>
         </div>
 
-        <!-- Quote Box with Bigger Text (text-sm / 14px) and Spacious Line Spacing (space-y-2.5) -->
         <div class="p-4 rounded-xl space-y-2.5 font-serif italic text-xs sm:text-sm shadow-inner mt-3" style="background-color: rgba(9, 13, 22, 0.7); border: 1px solid rgba(245, 158, 11, 0.25);">
           <p style="color: #fef08a;" class="leading-relaxed">In every sight, -- မင်း ဘာပဲမြင်မြင် ... </p>
           <p style="color: #7dd3fc;" class="leading-relaxed">In every sound, -- မင်း ဘာပဲကြားကြား ... </p>
@@ -79,7 +78,7 @@
 
   </div>
 
-  <!-- 💡 ROW 2 (FULL WIDTH): CONSOLIDATED FY DATA EXPORT & BACKUP CENTER (Beautiful Spacious Grid Layout) -->
+  <!-- 💡 ROW 2: CONSOLIDATED FY DATA EXPORT & BACKUP CENTER (One-Page Auto-Wrapped Layout) -->
   <div class="bg-[#0c1322] border border-slate-800 p-5 rounded-2xl shadow-xl space-y-4">
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-3 gap-2">
       <div>
@@ -93,16 +92,16 @@
       </span>
     </div>
 
-    <!-- Export Table with Full Width & No Cutting Off -->
-    <div class="overflow-x-auto table-container">
-      <table class="w-full text-left border-collapse text-xs min-w-[750px]">
+    <!-- 💡 One-Page Responsive Table (No Horizontal Scrolling) -->
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-xs">
         <thead>
           <tr class="bg-[#0e172a] text-slate-400 font-bold uppercase text-[10px] border-b border-slate-800">
-            <th class="py-3 px-4 w-12 text-center">NO</th>
-            <th class="py-3 px-4 min-w-[300px]">Ledger / Book Group Name</th>
-            <th class="py-3 px-4 w-40">Category Group</th>
-            <th class="py-3 px-4 w-44 text-center">Select FY</th>
-            <th class="py-3 px-4 w-64 text-center">Actions</th>
+            <th class="py-3 px-3 w-10 text-center">NO</th>
+            <th class="py-3 px-4 min-w-[240px] max-w-md">LEDGER / BOOK GROUP NAME</th>
+            <th class="py-3 px-3 w-32 text-center">CATEGORY GROUP</th>
+            <th class="py-3 px-3 w-36 text-center">SELECT FY</th>
+            <th class="py-3 px-4 w-60 text-center">ACTIONS</th>
           </tr>
         </thead>
         <tbody id="settings-export-table-body" class="divide-y divide-slate-800/40 text-slate-200">
