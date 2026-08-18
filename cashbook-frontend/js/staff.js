@@ -6,7 +6,7 @@
 
 var gStaffCategory = 'Full Time'; // 'Full Time' or 'Part Time'
 var gStaffPage = 1;
-var gStaffLimit = 30;
+var gStaffLimit = 20;
 var gStaffSearch = '';
 var gStaffData = [];
 var isStaffSubmitting = false;
