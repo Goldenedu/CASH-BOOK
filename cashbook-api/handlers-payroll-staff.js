@@ -1,8 +1,9 @@
 /**
  * GOLDEN ERP SYSTEM - HR PAYROLL & STAFF D1 SQL HANDLER MODULE
  * File: handlers-payroll-staff.js 
- * 💡 Features: Fund Date Calculation (Join Date + 3 Years), Bonus/Fund Accrual & Payout Deduction Engine,
- *              Date-Based VR No (SAL-080826-001), FY Integer NO Reset, Grade Matrix Upsert & D1 Batch Running Balance Recalculator
+ * 💡 Features: PII & Salary Data Protection (Role-Based Field Redaction),
+ *              Fund Date Calculation (Join Date + 3 Years), Bonus/Fund Accrual & Payout Deduction Engine,
+ *              Date-Based VR No (SAL-080826-001), FY Integer NO Reset, Grade Matrix Upsert & Idempotent Upsert Engine
  */
 
 /**
@@ -116,9 +117,9 @@ async function generateFyNo(db, tableName, fy) {
 }
 
 /**
- * 💡 Get Staff Data & Compute KPI Stats (Supports Search & Pagination)
+ * 💡 Get Staff Data & Compute KPI Stats (With Role-Based PII & Salary Data Protection)
  */
-export async function getStaffData(db, body) {
+export async function getStaffData(db, body, userSession) {
   try {
     const isPartTime = String(body.category || '').toLowerCase().includes('part');
     const table = isPartTime ? 'staff_parttime' : 'staff_fulltime';
@@ -139,14 +140,18 @@ export async function getStaffData(db, body) {
     const totalRows = countRow ? countRow.count : 0;
 
     const rows = await db.prepare(`SELECT * FROM ${table} ${whereSql} ORDER BY id DESC LIMIT 1000`).bind(...params).all();
-    const staffList = rows.results || [];
+    const rawStaffList = rows.results || [];
+
+    // 💡 1. ROLE-BASED PII ACCESS CHECK
+    const role = userSession?.role || 'Viewer';
+    const canSeeSensitive = ['Owner', 'Admin', 'Finance', 'HR', 'HR Staff', 'HRStaff', 'Accountant'].includes(role);
 
     let activeCount = 0;
     let maleCount = 0;
     let femaleCount = 0;
     let totalNetAmt = 0;
 
-    staffList.forEach(item => {
+    const staffList = rawStaffList.map(item => {
       const isAct = (item.status || 'Active') === 'Active';
       if (isAct) activeCount++;
 
@@ -154,7 +159,35 @@ export async function getStaffData(db, body) {
       if (gender === 'male' || gender === 'ကျား') maleCount++;
       else if (gender === 'female' || gender === 'မ') femaleCount++;
 
-      totalNetAmt += Number(item.total_net_amt ?? item.totalNetAmt ?? item.total_salary ?? item.totalSalary ?? 0);
+      const rowNet = Number(item.total_net_amt ?? item.totalNetAmt ?? item.total_salary ?? item.totalSalary ?? 0);
+      totalNetAmt += rowNet;
+
+      // 🛡️ Redact sensitive financial & personal data for non-privileged roles (Staff, Viewer, Cashier)
+      if (!canSeeSensitive) {
+        return {
+          ...item,
+          nrc_no: '***',
+          nrcNo: '***',
+          bank_account: '***',
+          bankAccount: '***',
+          basic_amt: 0,
+          basicAmt: 0,
+          extra_amt: 0,
+          extraAmt: 0,
+          total_salary: 0,
+          totalSalary: 0,
+          bonus: 0,
+          fund: 0,
+          total_net_amt: 0,
+          totalNetAmt: 0,
+          unpaid_bonus: 0,
+          unpaidBonus: 0,
+          unpaid_fund: 0,
+          unpaidFund: 0
+        };
+      }
+
+      return item;
     });
 
     return {
@@ -163,7 +196,7 @@ export async function getStaffData(db, body) {
       totalRows: totalRows,
       stats: {
         activeCount,
-        totalNetAmt,
+        totalNetAmt: canSeeSensitive ? totalNetAmt : 0,
         maleCount,
         femaleCount
       }
@@ -175,7 +208,7 @@ export async function getStaffData(db, body) {
 }
 
 /**
- * 💡 Save Staff Record (Auto Fund Date = Join Date + 3 Years)
+ * 💡 Save Staff Record (Supports isMigration & Auto Fund Date = Join Date + 3 Years)
  */
 export async function saveStaffEntry(db, userSession, body) {
   try {
@@ -198,31 +231,34 @@ export async function saveStaffEntry(db, userSession, body) {
     const joinDateVal = body.joinDate || new Date().toISOString().split('T')[0];
     const computedFundDate = body.fundDate || calculateFundDate(joinDateVal);
 
+    const isMigration = Boolean(body.isMigration || body.directImport);
+    const assignedNo = (isMigration && body.no) ? parseInt(body.no, 10) : staffIdNum;
+
     if (isPartTime) {
-      await db.prepare(`INSERT INTO staff_parttime (
+      await db.prepare(`INSERT OR REPLACE INTO staff_parttime (
         no, join_date, category, staff_id, name, staff_idname, education, position,
         total_salary, total_net_amt, resigned_date, status, gender, nrc_no,
         bank_account, phone_no, email, created_by, created_at, uniqueid
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
-        body.no || staffIdNum, joinDateVal, 'Part Time', staffIdNum, staffName, staffIdName,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`).bind(
+        assignedNo, joinDateVal, 'Part Time', staffIdNum, staffName, staffIdName,
         body.education || '', body.position || '', parseFloat(body.totalSalary || 0), parseFloat(body.totalNetAmt || 0),
         body.resignedDate || '', body.status || 'Active', body.gender || 'Male', body.nrcNo || '', body.bankAccount || '',
-        body.phoneNo || '', body.email || '', userSession?.name || 'Admin', new Date().toISOString(), uniqueid
+        body.phoneNo || '', body.email || '', userSession?.name || 'Admin', uniqueid
       ).run();
     } else {
-      await db.prepare(`INSERT INTO staff_fulltime (
+      await db.prepare(`INSERT OR REPLACE INTO staff_fulltime (
         no, join_date, category, staff_id, name, staff_idname, education, position,
         salary_grade, working_days, basic_amt, extra_amt, total_salary, bonus, fund,
         total_net_amt, resigned_date, status, gender, nrc_no, bank_account, phone_no,
         email, fund_date, unpaid_bonus, unpaid_fund, created_by, created_at, uniqueid
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
-        body.no || staffIdNum, joinDateVal, 'Full Time', staffIdNum, staffName, staffIdName,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`).bind(
+        assignedNo, joinDateVal, 'Full Time', staffIdNum, staffName, staffIdName,
         body.education || '', body.position || '', body.salaryGrade || '', parseFloat(body.workingDays || 26),
         parseFloat(body.basicAmt || 0), parseFloat(body.extraAmt || 0), parseFloat(body.totalSalary || 0),
         parseFloat(body.bonus || 0), parseFloat(body.fund || 0), parseFloat(body.totalNetAmt || 0),
         body.resignedDate || '', body.status || 'Active', body.gender || 'Male', body.nrcNo || '', body.bankAccount || '',
         body.phoneNo || '', body.email || '', computedFundDate, parseFloat(body.unpaidBonus || 0), parseFloat(body.unpaidFund || 0),
-        userSession?.name || 'Admin', new Date().toISOString(), uniqueid
+        userSession?.name || 'Admin', uniqueid
       ).run();
     }
 
@@ -305,7 +341,7 @@ export async function deleteStaffEntry(db, userSession, body) {
   try {
     const isPartTime = String(body.category || '').toLowerCase().includes('part');
     const table = isPartTime ? 'staff_parttime' : 'staff_fulltime';
-    await db.prepare(`DELETE FROM ${table} WHERE uniqueid = ?`).bind(body.uniqueId).run();
+    await db.prepare(`DELETE FROM ${table} WHERE uniqueid = ?`).bind(body.uniqueId || body.uniqueid).run();
     return { success: true, message: "ဝန်ထမ်း မှတ်တမ်း အောင်မြင်စွာ ဖျက်သိမ်းပြီးပါပြီ။" };
   } catch (err) {
     console.error("Error in deleteStaffEntry handler:", err);
@@ -340,17 +376,17 @@ export async function saveHrPayrollForm(db, userSession, body) {
     const unpaidBonus = parseFloat(body.unpaidBonus || 0);
     const unpaidFund = parseFloat(body.unpaidFund || 0);
 
-    const stmt = `INSERT INTO payroll (
+    const stmt = `INSERT OR REPLACE INTO payroll (
       no, date, category, description, method, debit, credit, balances,
       unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name,
       created_by, created_at, uniqueid
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`;
 
     await db.prepare(stmt).bind(
       newNo, dateStr, category, body.description || '', body.method || 'Cash',
-      debitVal, creditVal, 0, unpaidBonus, unpaidFund,
+      debitVal, creditVal, unpaidBonus, unpaidFund,
       body.transfer || '', vrNoVal, myVal, fy,
-      'HR Payroll Exp Book', userSession?.name || 'Admin', new Date().toISOString(), uniqueid
+      'HR Payroll Exp Book', userSession?.name || 'Admin', uniqueid
     ).run();
 
     await recalculateLedgerBalances(db, 'payroll');
@@ -405,11 +441,10 @@ export async function getPayrollSettings(db, body) {
   try {
     let matrix = await db.prepare("SELECT * FROM salary_grade_matrix WHERE id = 1").first();
     
-    // Auto-create default row if table is empty
     if (!matrix) {
-      await db.prepare(`INSERT INTO salary_grade_matrix (
+      await db.prepare(`INSERT OR IGNORE INTO salary_grade_matrix (
         id, grade_a, grade_b, grade_c, grade_d, grade_e, grade_f, grade_g, grade_h, grade_i, grade_j, grade_k, grade_l, bonus_rate, fund_rate, updated_at
-      ) VALUES (1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.05, ?)`).bind(new Date().toISOString()).run();
+      ) VALUES (1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.05, datetime('now'))`).run();
       
       matrix = await db.prepare("SELECT * FROM salary_grade_matrix WHERE id = 1").first();
     }
@@ -432,29 +467,27 @@ export async function updatePayrollSettings(db, userSession, body) {
       await db.prepare(`UPDATE salary_grade_matrix SET 
         grade_a = ?, grade_b = ?, grade_c = ?, grade_d = ?, grade_e = ?, grade_f = ?, 
         grade_g = ?, grade_h = ?, grade_i = ?, grade_j = ?, grade_k = ?, grade_l = ?, 
-        bonus_rate = ?, fund_rate = ?, updated_at = ? WHERE id = 1`).bind(
+        bonus_rate = ?, fund_rate = ?, updated_at = datetime('now') WHERE id = 1`).bind(
         parseFloat(body.gradeA || body['grade-A'] || 0), parseFloat(body.gradeB || body['grade-B'] || 0),
         parseFloat(body.gradeC || body['grade-C'] || 0), parseFloat(body.gradeD || body['grade-D'] || 0),
         parseFloat(body.gradeE || body['grade-E'] || 0), parseFloat(body.gradeF || body['grade-F'] || 0),
         parseFloat(body.gradeG || body['grade-G'] || 0), parseFloat(body.gradeH || body['grade-H'] || 0),
         parseFloat(body.gradeI || body['grade-I'] || 0), parseFloat(body.gradeJ || body['grade-J'] || 0),
         parseFloat(body.gradeK || body['grade-K'] || 0), parseFloat(body.gradeL || body['grade-L'] || 0),
-        parseFloat(body.bonusRate || body.bonus || 0), parseFloat(body.fundRate || body.fund || 0.05),
-        new Date().toISOString()
+        parseFloat(body.bonusRate || body.bonus || 0), parseFloat(body.fundRate || body.fund || 0.05)
       ).run();
     } else {
       await db.prepare(`INSERT INTO salary_grade_matrix (
         id, grade_a, grade_b, grade_c, grade_d, grade_e, grade_f, grade_g, grade_h, grade_i, grade_j, grade_k, grade_l, 
         bonus_rate, fund_rate, updated_at
-      ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
+      ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`).bind(
         parseFloat(body.gradeA || body['grade-A'] || 0), parseFloat(body.gradeB || body['grade-B'] || 0),
         parseFloat(body.gradeC || body['grade-C'] || 0), parseFloat(body.gradeD || body['grade-D'] || 0),
         parseFloat(body.gradeE || body['grade-E'] || 0), parseFloat(body.gradeF || body['grade-F'] || 0),
         parseFloat(body.gradeG || body['grade-G'] || 0), parseFloat(body.gradeH || body['grade-H'] || 0),
         parseFloat(body.gradeI || body['grade-I'] || 0), parseFloat(body.gradeJ || body['grade-J'] || 0),
         parseFloat(body.gradeK || body['grade-K'] || 0), parseFloat(body.gradeL || body['grade-L'] || 0),
-        parseFloat(body.bonusRate || body.bonus || 0), parseFloat(body.fundRate || body.fund || 0.05),
-        new Date().toISOString()
+        parseFloat(body.bonusRate || body.bonus || 0), parseFloat(body.fundRate || body.fund || 0.05)
       ).run();
     }
 
