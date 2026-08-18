@@ -1,7 +1,8 @@
 /**
  * GOLDEN ERP SYSTEM - MAIN INCOME BOOK MODULE
  * File: js/income.js 
- * 💡 Features: FY-Scoped Student Lookup, Promo Matrix AUT Rate Calculator, Split Payment & Universal Invoice Printer
+ * 💡 Features: Precision FY-Scoped Student Lookup, Dynamic Promotion Matrix AUT Calculator (FY+Class+Category+Promo),
+ *              Auto-Fill Credit Amount, Split Payment & Universal Invoice Printer
  */
 
 var incomePage = 1;
@@ -11,7 +12,7 @@ var incomeActiveData = [];
 var studentsByFyCache = {};
 var promoMatrixCache = null;
 var searchTimeoutIncome = null;
-var isIncomeSubmitting = false; // 💡 Double Submit Protection Flag
+var isIncomeSubmitting = false;
 
 /**
  * 💡 Safe Native DOM HTML Escaper
@@ -62,7 +63,7 @@ function getFyShortCode(fyStr) {
 }
 
 /**
- * 💡 FYID Sanitizer (Fixes .0 issue cleanly)
+ * 💡 FYID Sanitizer
  */
 function sanitizeFyidStr(fyidStr) {
   var s = String(fyidStr || '').trim();
@@ -107,9 +108,6 @@ function clearDateFilterIncome() {
   renderTableIncome();
 }
 
-/**
- * 💡 Debounced Search Input Handler
- */
 function onSearchInputIncome() {
   if (searchTimeoutIncome) clearTimeout(searchTimeoutIncome);
   searchTimeoutIncome = setTimeout(function() {
@@ -153,6 +151,9 @@ async function loadIncomeData(isSilent, forceRefresh) {
     renderTableIncome();
     updatePaginationUIIncome();
 
+    // 💡 Preload Promotion Matrix Rates into Cache in Background
+    preloadPromotionMatrix();
+
   } catch (err) {
     console.error("Income Data Load Error:", err);
     if (!isSilent && typeof showToast === 'function') {
@@ -164,8 +165,19 @@ async function loadIncomeData(isSilent, forceRefresh) {
 }
 
 /**
- * 💡 Render KPI Header Stats Cards
+ * 💡 Preload Promotion Matrix Rates
  */
+async function preloadPromotionMatrix() {
+  try {
+    var res = await callApi('getPromotionData', {}, 'GET');
+    if (res && res.success) {
+      promoMatrixCache = res.data || [];
+    }
+  } catch (e) {
+    console.warn("Promotion Matrix Preload Warning:", e);
+  }
+}
+
 function renderStatsIncome(stats) {
   var incTotal = document.getElementById('inc-total-income');
   var expTotal = document.getElementById('inc-total-expense');
@@ -178,9 +190,6 @@ function renderStatsIncome(stats) {
   if (countTotal) countTotal.textContent = Number(incomeTotalRows || 0).toLocaleString('en-US');
 }
 
-/**
- * 💡 Render Table Grid Rows (Integer NO)
- */
 function renderTableIncome() {
   var tbody = document.getElementById('income-table-body');
   if (!tbody) return;
@@ -246,7 +255,7 @@ function renderTableIncome() {
 }
 
 /**
- * 💡 FY-Scoped Student Lookup (SELECT * FROM student WHERE fy = ?)
+ * 💡 FY-Scoped Student Lookup
  */
 async function onStudentIdOrFYChangeIncome() {
   var fyVal = document.getElementById('inc-fy')?.value || '2026-2027';
@@ -305,26 +314,33 @@ async function onStudentIdOrFYChangeIncome() {
     if (catEl) catEl.value = student.category || 'Boarder';
     if (promoEl) promoEl.value = student.promo || 'Original price';
 
-    onAccountNameOrCategoryChangeIncome();
+    // 💡 Auto calculate fee rate instantly
+    await onAccountNameOrCategoryChangeIncome();
   } else {
     if (fyidShow) fyidShow.value = targetFyid;
     if (fyidNameShow) fyidNameShow.value = "ကျောင်းသား စာရင်း ရှာမတွေ့ပါ။";
     
     if (document.getElementById('inc-class')) document.getElementById('inc-class').value = "";
     if (document.getElementById('inc-promo')) document.getElementById('inc-promo').value = "";
-    if (document.getElementById('inc-autamount')) document.getElementById('inc-autamount').value = 0;
+    
+    var autAmtEl = document.getElementById('inc-autamount') || document.getElementById('inc-aut-amount');
+    if (autAmtEl) autAmtEl.value = 0;
   }
 }
 
 /**
- * 💡 Promo Matrix Rate Auto-Calculation
+ * 💡 Precision Promotion Matrix Rate Auto-Calculation Engine
  */
 async function onAccountNameOrCategoryChangeIncome() {
-  var accountName = document.getElementById('inc-account')?.value;
-  var classVal = document.getElementById('inc-class')?.value;
-  var categoryVal = document.getElementById('inc-category')?.value;
-  var promoVal = document.getElementById('inc-promo')?.value;
-  var autAmtEl = document.getElementById('inc-autamount');
+  var fyVal = document.getElementById('inc-fy')?.value || '2026-2027';
+  var cleanFy = String(fyVal).trim().replace(/^FY\s*/i, '');
+  var accountName = document.getElementById('inc-account')?.value || 'Registration';
+  var classVal = String(document.getElementById('inc-class')?.value || '').trim();
+  var categoryVal = String(document.getElementById('inc-category')?.value || '').trim();
+  var promoVal = String(document.getElementById('inc-promo')?.value || 'Original price').trim();
+
+  var autAmtEl = document.getElementById('inc-autamount') || document.getElementById('inc-aut-amount');
+  var creditEl = document.getElementById('inc-credit');
 
   if (!autAmtEl) return;
 
@@ -333,9 +349,10 @@ async function onAccountNameOrCategoryChangeIncome() {
     return;
   }
 
-  if (!promoMatrixCache) {
+  // Load promo matrix if cache is missing
+  if (!promoMatrixCache || !Array.isArray(promoMatrixCache) || promoMatrixCache.length === 0) {
     try {
-      var res = await callApi('getPromotionData', {});
+      var res = await callApi('getPromotionData', {}, 'GET');
       if (res && res.success) {
         promoMatrixCache = res.data || [];
       }
@@ -345,29 +362,55 @@ async function onAccountNameOrCategoryChangeIncome() {
   }
 
   if (promoMatrixCache && Array.isArray(promoMatrixCache)) {
+    // 💡 1. Strict Match: Match by FY, Class AND Category
     var match = promoMatrixCache.find(function(r) {
-      return String(r.class).toLowerCase().trim() === String(classVal).toLowerCase().trim() &&
-        (accountName === "Registration" || String(r.category).toLowerCase().trim() === String(categoryVal).toLowerCase().trim());
+      var rFy = String(r.fy || '').trim().replace(/^FY\s*/i, '');
+      var rClass = String(r.class || '').trim().toLowerCase();
+      var rCat = String(r.category || '').trim().toLowerCase();
+
+      var fyMatches = (!rFy || rFy === cleanFy);
+      var classMatches = (rClass === classVal.toLowerCase());
+      var catMatches = (rCat === categoryVal.toLowerCase());
+
+      return classMatches && (catMatches || !categoryVal) && fyMatches;
     });
 
+    // 💡 2. Fallback Match without FY
+    if (!match) {
+      match = promoMatrixCache.find(function(r) {
+        var rClass = String(r.class || '').trim().toLowerCase();
+        var rCat = String(r.category || '').trim().toLowerCase();
+        return (rClass === classVal.toLowerCase()) && (rCat === categoryVal.toLowerCase());
+      });
+    }
+
     if (match) {
+      var calculatedFee = 0;
+
       if (accountName === "Registration") {
-        autAmtEl.value = match.registration || 0;
-        return;
+        calculatedFee = Number(match.registration ?? match.Registration ?? 0);
       } else if (accountName === "Services") {
         var promoKeyMap = {
-          'Original price': match.originalPrice || match.original_price,
-          'Pro A': match.proA || match.pro_a,
-          'Pro B': match.proB || match.pro_b,
-          'Pro C': match.proC || match.pro_c,
-          'Pro D': match.proD || match.pro_d,
-          'Pro E': match.proE || match.pro_e,
-          'Half scholar': match.halfScholar || match.half_scholar,
-          'Full scholar': match.fullScholar || match.full_scholar
+          'Original price': match.originalPrice ?? match.original_price ?? 0,
+          'Pro A': match.proA ?? match.pro_a ?? 0,
+          'Pro B': match.proB ?? match.pro_b ?? 0,
+          'Pro C': match.proC ?? match.pro_c ?? 0,
+          'Pro D': match.proD ?? match.pro_d ?? 0,
+          'Pro E': match.proE ?? match.pro_e ?? 0,
+          'Half scholar': match.halfScholar ?? match.half_scholar ?? 0,
+          'Full scholar': match.fullScholar ?? match.full_scholar ?? 0
         };
-        autAmtEl.value = promoKeyMap[promoVal] || match.originalPrice || match.original_price || 0;
-        return;
+
+        calculatedFee = Number(promoKeyMap[promoVal] !== undefined ? promoKeyMap[promoVal] : (match.originalPrice || match.original_price || 0));
       }
+
+      autAmtEl.value = calculatedFee;
+
+      // 💡 Auto-fill Credit amount if currently empty or 0
+      if (creditEl && (parseFloat(creditEl.value || 0) === 0 || creditEl.value === '')) {
+        creditEl.value = calculatedFee;
+      }
+      return;
     }
   }
 
@@ -394,7 +437,7 @@ function toggleSplitPaymentIncome() {
 /**
  * 💡 Modal Form Controls
  */
-function openAddModalIncome() {
+async function openAddModalIncome() {
   var form = document.getElementById('income-form');
   if (form) form.reset();
   
@@ -408,7 +451,7 @@ function openAddModalIncome() {
   var effDateEl = document.getElementById('inc-effdate');
   if (effDateEl) effDateEl.value = today;
 
-  var autAmtEl = document.getElementById('inc-autamount');
+  var autAmtEl = document.getElementById('inc-autamount') || document.getElementById('inc-aut-amount');
   if (autAmtEl) autAmtEl.value = 0;
 
   populateFYDropdownIncome();
@@ -419,6 +462,9 @@ function openAddModalIncome() {
 
   var modalEl = document.getElementById('income-modal');
   if (modalEl) modalEl.classList.remove('hidden');
+
+  // Preload Promo Matrix to be 100% ready for instant calculation
+  await preloadPromotionMatrix();
 }
 
 function closeIncomeModal() {
@@ -459,6 +505,8 @@ async function saveIncomeForm(e) {
     return;
   }
 
+  var autAmtEl = document.getElementById('inc-autamount') || document.getElementById('inc-aut-amount');
+
   var payload = {
     uniqueId: document.getElementById('inc-uniqueId')?.value || "",
     id: parseInt(document.getElementById('inc-id-search')?.value, 10) || 0,
@@ -471,7 +519,7 @@ async function saveIncomeForm(e) {
     category: document.getElementById('inc-category')?.value || "",
     promo: document.getElementById('inc-promo')?.value || "",
     accountName: document.getElementById('inc-account')?.value || "",
-    autAmount: parseFloat(document.getElementById('inc-autamount')?.value) || 0,
+    autAmount: parseFloat(autAmtEl?.value) || 0,
     remark: document.getElementById('inc-remark')?.value || "",
     isSplit: isSplit,
 
@@ -548,7 +596,7 @@ function editIncomeEntry(uniqueId) {
   var creditEl = document.getElementById('inc-credit');
   if (creditEl) creditEl.value = row.credit || 0;
 
-  var autAmtEl = document.getElementById('inc-autamount');
+  var autAmtEl = document.getElementById('inc-autamount') || document.getElementById('inc-aut-amount');
   if (autAmtEl) autAmtEl.value = row.autAmount || 0;
 
   var remarkEl = document.getElementById('inc-remark');
@@ -632,13 +680,11 @@ function exportToCSVIncome() {
 }
 
 /**
- * 💡 Universal Invoice Printer (Supports both Income Book & Cashier Today Income)
+ * 💡 Universal Invoice Printer
  */
 function printInvoice(uniqueId) {
-  // 1. First search in incomeActiveData
   var row = incomeActiveData.find(function(item) { return (item.uniqueId === uniqueId || item.uniqueid === uniqueId); });
 
-  // 2. If not found, fallback to Cashier allCashierData
   if (!row && window.allCashierData && Array.isArray(window.allCashierData)) {
     row = window.allCashierData.find(function(item) { return (item.uniqueId === uniqueId || item.uniqueid === uniqueId); });
   }
