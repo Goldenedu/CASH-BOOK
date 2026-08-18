@@ -1,7 +1,7 @@
 /**
  * GOLDEN ERP SYSTEM - SYSTEM SETTINGS & BACKUP CONTROLLER
  * File: js/settings.js 
- * 💡 Features: Balances Cross-Control, Zero-Scrollbar Table UI (Strict Table-Fixed),
+ * 💡 Features: Exact 2-Line Subtitle Layout (Zero Cut-Offs), Balances Cross-Control,
  *              SheetJS Multi-Tab Real Excel (.xlsx) Generator & Resend Email Backup
  */
 
@@ -84,7 +84,7 @@ function renderBalancesControlTable(data) {
 }
 
 /**
- * 💡 Render Export Table (Strictly fits on 1 Screen without Horizontal Scroll)
+ * 💡 Render Export Table (Strict 2-Line Layout for 100% Screen Visibility)
  */
 function renderExportTable() {
   const tbody = document.getElementById('settings-export-table-body');
@@ -94,33 +94,34 @@ function renderExportTable() {
   const fyOptions = fys.map(fy => `<option value="${fy}">${fy}</option>`).join('');
 
   tbody.innerHTML = `
-    <!-- ROW 1: MAIN CASH BOOK (13 TABS) -->
+    <!-- ROW 1: MAIN CASH BOOK (13 TABS SPLIT INTO 2 CLEAN LINES) -->
     <tr class="hover:bg-slate-800/30 transition">
-      <td class="py-3.5 px-2 text-center font-mono font-bold text-slate-500">1</td>
-      <td class="py-3.5 px-3">
+      <td class="py-3 px-2 text-center font-mono font-bold text-slate-500">1</td>
+      <td class="py-3 px-3">
         <div class="font-bold text-white text-xs tracking-wide">Main Cash Book</div>
-        <div class="text-[10px] text-slate-400 leading-snug mt-1 font-sans break-words whitespace-normal">
-          bank, cash, office, kitchen, payroll, income, student,<br class="hidden sm:inline" />
-          student_money, uniform, promotion, staff_fulltime, staff_parttime, salary_grade_matrix
+        <!-- 💡 ၂ ကြောင်း အညီအမျှ ခွဲထုတ်ထားသော စာတန်း -->
+        <div class="text-[10px] text-slate-400 leading-tight mt-1 font-mono">
+          <div>bank, cash, office, kitchen, payroll, income, student,</div>
+          <div>student_money, uniform, promotion, staff_fulltime, staff_parttime, salary_grade_matrix</div>
         </div>
       </td>
-      <td class="py-3.5 px-2 text-center">
-        <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-800 text-slate-300 border border-slate-700 whitespace-nowrap shadow-sm">
+      <td class="py-3 px-2 text-center">
+        <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-slate-800 text-slate-300 border border-slate-700 whitespace-nowrap shadow-sm">
           13 Master Tabs
         </span>
       </td>
-      <td class="py-3.5 px-2 text-center">
-        <select id="export-fy-main" class="w-full bg-[#0f172a] border border-slate-800 text-slate-200 text-xs font-bold rounded-lg px-2 py-1.5 outline-none focus:border-indigo-500 transition font-mono">
+      <td class="py-3 px-2 text-center">
+        <select id="export-fy-main" class="w-full bg-[#0f172a] border border-slate-800 text-slate-200 text-xs font-bold rounded-lg px-2.5 py-1.5 outline-none focus:border-indigo-500 transition font-mono">
           ${fyOptions}
         </select>
       </td>
-      <td class="py-3.5 px-3 text-center">
-        <div class="flex items-center justify-center gap-1.5 flex-nowrap">
-          <button onclick="handleExportWorkbook('main')" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] font-bold rounded-lg transition flex items-center gap-1 shadow-sm whitespace-nowrap" title="Download Excel (.xlsx)">
+      <td class="py-3 px-3 text-center">
+        <div class="flex items-center justify-center gap-1.5">
+          <button onclick="handleExportWorkbook('main')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold rounded-lg transition flex items-center gap-1.5 shadow-sm whitespace-nowrap" title="Download Excel (.xlsx)">
             <i class="fa-solid fa-file-excel text-emerald-400"></i> Excel (.xlsx)
           </button>
-          <button onclick="handleSendEmailBackup('main')" class="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-black rounded-lg transition flex items-center gap-1 shadow-md shadow-indigo-600/20 whitespace-nowrap" title="Send Email Backup">
-            <i class="fa-solid fa-paper-plane text-[10px]"></i> Email
+          <button onclick="handleSendEmailBackup('main')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black rounded-lg transition flex items-center gap-1.5 shadow-md shadow-indigo-600/20 whitespace-nowrap" title="Send Email Backup">
+            <i class="fa-solid fa-paper-plane text-xs"></i> Email
           </button>
         </div>
       </td>
@@ -128,30 +129,30 @@ function renderExportTable() {
 
     <!-- ROW 2: CASHIER CASH BOOK (5 TABS) -->
     <tr class="hover:bg-slate-800/30 transition">
-      <td class="py-3.5 px-2 text-center font-mono font-bold text-slate-500">2</td>
-      <td class="py-3.5 px-3">
+      <td class="py-3 px-2 text-center font-mono font-bold text-slate-500">2</td>
+      <td class="py-3 px-3">
         <div class="font-bold text-white text-xs tracking-wide">Cashier Cash Book</div>
-        <div class="text-[10px] text-slate-400 leading-snug mt-1 font-sans break-words whitespace-normal">
-          ca_bank, ca_cash, ca_office, ca_kitchen, ca_payroll (5 Tabs)
+        <div class="text-[10px] text-slate-400 leading-tight mt-1 font-mono">
+          <div>ca_bank, ca_cash, ca_office, ca_kitchen, ca_payroll (5 Tabs)</div>
         </div>
       </td>
-      <td class="py-3.5 px-2 text-center">
-        <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-800 text-slate-300 border border-slate-700 whitespace-nowrap shadow-sm">
+      <td class="py-3 px-2 text-center">
+        <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-slate-800 text-slate-300 border border-slate-700 whitespace-nowrap shadow-sm">
           5 Cashier Tabs
         </span>
       </td>
-      <td class="py-3.5 px-2 text-center">
-        <select id="export-fy-cashier" class="w-full bg-[#0f172a] border border-slate-800 text-slate-200 text-xs font-bold rounded-lg px-2 py-1.5 outline-none focus:border-indigo-500 transition font-mono">
+      <td class="py-3 px-2 text-center">
+        <select id="export-fy-cashier" class="w-full bg-[#0f172a] border border-slate-800 text-slate-200 text-xs font-bold rounded-lg px-2.5 py-1.5 outline-none focus:border-indigo-500 transition font-mono">
           ${fyOptions}
         </select>
       </td>
-      <td class="py-3.5 px-3 text-center">
-        <div class="flex items-center justify-center gap-1.5 flex-nowrap">
-          <button onclick="handleExportWorkbook('cashier')" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] font-bold rounded-lg transition flex items-center gap-1 shadow-sm whitespace-nowrap" title="Download Excel (.xlsx)">
+      <td class="py-3 px-3 text-center">
+        <div class="flex items-center justify-center gap-1.5">
+          <button onclick="handleExportWorkbook('cashier')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold rounded-lg transition flex items-center gap-1.5 shadow-sm whitespace-nowrap" title="Download Excel (.xlsx)">
             <i class="fa-solid fa-file-excel text-emerald-400"></i> Excel (.xlsx)
           </button>
-          <button onclick="handleSendEmailBackup('cashier')" class="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-black rounded-lg transition flex items-center gap-1 shadow-md shadow-indigo-600/20 whitespace-nowrap" title="Send Email Backup">
-            <i class="fa-solid fa-paper-plane text-[10px]"></i> Email
+          <button onclick="handleSendEmailBackup('cashier')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black rounded-lg transition flex items-center gap-1.5 shadow-md shadow-indigo-600/20 whitespace-nowrap" title="Send Email Backup">
+            <i class="fa-solid fa-paper-plane text-xs"></i> Email
           </button>
         </div>
       </td>
