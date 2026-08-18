@@ -1,9 +1,10 @@
 /**
  * GOLDEN ERP SYSTEM - MAIN BANK & CASH BOOKS HANDLER (CLOUDFLARE D1)
  * File: handlers-bank-cash.js  
- * 💡 Features: Direct isMigration Mode (Preserves Column A NO 1..656 & Bypasses Auto-Transfers during bulk sync),
- *              Accurate Balances Calculation (Total Income - Total Expense), Config-Aligned Schema Mapping,
- *              FY-Based Stats, Date-Based VR No, Batch Running Balance & Idempotent Upsert Engine
+ * 💡 Features: Server-Side Auto-Lock Enforcement (Protects Cross-Book Integrity),
+ *              Direct isMigration Mode (Preserves Column A NO 1..656 & Bypasses Auto-Transfers),
+ *              Strict Net Balances Calculation (Total Income - Total Expense),
+ *              Dynamic Month-Year (MY) Generator & Idempotent Cross-Book Transfer Engine
  */
 
 const BOOK_TABLE_MAP = {
@@ -85,8 +86,10 @@ async function recalculateLedgerBalances(db, tableName) {
       }
     }
 
-    for (let i = 0; i < statements.length; i += 100) {
-      await db.batch(statements.slice(i, i + 100));
+    const chunkSize = 100;
+    for (let i = 0; i < statements.length; i += chunkSize) {
+      const chunk = statements.slice(i, i + chunkSize);
+      await db.batch(chunk);
     }
   } catch (e) {
     console.warn(`Running Balance & NO Recalculation Warning for ${tableName}:`, e);
@@ -143,7 +146,7 @@ async function cleanLinkedTransfer(db, uniqueid) {
 }
 
 /**
- * 💡 Cross-Book Transfer Auto-Posting Engine (Exact Schema Alignment with INSERT OR REPLACE)
+ * 💡 Cross-Book Transfer Auto-Posting Engine (Idempotent INSERT OR REPLACE)
  */
 async function postCrossBookTransfer(db, body, sourceBookName, entryDate, my, fy, createdBy, uniqueid) {
   if (String(body.category || '').trim() !== 'Transfer' || !body.transfer) return;
@@ -167,36 +170,36 @@ async function postCrossBookTransfer(db, body, sourceBookName, entryDate, my, fy
   const targetDesc = `[Transfer from ${sourceBookName}] ${body.description || ''}`.trim();
 
   if (targetTable === 'office') {
-    // 19 Columns
+    // 19 Columns for Office
     await db.prepare(`
       INSERT OR REPLACE INTO office (
         no, date, category, description, unit, unit_price, method, debit, credit, balances, liabilities, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
     `).bind(
       targetNo, entryDate, 'Transfer', targetDesc, 0, 0, body.method || 'Cash',
-      targetDebit, targetCredit, 0, 0, sourceBookName, targetVrNo, my, normFy,
-      sourceBookName, createdBy, new Date().toISOString(), transferUid
+      targetDebit, targetCredit, sourceBookName, targetVrNo, my, normFy,
+      sourceBookName, createdBy, transferUid
     ).run();
   } else if (targetTable === 'payroll') {
-    // 18 Columns (Includes unpaid_bonus & unpaid_fund)
+    // 18 Columns for Payroll
     await db.prepare(`
       INSERT OR REPLACE INTO payroll (
         no, date, category, description, method, debit, credit, balances, unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, '', ?, ?, ?, datetime('now'), ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
     `).bind(
       targetNo, entryDate, 'Transfer', targetDesc, body.method || 'Cash',
-      targetDebit, targetCredit, 0, 0, sourceBookName, targetVrNo, normalizeFyStr(fy),
+      targetDebit, targetCredit, sourceBookName, targetVrNo, my, normFy,
       sourceBookName, createdBy, transferUid
     ).run();
   } else {
-    // 16 Columns for bank, cash, kitchen
+    // 16 Columns for Bank, Cash, Kitchen
     await db.prepare(`
       INSERT OR REPLACE INTO ${targetTable} (
         no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, '', ?, ?, ?, datetime('now'), ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
     `).bind(
       targetNo, entryDate, 'Transfer', targetDesc, body.method || 'Cash',
-      targetDebit, targetCredit, sourceBookName, targetVrNo, normalizeFyStr(fy),
+      targetDebit, targetCredit, sourceBookName, targetVrNo, my, normFy,
       sourceBookName, createdBy, transferUid
     ).run();
   }
@@ -240,8 +243,7 @@ export async function getBankCashData(db, body) {
       totalExpense = parseFloat(allStats.totalExpense || 0);
     }
 
-    // 💡 FIX: Strict Net Balance Calculation (Total Income - Total Expense)
-    // Prevents displaying "0 MMK" when individual row balances are not yet recalculating
+    // 💡 Strict Net Balance Calculation: Total Income - Total Expense
     const balance = totalIncome - totalExpense;
 
     let whereClauses = [];
@@ -383,7 +385,7 @@ export async function saveBankCashEntry(db, session, body) {
 }
 
 /**
- * 💡 Update Bank / Cash Entry
+ * 💡 Update Bank / Cash Entry (With Server-Side Auto-Lock Guard)
  */
 export async function updateBankCashEntry(db, session, body) {
   try {
@@ -393,6 +395,20 @@ export async function updateBankCashEntry(db, session, body) {
 
     if (!uniqueid) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
+    }
+
+    // 🔒 SERVER-SIDE LOCK ENFORCEMENT
+    const existing = await db.prepare(`SELECT is_locked, uniqueid, transfer FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    if (!existing) {
+      return { success: false, message: "ပြင်ဆင်မည့် စာရင်း ရှာမတွေ့ပါ။" };
+    }
+
+    const uid = String(existing.uniqueid || '');
+    if (uid.startsWith('TRANS_') && !body.allowAutoOverride) {
+      return { 
+        success: false, 
+        message: "ဤစာရင်းသည် အခြားစာအုပ်မှ လွှဲပြောင်းထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ပြင်ဆင်ရပါမည်။" 
+      };
     }
 
     await cleanLinkedTransfer(db, uniqueid);
@@ -439,7 +455,7 @@ export async function updateBankCashEntry(db, session, body) {
 }
 
 /**
- * 💡 Delete Bank / Cash Entry
+ * 💡 Delete Bank / Cash Entry (With Server-Side Auto-Lock Guard)
  */
 export async function deleteBankCashEntry(db, session, body) {
   try {
@@ -449,6 +465,18 @@ export async function deleteBankCashEntry(db, session, body) {
 
     if (!uniqueid) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
+    }
+
+    // 🔒 SERVER-SIDE LOCK ENFORCEMENT
+    const existing = await db.prepare(`SELECT is_locked, uniqueid FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    if (existing) {
+      const uid = String(existing.uniqueid || '');
+      if (uid.startsWith('TRANS_') && !body.allowAutoOverride) {
+        return { 
+          success: false, 
+          message: "ဤစာရင်းသည် အခြားစာအုပ်မှ လွှဲပြောင်းထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ဖျက်သိမ်းရပါမည်။" 
+        };
+      }
     }
 
     await db.prepare(`DELETE FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).run();
