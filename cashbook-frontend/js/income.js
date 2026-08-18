@@ -5,7 +5,7 @@
  */
 
 var incomePage = 1;
-var incomeLimit = 50;
+var incomeLimit = 300;
 var incomeTotalRows = 0;
 var incomeActiveData = [];
 var studentsByFyCache = {};
