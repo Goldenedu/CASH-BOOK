@@ -5,7 +5,7 @@
  */
 
 var bckPage = 1;
-var bckLimit = 30;
+var bckLimit = 20;
 var bckTotalRows = 0;
 var bckActiveData = [];
 var currentSubBook = 'bank'; // 'bank' or 'cash'
