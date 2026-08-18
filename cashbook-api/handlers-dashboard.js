@@ -1,8 +1,9 @@
 /**
  * GOLDEN ERP SYSTEM - DASHBOARD HANDLER (D1 DATABASE)
- * File: handlers-dashboard.js  
- * 💡 Features: Crash-Proof Safe Dashboard Analytics (Total Income, Total Expense, Net Profit, Active Force),
- *              Daily Balances, Liabilities, Receivables & Gender Demographics (Male/Female/Total)
+ * File: handlers-dashboard.js
+ * 💡 Features: Full 17-Table System Counter (12 Transaction Books + 5 Master Lists & Inventories),
+ *              Active FY Scoped Precision Analytics, Daily Balances, Liabilities, Receivables &
+ *              Precision 100% Accurate Gender Demographics Engine
  */
 
 function normalizeFyStr(fy) {
@@ -48,9 +49,9 @@ function parseGenderCount(rows = []) {
 
   rows.forEach(r => {
     const g = String(r.gender || '').toLowerCase().trim();
-    const rawName = String(r.name || r.fyid_name || '').trim();
+    const rawName = String(r.name || r.fyid_name || r.staff_idname || '').trim();
     
-    // 💡 နာမည်ရှေ့က [2627-STU-0001] ကို ရှင်းထုတ်ခြင်း
+    // 💡 နာမည်ရှေ့က [2627-STU-0001] သို့မဟုတ် [FID 001] ကို ရှင်းထုတ်ခြင်း
     const cleanName = rawName.replace(/^\[.*?\]\s*/, '').trim();
 
     // ၁။ Database ထဲရှိ Gender ကော်လံကို အရင်စစ်ဆေးခြင်း
@@ -84,15 +85,13 @@ export async function getDashboardData(db, body) {
     const fyPrefixed = `FY ${activeFy}`;
 
     // ----------------------------------------------------
-    // 💡 1. TOP 4 KPI CARDS (Active FY Scoped)
+    // 💡 1. FINANCIAL KPI TOTALS (Active FY Scoped)
     // ----------------------------------------------------
-    // Total Income: Main Income Book (SUM(credit - debit) for active FY)
     const totalIncome = await safeFirstNum(db, 
       `SELECT COALESCE(SUM(credit - debit), 0) as total FROM income WHERE fy = ? OR fy = ?`,
       [activeFy, fyPrefixed]
     );
 
-    // Total Expense: Office Exp + Kitchen Exp + HR Payroll Exp (SUM(credit) for active FY)
     const offExp = await safeFirstNum(db, `SELECT COALESCE(SUM(credit), 0) as total FROM office WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]);
     const kitExp = await safeFirstNum(db, `SELECT COALESCE(SUM(credit), 0) as total FROM kitchen WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]);
     const payExp = await safeFirstNum(db, `SELECT COALESCE(SUM(credit), 0) as total FROM payroll WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]);
@@ -100,17 +99,41 @@ export async function getDashboardData(db, body) {
     const totalExpense = offExp + kitExp + payExp;
     const netProfit = totalIncome - totalExpense;
 
-    // Active Force / Entries Count
-    const bankCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM bank WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]);
-    const cashCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM cash WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]);
+    // ----------------------------------------------------
+    // 💡 2. ALL 17-TABLE TOTAL ENTRIES & MASTER RECORDS
+    // ----------------------------------------------------
+    // A. Main Ledgers (6 Books - FY Scoped)
     const incCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM income WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]);
+    const cashCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM cash WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]);
+    const bankCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM bank WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]);
     const offCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM office WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]);
     const kitCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM kitchen WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]);
     const payCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM payroll WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]);
-    const totalEntries = bankCnt + cashCnt + incCnt + offCnt + kitCnt + payCnt;
+
+    // B. Student Money Ledger (1 Book - FY Scoped)
+    const stmCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM student_money WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]);
+
+    // C. Cashier Sub-Ledgers (5 Books - FY Scoped)
+    const caBankCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM ca_bank WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]);
+    const caCashCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM ca_cash WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]);
+    const caOffCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM ca_office WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]);
+    const caKitCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM ca_kitchen WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]);
+    const caPayCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM ca_payroll WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]);
+
+    // D. Master Lists, Directory & Inventory (5 Tables)
+    const stuCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM student WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]);
+    const promoCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM promotion WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]);
+    const uniCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM uniform_ledger`);
+    const ftStaffCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM staff_fulltime WHERE LOWER(status) = 'active'`);
+    const ptStaffCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM staff_parttime WHERE LOWER(status) = 'active'`);
+
+    // 🌟 Grand Total Records across all 17 tables
+    const totalEntries = incCnt + cashCnt + bankCnt + offCnt + kitCnt + payCnt + stmCnt +
+                         caBankCnt + caCashCnt + caOffCnt + caKitCnt + caPayCnt +
+                         stuCnt + promoCnt + uniCnt + ftStaffCnt + ptStaffCnt;
 
     // ----------------------------------------------------
-    // 💡 2. DAILY BALANCES (Current Ledger Balances)
+    // 💡 3. DAILY BALANCES (Current Ledger Balances)
     // ----------------------------------------------------
     const bankBal = await safeFirstNum(db, "SELECT COALESCE(SUM(debit - credit), 0) as total FROM bank");
     const cashBal = await safeFirstNum(db, "SELECT COALESCE(SUM(debit - credit), 0) as total FROM cash");
@@ -119,7 +142,7 @@ export async function getDashboardData(db, body) {
     const payrollBal = await safeFirstNum(db, "SELECT COALESCE(SUM(debit - credit), 0) as total FROM payroll");
 
     // ----------------------------------------------------
-    // 💡 3. LIABILITIES (ပေးရန်ကြွေးမြီ စာရင်းများ)
+    // 💡 4. LIABILITIES & RECEIVABLES
     // ----------------------------------------------------
     const bankLoan = await safeFirstNum(db, "SELECT COALESCE(SUM(debit - credit), 0) as total FROM bank WHERE LOWER(category) LIKE '%bank loan%'");
     const cashLoan = await safeFirstNum(db, "SELECT COALESCE(SUM(debit - credit), 0) as total FROM cash WHERE LOWER(category) LIKE '%cash loan%'");
@@ -127,9 +150,6 @@ export async function getDashboardData(db, body) {
     const hrUnpaidBonus = await safeFirstNum(db, "SELECT COALESCE(SUM(unpaid_bonus), 0) as total FROM staff_fulltime WHERE LOWER(status) = 'active'");
     const hrUnpaidFund = await safeFirstNum(db, "SELECT COALESCE(SUM(unpaid_fund), 0) as total FROM staff_fulltime WHERE LOWER(status) = 'active'");
 
-    // ----------------------------------------------------
-    // 💡 4. RECEIVABLES (ရရန်ကြွေးမြီ / ကြိုတင်ပေး စာရင်းများ)
-    // ----------------------------------------------------
     const advSnack = await safeFirstNum(db, "SELECT COALESCE(SUM(credit - debit), 0) as total FROM office WHERE LOWER(category) LIKE '%snack%'");
     const advUniform = await safeFirstNum(db, "SELECT COALESCE(SUM(credit - debit), 0) as total FROM office WHERE LOWER(category) LIKE '%uniform%'");
     const othersAdv = await safeFirstNum(db, "SELECT COALESCE(SUM(credit - debit), 0) as total FROM office WHERE LOWER(category) LIKE '%adv%' AND LOWER(category) NOT LIKE '%snack%' AND LOWER(category) NOT LIKE '%uniform%'");
@@ -140,7 +160,7 @@ export async function getDashboardData(db, body) {
     let stuRows = [];
     try {
       const res = await db.prepare(
-        `SELECT gender, name FROM student WHERE LOWER(status) = 'active' AND (fy = ? OR fy = ?)`
+        `SELECT gender, name, fyid_name FROM student WHERE LOWER(status) = 'active' AND (fy = ? OR fy = ?)`
       ).bind(activeFy, fyPrefixed).all();
       if (res && res.results) stuRows = res.results;
     } catch (e) {}
@@ -148,14 +168,14 @@ export async function getDashboardData(db, body) {
 
     let ftRows = [];
     try {
-      const res = await db.prepare(`SELECT gender, name FROM staff_fulltime WHERE LOWER(status) = 'active'`).all();
+      const res = await db.prepare(`SELECT gender, name, staff_idname FROM staff_fulltime WHERE LOWER(status) = 'active'`).all();
       if (res && res.results) ftRows = res.results;
     } catch (e) {}
     const ftDemo = parseGenderCount(ftRows);
 
     let ptRows = [];
     try {
-      const res = await db.prepare(`SELECT gender, name FROM staff_parttime WHERE LOWER(status) = 'active'`).all();
+      const res = await db.prepare(`SELECT gender, name, staff_idname FROM staff_parttime WHERE LOWER(status) = 'active'`).all();
       if (res && res.results) ptRows = res.results;
     } catch (e) {}
     const ptDemo = parseGenderCount(ptRows);
