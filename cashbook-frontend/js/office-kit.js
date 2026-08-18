@@ -6,7 +6,7 @@
 
 window.OfficeState = {
   page: 1,
-  limit: 30,
+  limit: 50,
   totalRows: 0,
   activeData: [],
   searchVal: '',
