@@ -1,10 +1,14 @@
 /**
  * GOLDEN ERP SYSTEM - PROMOTION MATRIX MODULE 
  * File: js/promotion.js
- * 💡 Promotion Rate Matrix Controller with Precise Search Filters & Formal Corporate Tone
+ * 💡 Features: Client-Side Pagination (promoLimit = 30), Dynamic FY/Category Filters,
+ *              Clean Edit Pre-fill & CSV Export Engine
  */
 
 var gPromotionData = [];
+var gPromotionFilteredData = [];
+var gPromotionPage = 1;
+var gPromotionLimit = 30;
 var gPromotionSearch = '';
 var gPromotionFyFilter = '';
 var gPromotionCatFilter = '';
@@ -137,27 +141,39 @@ function applyPromotionFilters() {
     filtered = filtered.filter(item => item.category === gPromotionCatFilter);
   }
 
-  renderPromotionTable(filtered);
+  gPromotionFilteredData = filtered;
+  gPromotionPage = 1; // Filter ပြောင်းတိုင်း Page 1 မှ ပြန်စမည်
+  renderPromotionTable();
 }
 
 /**
- * 💡 Render Table Grid
+ * 💡 Render Table Grid with Pagination (30 rows per page)
  */
-function renderPromotionTable(data) {
+function renderPromotionTable() {
   const tbody = document.getElementById('promo-table-body');
   const totalCountEl = document.getElementById('promo-total-count');
 
-  if (totalCountEl) totalCountEl.textContent = data ? data.length : 0;
+  const totalEntries = gPromotionFilteredData.length;
+  if (totalCountEl) totalCountEl.textContent = totalEntries;
   if (!tbody) return;
 
-  if (!data || data.length === 0) {
+  if (!gPromotionFilteredData || totalEntries === 0) {
     tbody.innerHTML = `<tr><td colspan="15" class="text-center py-8 text-slate-500 font-bold">ရှာဖွေမှုနှင့် ကိုက်ညီသော Promotion Rate စာရင်း မရှိပါ။</td></tr>`;
+    updatePromotionPaginationInfo(0, 0, 0);
     return;
   }
 
+  // 💡 Pagination Calculation (30 items per page)
+  const totalPages = Math.ceil(totalEntries / gPromotionLimit) || 1;
+  if (gPromotionPage > totalPages) gPromotionPage = totalPages;
+
+  const startIndex = (gPromotionPage - 1) * gPromotionLimit;
+  const endIndex = Math.min(startIndex + gPromotionLimit, totalEntries);
+  const pageItems = gPromotionFilteredData.slice(startIndex, endIndex);
+
   let previousFy = '';
 
-  tbody.innerHTML = data.map((item, idx) => {
+  tbody.innerHTML = pageItems.map((item, idx) => {
     const isFyChanged = (idx > 0 && item.fy !== previousFy && item.fy && previousFy);
     previousFy = item.fy || '';
 
@@ -172,9 +188,11 @@ function renderPromotionTable(data) {
       fyBadgeStyle = 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold';
     }
 
+    const displayNo = Math.floor(parseFloat(item.no || (startIndex + idx + 1)));
+
     return `
       <tr class="hover:bg-slate-800/40 transition ${rowBorderClass}">
-        <td class="text-center text-slate-400 py-3">${item.no || (idx + 1)}</td>
+        <td class="text-center text-slate-400 py-3">${displayNo}</td>
         <td class="py-3"><span class="inline-block px-2 py-0.5 rounded text-[10px] border ${fyBadgeStyle}">${escapeHtml(item.fy || 'N/A')}</span></td>
         <td class="font-bold text-white py-3">${escapeHtml(item.class || '')}</td>
         <td class="text-slate-300 py-3">${escapeHtml(item.category || '')}</td>
@@ -197,6 +215,36 @@ function renderPromotionTable(data) {
       </tr>
     `;
   }).join('');
+
+  updatePromotionPaginationInfo(startIndex + 1, endIndex, totalEntries);
+}
+
+/**
+ * 💡 Update Pagination Controls (Previous / Next Buttons)
+ */
+function updatePromotionPaginationInfo(start, end, total) {
+  const info = document.getElementById('promo-pagination-info');
+  if (info) {
+    info.innerHTML = `Showing <span class="text-indigo-400 font-extrabold">${total === 0 ? 0 : start}</span> to <span class="text-indigo-400 font-extrabold">${end}</span> of <span class="text-indigo-400 font-extrabold">${total}</span> entries`;
+  }
+
+  const btnPrev = document.getElementById('promo-btn-prev');
+  const btnNext = document.getElementById('promo-btn-next');
+
+  if (btnPrev) btnPrev.disabled = (gPromotionPage <= 1);
+  if (btnNext) btnNext.disabled = (end >= total);
+}
+
+/**
+ * 💡 Page Change Handler
+ */
+function changePagePromotion(delta) {
+  const totalPages = Math.ceil(gPromotionFilteredData.length / gPromotionLimit) || 1;
+  const newPage = gPromotionPage + delta;
+  if (newPage >= 1 && newPage <= totalPages) {
+    gPromotionPage = newPage;
+    renderPromotionTable();
+  }
 }
 
 function onSearchInputPromotion() {
@@ -224,9 +272,6 @@ function closePromotionModal() {
   if (modal) modal.classList.add('hidden');
 }
 
-/**
- * 💡 EDIT PRE-FILL: မူလ ဒေတာများ Form ထဲသို့ အပြည့်အဝ ဝင်ရောက်လာစေခြင်း
- */
 function editPromotionEntry(uniqueId) {
   const item = gPromotionData.find(p => String(p.uniqueId).trim() === String(uniqueId).trim());
   if (!item) {
@@ -258,9 +303,6 @@ function editPromotionEntry(uniqueId) {
   if (modal) modal.classList.remove('hidden');
 }
 
-/**
- * 💡 Save / Submit Promotion Rate Entry
- */
 async function savePromotionForm(event) {
   event.preventDefault();
 
@@ -302,9 +344,6 @@ async function savePromotionForm(event) {
   }
 }
 
-/**
- * 💡 Delete Promotion Entry
- */
 async function deletePromotionEntry(uniqueId) {
   if (!confirm("ဤ Promotion Rate နှုန်းထားအား အပြီးတိုင် ဖျက်သိမ်းလိုပါသလား။")) return;
 
@@ -325,9 +364,6 @@ async function deletePromotionEntry(uniqueId) {
   }
 }
 
-/**
- * 💡 CSV Export
- */
 function exportToCSVPromotion() {
   if (!gPromotionData || gPromotionData.length === 0) {
     if (typeof showToast === 'function') showToast("ERROR", "ထုတ်ယူရန် မည်သည့် စာရင်းမျှ မရှိပါ။");
@@ -345,7 +381,7 @@ function exportToCSVPromotion() {
   a.click();
 }
 
-// 💡 Export functions to global window object
+// 💡 Export functions globally to window object
 window.loadPromotionData = loadPromotionData;
 window.openAddModalPromotion = openAddModalPromotion;
 window.closePromotionModal = closePromotionModal;
@@ -354,3 +390,4 @@ window.editPromotionEntry = editPromotionEntry;
 window.deletePromotionEntry = deletePromotionEntry;
 window.exportToCSVPromotion = exportToCSVPromotion;
 window.onSearchInputPromotion = onSearchInputPromotion;
+window.changePagePromotion = changePagePromotion;
