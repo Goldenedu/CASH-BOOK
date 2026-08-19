@@ -1,53 +1,61 @@
 /**
  * GOLDEN ERP SYSTEM - CASHIER SUB-LEDGER HANDLER (CLOUDFLARE D1)
  * File: handlers-cashier.js  
- * 💡 Features: 17-Column Schema Aligned (responsibility_person), User-Defined Responsibility Person Support,
- *              Active FY Stats, FY Integer NO Reset, Date-Based Voucher No (VR No) & Sub-Ledger Cross-Transfer Engine
+ * 💡 Features: Server-Side Auto-Lock Enforcement (Zero Client Bypass),
+ *              Privilege Escalation Defense (Server-Generated UUIDs for New Records),
+ *              17-Column Schema Alignment (With Responsibility Person),
+ *              Today's Income Live Feed for Invoice Printer & Cross-Book Transfer Engine
  */
 
 const CASHIER_TABLE_MAP = {
-  "cabank": { table: "ca_bank", prefix: "CAB", bookName: "Cashier Bank Book", method: "Bank" },
-  "cacash": { table: "ca_cash", prefix: "CAC", bookName: "Cashier Cash Book", method: "Cash" },
-  "caoffice": { table: "ca_office", prefix: "CAO", bookName: "Cashier Office Book", method: "Cash" },
-  "cakitchen": { table: "ca_kitchen", prefix: "CAK", bookName: "Cashier Kitchen Book", method: "Cash" },
-  "capayroll": { table: "ca_payroll", prefix: "CAP", bookName: "Cashier Payroll Book", method: "Cash" },
-  "ca_bank": { table: "ca_bank", prefix: "CAB", bookName: "Cashier Bank Book", method: "Bank" },
-  "ca_cash": { table: "ca_cash", prefix: "CAC", bookName: "Cashier Cash Book", method: "Cash" },
-  "ca_office": { table: "ca_office", prefix: "CAO", bookName: "Cashier Office Book", method: "Cash" },
-  "ca_kitchen": { table: "ca_kitchen", prefix: "CAK", bookName: "Cashier Kitchen Book", method: "Cash" },
-  "ca_payroll": { table: "ca_payroll", prefix: "CAP", bookName: "Cashier Payroll Book", method: "Cash" }
+  "cabank": "ca_bank",
+  "ca_bank": "ca_bank",
+  "cashier bank book": "ca_bank",
+  "cacash": "ca_cash",
+  "ca_cash": "ca_cash",
+  "cashier cash book": "ca_cash",
+  "caoffice": "ca_office",
+  "ca_office": "ca_office",
+  "cashier office book": "ca_office",
+  "cakitchen": "ca_kitchen",
+  "ca_kitchen": "ca_kitchen",
+  "cashier kitchen book": "ca_kitchen",
+  "capayroll": "ca_payroll",
+  "ca_payroll": "ca_payroll",
+  "cashier payroll book": "ca_payroll"
 };
 
 function getCashierMeta(rawBook) {
-  if (!rawBook) return CASHIER_TABLE_MAP["cacash"];
-  const key = String(rawBook).trim().toLowerCase();
-  return CASHIER_TABLE_MAP[key] || CASHIER_TABLE_MAP["cacash"];
-}
+  const key = String(rawBook || "CABank").trim().toLowerCase();
+  const tableName = CASHIER_TABLE_MAP[key] || "ca_bank";
 
-/**
- * 💡 Safe Integer ID Parser
- */
-function parseCleanIntId(val) {
-  if (val === undefined || val === null || val === '') return 0;
-  if (typeof val === 'number') return isNaN(val) ? 0 : Math.trunc(val);
-  const n = parseInt(String(val).trim(), 10);
-  return isNaN(n) ? 0 : n;
-}
+  let prefix = "CAB";
+  let bookTitle = "Cashier Bank Book";
 
-/**
- * 💡 FYID Sanitizer
- */
-function sanitizeFyidStr(fyidStr) {
-  const s = String(fyidStr || '').trim();
-  if (!s) return s;
-  if (s.indexOf('.0') === -1) return s;
-  const cleaned = s.replace(/\.0/g, '');
-  const parts = cleaned.split('-STU-');
-  if (parts.length === 2) {
-    const numPart = parseInt(parts[1], 10) || 0;
-    return `${parts[0]}-STU-${String(numPart).padStart(4, '0')}`;
+  switch (tableName) {
+    case 'ca_cash':
+      prefix = 'CAC';
+      bookTitle = 'Cashier Cash Book';
+      break;
+    case 'ca_office':
+      prefix = 'CAO';
+      bookTitle = 'Cashier Office Book';
+      break;
+    case 'ca_kitchen':
+      prefix = 'CAK';
+      bookTitle = 'Cashier Kitchen Book';
+      break;
+    case 'ca_payroll':
+      prefix = 'CAP';
+      bookTitle = 'Cashier Payroll Book';
+      break;
+    default:
+      prefix = 'CAB';
+      bookTitle = 'Cashier Bank Book';
+      break;
   }
-  return cleaned;
+
+  return { tableName, prefix, bookTitle };
 }
 
 /**
@@ -63,7 +71,7 @@ function normalizeFyStr(fy) {
 }
 
 /**
- * 💡 Cloudflare D1 Batch Running Balance & Integer NO Recalculation Engine
+ * 💡 Cloudflare D1 Batch Running Balance & Integer NO Recalculation Engine for Cashier
  */
 async function recalculateLedgerBalances(db, tableName) {
   if (!tableName) return;
@@ -99,10 +107,8 @@ async function recalculateLedgerBalances(db, tableName) {
       }
     }
 
-    const chunkSize = 100;
-    for (let i = 0; i < statements.length; i += chunkSize) {
-      const chunk = statements.slice(i, i + chunkSize);
-      await db.batch(chunk);
+    for (let i = 0; i < statements.length; i += 100) {
+      await db.batch(statements.slice(i, i + 100));
     }
   } catch (e) {
     console.warn(`Running Balance & NO Recalculation Warning for ${tableName}:`, e);
@@ -110,7 +116,7 @@ async function recalculateLedgerBalances(db, tableName) {
 }
 
 /**
- * 💡 Date-Based Voucher Number Generator (Format: CAB-080826-001, CAC-080826-001)
+ * 💡 Date-Based Voucher Number Generator
  */
 async function generateVoucherNo(db, tableName, prefix, entryDate) {
   let ddmmyy = "";
@@ -120,10 +126,7 @@ async function generateVoucherNo(db, tableName, prefix, entryDate) {
     ddmmyy = `${parts[2]}${parts[1]}${y}`;
   } else {
     const now = new Date();
-    const dd = String(now.getDate()).padStart(2, '0');
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const yy = String(now.getFullYear()).slice(-2);
-    ddmmyy = `${dd}${mm}${yy}`;
+    ddmmyy = `${String(now.getDate()).padStart(2, '0')}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getFullYear()).slice(-2)}`;
   }
 
   const pattern = `${prefix}-${ddmmyy}-%`;
@@ -147,7 +150,7 @@ async function generateFyNo(db, tableName, fy) {
 }
 
 /**
- * 💡 Clean Linked Sub-Ledger Transfer
+ * 💡 Clean Linked Transfer Auto Entries for Cashier Sub-Ledgers
  */
 async function cleanLinkedTransfer(db, uniqueid) {
   if (!uniqueid) return;
@@ -157,56 +160,54 @@ async function cleanLinkedTransfer(db, uniqueid) {
     try {
       await db.prepare(`DELETE FROM ${tbl} WHERE uniqueid = ?`).bind(transferUid).run();
       await recalculateLedgerBalances(db, tbl);
-    } catch (e) {
-      // Ignore
-    }
+    } catch (e) {}
   }
 }
 
 /**
- * 💡 Cashier Sub-Ledger Cross-Book Transfer Engine
+ * 💡 Cross-Book Transfer Auto-Posting Engine for Cashier Sub-Books
  */
-async function postCashierCrossBookTransfer(db, body, sourceBookKey, entryDate, my, fy, createdBy, uniqueid) {
+async function postCashierCrossBookTransfer(db, body, sourceBookName, entryDate, my, fy, createdBy, uniqueid) {
   if (String(body.category || '').trim() !== 'Transfer' || !body.transfer) return;
 
-  const targetMeta = getCashierMeta(body.transfer);
-  const sourceMeta = getCashierMeta(sourceBookKey);
+  const { tableName: targetTable, prefix: targetPrefix } = getCashierMeta(body.transfer);
+  const { tableName: sourceTable } = getCashierMeta(sourceBookName);
 
-  if (targetMeta.table === sourceMeta.table) return;
+  if (targetTable === sourceTable) return;
 
+  const normFy = normalizeFyStr(fy);
   const transferUid = `TRANS_${uniqueid}`;
   const debit = parseFloat(body.debit || 0);
   const credit = parseFloat(body.credit || 0);
 
-  // Invert flows: Inflow becomes Outflow and vice versa
   const targetDebit = credit;
   const targetCredit = debit;
 
-  const targetVrNo = await generateVoucherNo(db, targetMeta.table, targetMeta.prefix, entryDate);
-  const targetNo = await generateFyNo(db, targetMeta.table, fy);
-  const targetDesc = `[Transfer from ${sourceMeta.bookName}] ${body.description || ''}`.trim();
+  const targetVrNo = await generateVoucherNo(db, targetTable, targetPrefix, entryDate);
+  const targetNo = await generateFyNo(db, targetTable, normFy);
+  const targetDesc = `[Transfer from ${sourceBookName}] ${body.description || ''}`.trim();
+  const respPersonVal = body.respPerson || body.responsibility_person || '';
 
   await db.prepare(`
-    INSERT INTO ${targetMeta.table} (
+    INSERT OR REPLACE INTO ${targetTable} (
       no, date, responsibility_person, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
   `).bind(
-    targetNo, entryDate, body.respPerson || '', 'Transfer', targetDesc, targetMeta.method,
-    targetDebit, targetCredit, 0, sourceMeta.bookName, targetVrNo, my, fy,
-    targetMeta.bookName, createdBy, new Date().toISOString(), transferUid
+    targetNo, entryDate, respPersonVal, 'Transfer', targetDesc, body.method || 'Cash',
+    targetDebit, targetCredit, sourceBookName, targetVrNo, my, normFy,
+    sourceBookName, createdBy, transferUid
   ).run();
 
-  await recalculateLedgerBalances(db, targetMeta.table);
+  await recalculateLedgerBalances(db, targetTable);
 }
 
 /**
- * 💡 Fetch Cashier Sub-Ledger Data (17-Column Schema: responsibility_person)
+ * 💡 Fetch Cashier Sub-Ledger Data (Supports full dataset loading up to 2000 rows)
  */
 export async function getCashierData(db, body) {
   try {
-    const rawBook = body.bookName || body.book || "CABank";
-    const meta = getCashierMeta(rawBook);
-    const tableName = meta.table;
+    const rawBook = body.bookName || "CABank";
+    const { tableName, bookTitle } = getCashierMeta(rawBook);
     const searchVal = String(body.searchVal || "").trim();
     const page = parseInt(body.page || 1, 10);
     const limit = parseInt(body.limit || 50, 10);
@@ -236,16 +237,15 @@ export async function getCashierData(db, body) {
       totalExpense = parseFloat(allStats.totalExpense || 0);
     }
 
-    const latestBalRow = await db.prepare(`SELECT balances FROM ${tableName} ORDER BY id DESC LIMIT 1`).first();
-    const balance = latestBalRow ? parseFloat(latestBalRow.balances || 0) : (totalIncome - totalExpense);
+    const balance = totalIncome - totalExpense;
 
     let whereClauses = [];
     let params = [];
 
     if (searchVal) {
-      whereClauses.push(`(description LIKE ? OR category LIKE ? OR responsibility_person LIKE ? OR CAST(debit AS TEXT) LIKE ? OR CAST(credit AS TEXT) LIKE ?)`);
+      whereClauses.push(`(description LIKE ? OR category LIKE ? OR responsibility_person LIKE ? OR vr_no LIKE ? OR method LIKE ? OR transfer LIKE ? OR CAST(debit AS TEXT) LIKE ? OR CAST(credit AS TEXT) LIKE ?)`);
       const p = `%${searchVal}%`;
-      params.push(p, p, p, p, p);
+      params.push(p, p, p, p, p, p, p, p);
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
@@ -264,16 +264,16 @@ export async function getCashierData(db, body) {
 
     const formattedRows = rawRows.map(row => {
       const uid = String(row.uniqueid || row.uniqueId || '');
-      const isAutoLocked = Boolean(row.is_locked || row.isLocked || uid.startsWith('INCMAIN_') || uid.startsWith('INCCASHIER_') || uid.startsWith('UNIPROFIT_') || uid.startsWith('UNICASHIER_') || uid.startsWith('TRANS_'));
+      const isAutoLocked = Boolean(row.is_locked || row.isLocked || uid.startsWith('UNIPROFIT_') || uid.startsWith('UNICASHIER_') || uid.startsWith('INCCASHIER_') || uid.startsWith('TRANS_') || uid.startsWith('DAILY_INC_'));
 
       return {
         id: row.id,
         no: Math.floor(parseFloat(row.no || row.id || 1)),
         date: row.date || '',
-        respPerson: row.responsibility_person || row.resp_person || row.respPerson || '',
+        respPerson: row.responsibility_person || row.respPerson || '',
         category: row.category || '',
         description: row.description || '',
-        method: row.method || meta.method,
+        method: row.method || 'Cash',
         debit: parseFloat(row.debit || 0),
         credit: parseFloat(row.credit || 0),
         balances: parseFloat(row.balances || 0),
@@ -281,9 +281,9 @@ export async function getCashierData(db, body) {
         vrNo: row.vr_no || row.vrNo || '',
         my: row.my || '',
         fy: normalizeFyStr(row.fy || activeFy),
-        bookName: row.book_name || meta.bookName,
-        createdBy: row.created_by || row.createdBy || '',
-        createdAt: row.created_at || row.createdAt || '',
+        bookName: row.book_name || bookTitle,
+        createdBy: row.created_by || 'Cashier',
+        createdAt: row.created_at || '',
         uniqueId: uid || `ID_${row.id}`,
         isLocked: isAutoLocked
       };
@@ -311,38 +311,41 @@ export async function getCashierData(db, body) {
 }
 
 /**
- * 💡 Fetch Today's Student Income Entries Live Feed for Cashier Invoice Printing
+ * 💡 Load Today's Student Income Entries Live Feed for Cashier Receipt Printer
  */
 export async function getTodayIncomeForCashier(db, body) {
   try {
     const todayDate = body.date || new Date().toISOString().split('T')[0];
-    const activeFy = normalizeFyStr(body.fy || "FY 2026-2027");
+    const page = parseInt(body.page || 1, 10);
+    const limit = parseInt(body.limit || 500, 10);
+    const offset = (page - 1) * limit;
 
     const rowsRes = await db.prepare(
-      `SELECT * FROM income WHERE date = ? OR effect_date = ? ORDER BY id DESC LIMIT 500`
-    ).bind(todayDate, todayDate).all();
-    const rawRows = rowsRes.results || [];
+      `SELECT * FROM income WHERE date = ? ORDER BY id DESC LIMIT ? OFFSET ?`
+    ).bind(todayDate, limit, offset).all();
 
+    const rawRows = rowsRes.results || [];
     const formattedRows = rawRows.map(row => ({
-      id: parseCleanIntId(row.student_id || row.id),
+      id: row.student_id || row.id,
       no: Math.floor(parseFloat(row.no || row.id || 1)),
-      effDate: row.effect_date || row.effDate || row.date || '',
+      effDate: row.effect_date || row.date || '',
       date: row.date || '',
-      fy: normalizeFyStr(row.fy || activeFy),
-      fyid: sanitizeFyidStr(row.fyid || ''),
-      fyidName: row.fyid_name || row.fyidName || '',
+      fy: normalizeFyStr(row.fy || 'FY 2026-2027'),
+      fyid: row.fyid || '',
+      fyidName: row.fyid_name || '',
       class: row.class || '',
       category: row.category || '',
-      accountName: row.account_name || row.accountName || '',
+      accountName: row.account_name || '',
       method: row.method || 'Cash',
       debit: parseFloat(row.debit || 0),
       credit: parseFloat(row.credit || 0),
-      autAmount: parseFloat(row.aut_amount !== undefined ? row.aut_amount : (row.autAmount || 0)),
+      autAmount: parseFloat(row.aut_amount || 0),
       promo: row.promo || '',
       my: row.my || '',
-      vrNo: row.vr_no || row.vrNo || '',
+      vrNo: row.vr_no || '',
       remark: row.remark || '',
-      uniqueId: row.uniqueid || row.uniqueId || `INC_${row.id}`
+      uniqueId: row.uniqueid || row.uniqueId || `INC_${row.id}`,
+      isLocked: Boolean(row.is_locked)
     }));
 
     return {
@@ -351,52 +354,71 @@ export async function getTodayIncomeForCashier(db, body) {
       totalRows: formattedRows.length
     };
   } catch (err) {
-    console.error("Error in getTodayIncomeForCashier:", err);
+    console.error("Error in getTodayIncomeForCashier handler:", err);
     return {
       success: false,
-      message: "ယနေ့ ဝင်ငွေစာရင်းများ ခေါ်ယူရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message
+      message: "ယနေ့ ဝင်ငွေစာရင်း ရယူရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message
     };
   }
 }
 
 /**
- * 💡 Save Cashier Entry (17-Column Schema Aligned: responsibility_person)
+ * 💡 Save Cashier Entry (Privilege Escalation Protected)
  */
 export async function saveCashierEntry(db, session, body) {
   try {
-    const rawBook = body.bookName || body.book || "CABank";
-    const meta = getCashierMeta(rawBook);
-    const tableName = meta.table;
-    const uniqueid = body.uniqueId || `CAS_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const createdBy = session?.name || body.createdBy || "Admin";
+    const rawBook = body.bookName || "CABank";
+    const { tableName, prefix, bookTitle } = getCashierMeta(rawBook);
+    const createdBy = session?.name || body.createdBy || "Cashier";
 
     const entryDate = body.date || new Date().toISOString().split('T')[0];
     const d = new Date(entryDate);
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const my = `${monthNames[d.getMonth()]}-${d.getFullYear()}`;
-    
+
     let fyYear = d.getFullYear();
     if (d.getMonth() < 3) fyYear -= 1;
     const fy = normalizeFyStr(body.fy || `FY ${fyYear}-${fyYear + 1}`);
 
     const debit = parseFloat(body.debit || 0);
     const credit = parseFloat(body.credit || 0);
+    const respPersonVal = body.respPerson || body.responsibility_person || '';
 
-    const newNo = await generateFyNo(db, tableName, fy);
-    const vrNo = body.vrNo || await generateVoucherNo(db, tableName, meta.prefix, entryDate);
+    // 🔒 1. PRIVILEGE ESCALATION DEFENSE: Server-generated UUID only for new records
+    const isPrivilegedAdmin = ['Owner', 'Admin'].includes(session?.role || '');
+    const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport || body.skipAutoPost);
+
+    const uniqueid = (isMigration && body.uniqueId)
+      ? String(body.uniqueId).trim()
+      : `CAS_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+
+    const newNo = (isMigration && body.no) ? parseInt(body.no, 10) : await generateFyNo(db, tableName, fy);
+    const vrNo = body.vrNo || await generateVoucherNo(db, tableName, prefix, entryDate);
+
+    const sqlVerb = isMigration ? "INSERT OR REPLACE INTO" : "INSERT INTO";
 
     const stmt = `
-      INSERT INTO ${tableName} (
+      ${sqlVerb} ${tableName} (
         no, date, responsibility_person, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
     `;
 
     await db.prepare(stmt).bind(
-      newNo, entryDate, body.respPerson || '', body.category || 'Income',
-      body.description || '', body.method || meta.method, debit, credit,
-      0, body.transfer || '', vrNo, my, fy, meta.bookName, createdBy, new Date().toISOString(), uniqueid
+      newNo, entryDate, respPersonVal, body.category || 'Income', body.description || '',
+      body.method || 'Cash', debit, credit, body.transfer || '', vrNo, my, fy,
+      bookTitle, createdBy, uniqueid
     ).run();
 
+    if (isMigration) {
+      return {
+        success: true,
+        message: "Cashier စာရင်းသစ် အောင်မြင်စွာ တိုက်ရိုက် သွင်းယူပြီးပါပြီ။",
+        uniqueId: uniqueid,
+        vrNo: vrNo
+      };
+    }
+
+    // 💡 LIVE OPERATIONAL MODE
     await recalculateLedgerBalances(db, tableName);
     await postCashierCrossBookTransfer(db, body, rawBook, entryDate, my, fy, createdBy, uniqueid);
 
@@ -416,17 +438,38 @@ export async function saveCashierEntry(db, session, body) {
 }
 
 /**
- * 💡 Update Cashier Entry
+ * 💡 Update Cashier Entry (With Strict Server-Side Auto-Lock Guard)
  */
 export async function updateCashierEntry(db, session, body) {
   try {
-    const rawBook = body.bookName || body.book || "CABank";
-    const meta = getCashierMeta(rawBook);
-    const tableName = meta.table;
+    const rawBook = body.bookName || "CABank";
+    const { tableName } = getCashierMeta(rawBook);
     const uniqueid = body.uniqueId || body.uniqueid;
 
     if (!uniqueid) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
+    }
+
+    // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT (Zero Client-Flag Bypass)
+    const existing = await db.prepare(`SELECT is_locked, uniqueid, transfer FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    if (!existing) {
+      return { success: false, message: "ပြင်ဆင်မည့် စာရင်း ရှာမတွေ့ပါ။" };
+    }
+
+    const uid = String(existing.uniqueid || '');
+    const isAutoLocked = Boolean(existing.is_locked) ||
+      uid.startsWith('TRANS_') ||
+      uid.startsWith('UNIPROFIT_') ||
+      uid.startsWith('UNICASHIER_') ||
+      uid.startsWith('INCCASHIER_') ||
+      uid.startsWith('DAILY_INC_');
+
+    const isPrivilegedAdmin = ['Owner', 'Admin'].includes(session?.role || '');
+    if (isAutoLocked && !isPrivilegedAdmin) {
+      return { 
+        success: false, 
+        message: "ဤစာရင်းသည် မူရင်းစာအုပ်မှ အလိုအလျောက် ရောက်ရှိလာသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ပြင်ဆင်နိုင်ပါသည်။" 
+      };
     }
 
     await cleanLinkedTransfer(db, uniqueid);
@@ -442,21 +485,22 @@ export async function updateCashierEntry(db, session, body) {
 
     const debit = parseFloat(body.debit || 0);
     const credit = parseFloat(body.credit || 0);
+    const respPersonVal = body.respPerson || body.responsibility_person || '';
 
     const stmt = `
       UPDATE ${tableName} SET
-        date = ?, responsibility_person = ?, category = ?, description = ?, method = ?, debit = ?, credit = ?,
-        transfer = ?, my = ?, fy = ?
+        date = ?, responsibility_person = ?, category = ?, description = ?, method = ?,
+        debit = ?, credit = ?, transfer = ?, my = ?, fy = ?
       WHERE uniqueid = ?
     `;
 
     await db.prepare(stmt).bind(
-      entryDate, body.respPerson || '', body.category || 'Income', body.description || '',
-      body.method || meta.method, debit, credit, body.transfer || '', my, fy, uniqueid
+      entryDate, respPersonVal, body.category || 'Income', body.description || '',
+      body.method || 'Cash', debit, credit, body.transfer || '', my, fy, uniqueid
     ).run();
 
     await recalculateLedgerBalances(db, tableName);
-    await postCashierCrossBookTransfer(db, body, rawBook, entryDate, my, fy, session?.name || 'Admin', uniqueid);
+    await postCashierCrossBookTransfer(db, body, rawBook, entryDate, my, fy, session?.name || 'Cashier', uniqueid);
 
     return {
       success: true,
@@ -472,17 +516,36 @@ export async function updateCashierEntry(db, session, body) {
 }
 
 /**
- * 💡 Delete Cashier Entry
+ * 💡 Delete Cashier Entry (With Strict Server-Side Auto-Lock Guard)
  */
 export async function deleteCashierEntry(db, session, body) {
   try {
-    const rawBook = body.bookName || body.book || "CABank";
-    const meta = getCashierMeta(rawBook);
-    const tableName = meta.table;
+    const rawBook = body.bookName || "CABank";
+    const { tableName } = getCashierMeta(rawBook);
     const uniqueid = body.uniqueId || body.uniqueid;
 
     if (!uniqueid) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
+    }
+
+    // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT (Zero Client-Flag Bypass)
+    const existing = await db.prepare(`SELECT is_locked, uniqueid FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    if (existing) {
+      const uid = String(existing.uniqueid || '');
+      const isAutoLocked = Boolean(existing.is_locked) ||
+        uid.startsWith('TRANS_') ||
+        uid.startsWith('UNIPROFIT_') ||
+        uid.startsWith('UNICASHIER_') ||
+        uid.startsWith('INCCASHIER_') ||
+        uid.startsWith('DAILY_INC_');
+
+      const isPrivilegedAdmin = ['Owner', 'Admin'].includes(session?.role || '');
+      if (isAutoLocked && !isPrivilegedAdmin) {
+        return { 
+          success: false, 
+          message: "ဤစာရင်းသည် မူရင်းစာအုပ်မှ အလိုအလျောက် ရောက်ရှိလာသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ဖျက်သိမ်းနိုင်ပါသည်။" 
+        };
+      }
     }
 
     await db.prepare(`DELETE FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).run();
