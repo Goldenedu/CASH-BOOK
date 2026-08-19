@@ -1,9 +1,10 @@
 /**
  * GOLDEN ERP SYSTEM - HR PAYROLL & STAFF D1 SQL HANDLER MODULE
  * File: handlers-payroll-staff.js 
- * 💡 Features: PII & Salary Data Protection (Role-Based Field Redaction),
+ * 💡 Features: PII & Salary Data Protection (Role-Based Redaction including uniqueid),
+ *              Privilege Escalation Defense (Server-Generated UUIDs for new records),
  *              Fund Date Calculation (Join Date + 3 Years), Bonus/Fund Accrual & Payout Deduction Engine,
- *              Date-Based VR No (SAL-080826-001), FY Integer NO Reset, Grade Matrix Upsert & Idempotent Upsert Engine
+ *              Date-Based VR No (SAL-080826-001), FY Integer NO Reset & Grade Matrix Upsert
  */
 
 /**
@@ -162,32 +163,70 @@ export async function getStaffData(db, body, userSession) {
       const rowNet = Number(item.total_net_amt ?? item.totalNetAmt ?? item.total_salary ?? item.totalSalary ?? 0);
       totalNetAmt += rowNet;
 
-      // 🛡️ Redact sensitive financial & personal data for non-privileged roles (Staff, Viewer, Cashier)
+      // 🛡️ Redact sensitive financial, personal & ID fields for unauthorized roles (Staff, Viewer, Cashier)
       if (!canSeeSensitive) {
         return {
-          ...item,
-          nrc_no: '***',
-          nrcNo: '***',
-          bank_account: '***',
-          bankAccount: '***',
-          basic_amt: 0,
+          id: item.id,
+          no: item.no,
+          joinDate: item.join_date || item.joinDate || '',
+          category: item.category || '',
+          staffId: item.staff_id || item.staffId || '',
+          name: item.name || '',
+          staffIdName: item.staff_idname || item.staffIdName || '',
+          education: item.education || '',
+          position: item.position || '',
+          status: item.status || 'Active',
+          gender: item.gender || 'Male',
+          phoneNo: item.phone_no || item.phoneNo || '',
+          email: item.email || '',
+          salaryGrade: '***',
+          workingDays: 0,
           basicAmt: 0,
-          extra_amt: 0,
           extraAmt: 0,
-          total_salary: 0,
           totalSalary: 0,
           bonus: 0,
           fund: 0,
-          total_net_amt: 0,
           totalNetAmt: 0,
-          unpaid_bonus: 0,
+          resignedDate: '',
+          nrcNo: '***',
+          bankAccount: '***',
+          fundDate: '',
           unpaidBonus: 0,
-          unpaid_fund: 0,
-          unpaidFund: 0
+          unpaidFund: 0,
+          uniqueId: '***' // 🛡️ Internal ID Redacted to prevent IDOR probing
         };
       }
 
-      return item;
+      return {
+        id: item.id,
+        no: item.no,
+        joinDate: item.join_date || item.joinDate || '',
+        category: item.category || '',
+        staffId: item.staff_id || item.staffId || '',
+        name: item.name || '',
+        staffIdName: item.staff_idname || item.staffIdName || '',
+        education: item.education || '',
+        position: item.position || '',
+        salaryGrade: item.salary_grade || item.salaryGrade || '',
+        workingDays: parseFloat(item.working_days !== undefined ? item.working_days : (item.workingDays || 26)),
+        basicAmt: parseFloat(item.basic_amt !== undefined ? item.basic_amt : (item.basicAmt || 0)),
+        extraAmt: parseFloat(item.extra_amt !== undefined ? item.extra_amt : (item.extraAmt || 0)),
+        totalSalary: parseFloat(item.total_salary !== undefined ? item.total_salary : (item.totalSalary || 0)),
+        bonus: parseFloat(item.bonus || 0),
+        fund: parseFloat(item.fund || 0),
+        totalNetAmt: parseFloat(item.total_net_amt !== undefined ? item.total_net_amt : (item.totalNetAmt || 0)),
+        resignedDate: item.resigned_date || item.resignedDate || '',
+        status: item.status || 'Active',
+        gender: item.gender || 'Male',
+        nrcNo: item.nrc_no || item.nrcNo || '',
+        bankAccount: item.bank_account || item.bankAccount || '',
+        phoneNo: item.phone_no || item.phoneNo || '',
+        email: item.email || '',
+        fundDate: item.fund_date || item.fundDate || '',
+        unpaidBonus: parseFloat(item.unpaid_bonus !== undefined ? item.unpaid_bonus : (item.unpaidBonus || 0)),
+        unpaidFund: parseFloat(item.unpaid_fund !== undefined ? item.unpaid_fund : (item.unpaidFund || 0)),
+        uniqueId: item.uniqueid || item.uniqueId || `STF_${item.id}`
+      };
     });
 
     return {
@@ -208,14 +247,22 @@ export async function getStaffData(db, body, userSession) {
 }
 
 /**
- * 💡 Save Staff Record (Supports isMigration & Auto Fund Date = Join Date + 3 Years)
+ * 💡 Save Staff Record (Protected against Privilege Escalation / Server-Generated UUIDs)
  */
 export async function saveStaffEntry(db, userSession, body) {
   try {
     const isPartTime = String(body.category || '').toLowerCase().includes('part');
     const table = isPartTime ? 'staff_parttime' : 'staff_fulltime';
     const prefix = isPartTime ? 'PID' : 'FID';
-    const uniqueid = body.uniqueId || `STF_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+
+    // 🔒 1. PRIVILEGE ESCALATION DEFENSE: Server-generated UUID only for new records
+    // Client-provided uniqueId is strictly ignored for normal creation to prevent overwriting existing records
+    const isPrivilegedAdmin = ['Owner', 'Admin'].includes(userSession?.role || '');
+    const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport);
+
+    const uniqueid = (isMigration && body.uniqueId)
+      ? String(body.uniqueId).trim()
+      : `STF_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 
     let staffIdNum = parseInt(body.staffId || body.id, 10);
     if (!staffIdNum || isNaN(staffIdNum)) {
@@ -231,11 +278,13 @@ export async function saveStaffEntry(db, userSession, body) {
     const joinDateVal = body.joinDate || new Date().toISOString().split('T')[0];
     const computedFundDate = body.fundDate || calculateFundDate(joinDateVal);
 
-    const isMigration = Boolean(body.isMigration || body.directImport);
     const assignedNo = (isMigration && body.no) ? parseInt(body.no, 10) : staffIdNum;
 
+    // 🔒 2. SAFE INSERTION: Use INSERT INTO (or INSERT OR REPLACE ONLY for authenticated Admin migration)
+    const sqlInsertVerb = isMigration ? "INSERT OR REPLACE INTO" : "INSERT INTO";
+
     if (isPartTime) {
-      await db.prepare(`INSERT OR REPLACE INTO staff_parttime (
+      await db.prepare(`${sqlInsertVerb} staff_parttime (
         no, join_date, category, staff_id, name, staff_idname, education, position,
         total_salary, total_net_amt, resigned_date, status, gender, nrc_no,
         bank_account, phone_no, email, created_by, created_at, uniqueid
@@ -246,7 +295,7 @@ export async function saveStaffEntry(db, userSession, body) {
         body.phoneNo || '', body.email || '', userSession?.name || 'Admin', uniqueid
       ).run();
     } else {
-      await db.prepare(`INSERT OR REPLACE INTO staff_fulltime (
+      await db.prepare(`${sqlInsertVerb} staff_fulltime (
         no, join_date, category, staff_id, name, staff_idname, education, position,
         salary_grade, working_days, basic_amt, extra_amt, total_salary, bonus, fund,
         total_net_amt, resigned_date, status, gender, nrc_no, bank_account, phone_no,
@@ -276,7 +325,7 @@ export async function saveStaffEntry(db, userSession, body) {
 }
 
 /**
- * 💡 Update Staff Record
+ * 💡 Update Staff Record (Strict Permission Guarded)
  */
 export async function updateStaffEntry(db, userSession, body) {
   try {
@@ -289,7 +338,13 @@ export async function updateStaffEntry(db, userSession, body) {
     const table = isPartTime ? 'staff_parttime' : 'staff_fulltime';
     const prefix = isPartTime ? 'PID' : 'FID';
 
-    const staffIdNum = parseInt(body.staffId || body.id, 10) || 1;
+    // Verify existing record
+    const existing = await db.prepare(`SELECT id, staff_id FROM ${table} WHERE uniqueid = ?`).bind(uniqueid).first();
+    if (!existing) {
+      return { success: false, message: "ပြင်ဆင်မည့် ဝန်ထမ်းမှတ်တမ်း ရှာမတွေ့ပါ။" };
+    }
+
+    const staffIdNum = parseInt(body.staffId || body.id, 10) || existing.staff_id || 1;
     const paddedId = String(staffIdNum).padStart(3, '0');
     const staffName = body.name || '';
     const staffIdName = `[${prefix} ${paddedId}] ${staffName}`;
@@ -354,7 +409,7 @@ export async function deleteStaffEntry(db, userSession, body) {
  */
 export async function saveHrPayrollForm(db, userSession, body) {
   try {
-    const uniqueid = body.uniqueId || `SAL_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    const uniqueid = body.uniqueId || `SAL_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const dateStr = body.date || new Date().toISOString().split('T')[0];
     const category = body.category || 'Full Time Salary';
     const staffIdStr = String(body.staffId || '').trim();
