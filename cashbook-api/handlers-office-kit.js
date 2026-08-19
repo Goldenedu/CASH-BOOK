@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - OFFICE & KITCHEN EXPENSE HANDLER (CLOUDFLARE D1)
- * File: handlers-office-kit.js 
+ * File: handlers-office-kit.js  
  * 💡 Features: Server-Side Auto-Lock Enforcement (5-Prefix Lock Engine & Zero Client Bypass),
  *              Config.js Aligned (office: 19 cols, kitchen: 16 cols without liabilities, payroll: 18 cols),
  *              Privilege Escalation Defense, Bulletproof Uniform Stock Reversion & Idempotent Upsert Engine
