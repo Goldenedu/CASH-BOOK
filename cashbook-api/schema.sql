@@ -1,10 +1,12 @@
 -- ==============================================================================
--- GOLDEN ERP SYSTEM - CLOUDFLARE D1 DATABASE INITIAL SCHEMA
--- File: schema.sql 
+-- GOLDEN ERP SYSTEM - CLOUDFLARE D1 DATABASE MASTER PRODUCTION SCHEMA
+-- File: schema.sql
+-- 💡 Features: 20 Complete Relational Tables, High-Performance Composite Indexes,
+--              PBKDF2 Password Security & Canonical Grade Matrix Initial Seeds
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
--- 1. USERS TABLE (Authentication & Roles)
+-- 1. USERS & AUTHENTICATION (PBKDF2 Secured)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -16,7 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- ------------------------------------------------------------------------------
--- 2. MAIN FINANCIAL & EXPENSE BOOKS (5 Core Books)
+-- 2. MAIN FINANCIAL & EXPENSE BOOKS (5 Core Ledgers)
 -- ------------------------------------------------------------------------------
 
 -- A. Main Bank Book (16 Cols)
@@ -63,7 +65,7 @@ CREATE TABLE IF NOT EXISTS cash (
   is_locked INTEGER DEFAULT 0
 );
 
--- C. Office Expense Book (19 Cols)
+-- C. Office Expense Book (19 Cols - Includes liabilities)
 CREATE TABLE IF NOT EXISTS office (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   no INTEGER DEFAULT 1,
@@ -88,7 +90,7 @@ CREATE TABLE IF NOT EXISTS office (
   is_locked INTEGER DEFAULT 0
 );
 
--- D. Kitchen Expense Book (17 Cols)
+-- D. Kitchen Expense Book (16 Cols - Strictly NO liabilities column)
 CREATE TABLE IF NOT EXISTS kitchen (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   no INTEGER DEFAULT 1,
@@ -99,7 +101,6 @@ CREATE TABLE IF NOT EXISTS kitchen (
   debit REAL DEFAULT 0,
   credit REAL DEFAULT 0,
   balances REAL DEFAULT 0,
-  liabilities REAL DEFAULT 0,
   transfer TEXT DEFAULT '',
   vr_no TEXT,
   my TEXT,
@@ -111,7 +112,7 @@ CREATE TABLE IF NOT EXISTS kitchen (
   is_locked INTEGER DEFAULT 0
 );
 
--- E. HR Payroll Expense Book (18 Cols)
+-- E. HR Payroll Expense Book (18 Cols - Includes unpaid_bonus & unpaid_fund)
 CREATE TABLE IF NOT EXISTS payroll (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   no INTEGER DEFAULT 1,
@@ -136,7 +137,7 @@ CREATE TABLE IF NOT EXISTS payroll (
 );
 
 -- ------------------------------------------------------------------------------
--- 3. MAIN INCOME BOOK (Student Revenue & Split Payment Ledger)
+-- 3. MAIN INCOME BOOK (Student Tuition & Split Payment Ledger - 21 Cols)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS income (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -255,7 +256,7 @@ CREATE TABLE IF NOT EXISTS promotion (
 );
 
 -- ------------------------------------------------------------------------------
--- 6. STAFF DIRECTORY & SALARY GRADE MATRIX
+-- 6. STAFF DIRECTORY & SALARY GRADE MATRIX (Grades A to L)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS staff_fulltime (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -334,7 +335,7 @@ CREATE TABLE IF NOT EXISTS salary_grade_matrix (
 );
 
 -- ------------------------------------------------------------------------------
--- 7. CASHIER SUB-LEDGERS (5 Books - 17 Cols with responsibility_person)
+-- 7. CASHIER SUB-LEDGERS (5 Sub-Books - 17 Cols with responsibility_person)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS ca_bank (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -447,32 +448,28 @@ CREATE TABLE IF NOT EXISTS ca_payroll (
 );
 
 -- ------------------------------------------------------------------------------
--- 8. INDEXES FOR LIGHTNING FAST QUERIES (0ms Navigation)
+-- 8. HIGH-PERFORMANCE COMPOSITE INDEXES (Sub-Millisecond Query Scaling)
 -- ------------------------------------------------------------------------------
-CREATE INDEX IF NOT EXISTS idx_bank_fy ON bank(fy);
-CREATE INDEX IF NOT EXISTS idx_cash_fy ON cash(fy);
-CREATE INDEX IF NOT EXISTS idx_office_fy ON office(fy);
-CREATE INDEX IF NOT EXISTS idx_kitchen_fy ON kitchen(fy);
-CREATE INDEX IF NOT EXISTS idx_payroll_fy ON payroll(fy);
-CREATE INDEX IF NOT EXISTS idx_income_fy ON income(fy);
-CREATE INDEX IF NOT EXISTS idx_student_fy ON student(fy);
-CREATE INDEX IF NOT EXISTS idx_student_money_fy ON student_money(fy);
-CREATE INDEX IF NOT EXISTS idx_ca_cash_fy ON ca_cash(fy);
-CREATE INDEX IF NOT EXISTS idx_ca_bank_fy ON ca_bank(fy);
+CREATE INDEX IF NOT EXISTS idx_bank_fy_date ON bank(fy, date);
+CREATE INDEX IF NOT EXISTS idx_cash_fy_date ON cash(fy, date);
+CREATE INDEX IF NOT EXISTS idx_office_fy_date ON office(fy, date);
+CREATE INDEX IF NOT EXISTS idx_kitchen_fy_date ON kitchen(fy, date);
+CREATE INDEX IF NOT EXISTS idx_payroll_fy_date ON payroll(fy, date);
+CREATE INDEX IF NOT EXISTS idx_income_fy_date ON income(fy, date);
+CREATE INDEX IF NOT EXISTS idx_student_fy_status ON student(fy, status);
+CREATE INDEX IF NOT EXISTS idx_student_money_fy_date ON student_money(fy, date);
+CREATE INDEX IF NOT EXISTS idx_ca_cash_fy_date ON ca_cash(fy, date);
+CREATE INDEX IF NOT EXISTS idx_ca_bank_fy_date ON ca_bank(fy, date);
 
 -- ------------------------------------------------------------------------------
--- 9. DEFAULT SEED DATA
+-- 9. CANONICAL INITIAL SEED DATA (Non-Sensitive Defaults Only)
 -- ------------------------------------------------------------------------------
--- A. Default Salary Grade Matrix Row (ID = 1)
-INSERT OR IGNORE INTO salary_grade_matrix (id, grade_a, grade_b, grade_c, grade_d, grade_e, grade_f, grade_g, grade_h, grade_i, grade_j, grade_k, grade_l, bonus_rate, fund_rate)
-VALUES (1, 300000, 350000, 400000, 450000, 500000, 550000, 600000, 650000, 700000, 750000, 800000, 850000, 30000, 0.05);
 
--- B. Default Users (Initial Setup - Passwords will auto-hash on first login)
-INSERT OR IGNORE INTO users (id, username, password_hash, role, name)
-VALUES 
-  (1, 'Owner', 'golden@123', 'Owner', 'School Owner'),
-  (2, 'Admin', 'golden@123', 'Admin', 'System Administrator'),
-  (3, 'Finance', 'golden@123', 'Finance', 'Finance Manager'),
-  (4, 'HR', 'golden@123', 'HR', 'HR Officer'),
-  (5, 'Accountant', 'golden@123', 'Accountant', 'Chief Accountant'),
-  (6, 'Cashier', 'golden@123', 'Cashier', 'Head Cashier');
+-- A. Default Salary Grade Matrix Row (ID = 1, Grades A to L)
+INSERT OR IGNORE INTO salary_grade_matrix (id, grade_a, grade_b, grade_c, grade_d, grade_e, grade_f, grade_g, grade_h, grade_i, grade_j, grade_k, grade_l, bonus_rate, fund_rate, updated_at)
+VALUES (1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.05, datetime('now'));
+
+-- 💡 SECURITY NOTICE: 
+-- User accounts and passwords must NOT be stored in public schema files.
+-- Create administrative users privately via Cloudflare D1 Console.
+
