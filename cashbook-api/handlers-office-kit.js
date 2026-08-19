@@ -1,9 +1,9 @@
 /**
  * GOLDEN ERP SYSTEM - OFFICE & KITCHEN EXPENSE HANDLER (CLOUDFLARE D1)
  * File: handlers-office-kit.js 
- * 💡 Features: Config.js Aligned (office: 19 cols, kitchen: 16 cols without liabilities, payroll: 18 cols),
- *              Direct Migration Mode (Bypasses cascading triggers during bulk sync),
- *              Bulletproof Uniform Stock Reversion, Date-Based VR No & Idempotent Upsert Engine
+ * 💡 Features: Server-Side Auto-Lock Enforcement (5-Prefix Lock Engine & Zero Client Bypass),
+ *              Config.js Aligned (office: 19 cols, kitchen: 16 cols without liabilities, payroll: 18 cols),
+ *              Privilege Escalation Defense, Bulletproof Uniform Stock Reversion & Idempotent Upsert Engine
  */
 
 const BOOK_TABLE_MAP = {
@@ -180,7 +180,7 @@ async function cleanLinkedAutoEntries(db, uniqueid) {
 }
 
 /**
- * 💡 Post Linked Auto Entries (Source Book Name Aligned: 'Office Exp Book')
+ * 💡 Post Linked Auto Entries
  */
 async function postLinkedAutoEntries(db, body, entryDate, my, fy, createdBy, uniqueid) {
   const isUniform = (body.category === "Advance Uniform" || body.category === "Advance Unifrom");
@@ -193,7 +193,6 @@ async function postLinkedAutoEntries(db, body, entryDate, my, fy, createdBy, uni
   const totalCashierIncome = costDebit + profit;
   const sourceBookTitle = body.bookName || 'Office Exp Book';
 
-  // 1. Post Uniform Profit to Main Cash/Bank Book
   if (profit > 0) {
     const mainTable = (method === 'bank') ? 'bank' : 'cash';
     const mainPrefix = (method === 'bank') ? 'BNK' : 'CAH';
@@ -214,7 +213,6 @@ async function postLinkedAutoEntries(db, body, entryDate, my, fy, createdBy, uni
     await recalculateLedgerBalances(db, mainTable);
   }
 
-  // 2. Post Total Customer Collection to Cashier Sub-Ledger
   if (totalCashierIncome > 0) {
     const caTable = (method === 'bank') ? 'ca_bank' : 'ca_cash';
     const caPrefix = (method === 'bank') ? 'CAB' : 'CAC';
@@ -280,7 +278,7 @@ export async function getExpenseData(db, body) {
 
     const formattedRows = rawRows.map(row => {
       const uid = String(row.uniqueid || row.uniqueId || '');
-      const isAutoLocked = Boolean(row.is_locked || row.isLocked || uid.startsWith('UNIPROFIT_') || uid.startsWith('UNICASHIER_') || uid.startsWith('TRANS_'));
+      const isAutoLocked = Boolean(row.is_locked || row.isLocked || uid.startsWith('UNIPROFIT_') || uid.startsWith('UNICASHIER_') || uid.startsWith('TRANS_') || uid.startsWith('DAILY_INC_') || uid.startsWith('INCMAIN_'));
 
       return {
         id: row.id,
@@ -322,13 +320,12 @@ export async function getExpenseData(db, body) {
 }
 
 /**
- * 💡 Save New Expense Entry (Kitchen 16-cols without liabilities)
+ * 💡 Save New Expense Entry (Privilege Escalation Protected & Zero Liabilities for Kitchen)
  */
 export async function saveExpenseEntry(db, session, body) {
   try {
     const rawBook = body.bookName || body.book || "office";
     const tableName = getTableName(rawBook);
-    const uniqueid = body.uniqueId || `EXP_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const createdBy = session?.name || body.createdBy || "Admin";
 
     const entryDate = body.date || new Date().toISOString().split('T')[0];
@@ -346,17 +343,24 @@ export async function saveExpenseEntry(db, session, body) {
     const unitPrice = parseFloat(body.unitPrice || 0);
     const liabilities = parseFloat(body.liabilities || 0);
 
-    const newNo = await generateFyNo(db, tableName, fy);
+    // 🔒 1. PRIVILEGE ESCALATION DEFENSE: Server-generated UUID only for new records
+    const isPrivilegedAdmin = ['Owner', 'Admin'].includes(session?.role || '');
+    const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport || body.skipAutoPost);
+
+    const uniqueid = (isMigration && body.uniqueId)
+      ? String(body.uniqueId).trim()
+      : `EXP_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+
+    const newNo = (isMigration && body.no) ? parseInt(body.no, 10) : await generateFyNo(db, tableName, fy);
     const bookPrefix = tableName === 'kitchen' ? 'KIT' : (tableName === 'payroll' ? 'SAL' : 'OFF');
     const vrNo = body.vrNo || await generateVoucherNo(db, tableName, bookPrefix, entryDate);
 
-    // 💡 CHECK FOR DIRECT MIGRATION MODE
-    const isMigration = Boolean(body.isMigration || body.directImport || body.skipAutoPost);
+    const sqlVerb = isMigration ? "INSERT OR REPLACE INTO" : "INSERT INTO";
 
     if (tableName === 'kitchen') {
       // ✅ 16 Columns (NO liabilities column for Kitchen)
       const kitchenStmt = `
-        INSERT OR REPLACE INTO kitchen (
+        ${sqlVerb} kitchen (
           no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
         ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, '', ?, ?, ?, datetime('now'), ?)
       `;
@@ -368,7 +372,7 @@ export async function saveExpenseEntry(db, session, body) {
     } else if (tableName === 'payroll') {
       // 18 Columns for Payroll
       const payrollStmt = `
-        INSERT OR REPLACE INTO payroll (
+        ${sqlVerb} payroll (
           no, date, category, description, method, debit, credit, balances, unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
         ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, '', ?, ?, ?, datetime('now'), ?)
       `;
@@ -380,7 +384,7 @@ export async function saveExpenseEntry(db, session, body) {
     } else {
       // 19 Columns for Office (Includes liabilities)
       const officeStmt = `
-        INSERT OR REPLACE INTO office (
+        ${sqlVerb} office (
           no, date, category, description, unit, unit_price, method, debit, credit, balances, liabilities, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, '', ?, ?, ?, datetime('now'), ?)
       `;
@@ -424,7 +428,7 @@ export async function saveExpenseEntry(db, session, body) {
 }
 
 /**
- * 💡 Update Expense Entry (Kitchen has NO liabilities column)
+ * 💡 Update Expense Entry (With Strict Server-Side Auto-Lock & Zero Liabilities for Kitchen)
  */
 export async function updateExpenseEntry(db, session, body) {
   try {
@@ -434,10 +438,30 @@ export async function updateExpenseEntry(db, session, body) {
 
     if (!uniqueid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
 
-    const oldRow = await db.prepare(`SELECT * FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
-    if (oldRow && (oldRow.category === "Advance Uniform" || oldRow.category === "Advance Unifrom")) {
-      const oldUnit = parseFloat(oldRow.unit || 0);
-      const oldPid = extractProductIdFromDescription(oldRow.description) || oldRow.id;
+    // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT (Zero Client-Flag Bypass)
+    const existing = await db.prepare(`SELECT is_locked, uniqueid, description, unit, id, category FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    if (!existing) return { success: false, message: "ပြင်ဆင်မည့် စာရင်း ရှာမတွေ့ပါ။" };
+
+    const uid = String(existing.uniqueid || '');
+    const isAutoLocked = Boolean(existing.is_locked) ||
+      uid.startsWith('TRANS_') ||
+      uid.startsWith('UNIPROFIT_') ||
+      uid.startsWith('UNICASHIER_') ||
+      uid.startsWith('DAILY_INC_') ||
+      uid.startsWith('INCMAIN_');
+
+    const isPrivilegedAdmin = ['Owner', 'Admin'].includes(session?.role || '');
+    if (isAutoLocked && !isPrivilegedAdmin) {
+      return { 
+        success: false, 
+        message: "ဤစာရင်းသည် စနစ်မှ အလိုအလျောက် သို့မဟုတ် အခြားစာအုပ်မှ ချိတ်ဆက်ထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ပြင်ဆင်နိုင်ပါသည်။" 
+      };
+    }
+
+    // 2. Fetch Old Entry to Revert Stock using Extracted Product ID
+    if (existing.category === "Advance Uniform" || existing.category === "Advance Unifrom") {
+      const oldUnit = parseFloat(existing.unit || 0);
+      const oldPid = extractProductIdFromDescription(existing.description) || existing.id;
       if (oldPid && oldUnit > 0) {
         await syncUniformStock(db, oldPid, -oldUnit);
       }
@@ -477,12 +501,14 @@ export async function updateExpenseEntry(db, session, body) {
 
     await recalculateLedgerBalances(db, tableName);
 
+    // 3. Deduct New Stock
     const isUniform = (body.category === "Advance Uniform" || body.category === "Advance Unifrom");
     const targetPid = body.id || extractProductIdFromDescription(body.description);
     if (isUniform && targetPid && unit > 0) {
       await syncUniformStock(db, targetPid, unit);
     }
 
+    // 4. Re-post Updated Linked Auto Entries & Recalculate Linked Books
     await postLinkedAutoEntries(db, body, entryDate, my, fy, session?.name || 'Admin', uniqueid);
     await recalculateLedgerBalances(db, 'cash');
     await recalculateLedgerBalances(db, 'bank');
@@ -497,7 +523,7 @@ export async function updateExpenseEntry(db, session, body) {
 }
 
 /**
- * 💡 Delete Expense Entry
+ * 💡 Delete Expense Entry (With Strict Server-Side Auto-Lock Guard)
  */
 export async function deleteExpenseEntry(db, session, body) {
   try {
@@ -507,18 +533,42 @@ export async function deleteExpenseEntry(db, session, body) {
 
     if (!uniqueid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
 
-    const oldRow = await db.prepare(`SELECT * FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
-    if (oldRow && (oldRow.category === "Advance Uniform" || oldRow.category === "Advance Unifrom")) {
-      const oldUnit = parseFloat(oldRow.unit || 0);
-      const oldPid = extractProductIdFromDescription(oldRow.description) || oldRow.id;
+    // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT (Zero Client-Flag Bypass)
+    const existing = await db.prepare(`SELECT is_locked, uniqueid, description, unit, id, category FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    if (existing) {
+      const uid = String(existing.uniqueid || '');
+      const isAutoLocked = Boolean(existing.is_locked) ||
+        uid.startsWith('TRANS_') ||
+        uid.startsWith('UNIPROFIT_') ||
+        uid.startsWith('UNICASHIER_') ||
+        uid.startsWith('DAILY_INC_') ||
+        uid.startsWith('INCMAIN_');
+
+      const isPrivilegedAdmin = ['Owner', 'Admin'].includes(session?.role || '');
+      if (isAutoLocked && !isPrivilegedAdmin) {
+        return { 
+          success: false, 
+          message: "ဤစာရင်းသည် စနစ်မှ အလိုအလျောက် သို့မဟုတ် အခြားစာအုပ်မှ ချိတ်ဆက်ထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ဖျက်သိမ်းနိုင်ပါသည်။" 
+        };
+      }
+    }
+
+    // 2. Revert Stock in Uniform Ledger via Extracted Product ID
+    if (existing && (existing.category === "Advance Uniform" || existing.category === "Advance Unifrom")) {
+      const oldUnit = parseFloat(existing.unit || 0);
+      const oldPid = extractProductIdFromDescription(existing.description) || existing.id;
       if (oldPid && oldUnit > 0) {
         await syncUniformStock(db, oldPid, -oldUnit);
       }
     }
 
+    // 3. Delete Main Entry
     await db.prepare(`DELETE FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).run();
+
+    // 4. Delete Linked Auto Entries
     await cleanLinkedAutoEntries(db, uniqueid);
 
+    // 5. Recalculate all affected ledgers
     await recalculateLedgerBalances(db, tableName);
     await recalculateLedgerBalances(db, 'cash');
     await recalculateLedgerBalances(db, 'bank');
