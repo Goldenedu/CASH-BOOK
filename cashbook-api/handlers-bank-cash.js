@@ -1,7 +1,7 @@
 /**
  * GOLDEN ERP SYSTEM - MAIN BANK & CASH BOOKS HANDLER (CLOUDFLARE D1)
  * File: handlers-bank-cash.js  
- * 💡 Features: Server-Side Auto-Lock Enforcement (Protects Cross-Book Integrity),
+ * 💡 Features: Server-Side Auto-Lock Enforcement (5-Prefix Lock Engine & Zero Client Bypass),
  *              Direct isMigration Mode (Preserves Column A NO 1..656 & Bypasses Auto-Transfers),
  *              Strict Net Balances Calculation (Total Income - Total Expense),
  *              Dynamic Month-Year (MY) Generator & Idempotent Cross-Book Transfer Engine
@@ -86,10 +86,8 @@ async function recalculateLedgerBalances(db, tableName) {
       }
     }
 
-    const chunkSize = 100;
-    for (let i = 0; i < statements.length; i += chunkSize) {
-      const chunk = statements.slice(i, i + chunkSize);
-      await db.batch(chunk);
+    for (let i = 0; i < statements.length; i += 100) {
+      await db.batch(statements.slice(i, i + 100));
     }
   } catch (e) {
     console.warn(`Running Balance & NO Recalculation Warning for ${tableName}:`, e);
@@ -315,13 +313,12 @@ export async function getBankCashData(db, body) {
 }
 
 /**
- * 💡 Save Bank / Cash Entry (Preserves Column A NO 1..656 during isMigration Mode)
+ * 💡 Save Bank / Cash Entry (Preserves Column A NO during isMigration Mode)
  */
 export async function saveBankCashEntry(db, session, body) {
   try {
     const rawBook = body.bookName || body.book || "cash";
     const tableName = getTableName(rawBook);
-    const uniqueid = body.uniqueId || `BCK_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const createdBy = session?.name || body.createdBy || "Admin";
 
     const entryDate = body.date || new Date().toISOString().split('T')[0];
@@ -336,16 +333,23 @@ export async function saveBankCashEntry(db, session, body) {
     const debit = parseFloat(body.debit || 0);
     const credit = parseFloat(body.credit || 0);
 
-    // 💡 CHECK FOR DIRECT MIGRATION MODE (Bypasses Live Cross-Book Transfers)
-    const isMigration = Boolean(body.isMigration || body.directImport || body.skipAutoPost);
+    // 🔒 1. PRIVILEGE ESCALATION DEFENSE: Server-generated UUID only for new records
+    const isPrivilegedAdmin = ['Owner', 'Admin'].includes(session?.role || '');
+    const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport || body.skipAutoPost);
 
-    // 💡 FIX: Use exact sequential NO from Google Sheet Column A when migrating
+    const uniqueid = (isMigration && body.uniqueId)
+      ? String(body.uniqueId).trim()
+      : `BCK_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+
+    // 💡 Use exact sequential NO from Google Sheet Column A when migrating
     const newNo = (isMigration && body.no) ? parseInt(body.no, 10) : await generateFyNo(db, tableName, fy);
     const prefix = getTablePrefix(tableName);
     const vrNo = body.vrNo || await generateVoucherNo(db, tableName, prefix, entryDate);
 
+    const sqlVerb = isMigration ? "INSERT OR REPLACE INTO" : "INSERT INTO";
+
     const stmt = `
-      INSERT OR REPLACE INTO ${tableName} (
+      ${sqlVerb} ${tableName} (
         no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
       ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
     `;
@@ -385,7 +389,7 @@ export async function saveBankCashEntry(db, session, body) {
 }
 
 /**
- * 💡 Update Bank / Cash Entry (With Server-Side Auto-Lock Guard)
+ * 💡 Update Bank / Cash Entry (With Strict Server-Side Auto-Lock & Role Protection)
  */
 export async function updateBankCashEntry(db, session, body) {
   try {
@@ -397,17 +401,26 @@ export async function updateBankCashEntry(db, session, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    // 🔒 SERVER-SIDE LOCK ENFORCEMENT
+    // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT (All 5 Lock Types Protected, Zero Client-Flag Bypass)
     const existing = await db.prepare(`SELECT is_locked, uniqueid, transfer FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ပြင်ဆင်မည့် စာရင်း ရှာမတွေ့ပါ။" };
     }
 
     const uid = String(existing.uniqueid || '');
-    if (uid.startsWith('TRANS_') && !body.allowAutoOverride) {
+    const isAutoLocked = Boolean(existing.is_locked) ||
+      uid.startsWith('TRANS_') ||
+      uid.startsWith('UNIPROFIT_') ||
+      uid.startsWith('UNICASHIER_') ||
+      uid.startsWith('DAILY_INC_');
+
+    const isPrivilegedAdmin = ['Owner', 'Admin'].includes(session?.role || '');
+
+    // 🛡️ Lock rejection: Non-admin users cannot alter linked/auto-generated rows
+    if (isAutoLocked && !isPrivilegedAdmin) {
       return { 
         success: false, 
-        message: "ဤစာရင်းသည် အခြားစာအုပ်မှ လွှဲပြောင်းထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ပြင်ဆင်ရပါမည်။" 
+        message: "ဤစာရင်းသည် စနစ်မှ အလိုအလျောက် သို့မဟုတ် အခြားစာအုပ်မှ လွှဲပြောင်းထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ပြင်ဆင်နိုင်ပါသည်။" 
       };
     }
 
@@ -455,7 +468,7 @@ export async function updateBankCashEntry(db, session, body) {
 }
 
 /**
- * 💡 Delete Bank / Cash Entry (With Server-Side Auto-Lock Guard)
+ * 💡 Delete Bank / Cash Entry (With Strict Server-Side Auto-Lock & Role Protection)
  */
 export async function deleteBankCashEntry(db, session, body) {
   try {
@@ -467,14 +480,23 @@ export async function deleteBankCashEntry(db, session, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    // 🔒 SERVER-SIDE LOCK ENFORCEMENT
+    // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT (All 5 Lock Types Protected, Zero Client-Flag Bypass)
     const existing = await db.prepare(`SELECT is_locked, uniqueid FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (existing) {
       const uid = String(existing.uniqueid || '');
-      if (uid.startsWith('TRANS_') && !body.allowAutoOverride) {
+      const isAutoLocked = Boolean(existing.is_locked) ||
+        uid.startsWith('TRANS_') ||
+        uid.startsWith('UNIPROFIT_') ||
+        uid.startsWith('UNICASHIER_') ||
+        uid.startsWith('DAILY_INC_');
+
+      const isPrivilegedAdmin = ['Owner', 'Admin'].includes(session?.role || '');
+
+      // 🛡️ Lock rejection: Non-admin users cannot directly delete linked/auto-generated rows
+      if (isAutoLocked && !isPrivilegedAdmin) {
         return { 
           success: false, 
-          message: "ဤစာရင်းသည် အခြားစာအုပ်မှ လွှဲပြောင်းထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ဖျက်သိမ်းရပါမည်။" 
+          message: "ဤစာရင်းသည် စနစ်မှ အလိုအလျောက် သို့မဟုတ် အခြားစာအုပ်မှ လွှဲပြောင်းထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ဖျက်သိမ်းနိုင်ပါသည်။" 
         };
       }
     }
