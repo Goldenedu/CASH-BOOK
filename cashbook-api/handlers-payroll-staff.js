@@ -409,7 +409,15 @@ export async function deleteStaffEntry(db, userSession, body) {
  */
 export async function saveHrPayrollForm(db, userSession, body) {
   try {
-    const uniqueid = body.uniqueId || `SAL_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    // 🔒 1. PRIVILEGE ESCALATION DEFENSE: Server-generated UUID only for new records.
+    // Client-provided uniqueId is strictly ignored for normal creation (route only
+    // requires 'add' permission) to prevent overwriting an existing payroll entry.
+    const isPrivilegedAdmin = ['Owner', 'Admin'].includes(userSession?.role || '');
+    const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport);
+
+    const uniqueid = (isMigration && body.uniqueId)
+      ? String(body.uniqueId).trim()
+      : `SAL_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const dateStr = body.date || new Date().toISOString().split('T')[0];
     const category = body.category || 'Full Time Salary';
     const staffIdStr = String(body.staffId || '').trim();
@@ -423,7 +431,7 @@ export async function saveHrPayrollForm(db, userSession, body) {
     const fy = normalizeFyStr(body.fy || 'FY 2026-2027');
 
     const vrNoVal = body.vrNo || await generateVoucherNo(db, 'payroll', 'SAL', dateStr);
-    const newNo = await generateFyNo(db, 'payroll', fy);
+    const newNo = (isMigration && body.no) ? parseInt(body.no, 10) : await generateFyNo(db, 'payroll', fy);
 
     const debitVal = parseFloat(body.debit || 0);
     const creditVal = parseFloat(body.credit || 0);
@@ -431,7 +439,10 @@ export async function saveHrPayrollForm(db, userSession, body) {
     const unpaidBonus = parseFloat(body.unpaidBonus || 0);
     const unpaidFund = parseFloat(body.unpaidFund || 0);
 
-    const stmt = `INSERT OR REPLACE INTO payroll (
+    // 🔒 2. SAFE INSERTION: plain INSERT for normal creation; INSERT OR REPLACE only
+    // ever runs when isMigration is true, which itself is gated to Owner/Admin above.
+    const sqlVerb = isMigration ? "INSERT OR REPLACE INTO" : "INSERT INTO";
+    const stmt = `${sqlVerb} payroll (
       no, date, category, description, method, debit, credit, balances,
       unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name,
       created_by, created_at, uniqueid
