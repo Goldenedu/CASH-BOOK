@@ -38,6 +38,21 @@ function getTablePrefix(tableName) {
 }
 
 /**
+ * 💡 Table Name -> Human-Readable Book Title (for the row's own book_name column,
+ * as distinct from the 'transfer' column which names where the money came FROM)
+ */
+function getBookTitle(tableName) {
+  switch (tableName) {
+    case 'bank': return 'Main Bank Book';
+    case 'cash': return 'Main Cash Book';
+    case 'office': return 'Office Exp Book';
+    case 'kitchen': return 'Kitchen Exp Book';
+    case 'payroll': return 'HR Payroll Exp Book';
+    default: return tableName;
+  }
+}
+
+/**
  * 💡 FY String Normalizer (Ensures "FY 2026-2027" format)
  */
 function normalizeFyStr(fy) {
@@ -165,7 +180,10 @@ async function postCrossBookTransfer(db, body, sourceBookName, entryDate, my, fy
   const targetPrefix = getTablePrefix(targetTable);
   const targetVrNo = await generateVoucherNo(db, targetTable, targetPrefix, entryDate);
   const targetNo = await generateFyNo(db, targetTable, normFy);
-  const targetDesc = `[Transfer from ${sourceBookName}] ${body.description || ''}`.trim();
+  // 🔒 Use each book's own proper title, not the raw source string, for readability
+  const sourceBookTitle = getBookTitle(sourceTable);
+  const targetBookTitle = getBookTitle(targetTable);
+  const targetDesc = `[Transfer from ${sourceBookTitle}] ${body.description || ''}`.trim();
 
   if (targetTable === 'office') {
     // 19 Columns for Office
@@ -175,8 +193,9 @@ async function postCrossBookTransfer(db, body, sourceBookName, entryDate, my, fy
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
     `).bind(
       targetNo, entryDate, 'Transfer', targetDesc, 0, 0, body.method || 'Cash',
-      targetDebit, targetCredit, sourceBookName, targetVrNo, my, normFy,
-      sourceBookName, createdBy, transferUid
+      targetDebit, targetCredit, sourceBookTitle, targetVrNo, my, normFy,
+      // 🔒 FIX: book_name must describe THIS row's own book (target), not the source
+      targetBookTitle, createdBy, transferUid
     ).run();
   } else if (targetTable === 'payroll') {
     // 18 Columns for Payroll
@@ -186,8 +205,8 @@ async function postCrossBookTransfer(db, body, sourceBookName, entryDate, my, fy
       ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
     `).bind(
       targetNo, entryDate, 'Transfer', targetDesc, body.method || 'Cash',
-      targetDebit, targetCredit, sourceBookName, targetVrNo, my, normFy,
-      sourceBookName, createdBy, transferUid
+      targetDebit, targetCredit, sourceBookTitle, targetVrNo, my, normFy,
+      targetBookTitle, createdBy, transferUid
     ).run();
   } else {
     // 16 Columns for Bank, Cash, Kitchen
@@ -197,8 +216,8 @@ async function postCrossBookTransfer(db, body, sourceBookName, entryDate, my, fy
       ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
     `).bind(
       targetNo, entryDate, 'Transfer', targetDesc, body.method || 'Cash',
-      targetDebit, targetCredit, sourceBookName, targetVrNo, my, normFy,
-      sourceBookName, createdBy, transferUid
+      targetDebit, targetCredit, sourceBookTitle, targetVrNo, my, normFy,
+      targetBookTitle, createdBy, transferUid
     ).run();
   }
 
