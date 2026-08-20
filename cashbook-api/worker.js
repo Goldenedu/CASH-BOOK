@@ -1,7 +1,7 @@
 /**
  * ==============================================================================
  * GOLDEN ERP SYSTEM - CLOUDFLARE WORKER MAIN ROUTER (D1 MODULAR EDITION)
- * File: worker.js  
+ * File: worker.js   
  * 💡 Features: Fail-Closed JWT Security, Strict RBAC Matrix, PII Data Protection,
  *              CORS Whitelist Protection, Masked Error Logging & Full 35+ Route Handlers
  * ==============================================================================
