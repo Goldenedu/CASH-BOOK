@@ -166,6 +166,85 @@ async function verifyPassword(password, stored) {
   return { ok, needsRehash: ok };
 }
 
+// 💡 LOGIN BRUTE-FORCE RATE LIMITING (backs the login_attempts D1 table)
+const LOGIN_MAX_FAILED_ATTEMPTS = 5;
+const LOGIN_LOCKOUT_MINUTES = 5;
+
+async function getLoginLockStatus(db, username) {
+  try {
+    const row = await db.prepare("SELECT fail_count, locked_until FROM login_attempts WHERE username = ?").bind(username).first();
+    if (row && row.locked_until) {
+      const lockedUntilMs = Date.parse(row.locked_until + "Z"); // stored via datetime('now'), which is UTC
+      if (!isNaN(lockedUntilMs) && lockedUntilMs > Date.now()) {
+        const remainingSec = Math.ceil((lockedUntilMs - Date.now()) / 1000);
+        return { locked: true, remainingSec };
+      }
+    }
+    return { locked: false };
+  } catch (e) {
+    console.error("getLoginLockStatus error:", e);
+    return { locked: false }; // fail-open on infra errors so a DB hiccup never permanently locks everyone out
+  }
+}
+
+async function recordFailedLogin(db, username) {
+  try {
+    await db.prepare(`
+      INSERT INTO login_attempts (username, fail_count, locked_until, last_attempt_at)
+      VALUES (?, 1, NULL, datetime('now'))
+      ON CONFLICT(username) DO UPDATE SET
+        fail_count = fail_count + 1,
+        last_attempt_at = datetime('now')
+    `).bind(username).run();
+
+    const row = await db.prepare("SELECT fail_count FROM login_attempts WHERE username = ?").bind(username).first();
+    if (row && row.fail_count >= LOGIN_MAX_FAILED_ATTEMPTS) {
+      await db.prepare(`
+        UPDATE login_attempts SET locked_until = datetime('now', '+${LOGIN_LOCKOUT_MINUTES} minutes') WHERE username = ?
+      `).bind(username).run();
+    }
+  } catch (e) {
+    console.error("recordFailedLogin error:", e);
+  }
+}
+
+async function resetLoginAttempts(db, username) {
+  try {
+    await db.prepare("DELETE FROM login_attempts WHERE username = ?").bind(username).run();
+  } catch (e) {
+    console.error("resetLoginAttempts error:", e);
+  }
+}
+
+// 💡 LIGHTWEIGHT AUDIT TRAIL (backs the audit_logs D1 table). Best-effort / never
+// blocks or fails the caller's actual request if logging itself has a problem.
+async function writeAuditLog(db, userSession, action, body, result) {
+  try {
+    const recordId = body?.uniqueId || body?.uniqueid || result?.uniqueId || null;
+    const detail = JSON.stringify({
+      bookName: body?.bookName || body?.book || undefined,
+      groupKey: body?.groupKey || undefined,
+    });
+    await db.prepare(`
+      INSERT INTO audit_logs (username, role, action, record_id, detail) VALUES (?, ?, ?, ?, ?)
+    `).bind(
+      userSession?.username || "Unknown",
+      userSession?.role || "Unknown",
+      action,
+      recordId,
+      detail
+    ).run();
+  } catch (e) {
+    console.error("writeAuditLog error:", e);
+  }
+}
+
+// Actions worth recording in the audit trail (create/update/delete/backup — not plain reads)
+const AUDIT_ACTION_PREFIXES = ['save', 'update', 'delete', 'send', 'export'];
+function isAuditableAction(action) {
+  return AUDIT_ACTION_PREFIXES.some(p => action.startsWith(p));
+}
+
 export default {
   async fetch(request, env, ctx) {
     // 💡 1. CORS ORIGIN WHITELIST ENGINE (Connects with wrangler.toml ALLOWED_ORIGIN)
@@ -263,12 +342,31 @@ export default {
           const username = String(body.username || "").trim();
           const password = String(body.password || "").trim();
 
+          if (!username || !password) {
+            return new Response(JSON.stringify({
+              success: false,
+              message: "Username နှင့် Password ဖြည့်သွင်းပါ။"
+            }), { headers: corsHeaders });
+          }
+
+          // 🔒 BRUTE-FORCE RATE LIMITING
+          const lockStatus = await getLoginLockStatus(db, username.toLowerCase());
+          if (lockStatus.locked) {
+            const mins = Math.ceil(lockStatus.remainingSec / 60);
+            return new Response(JSON.stringify({
+              success: false,
+              message: `Login ကြိမ်ဖန်များစွာ မှားယွင်းနေသဖြင့် ခေတ္တပိတ်ထားပါသည်။ ${mins} မိနစ်အကြာတွင် ထပ်မံကြိုးစားပါ။`
+            }), { status: 429, headers: corsHeaders });
+          }
+
           const user = await db.prepare("SELECT * FROM users WHERE LOWER(username) = LOWER(?)").bind(username).first();
 
           if (user) {
             const { ok, needsRehash } = await verifyPassword(password, user.password_hash);
 
             if (ok) {
+              await resetLoginAttempts(db, username.toLowerCase());
+
               if (needsRehash) {
                 try {
                   const newHash = await hashPassword(password);
@@ -286,6 +384,11 @@ export default {
               }), { headers: corsHeaders });
             }
           }
+
+          // 🔒 Record the failed attempt regardless of whether the username exists,
+          // so an attacker can't distinguish "wrong username" from "wrong password"
+          // and can't dodge rate-limiting by targeting unknown usernames.
+          await recordFailedLogin(db, username.toLowerCase());
 
           return new Response(JSON.stringify({
             success: false,
@@ -544,6 +647,12 @@ export default {
 
         default:
           return new Response(JSON.stringify({ success: false, message: `Action '${action}' မဟုတ်ပါ သို့မဟုတ် မပံ့ပိုးသေးပါ။` }), { headers: corsHeaders });
+      }
+
+      // 📝 AUDIT TRAIL: best-effort log for create/update/delete/export/backup actions.
+      // Never blocks or fails the response — failures here are logged and swallowed.
+      if (isAuditableAction(action) && (!result || result.success !== false)) {
+        ctx.waitUntil(writeAuditLog(db, userSession, action, body, result));
       }
 
       return new Response(JSON.stringify(result || { success: true }), { headers: corsHeaders });
