@@ -170,8 +170,8 @@ async function cleanLinkedTransfer(db, uniqueid) {
 async function postCashierCrossBookTransfer(db, body, sourceBookName, entryDate, my, fy, createdBy, uniqueid) {
   if (String(body.category || '').trim() !== 'Transfer' || !body.transfer) return;
 
-  const { tableName: targetTable, prefix: targetPrefix } = getCashierMeta(body.transfer);
-  const { tableName: sourceTable } = getCashierMeta(sourceBookName);
+  const { tableName: targetTable, prefix: targetPrefix, bookTitle: targetBookTitle } = getCashierMeta(body.transfer);
+  const { tableName: sourceTable, bookTitle: sourceBookTitle } = getCashierMeta(sourceBookName);
 
   if (targetTable === sourceTable) return;
 
@@ -185,7 +185,8 @@ async function postCashierCrossBookTransfer(db, body, sourceBookName, entryDate,
 
   const targetVrNo = await generateVoucherNo(db, targetTable, targetPrefix, entryDate);
   const targetNo = await generateFyNo(db, targetTable, normFy);
-  const targetDesc = `[Transfer from ${sourceBookName}] ${body.description || ''}`.trim();
+  // 🔒 Use the human-readable source book title here, not the raw book key
+  const targetDesc = `[Transfer from ${sourceBookTitle}] ${body.description || ''}`.trim();
   const respPersonVal = body.respPerson || body.responsibility_person || '';
 
   await db.prepare(`
@@ -194,8 +195,11 @@ async function postCashierCrossBookTransfer(db, body, sourceBookName, entryDate,
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
   `).bind(
     targetNo, entryDate, respPersonVal, 'Transfer', targetDesc, body.method || 'Cash',
-    targetDebit, targetCredit, sourceBookName, targetVrNo, my, normFy,
-    sourceBookName, createdBy, transferUid
+    // 🔒 FIX: 'transfer' records where the money came FROM (source book title);
+    // 'book_name' must describe the row's OWN book (target's title) — previously
+    // both were bound to the source name, mislabeling every transfer-posted row.
+    targetDebit, targetCredit, sourceBookTitle, targetVrNo, my, normFy,
+    targetBookTitle, createdBy, transferUid
   ).run();
 
   await recalculateLedgerBalances(db, targetTable);
