@@ -18,6 +18,31 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- ------------------------------------------------------------------------------
+-- 1B. LOGIN ATTEMPTS (Server-Side Brute-Force / Rate-Limiting)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS login_attempts (
+  username TEXT PRIMARY KEY,
+  fail_count INTEGER DEFAULT 0,
+  locked_until TEXT,
+  last_attempt_at TEXT DEFAULT (datetime('now'))
+);
+
+-- ------------------------------------------------------------------------------
+-- 1C. AUDIT LOGS (Who Did What, When — Required for Financial Systems)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT,
+  role TEXT,
+  action TEXT NOT NULL,
+  record_id TEXT,
+  detail TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_username ON audit_logs(username);
+
+-- ------------------------------------------------------------------------------
 -- 2. MAIN FINANCIAL & EXPENSE BOOKS (5 Core Ledgers)
 -- ------------------------------------------------------------------------------
 
