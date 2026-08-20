@@ -15,7 +15,7 @@ function parseCleanIntId(val) {
 }
 
 function normalizeFyStr(fy) {
-  if (!fy) return 'FY 2026-2027';
+  if (!fy) return 'FY 2026-2027';ထထ
   let s = String(fy).trim();
   if (!s.toUpperCase().startsWith('FY ')) {
     s = 'FY ' + s;
@@ -458,6 +458,26 @@ export async function getIncomeData(db, body) {
 }
 
 export async function saveIncomeEntry(db, session, body) {
+  // 🔒 PRIVILEGE ESCALATION DEFENSE: Server-generated UUID only for new records,
+  // unless an Owner/Admin explicitly requests migration mode.
+  const isPrivilegedAdmin = ['Owner', 'Admin'].includes(session?.role || '');
+  const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport || body.skipAutoPost);
+  const uniqueid = (isMigration && body.uniqueId)
+    ? String(body.uniqueId).trim()
+    : `INC_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+
+  return _saveIncomeEntryCore(db, session, body, uniqueid, isMigration);
+}
+
+/**
+ * 💡 Internal upsert core, shared by:
+ *  - saveIncomeEntry (new records — public entrypoint above always supplies a
+ *    server-generated or admin-migration uniqueid, never a raw client value)
+ *  - updateIncomeEntry (existing records — caller already verified 'edit'
+ *    permission and resolved the target's ORIGINAL uniqueid, which must be
+ *    preserved so the record's identity doesn't silently change on every edit)
+ */
+async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration) {
   try {
     const createdBy = session?.name || body.createdBy || "Admin";
 
@@ -471,14 +491,6 @@ export async function saveIncomeEntry(db, session, body) {
 
     const cleanStudentId = parseCleanIntId(body.id || body.studentId);
     const cleanFyid = sanitizeFyidStr(body.fyid || '');
-
-    // 🔒 1. PRIVILEGE ESCALATION DEFENSE: Server-generated UUID only for new records
-    const isPrivilegedAdmin = ['Owner', 'Admin'].includes(session?.role || '');
-    const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport || body.skipAutoPost);
-
-    const uniqueid = (isMigration && body.uniqueId)
-      ? String(body.uniqueId).trim()
-      : `INC_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 
     const assignedNo = (isMigration && body.no)
       ? parseInt(body.no, 10)
@@ -601,7 +613,11 @@ export async function updateIncomeEntry(db, session, body) {
     const oldFy = existing?.fy || null;
 
     await cleanLinkedIncomeEntries(db, uniqueid);
-    const res = await saveIncomeEntry(db, session, body);
+    // 🔒 Preserve the ORIGINAL uniqueid on edit — do not delegate to the public
+    // saveIncomeEntry() entrypoint, which now always mints a fresh id unless an
+    // explicit Owner/Admin migration request is made. Editing a record must never
+    // silently change its identity (breaks receipts, links, and audit continuity).
+    const res = await _saveIncomeEntryCore(db, session, body, uniqueid, false);
 
     const entryDate = body.date || new Date().toISOString().split('T')[0];
     const createdBy = session?.name || 'Admin';
