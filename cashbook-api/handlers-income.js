@@ -15,7 +15,7 @@ function parseCleanIntId(val) {
 }
 
 function normalizeFyStr(fy) {
-  if (!fy) return 'FY 2026-2027';ထထ
+  if (!fy) return 'FY 2026-2027';
   let s = String(fy).trim();
   if (!s.toUpperCase().startsWith('FY ')) {
     s = 'FY ' + s;
