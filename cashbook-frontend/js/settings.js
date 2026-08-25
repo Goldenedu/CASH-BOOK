@@ -1,8 +1,9 @@
 /**
  * GOLDEN ERP SYSTEM - SYSTEM SETTINGS & BACKUP CONTROLLER
  * File: js/settings.js 
- * 💡 Features: Balanced 2-Line Subtitle Layout (student_money on top line),
- *              Full-Width FY Dropdown (w-36), Zero-Overflow Action Buttons,
+ * 💡 Features: 1-Click Full Database Balance & Sequence Recalculator Engine,
+ *              Balanced 2-Line Subtitle Layout (student_money on top line),
+ *              Full-Width FY Dropdowns (w-36), Zero-Overflow Action Buttons,
  *              SheetJS Multi-Tab Real Excel (.xlsx) Generator & Resend Email Backup
  */
 
@@ -30,6 +31,40 @@ async function loadSettingsData(forceRefresh) {
   } catch (err) {
     console.error("Error loading settings data:", err);
     if (typeof showToast === 'function') showToast("ERROR", "ဆာဗာ ချိတ်ဆက်မှု အမှား: " + err.message);
+  } finally {
+    if (typeof toggleLoading === 'function') toggleLoading(false);
+  }
+}
+
+/**
+ * 💡 1-Click Database Running Balances & NO Sequence Recalculation Engine
+ */
+async function triggerGlobalRecalculateBalances() {
+  if (!confirm("D1 Database ထဲရှိ စာရင်းအုပ်အားလုံး (၁၂ အုပ်) ၏ Running Balances နှင့် NO စဉ်နံပါတ်များကို အစမှအဆုံး အလိုအလျောက် ပြန်လည်ညှိယူလိုပါသလား။")) {
+    return;
+  }
+
+  try {
+    if (typeof toggleLoading === 'function') toggleLoading(true);
+
+    const res = await callApi('recalculateAllBalances', {});
+
+    if (res && res.success) {
+      if (typeof showToast === 'function') {
+        showToast("SUCCESS", res.message || "Database ထဲရှိ စာအုပ်အားလုံး၏ Balance များကို အောင်မြင်စွာ ပြန်လည်ညှိယူပြီးပါပြီ။");
+      }
+      if (typeof clearAllApiCache === 'function') clearAllApiCache();
+      await loadSettingsData(true);
+    } else {
+      if (typeof showToast === 'function') {
+        showToast("ERROR", res?.message || "Balance ပြန်ညှိခြင်း မအောင်မြင်ပါ။");
+      }
+    }
+  } catch (err) {
+    console.error("Global Recalculate Error:", err);
+    if (typeof showToast === 'function') {
+      showToast("ERROR", "ဆာဗာ ချိတ်ဆက်မှု အမှား: " + err.message);
+    }
   } finally {
     if (typeof toggleLoading === 'function') toggleLoading(false);
   }
@@ -271,3 +306,4 @@ async function handleSendEmailBackup(groupKey) {
 window.loadSettingsData = loadSettingsData;
 window.handleExportWorkbook = handleExportWorkbook;
 window.handleSendEmailBackup = handleSendEmailBackup;
+window.triggerGlobalRecalculateBalances = triggerGlobalRecalculateBalances;
