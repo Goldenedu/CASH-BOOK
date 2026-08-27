@@ -46,6 +46,17 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+/**
+ * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
+ * Escapes backslashes/quotes for the JS string literal, then HTML-escapes the
+ * result so it can't break out of the surrounding double-quoted HTML attribute.
+ */
+function escapeJsAttr(str) {
+  if (str === null || str === undefined) return '';
+  var jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return escapeHtml(jsEscaped);
+}
+
 function autoDetectGender(nameStr) {
   if (!nameStr) return 'Male';
   const clean = String(nameStr).trim();
@@ -289,10 +300,10 @@ function renderStudentTable() {
         <td class="max-w-xs truncate py-3 px-2" title="${escapeHtml(row.address || '')}">${escapeHtml(row.address || '-')}</td>
         <td class="right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg text-center py-3 px-2">
           <div class="flex items-center justify-center gap-3 ${isViewer ? 'hidden' : ''}">
-            <button onclick="editStudentEntry('${uniqueIdVal}')" class="text-indigo-400 hover:text-indigo-300 transition" title="Edit Profile">
+            <button onclick="editStudentEntry('${escapeJsAttr(uniqueIdVal)}')" class="text-indigo-400 hover:text-indigo-300 transition" title="Edit Profile">
               <i class="fa-solid fa-pen-to-square"></i>
             </button>
-            <button onclick="deleteStudentEntry('${uniqueIdVal}')" class="text-rose-400 hover:text-rose-300 transition" title="Delete Profile">
+            <button onclick="deleteStudentEntry('${escapeJsAttr(uniqueIdVal)}')" class="text-rose-400 hover:text-rose-300 transition" title="Delete Profile">
               <i class="fa-solid fa-trash"></i>
             </button>
           </div>
