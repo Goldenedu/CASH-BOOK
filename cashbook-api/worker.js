@@ -167,6 +167,99 @@ async function verifyPassword(password, stored) {
   return { ok, needsRehash: ok };
 }
 
+// 💡 Login Brute-Force Protection Tuning
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_MINUTES = 15;
+
+/**
+ * 💡 Check whether a username is currently locked out due to repeated failed logins.
+ * Returns { locked: boolean, remainingMinutes?: number }
+ */
+async function checkLoginLockout(db, username) {
+  try {
+    const row = await db.prepare(
+      "SELECT fail_count, locked_until FROM login_attempts WHERE username = ?"
+    ).bind(username).first();
+
+    if (!row || !row.locked_until) return { locked: false };
+
+    const lockedUntilMs = Date.parse(row.locked_until.replace(' ', 'T') + "Z");
+    const nowMs = Date.now();
+
+    if (!isNaN(lockedUntilMs) && lockedUntilMs > nowMs) {
+      return { locked: true, remainingMinutes: Math.ceil((lockedUntilMs - nowMs) / 60000) };
+    }
+    return { locked: false };
+  } catch (e) {
+    console.warn("checkLoginLockout error:", e.message);
+    return { locked: false };
+  }
+}
+
+/**
+ * 💡 Record a failed login attempt; locks the username after MAX_LOGIN_ATTEMPTS failures.
+ */
+async function recordLoginFailure(db, username) {
+  try {
+    const existing = await db.prepare(
+      "SELECT fail_count FROM login_attempts WHERE username = ?"
+    ).bind(username).first();
+
+    const newFailCount = (existing ? existing.fail_count : 0) + 1;
+    const shouldLock = newFailCount >= MAX_LOGIN_ATTEMPTS;
+    const lockedUntil = shouldLock
+      ? new Date(Date.now() + LOCKOUT_MINUTES * 60000).toISOString().replace('T', ' ').substring(0, 19)
+      : null;
+
+    await db.prepare(`
+      INSERT INTO login_attempts (username, fail_count, locked_until, last_attempt_at)
+      VALUES (?, ?, ?, datetime('now'))
+      ON CONFLICT(username) DO UPDATE SET
+        fail_count = excluded.fail_count,
+        locked_until = excluded.locked_until,
+        last_attempt_at = datetime('now')
+    `).bind(username, newFailCount, lockedUntil).run();
+
+    return shouldLock;
+  } catch (e) {
+    console.warn("recordLoginFailure error:", e.message);
+    return false;
+  }
+}
+
+/**
+ * 💡 Reset the failure counter for a username after a successful login.
+ */
+async function resetLoginAttempts(db, username) {
+  try {
+    await db.prepare(
+      "DELETE FROM login_attempts WHERE username = ?"
+    ).bind(username).run();
+  } catch (e) {
+    console.warn("resetLoginAttempts error:", e.message);
+  }
+}
+
+/**
+ * 💡 Write an audit log entry. Never throws — logging must not break the request.
+ */
+async function logAuditEvent(db, { username, role, action, recordId, detail }) {
+  try {
+    await db.prepare(`
+      INSERT INTO audit_logs (username, role, action, record_id, detail, created_at)
+      VALUES (?, ?, ?, ?, ?, datetime('now'))
+    `).bind(
+      username || null,
+      role || null,
+      action || "unknown",
+      recordId ? String(recordId) : null,
+      detail ? String(detail).slice(0, 2000) : null
+    ).run();
+  } catch (e) {
+    console.warn("logAuditEvent error:", e.message);
+  }
+}
+
 /**
  * 💡 AUTOMATED FULL-DATABASE RECALCULATE ENGINE (NO & BALANCES AUTO-SYNC)
  */
@@ -336,6 +429,19 @@ export default {
           const username = String(body.username || "").trim();
           const password = String(body.password || "").trim();
 
+          // 🛡️ 1. Brute-Force Lockout Check (before touching the password at all)
+          const lockoutStatus = await checkLoginLockout(db, username.toLowerCase());
+          if (lockoutStatus.locked) {
+            await logAuditEvent(db, {
+              username, role: null, action: 'loginBlocked',
+              detail: `Locked out, ${lockoutStatus.remainingMinutes} min remaining`
+            });
+            return new Response(JSON.stringify({
+              success: false,
+              message: `ကြိုးစားမှု အကြိမ်များစွာ မှားယွင်းသဖြင့် ${lockoutStatus.remainingMinutes} မိနစ်အကြာတွင် ပြန်လည် ကြိုးစားပါ။`
+            }), { status: 429, headers: corsHeaders });
+          }
+
           const user = await db.prepare("SELECT * FROM users WHERE LOWER(username) = LOWER(?)").bind(username).first();
 
           if (user) {
@@ -351,6 +457,10 @@ export default {
                 }
               }
 
+              // 🛡️ 2. Success: clear the failure counter & audit-log the login
+              await resetLoginAttempts(db, user.username.toLowerCase());
+              await logAuditEvent(db, { username: user.username, role: user.role, action: 'loginSuccess' });
+
               const token = await createJwtToken({ username: user.username, role: user.role, name: user.name || user.username }, authSecret);
               return new Response(JSON.stringify({
                 success: true,
@@ -359,6 +469,13 @@ export default {
               }), { headers: corsHeaders });
             }
           }
+
+          // 🛡️ 3. Failure: increment the counter (locks out after MAX_LOGIN_ATTEMPTS) & audit-log it
+          const gotLocked = await recordLoginFailure(db, username.toLowerCase());
+          await logAuditEvent(db, {
+            username, role: null, action: 'loginFailed',
+            detail: gotLocked ? 'Failure threshold reached — account locked' : 'Invalid credentials'
+          });
 
           return new Response(JSON.stringify({
             success: false,
@@ -623,6 +740,18 @@ export default {
 
         default:
           return new Response(JSON.stringify({ success: false, message: `Action '${action}' မဟုတ်ပါ သို့မဟုတ် မပံ့ပိုးသေးပါ။` }), { headers: corsHeaders });
+      }
+
+      // 🛡️ AUDIT LOG — record every successful mutating/sensitive action
+      const isMutatingAction = /^(save|update|delete|export|send|recalculate)/i.test(action);
+      if (isMutatingAction && result && result.success !== false && userSession) {
+        await logAuditEvent(db, {
+          username: userSession.username,
+          role: userSession.role,
+          action,
+          recordId: body.uniqueId || body.uniqueid || body.id || null,
+          detail: JSON.stringify(body).slice(0, 500)
+        });
       }
 
       return new Response(JSON.stringify(result || { success: true }), { headers: corsHeaders });
