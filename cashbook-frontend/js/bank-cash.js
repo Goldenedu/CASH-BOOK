@@ -26,6 +26,17 @@ function escapeHtml(str) {
 }
 
 /**
+ * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
+ * Escapes backslashes/quotes for the JS string literal, then HTML-escapes the
+ * result so it can't break out of the surrounding double-quoted HTML attribute.
+ */
+function escapeJsAttr(str) {
+  if (str === null || str === undefined) return '';
+  var jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return escapeHtml(jsEscaped);
+}
+
+/**
  * 💡 Safe Comma String Number Parser
  */
 function parseCleanNum(val) {
@@ -206,10 +217,10 @@ function renderTableBankCashKit() {
         '<td class="font-mono text-xs font-bold text-indigo-300 py-3 px-2">' + (escapeHtml(row.fy) || '-') + '</td>' +
         '<td class="right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg text-center py-3 px-2">' +
           '<div class="flex items-center justify-center gap-3">' +
-            '<button onclick="editBankCashKitEntry(\'' + row.uniqueId + '\')" class="text-indigo-400 hover:text-indigo-300 transition ' + lockClass + '" title="' + lockTitle + '" ' + disabledAttr + '>' +
+            '<button onclick="editBankCashKitEntry(\'' + escapeJsAttr(row.uniqueId) + '\')" class="text-indigo-400 hover:text-indigo-300 transition ' + lockClass + '" title="' + lockTitle + '" ' + disabledAttr + '>' +
               '<i class="fa-solid fa-pen-to-square"></i>' +
             '</button>' +
-            '<button onclick="deleteBankCashKitEntry(\'' + row.uniqueId + '\')" class="text-rose-400 hover:text-rose-300 transition ' + lockClass + '" title="' + lockTitle + '" ' + disabledAttr + '>' +
+            '<button onclick="deleteBankCashKitEntry(\'' + escapeJsAttr(row.uniqueId) + '\')" class="text-rose-400 hover:text-rose-300 transition ' + lockClass + '" title="' + lockTitle + '" ' + disabledAttr + '>' +
               '<i class="fa-solid fa-trash"></i>' +
             '</button>' +
           '</div>' +
