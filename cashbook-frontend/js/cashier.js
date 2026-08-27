@@ -28,6 +28,17 @@ function escapeHtml(str) {
 }
 
 /**
+ * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
+ * Escapes backslashes/quotes for the JS string literal, then HTML-escapes the
+ * result so it can't break out of the surrounding double-quoted HTML attribute.
+ */
+function escapeJsAttr(str) {
+  if (str === null || str === undefined) return '';
+  var jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return escapeHtml(jsEscaped);
+}
+
+/**
  * 💡 Safe Comma String Number Parser
  */
 function parseCleanNum(val) {
@@ -349,7 +360,7 @@ function renderCashierTable() {
         <td class="font-mono text-xs text-slate-400 py-3 px-2">${escapeHtml(item.vrNo) || '-'}</td>
         <td class="max-w-xs truncate text-xs text-slate-400 py-3 px-2" title="${escapeHtml(item.remark || '')}">${escapeHtml(item.remark) || '-'}</td>
         <td class="text-center right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg py-3 px-2">
-          <button onclick="printInvoice('${item.uniqueId}')" class="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition font-bold" title="Print Receipt">
+          <button onclick="printInvoice('${escapeJsAttr(item.uniqueId)}')" class="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition font-bold" title="Print Receipt">
             <i class="fa-solid fa-print mr-1"></i> Print
           </button>
         </td>
@@ -362,7 +373,7 @@ function renderCashierTable() {
 
       tr.innerHTML = `
         <td class="text-center font-mono font-semibold text-slate-400 py-3 px-2">${displayNo}</td>
-        <td class="font-mono py-3 px-2">${item.date || '-'}</td>
+        <td class="font-mono py-3 px-2">${escapeHtml(item.date) || '-'}</td>
         <td class="font-bold text-amber-300 py-3 px-2">${escapeHtml(item.respPerson) || '-'}</td>
         <td class="py-3 px-2">${typeof window.formatCategoryBadgeHtml === 'function' ? window.formatCategoryBadgeHtml(item.category) : escapeHtml(item.category)}</td>
         <td class="font-bold text-slate-100 max-w-xs truncate py-3 px-2" title="${escapeHtml(item.description)}">${escapeHtml(item.description) || '-'}</td>
@@ -379,8 +390,8 @@ function renderCashierTable() {
         <td class="font-mono text-slate-500 py-3 px-2">${item.createdAt ? item.createdAt.slice(0,10) : '-'}</td>
         <td class="text-center right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg py-3 px-2">
           <div class="flex items-center justify-center gap-2">
-            <button onclick="editCashierEntry('${item.uniqueId}')" class="p-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-lg transition ${lockClass}" title="Edit ${lockTitle}" ${disabledAttr}><i class="fa-solid fa-pen-to-square"></i></button>
-            <button onclick="deleteCashierEntry('${item.uniqueId}')" class="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg transition btn-delete ${lockClass}" title="Delete ${lockTitle}" ${disabledAttr}><i class="fa-solid fa-trash"></i></button>
+            <button onclick="editCashierEntry('${escapeJsAttr(item.uniqueId)}')" class="p-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-lg transition ${lockClass}" title="Edit ${lockTitle}" ${disabledAttr}><i class="fa-solid fa-pen-to-square"></i></button>
+            <button onclick="deleteCashierEntry('${escapeJsAttr(item.uniqueId)}')" class="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg transition btn-delete ${lockClass}" title="Delete ${lockTitle}" ${disabledAttr}><i class="fa-solid fa-trash"></i></button>
           </div>
         </td>
       `;
