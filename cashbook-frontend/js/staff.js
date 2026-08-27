@@ -4,6 +4,30 @@
  * 💡 Features: Live Cloudflare D1 Salary Grade Matrix Sync, Auto Basic Amt Fill, Live Net Salary Calculator & Integer NO Fix
  */
 
+/**
+ * 💡 Safe Native DOM HTML Escaper
+ */
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  if (typeof window.escapeHtml === 'function' && window.escapeHtml !== escapeHtml) {
+    return window.escapeHtml(str);
+  }
+  var div = document.createElement('div');
+  div.textContent = String(str);
+  return div.innerHTML;
+}
+
+/**
+ * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
+ * Escapes backslashes/quotes for the JS string literal, then HTML-escapes the
+ * result so it can't break out of the surrounding double-quoted HTML attribute.
+ */
+function escapeJsAttr(str) {
+  if (str === null || str === undefined) return '';
+  var jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return escapeHtml(jsEscaped);
+}
+
 var gStaffCategory = 'Full Time'; // 'Full Time' or 'Part Time'
 var gStaffPage = 1;
 var gStaffLimit = 20;
@@ -280,8 +304,8 @@ function renderStaffTable(rawData) {
         <td class="text-right font-bold text-teal-400 py-3">${Number(unpaidFund).toLocaleString()}</td>
         <td class="text-center py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">
           <div class="flex items-center justify-center gap-2">
-            <button onclick="editStaffEntry('${uid}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded transition" title="Edit Profile"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
-            <button onclick="deleteStaffEntry('${uid}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded transition" title="Delete Profile"><i class="fa-solid fa-trash-can text-xs"></i></button>
+            <button onclick="editStaffEntry('${escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded transition" title="Edit Profile"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
+            <button onclick="deleteStaffEntry('${escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded transition" title="Delete Profile"><i class="fa-solid fa-trash-can text-xs"></i></button>
           </div>
         </td>
       </tr>`;
@@ -315,8 +339,8 @@ function renderStaffTable(rawData) {
         <td class="font-mono text-xs text-slate-300 py-3">${item.email || ''}</td>
         <td class="text-center py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">
           <div class="flex items-center justify-center gap-2">
-            <button onclick="editStaffEntry('${uid}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded transition" title="Edit Profile"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
-            <button onclick="deleteStaffEntry('${uid}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded transition" title="Delete Profile"><i class="fa-solid fa-trash-can text-xs"></i></button>
+            <button onclick="editStaffEntry('${escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded transition" title="Edit Profile"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
+            <button onclick="deleteStaffEntry('${escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded transition" title="Delete Profile"><i class="fa-solid fa-trash-can text-xs"></i></button>
           </div>
         </td>
       </tr>`;
