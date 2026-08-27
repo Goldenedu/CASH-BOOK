@@ -1,6 +1,6 @@
 /**
  * GOLDEN ERP SYSTEM - UNIFORM INVENTORY LEDGER MODULE (D1 DATABASE COMPATIBLE)
- * File: js/uniform.js 
+ * File: js/uniform.js  
  * 💡 Features: Live Cloudflare D1 SQL Sync, Auto PID Generator, Profit & Stock Value Computation, Integer NO & Real-Time Sync
  */
 
