@@ -12,6 +12,30 @@ var stmActiveData = [];
 var stmStudentsCache = {};
 var searchTimeoutStm = null;
 
+/**
+ * 💡 Safe Native DOM HTML Escaper
+ */
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  if (typeof window.escapeHtml === 'function' && window.escapeHtml !== escapeHtml) {
+    return window.escapeHtml(str);
+  }
+  var div = document.createElement('div');
+  div.textContent = String(str);
+  return div.innerHTML;
+}
+
+/**
+ * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
+ * Escapes backslashes/quotes for the JS string literal, then HTML-escapes the
+ * result so it can't break out of the surrounding double-quoted HTML attribute.
+ */
+function escapeJsAttr(str) {
+  if (str === null || str === undefined) return '';
+  var jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return escapeHtml(jsEscaped);
+}
+
 function parseCleanIntId(val) {
   if (val === undefined || val === null || val === '') return 0;
   if (typeof val === 'number') return isNaN(val) ? 0 : Math.trunc(val);
@@ -162,8 +186,8 @@ function renderTableStudentMoney() {
         '<td class="max-w-xs truncate text-xs text-slate-400" title="' + escapeHtml(row.remark) + '">' + (escapeHtml(row.remark) || '-') + '</td>' +
         '<td class="right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg text-center">' +
           '<div class="flex items-center justify-center gap-3 ' + (isViewer ? 'hidden' : '') + '">' +
-            '<button onclick="editStudentMoneyEntry(\'' + row.uniqueId + '\')" class="text-indigo-400 hover:text-indigo-300 transition" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>' +
-            '<button onclick="deleteStudentMoneyEntry(\'' + row.uniqueId + '\')" class="text-rose-400 hover:text-rose-300 transition" title="Delete"><i class="fa-solid fa-trash"></i></button>' +
+            '<button onclick="editStudentMoneyEntry(\'' + escapeJsAttr(row.uniqueId) + '\')" class="text-indigo-400 hover:text-indigo-300 transition" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>' +
+            '<button onclick="deleteStudentMoneyEntry(\'' + escapeJsAttr(row.uniqueId) + '\')" class="text-rose-400 hover:text-rose-300 transition" title="Delete"><i class="fa-solid fa-trash"></i></button>' +
           '</div>' +
         '</td>' +
       '</tr>';
