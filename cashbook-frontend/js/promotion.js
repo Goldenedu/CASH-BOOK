@@ -27,6 +27,17 @@ function escapeHtml(str) {
 }
 
 /**
+ * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
+ * Escapes backslashes/quotes for the JS string literal, then HTML-escapes the
+ * result so it can't break out of the surrounding double-quoted HTML attribute.
+ */
+function escapeJsAttr(str) {
+  if (str === null || str === undefined) return '';
+  var jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return escapeHtml(jsEscaped);
+}
+
+/**
  * 💡 Generate Dynamic 3-Year Fiscal Years
  */
 function getDynamicFiscalYears() {
@@ -208,8 +219,8 @@ function renderPromotionTable() {
         <td class="text-slate-400 py-3">${escapeHtml(item.remark || '')}</td>
         <td class="text-center py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">
           <div class="flex items-center justify-center gap-2">
-            <button onclick="editPromotionEntry('${item.uniqueId}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded transition" title="Edit Rate"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
-            <button onclick="deletePromotionEntry('${item.uniqueId}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded transition" title="Delete Rate"><i class="fa-solid fa-trash-can text-xs"></i></button>
+            <button onclick="editPromotionEntry('${escapeJsAttr(item.uniqueId)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded transition" title="Edit Rate"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
+            <button onclick="deletePromotionEntry('${escapeJsAttr(item.uniqueId)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded transition" title="Delete Rate"><i class="fa-solid fa-trash-can text-xs"></i></button>
           </div>
         </td>
       </tr>
