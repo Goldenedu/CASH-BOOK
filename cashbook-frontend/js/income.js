@@ -28,6 +28,17 @@ function escapeHtml(str) {
 }
 
 /**
+ * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
+ * Escapes backslashes/quotes for the JS string literal, then HTML-escapes the
+ * result so it can't break out of the surrounding double-quoted HTML attribute.
+ */
+function escapeJsAttr(str) {
+  if (str === null || str === undefined) return '';
+  var jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return escapeHtml(jsEscaped);
+}
+
+/**
  * 💡 Safe Comma String Number Parser
  */
 function parseCleanNum(val) {
@@ -245,9 +256,9 @@ function renderTableIncome() {
         '<td class="max-w-xs truncate text-xs text-slate-400 py-3 px-2" title="' + escapeHtml(row.remark) + '">' + (escapeHtml(row.remark) || '-') + '</td>' +
         '<td class="right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg text-center py-3 px-2">' +
           '<div class="flex items-center justify-center gap-2">' +
-            '<button onclick="printInvoice(\'' + row.uniqueId + '\')" class="p-1 text-emerald-400 hover:text-emerald-300 transition" title="Print Receipt"><i class="fa-solid fa-print"></i></button>' +
-            '<button onclick="editIncomeEntry(\'' + row.uniqueId + '\')" class="p-1 text-indigo-400 hover:text-indigo-300 transition ' + lockClass + '" title="Edit ' + lockTitle + '" ' + disabledAttr + '><i class="fa-solid fa-pen-to-square"></i></button>' +
-            '<button onclick="deleteIncomeEntry(\'' + row.uniqueId + '\')" class="p-1 text-rose-400 hover:text-rose-300 transition ' + lockClass + '" title="Delete ' + lockTitle + '" ' + disabledAttr + '><i class="fa-solid fa-trash"></i></button>' +
+            '<button onclick="printInvoice(\'' + escapeJsAttr(row.uniqueId) + '\')" class="p-1 text-emerald-400 hover:text-emerald-300 transition" title="Print Receipt"><i class="fa-solid fa-print"></i></button>' +
+            '<button onclick="editIncomeEntry(\'' + escapeJsAttr(row.uniqueId) + '\')" class="p-1 text-indigo-400 hover:text-indigo-300 transition ' + lockClass + '" title="Edit ' + lockTitle + '" ' + disabledAttr + '><i class="fa-solid fa-pen-to-square"></i></button>' +
+            '<button onclick="deleteIncomeEntry(\'' + escapeJsAttr(row.uniqueId) + '\')" class="p-1 text-rose-400 hover:text-rose-300 transition ' + lockClass + '" title="Delete ' + lockTitle + '" ' + disabledAttr + '><i class="fa-solid fa-trash"></i></button>' +
           '</div>' +
         '</td>' +
       '</tr>';
