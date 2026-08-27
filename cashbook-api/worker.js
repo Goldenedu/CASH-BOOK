@@ -758,9 +758,14 @@ export default {
 
     } catch (err) {
       console.error("Worker Execution Catch:", err);
+      // 💡 Improved Error Message for Debugging based on Environment
+      const errorMessage = (env.ENVIRONMENT === "development" || env.ENVIRONMENT === "dev")
+        ? `Server Error: ${err.message}` 
+        : "Server အတွင်း အမှားအယွင်း ဖြစ်ပေါ်နေပါသည်။";
+        
       return new Response(JSON.stringify({
         success: false,
-        message: "Server အတွင်း အမှားအယွင်း ဖြစ်ပေါ်နေပါသည်။"
+        message: errorMessage
       }), { status: 500, headers: corsHeaders });
     }
   }
