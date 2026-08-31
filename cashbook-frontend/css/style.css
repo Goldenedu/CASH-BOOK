@@ -1,12 +1,16 @@
-/* css/style.css - GOLDEN ERP SYSTEM EYE-COMFORT DARK STYLES & PRINT ENGINE */
- 
+/* ==============================================================================
+ * GOLDEN ERP SYSTEM - EYE-COMFORT DARK STYLES, MODAL SCROLL & PRINT ENGINE
+ * File: css/style.css
+ * 💡 Features: Glassmorphism KPI Cards, Sticky Action Columns, Enterprise Form Fields,
+ *              Global Modal Scroll & Sticky Buttons Fix for Laptops & A4 Print Engine
+ * ============================================================================== */
+
 /* 💡 Force Browser Elements Dark Scheme & Comfort Theme */
 :root { 
   color-scheme: dark; 
 }
 
-/* ⬇️ ဤနေရာကြားထဲတွင် ကူးထည့်လိုက်ပါ ⬇️ */
-/* 💡 GUARANTEED GOLD GRADIENT TEXT WITH BROWSER FALLBACK */
+/* 💡 Guaranteed Gold Gradient Text with Browser Fallback */
 .text-gold-gradient {
   color: #fbbf24 !important; /* Fallback: Browser က Gradient မပံ့ပိုးပါက ဒီအရောင် ပေါ်မည် */
   background: linear-gradient(135deg, #fef08a 0%, #facc15 50%, #d97706 100%) !important;
@@ -66,7 +70,6 @@
   border: 1.5px solid rgba(71, 85, 105, 0.45) !important;
   border-radius: 0.85rem !important;
   box-shadow: 0 6px 20px -4px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.08) !important;
-  /* ── Compact fixed height so all pages look identical ── */
   min-height: 82px !important;
   padding: 0.85rem 1.1rem !important;
   display: flex !important;
@@ -96,14 +99,14 @@
   font-size: 1.15rem !important;
 }
 
-/* Text area — fills remaining space, min-width 0 to allow shrink */
+/* Text area */
 .stats-card > div:last-child {
   flex: 1 1 0 !important;
   min-width: 0 !important;
   overflow: hidden !important;
 }
 
-/* Label — single line, small */
+/* Label */
 .stats-card > div:last-child p {
   font-size: 0.6rem !important;
   font-weight: 700 !important;
@@ -117,7 +120,7 @@
   line-height: 1.2 !important;
 }
 
-/* Amount / Value — auto-scale font, no wrap, nowrap MMK */
+/* Amount / Value */
 .stats-card > div:last-child h3 {
   font-size: clamp(0.85rem, 1.6vw, 1.1rem) !important;
   font-weight: 800 !important;
@@ -130,19 +133,20 @@
   font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace !important;
   letter-spacing: -0.01em !important;
 }
+
 .table-container { 
   border-radius: 0.75rem; 
   border: 1px solid rgba(30, 41, 59, 0.35) !important; 
 }
 
-/* 💡 Soften Harsh White Borders for Containers & Pagination Trays */
+/* Soften Harsh Borders */
 div.border-slate-800, 
 div.border-slate-700,
 div.border-slate-850 {
   border-color: rgba(51, 65, 85, 0.45) !important;
 }
 
-/* 💡 Header Height & Horizontal Border Line Alignment Fix */
+/* Header Height & Alignment */
 aside > div:first-child,
 header,
 #app-header,
@@ -151,7 +155,7 @@ div#erp-workspace header {
   border-bottom: 1px solid rgba(30, 41, 59, 0.35) !important;
 }
 
-/* 💡 Table Styling & Softened Eye-Comfort Contrast */
+/* Table Styling */
 table thead th {
   position: sticky; 
   top: 0; 
@@ -175,7 +179,7 @@ table tbody tr:hover {
   background-color: rgba(30, 41, 59, 0.2) !important; 
 }
 
-/* 💡 FIX STICKY ACTION COLUMN OPAQUE BACKGROUND (PREVENTS SCROLL OVERLAP BLEED) */
+/* 💡 Fix Sticky Action Column Background */
 table th.sticky,
 table td.sticky,
 th.right-0,
@@ -188,12 +192,12 @@ td.right-0 {
   border-left: 1px solid rgba(30, 41, 59, 0.5) !important;
 }
 
-/* 💡 Soften Stark Pure White Text Globally for Eye Comfort */
+/* Soften Text Globally */
 .text-white {
   color: #f1f5f9 !important;
 }
 
-/* 💡 DEBIT, CREDIT & BALANCE COLUMN COLOR HIGHLIGHTS */
+/* 💡 Debit, Credit & Balance Colors */
 .text-emerald-400,
 td.text-emerald-400,
 span.text-emerald-400 {
@@ -218,7 +222,7 @@ span.text-teal-400 {
   color: #2dd4bf !important; /* Teal for Fund */
 }
 
-/* 💡 ACTION DELETE BUTTON RED HIGHLIGHT */
+/* 💡 Action Delete Button Highlight */
 button[onclick*="delete"] i,
 button[onclick*="Delete"] i,
 .btn-delete i,
@@ -233,7 +237,7 @@ button[onclick*="Delete"]:hover i,
   transform: scale(1.15);
 }
 
-/* 💡 GLOBAL MODAL OPAQUE BACKGROUND FIX - PREVENTS BACKGROUND TABLE BLEED */
+/* 💡 Modal Background Base */
 #bck-modal > div,
 #office-modal > div,
 #income-modal > div,
@@ -257,28 +261,25 @@ div[id$="-modal"].fixed.inset-0 {
 
 /* =============================================================
    💡 ENTERPRISE FORM FIELD SYSTEM — Professional Modal Inputs
-   Clear field boundaries, strong labels, pro focus states
    ============================================================= */
 
-/* Base inputs inside modals */
 div[id$="-modal"] input,
 div[id$="-modal"] select,
 div[id$="-modal"] textarea {
   display: block !important;
   width: 100% !important;
-  background-color: #080e1c !important;          /* Deeper inset feel */
-  border: 1.5px solid rgba(71, 85, 105, 0.55) !important;  /* Clearly visible border */
+  background-color: #080e1c !important;
+  border: 1.5px solid rgba(71, 85, 105, 0.55) !important;
   border-radius: 8px !important;
   color: #e2e8f0 !important;
   font-size: 0.8125rem !important;
   padding: 0.6rem 0.875rem !important;
   min-height: 2.5rem !important;
   transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.15s ease !important;
-  box-shadow: inset 0 2px 6px rgba(0,0,0,0.35) !important;  /* Inset depth */
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.35) !important;
   letter-spacing: 0.01em !important;
 }
 
-/* Select arrow color fix */
 div[id$="-modal"] select {
   background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e") !important;
   background-position: right 0.65rem center !important;
@@ -289,31 +290,27 @@ div[id$="-modal"] select {
   -webkit-appearance: none !important;
 }
 
-/* Textarea */
 div[id$="-modal"] textarea {
   min-height: 4.5rem !important;
   resize: vertical !important;
   line-height: 1.55 !important;
 }
 
-/* Number / Amount inputs — slightly brighter */
 div[id$="-modal"] input[type="number"] {
   font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace !important;
   font-variant-numeric: lining-nums tabular-nums !important;
   font-size: 0.875rem !important;
   letter-spacing: 0.04em !important;
-  color: #a5f3fc !important;  /* Soft cyan for amount fields */
+  color: #a5f3fc !important;
   border-color: rgba(56, 189, 248, 0.25) !important;
 }
 
-/* Date inputs */
 div[id$="-modal"] input[type="date"] {
   color-scheme: dark !important;
   cursor: pointer !important;
   font-size: 0.8125rem !important;
 }
 
-/* ─── Focus State ──────────────────────────── */
 div[id$="-modal"] input:focus,
 div[id$="-modal"] select:focus,
 div[id$="-modal"] textarea:focus {
@@ -328,7 +325,6 @@ div[id$="-modal"] input[type="number"]:focus {
   box-shadow: 0 0 0 3px rgba(56,189,248,0.15), inset 0 2px 6px rgba(0,0,0,0.4) !important;
 }
 
-/* ─── Placeholder ──────────────────────────── */
 div[id$="-modal"] input::placeholder,
 div[id$="-modal"] textarea::placeholder {
   color: #3d4f6b !important;
@@ -336,10 +332,9 @@ div[id$="-modal"] textarea::placeholder {
   opacity: 1 !important;
 }
 
-/* ─── Modal Form Labels ─────────────────────── */
 div[id$="-modal"] label {
   display: block !important;
-  font-size: 0.6875rem !important;     /* 11px */
+  font-size: 0.6875rem !important;
   font-weight: 700 !important;
   letter-spacing: 0.07em !important;
   text-transform: uppercase !important;
@@ -347,14 +342,12 @@ div[id$="-modal"] label {
   margin-bottom: 0.35rem !important;
 }
 
-/* ─── Field Group Spacing ───────────────────── */
 div[id$="-modal"] .grid > div,
 div[id$="-modal"] .space-y-4 > div,
 div[id$="-modal"] .space-y-3 > div {
   position: relative !important;
 }
 
-/* ─── Hover State (pre-focus affordance) ─────── */
 div[id$="-modal"] input:not(:focus):hover,
 div[id$="-modal"] select:not(:focus):hover,
 div[id$="-modal"] textarea:not(:focus):hover {
@@ -362,7 +355,7 @@ div[id$="-modal"] textarea:not(:focus):hover {
   background-color: #090f1e !important;
 }
 
-/* ─── Global plain page inputs (search bars, date range, etc.) ─ */
+/* Global inputs */
 input, select, textarea {
   background-color: #0b1120 !important;
   border: 1.5px solid rgba(51, 65, 85, 0.6) !important;
@@ -376,18 +369,14 @@ input:focus, select:focus, textarea:focus {
   outline: none !important;
   box-shadow: 0 0 0 2px rgba(99,102,241,0.18) !important;
 }
-textarea::placeholder, input::placeholder {
-  color: #3d4f6b !important;
-  opacity: 1 !important;
-}
 
-/* 💡 Force Monospace English Digits on all Number Fields */
+/* Digits styling */
 input[type="number"], input.font-mono, td.font-mono, span.font-mono, .font-mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
   font-variant-numeric: lining-nums tabular-nums !important;
 }
 
-/* 💡 View Panel Animation */
+/* View Panel Animation */
 .view-panel { 
   animation: fadeIn 0.2s ease-out; 
 }
@@ -396,7 +385,6 @@ input[type="number"], input.font-mono, td.font-mono, span.font-mono, .font-mono 
   to { opacity: 1; transform: translateY(0); } 
 }
 
-/* 💡 Search Box Width Responsive Rule */
 @media (min-width: 768px) {
   .search-container .relative.w-full,
   div[class*="border-slate-800"] > .relative.w-full {
@@ -404,7 +392,7 @@ input[type="number"], input.font-mono, td.font-mono, span.font-mono, .font-mono 
   }
 }
 
-/* 💡 PERMISSION CONTROL - HIDE DELETE BUTTONS WHEN CAN_DELETE IS FALSE */
+/* Permission delete hidden */
 body.hide-delete-btn .btn-delete,
 body.hide-delete-btn .action-delete,
 body.hide-delete-btn button[onclick*="delete"],
@@ -417,12 +405,11 @@ body.hide-delete-btn a[onclick*="delete"] {
   visibility: hidden !important;
 }
 
-/* 💡 GLOBAL PRINT STYLING - Default Hidden on Screen */
+/* Print styling */
 #invoice-print-area, #payslip-print-area {
   display: none !important;
 }
 
-/* 💡 A4 DUAL-COPY PRINT ENGINE */
 @media print {
   body > *:not(.active-print) {
     display: none !important;
@@ -477,4 +464,54 @@ body.hide-delete-btn a[onclick*="delete"] {
     color: black !important;
     background-color: transparent !important;
   }
+}
+
+/* ==============================================================================
+ * 💡 GLOBAL MODAL SCROLL & STICKY BUTTONS FIX FOR SHORT LAPTOPS / SMALL SCREENS
+ * ============================================================================== */
+
+/* ၁။ Modal အားလုံး၏ အပြင်ဘောင်ကို Screen အမြင့် ၉၀% ထက် မကျော်စေရန် ကန့်သတ်ခြင်း */
+.fixed.inset-0.z-50 > div,
+div[id$="-modal"] > div {
+  max-height: 90vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+/* ၂။ Form အလယ်ပိုင်းကို Scroll အပေါ်အောက် အလွယ်တကူ ဆွဲနိုင်စေခြင်း */
+.fixed.inset-0.z-50 form,
+div[id$="-modal"] form {
+  overflow-y: auto !important;
+  flex: 1 1 auto !important;
+  max-height: calc(90vh - 70px) !important;
+  padding-bottom: 1.5rem !important;
+}
+
+/* ၃။ Cancel နှင့် Confirm ခလုတ်များကို အောက်ခြေတွင် အမြဲတမ်း ပေါ်နေစေခြင်း (Sticky Buttons) */
+.fixed.inset-0.z-50 form > div:last-child,
+div[id$="-modal"] form > div:last-child {
+  position: sticky !important;
+  bottom: 0 !important;
+  background-color: #0c1322 !important;
+  padding-top: 1rem !important;
+  padding-bottom: 0.5rem !important;
+  margin-top: 1rem !important;
+  border-top: 1px solid rgba(51, 65, 85, 0.6) !important;
+  z-index: 20 !important;
+}
+
+/* ၄။ Modal အတွင်း လှပသော Custom Scrollbar ပုံစံ */
+div[id$="-modal"] form::-webkit-scrollbar {
+  width: 6px;
+}
+div[id$="-modal"] form::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+div[id$="-modal"] form::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}
+div[id$="-modal"] form::-webkit-scrollbar-thumb:hover {
+  background: #475569;
 }
