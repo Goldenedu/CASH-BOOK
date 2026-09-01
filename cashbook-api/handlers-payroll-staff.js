@@ -1,10 +1,10 @@
 /**
  * GOLDEN ERP SYSTEM - HR PAYROLL & STAFF D1 SQL HANDLER MODULE
  * File: handlers-payroll-staff.js 
- * 💡 Features: PII & Salary Data Protection (Role-Based Redaction including uniqueid),
+ * 💡 Features: Resigned Date Auto-Inactive Engine (Status Calculation & Active Force Stats),
+ *              PII & Salary Data Protection (Role-Based Redaction including uniqueid),
  *              Privilege Escalation Defense (Server-Generated UUIDs for new records),
- *              Fund Date Calculation (Join Date + 3 Years), Bonus/Fund Accrual & Payout Deduction Engine,
- *              Date-Based VR No (SAL-080826-001), FY Integer NO Reset & Grade Matrix Upsert
+ *              Fund Date Calculation (Join Date + 3 Years) & Idempotent Upsert Engine
  */
 
 /**
@@ -118,7 +118,7 @@ async function generateFyNo(db, tableName, fy) {
 }
 
 /**
- * 💡 Get Staff Data & Compute KPI Stats (With Role-Based PII & Salary Data Protection)
+ * 💡 Get Staff Data & Compute KPI Stats (Resigned Staff Auto-Deducted from Active Force)
  */
 export async function getStaffData(db, body, userSession) {
   try {
@@ -153,15 +153,20 @@ export async function getStaffData(db, body, userSession) {
     let totalNetAmt = 0;
 
     const staffList = rawStaffList.map(item => {
-      const isAct = (item.status || 'Active') === 'Active';
-      if (isAct) activeCount++;
+      // 💡 Resigned Date ပါရှိပါက Inactive အဖြစ် အလိုအလျောက် သတ်မှတ်သည်
+      const resignedDate = item.resigned_date || item.resignedDate || '';
+      const isInactive = (item.status || '').toLowerCase() === 'inactive' || !!resignedDate;
+      const finalStatus = isInactive ? 'Inactive' : 'Active';
 
-      const gender = (item.gender || 'Male').toLowerCase();
-      if (gender === 'male' || gender === 'ကျား') maleCount++;
-      else if (gender === 'female' || gender === 'မ') femaleCount++;
+      if (!isInactive) {
+        activeCount++;
+        const rowNet = Number(item.total_net_amt ?? item.totalNetAmt ?? item.total_salary ?? item.totalSalary ?? 0);
+        totalNetAmt += rowNet;
 
-      const rowNet = Number(item.total_net_amt ?? item.totalNetAmt ?? item.total_salary ?? item.totalSalary ?? 0);
-      totalNetAmt += rowNet;
+        const gender = (item.gender || 'Male').toLowerCase();
+        if (gender === 'male' || gender === 'ကျား') maleCount++;
+        else if (gender === 'female' || gender === 'မ') femaleCount++;
+      }
 
       // 🛡️ Redact sensitive financial, personal & ID fields for unauthorized roles (Staff, Viewer, Cashier)
       if (!canSeeSensitive) {
@@ -175,7 +180,7 @@ export async function getStaffData(db, body, userSession) {
           staffIdName: item.staff_idname || item.staffIdName || '',
           education: item.education || '',
           position: item.position || '',
-          status: item.status || 'Active',
+          status: finalStatus,
           gender: item.gender || 'Male',
           phoneNo: item.phone_no || item.phoneNo || '',
           email: item.email || '',
@@ -187,13 +192,13 @@ export async function getStaffData(db, body, userSession) {
           bonus: 0,
           fund: 0,
           totalNetAmt: 0,
-          resignedDate: '',
+          resignedDate: resignedDate,
           nrcNo: '***',
           bankAccount: '***',
           fundDate: '',
           unpaidBonus: 0,
           unpaidFund: 0,
-          uniqueId: '***' // 🛡️ Internal ID Redacted to prevent IDOR probing
+          uniqueId: '***'
         };
       }
 
@@ -215,8 +220,8 @@ export async function getStaffData(db, body, userSession) {
         bonus: parseFloat(item.bonus || 0),
         fund: parseFloat(item.fund || 0),
         totalNetAmt: parseFloat(item.total_net_amt !== undefined ? item.total_net_amt : (item.totalNetAmt || 0)),
-        resignedDate: item.resigned_date || item.resignedDate || '',
-        status: item.status || 'Active',
+        resignedDate: resignedDate,
+        status: finalStatus,
         gender: item.gender || 'Male',
         nrcNo: item.nrc_no || item.nrcNo || '',
         bankAccount: item.bank_account || item.bankAccount || '',
@@ -247,7 +252,7 @@ export async function getStaffData(db, body, userSession) {
 }
 
 /**
- * 💡 Save Staff Record (Protected against Privilege Escalation / Server-Generated UUIDs)
+ * 💡 Save Staff Record (With Resigned Date Auto-Status Calculation)
  */
 export async function saveStaffEntry(db, userSession, body) {
   try {
@@ -256,7 +261,6 @@ export async function saveStaffEntry(db, userSession, body) {
     const prefix = isPartTime ? 'PID' : 'FID';
 
     // 🔒 1. PRIVILEGE ESCALATION DEFENSE: Server-generated UUID only for new records
-    // Client-provided uniqueId is strictly ignored for normal creation to prevent overwriting existing records
     const isPrivilegedAdmin = ['Owner', 'Admin'].includes(userSession?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport);
 
@@ -278,9 +282,11 @@ export async function saveStaffEntry(db, userSession, body) {
     const joinDateVal = body.joinDate || new Date().toISOString().split('T')[0];
     const computedFundDate = body.fundDate || calculateFundDate(joinDateVal);
 
-    const assignedNo = (isMigration && body.no) ? parseInt(body.no, 10) : staffIdNum;
+    // 💡 Resigned Date ပါပါက Status အား Inactive အဖြစ် Database ထဲ သို့ တိုက်ရိုက် သိမ်းဆည်းသည်
+    const resignedDateVal = body.resignedDate || body.resigned_date || '';
+    const computedStatus = resignedDateVal.trim() ? 'Inactive' : (body.status || 'Active');
 
-    // 🔒 2. SAFE INSERTION: Use INSERT INTO (or INSERT OR REPLACE ONLY for authenticated Admin migration)
+    const assignedNo = (isMigration && body.no) ? parseInt(body.no, 10) : staffIdNum;
     const sqlInsertVerb = isMigration ? "INSERT OR REPLACE INTO" : "INSERT INTO";
 
     if (isPartTime) {
@@ -291,7 +297,7 @@ export async function saveStaffEntry(db, userSession, body) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`).bind(
         assignedNo, joinDateVal, 'Part Time', staffIdNum, staffName, staffIdName,
         body.education || '', body.position || '', parseFloat(body.totalSalary || 0), parseFloat(body.totalNetAmt || 0),
-        body.resignedDate || '', body.status || 'Active', body.gender || 'Male', body.nrcNo || '', body.bankAccount || '',
+        resignedDateVal, computedStatus, body.gender || 'Male', body.nrcNo || '', body.bankAccount || '',
         body.phoneNo || '', body.email || '', userSession?.name || 'Admin', uniqueid
       ).run();
     } else {
@@ -305,7 +311,7 @@ export async function saveStaffEntry(db, userSession, body) {
         body.education || '', body.position || '', body.salaryGrade || '', parseFloat(body.workingDays || 26),
         parseFloat(body.basicAmt || 0), parseFloat(body.extraAmt || 0), parseFloat(body.totalSalary || 0),
         parseFloat(body.bonus || 0), parseFloat(body.fund || 0), parseFloat(body.totalNetAmt || 0),
-        body.resignedDate || '', body.status || 'Active', body.gender || 'Male', body.nrcNo || '', body.bankAccount || '',
+        resignedDateVal, computedStatus, body.gender || 'Male', body.nrcNo || '', body.bankAccount || '',
         body.phoneNo || '', body.email || '', computedFundDate, parseFloat(body.unpaidBonus || 0), parseFloat(body.unpaidFund || 0),
         userSession?.name || 'Admin', uniqueid
       ).run();
@@ -325,7 +331,7 @@ export async function saveStaffEntry(db, userSession, body) {
 }
 
 /**
- * 💡 Update Staff Record (Strict Permission Guarded)
+ * 💡 Update Staff Record (With Resigned Date Auto-Status Calculation)
  */
 export async function updateStaffEntry(db, userSession, body) {
   try {
@@ -338,7 +344,6 @@ export async function updateStaffEntry(db, userSession, body) {
     const table = isPartTime ? 'staff_parttime' : 'staff_fulltime';
     const prefix = isPartTime ? 'PID' : 'FID';
 
-    // Verify existing record
     const existing = await db.prepare(`SELECT id, staff_id FROM ${table} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ပြင်ဆင်မည့် ဝန်ထမ်းမှတ်တမ်း ရှာမတွေ့ပါ။" };
@@ -352,6 +357,10 @@ export async function updateStaffEntry(db, userSession, body) {
     const joinDateVal = body.joinDate || new Date().toISOString().split('T')[0];
     const computedFundDate = body.fundDate || calculateFundDate(joinDateVal);
 
+    // 💡 Resigned Date ပါပါက Status အား Inactive အဖြစ် Database ထဲ သို့ တိုက်ရိုက် သိမ်းဆည်းသည်
+    const resignedDateVal = body.resignedDate || body.resigned_date || '';
+    const computedStatus = resignedDateVal.trim() ? 'Inactive' : (body.status || 'Active');
+
     if (isPartTime) {
       await db.prepare(`UPDATE staff_parttime SET
         join_date = ?, category = ?, staff_id = ?, name = ?, staff_idname = ?,
@@ -361,7 +370,7 @@ export async function updateStaffEntry(db, userSession, body) {
         WHERE uniqueid = ?`).bind(
         joinDateVal, 'Part Time', staffIdNum, staffName, staffIdName,
         body.education || '', body.position || '', parseFloat(body.totalSalary || 0), parseFloat(body.totalNetAmt || 0),
-        body.resignedDate || '', body.status || 'Active', body.gender || 'Male', body.nrcNo || '', body.bankAccount || '',
+        resignedDateVal, computedStatus, body.gender || 'Male', body.nrcNo || '', body.bankAccount || '',
         body.phoneNo || '', body.email || '', uniqueid
       ).run();
     } else {
@@ -376,7 +385,7 @@ export async function updateStaffEntry(db, userSession, body) {
         body.education || '', body.position || '', body.salaryGrade || '', parseFloat(body.workingDays || 26),
         parseFloat(body.basicAmt || 0), parseFloat(body.extraAmt || 0), parseFloat(body.totalSalary || 0),
         parseFloat(body.bonus || 0), parseFloat(body.fund || 0), parseFloat(body.totalNetAmt || 0),
-        body.resignedDate || '', body.status || 'Active', body.gender || 'Male', body.nrcNo || '', body.bankAccount || '',
+        resignedDateVal, computedStatus, body.gender || 'Male', body.nrcNo || '', body.bankAccount || '',
         body.phoneNo || '', body.email || '', computedFundDate, parseFloat(body.unpaidBonus || 0), parseFloat(body.unpaidFund || 0),
         uniqueid
       ).run();
@@ -405,13 +414,10 @@ export async function deleteStaffEntry(db, userSession, body) {
 }
 
 /**
- * 💡 Save HR Payroll Entry & Auto Accrue / Deduct Bonus & Fund in staff_fulltime Table
+ * 💡 Save HR Payroll Entry
  */
 export async function saveHrPayrollForm(db, userSession, body) {
   try {
-    // 🔒 1. PRIVILEGE ESCALATION DEFENSE: Server-generated UUID only for new records.
-    // Client-provided uniqueId is strictly ignored for normal creation (route only
-    // requires 'add' permission) to prevent overwriting an existing payroll entry.
     const isPrivilegedAdmin = ['Owner', 'Admin'].includes(userSession?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport);
 
@@ -439,8 +445,6 @@ export async function saveHrPayrollForm(db, userSession, body) {
     const unpaidBonus = parseFloat(body.unpaidBonus || 0);
     const unpaidFund = parseFloat(body.unpaidFund || 0);
 
-    // 🔒 2. SAFE INSERTION: plain INSERT for normal creation; INSERT OR REPLACE only
-    // ever runs when isMigration is true, which itself is gated to Owner/Admin above.
     const sqlVerb = isMigration ? "INSERT OR REPLACE INTO" : "INSERT INTO";
     const stmt = `${sqlVerb} payroll (
       no, date, category, description, method, debit, credit, balances,
@@ -457,7 +461,6 @@ export async function saveHrPayrollForm(db, userSession, body) {
 
     await recalculateLedgerBalances(db, 'payroll');
 
-    // 💡 AUTO-SYNC & DEDUCTION TO staff_fulltime TABLE
     if (staffIdStr) {
       const targetStaffId = parseInt(staffIdStr, 10);
       const staffRow = await db.prepare("SELECT * FROM staff_fulltime WHERE staff_id = ? OR id = ?").bind(targetStaffId, targetStaffId).first();
