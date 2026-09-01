@@ -691,7 +691,7 @@ function exportToCSVIncome() {
 }
 
 /**
- * 💡 Universal Invoice Printer
+ * 💡 Universal Invoice Printer (With Strict Print Mode Isolation)
  */
 function printInvoice(uniqueId) {
   var row = incomeActiveData.find(function(item) { return (item.uniqueId === uniqueId || item.uniqueid === uniqueId); });
@@ -756,7 +756,16 @@ function printInvoice(uniqueId) {
     if (totEl) totEl.textContent = Number(displayAmount).toLocaleString('en-US') + " MMK";
   });
 
-  window.print();
+  // 💡 FIX: Invoice Mode သီးသန့် ဖွင့်ပြီး Payslip ကို အပြီးတိုင် ဖုံးကွယ်စေခြင်း
+  document.body.classList.remove('print-mode-payslip');
+  document.body.classList.add('print-mode-invoice');
+
+  setTimeout(function() {
+    window.print();
+    setTimeout(function() {
+      document.body.classList.remove('print-mode-invoice');
+    }, 500);
+  }, 100);
 }
 
 // 💡 EXPOSE GLOBALLY
