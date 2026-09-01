@@ -1,7 +1,9 @@
 /**
  * GOLDEN ERP SYSTEM - STAFF MODULE (D1 DATABASE COMPATIBLE)
  * File: js/staff.js   
- * 💡 Features: Live Cloudflare D1 Salary Grade Matrix Sync, Auto Basic Amt Fill, Live Net Salary Calculator & Integer NO Fix
+ * 💡 Features: Live Cloudflare D1 Salary Grade Matrix Sync, Auto Basic Amt Fill,
+ *              Resigned Date Auto-Inactive Engine (Status & Active Force KPIs),
+ *              Live Net Salary Calculator & Integer NO Sequencing Engine
  */
 
 /**
@@ -19,8 +21,6 @@ function escapeHtml(str) {
 
 /**
  * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
- * Escapes backslashes/quotes for the JS string literal, then HTML-escapes the
- * result so it can't break out of the surrounding double-quoted HTML attribute.
  */
 function escapeJsAttr(str) {
   if (str === null || str === undefined) return '';
@@ -128,7 +128,7 @@ function renderStaffTableHead() {
         <th scope="col" class="w-28 text-right text-emerald-400 text-xs py-3">BONUS</th>
         <th scope="col" class="w-28 text-right text-teal-400 text-xs py-3">FUND</th>
         <th scope="col" class="w-36 text-right text-indigo-400 text-xs py-3">TOTAL NET AMT</th>
-        <th scope="col" class="w-24 text-slate-400 text-xs py-3">STATUS</th>
+        <th scope="col" class="w-24 text-center text-slate-400 text-xs py-3">STATUS</th>
         <th scope="col" class="w-24 text-slate-400 text-xs py-3">GENDER</th>
         <th scope="col" class="w-36 text-slate-400 text-xs py-3">NRC NO</th>
         <th scope="col" class="w-36 text-slate-400 text-xs py-3">BANK ACCOUNT</th>
@@ -149,7 +149,7 @@ function renderStaffTableHead() {
         <th scope="col" class="w-36 text-slate-400 text-xs py-3">POSITION</th>
         <th scope="col" class="w-32 text-right text-indigo-400 text-xs py-3">TOTAL SALARY</th>
         <th scope="col" class="w-36 text-right text-indigo-400 text-xs py-3">TOTAL NET AMT</th>
-        <th scope="col" class="w-24 text-slate-400 text-xs py-3">STATUS</th>
+        <th scope="col" class="w-24 text-center text-slate-400 text-xs py-3">STATUS</th>
         <th scope="col" class="w-24 text-slate-400 text-xs py-3">GENDER</th>
         <th scope="col" class="w-36 text-slate-400 text-xs py-3">NRC NO</th>
         <th scope="col" class="w-36 text-slate-400 text-xs py-3">BANK ACCOUNT</th>
@@ -180,12 +180,18 @@ async function loadStaffData(useCache = false) {
       let femaleCount = 0;
       let netPayroll = 0;
 
+      // 💡 Resigned Staff များကို Active Force နှင့် Net Payroll စာရင်းမှ နုတ်ပယ်ခြင်း
       gStaffData.forEach(item => {
-        if ((item.status || 'Active') === 'Active') actCount++;
-        const g = (item.gender || 'Male').toLowerCase();
-        if (g === 'male' || g === 'ကျား') maleCount++;
-        else if (g === 'female' || g === 'မ') femaleCount++;
-        netPayroll += Number(item.total_net_amt ?? item.totalNetAmt ?? item.total_salary ?? item.totalSalary ?? 0);
+        const isResigned = !!(item.resigned_date || item.resignedDate);
+        const isInactive = (item.status || '').toLowerCase() === 'inactive' || isResigned;
+
+        if (!isInactive) {
+          actCount++;
+          const g = (item.gender || 'Male').toLowerCase();
+          if (g === 'male' || g === 'ကျား') maleCount++;
+          else if (g === 'female' || g === 'မ') femaleCount++;
+          netPayroll += Number(item.total_net_amt ?? item.totalNetAmt ?? item.total_salary ?? item.totalSalary ?? 0);
+        }
       });
 
       renderStaffKpis({
@@ -278,6 +284,13 @@ function renderStaffTable(rawData) {
       const unpaidBonus = item.unpaid_bonus ?? item.unpaidBonus ?? 0;
       const unpaidFund = item.unpaid_fund ?? item.unpaidFund ?? 0;
 
+      // 💡 Inactive Badge အနီရောင် ပြသခြင်း
+      const isResigned = !!(item.resigned_date || item.resignedDate);
+      const isInactive = (item.status || '').toLowerCase() === 'inactive' || isResigned;
+      const statusBadge = isInactive
+        ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Inactive</span>'
+        : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Active</span>';
+
       return `
       <tr class="hover:bg-slate-800/40 transition">
         <td class="text-center text-slate-400 py-3">${displayNo}</td>
@@ -293,7 +306,7 @@ function renderStaffTable(rawData) {
         <td class="text-right font-bold text-emerald-400 py-3">${Number(bonus).toLocaleString()}</td>
         <td class="text-right font-bold text-teal-400 py-3">${Number(fund).toLocaleString()}</td>
         <td class="text-right font-extrabold text-indigo-400 py-3">${Number(totalNetAmt).toLocaleString()}</td>
-        <td class="py-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${item.status === 'Active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}">${item.status || 'Active'}</span></td>
+        <td class="text-center py-3">${statusBadge}</td>
         <td class="text-slate-300 py-3">${item.gender || 'Male'}</td>
         <td class="font-mono text-xs text-slate-300 py-3">${nrcNo}</td>
         <td class="font-mono text-xs text-slate-300 py-3">${bankAccount}</td>
@@ -322,6 +335,13 @@ function renderStaffTable(rawData) {
       const phoneNo = item.phone_no || item.phoneNo || '';
       const displayNo = parseInt(item.no || (idx + 1), 10);
 
+      // 💡 Inactive Badge အနီရောင် ပြသခြင်း
+      const isResigned = !!(item.resigned_date || item.resignedDate);
+      const isInactive = (item.status || '').toLowerCase() === 'inactive' || isResigned;
+      const statusBadge = isInactive
+        ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Inactive</span>'
+        : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Active</span>';
+
       return `
       <tr class="hover:bg-slate-800/40 transition">
         <td class="text-center text-slate-400 py-3">${displayNo}</td>
@@ -331,7 +351,7 @@ function renderStaffTable(rawData) {
         <td class="text-indigo-300 font-semibold py-3">${item.position || ''}</td>
         <td class="text-right font-bold text-indigo-400 py-3">${Number(totalSalary).toLocaleString()}</td>
         <td class="text-right font-extrabold text-indigo-400 py-3">${Number(totalNetAmt).toLocaleString()}</td>
-        <td class="py-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${item.status === 'Active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}">${item.status || 'Active'}</span></td>
+        <td class="text-center py-3">${statusBadge}</td>
         <td class="text-slate-300 py-3">${item.gender || 'Male'}</td>
         <td class="font-mono text-xs text-slate-300 py-3">${nrcNo}</td>
         <td class="font-mono text-xs text-slate-300 py-3">${bankAccount}</td>
@@ -539,7 +559,7 @@ async function editStaffEntry(uniqueId) {
 }
 
 /**
- * 💡 SAVE STAFF FORM
+ * 💡 SAVE STAFF FORM (With Auto Status: Inactive on Resigned Date)
  */
 async function saveStaffForm(event) {
   event.preventDefault();
@@ -553,7 +573,10 @@ async function saveStaffForm(event) {
   const basic = parseFloat(document.getElementById('staff-basic')?.value || 0);
   const extra = parseFloat(document.getElementById('staff-extra')?.value || 0);
   const days = parseFloat(document.getElementById('staff-working-days')?.value || 26);
-  const isResigned = !!document.getElementById('staff-resigned')?.value;
+  
+  const resignedDate = document.getElementById('staff-resigned')?.value || '';
+  const isResigned = !!resignedDate.trim();
+  const calculatedStatus = isResigned ? 'Inactive' : 'Active';
 
   const bonusConfig = gPayrollSettings.bonus || 0;
   const fundRateConfig = gPayrollSettings.fundRate || 0.05;
@@ -592,7 +615,8 @@ async function saveStaffForm(event) {
     bankAccount: document.getElementById('staff-bank')?.value || '',
     phoneNo: document.getElementById('staff-phone')?.value || '',
     email: document.getElementById('staff-email')?.value || '',
-    resignedDate: document.getElementById('staff-resigned')?.value || ''
+    resignedDate: resignedDate,
+    status: calculatedStatus // 💡 FIX: Inactive / Active တိုက်ရိုက် သတ်မှတ်သည်
   };
 
   try {
