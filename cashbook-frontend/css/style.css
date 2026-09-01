@@ -515,3 +515,94 @@ div[id$="-modal"] form::-webkit-scrollbar-thumb {
 div[id$="-modal"] form::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
+
+/* ==============================================================================
+ * 💡 BULLETPROOF A4 DUAL-COPY INVOICE & PAYSLIP PRINT ENGINE
+ * ============================================================================== */
+
+/* Screen ပေါ်တွင် ပုံမှန်အချိန်၌ ပြေစာကို ဝှက်ထားမည် */
+#invoice-print-area, 
+#payslip-print-area {
+  display: none !important;
+}
+
+@media print {
+  /* ၁။ Web App မျက်နှာပြင် (Sidebar, Header, Table, Buttons) အားလုံးကို အပြီးတိုင် ဖုံးကွယ်မည် */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* ၂။ ကျောင်းသားပြေစာ (သို့မဟုတ်) လစာပြေစာ ဧရိယာတစ်ခုတည်းကိုသာ သီးသန့် အပြည့် ဖော်ပြမည် */
+  #invoice-print-area,
+  #invoice-print-area *,
+  #payslip-print-area,
+  #payslip-print-area * {
+    visibility: visible !important;
+  }
+
+  /* ၃။ A4 စာရွက်အပြည့် နေရာယူစေခြင်း */
+  #invoice-print-area,
+  #payslip-print-area {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: 100vh !important;
+    background-color: white !important;
+    color: black !important;
+    padding: 8mm !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    z-index: 9999999 !important;
+  }
+
+  /* ၄။ အထက်အောက် Dual-Copy ဘောက်ချာ အပိုင်းများ */
+  .invoice-section, 
+  .payslip-section {
+    height: 46vh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    border: 1.5px solid black !important;
+    padding: 10px 14px !important;
+    border-radius: 6px !important;
+    background: white !important;
+    color: black !important;
+    box-sizing: border-box !important;
+  }
+
+  /* အလယ်ပိုင်း ဖြတ်ရန် မျဉ်းကြောင်း */
+  .invoice-divider, 
+  .payslip-divider {
+    height: 4vh !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 10px !important;
+    font-weight: bold !important;
+    color: #475569 !important;
+    border-top: 1px dashed #94a3b8 !important;
+    margin: 4px 0 !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  table th, table td {
+    padding: 4px 8px !important;
+    font-size: 10px !important;
+    border: 1px solid black !important;
+    color: black !important;
+    background-color: transparent !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+}
