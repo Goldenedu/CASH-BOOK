@@ -1,13 +1,35 @@
 /**
- * GOLDEN ERP SYSTEM - STUDENT D1 SQL HANDLER MODULE
- * File: handlers-student.js 
- * 💡 Features: FY-Scoped Student Lookup (SELECT * FROM student WHERE fy = ?), Strict 4-Digit FYID Padding (2627-STU-0002),
- *              Accurate Pagination Offset Engine, History Lookup & Precision Gender Auto-Detection
+ * GOLDEN ERP SYSTEM - STUDENT DIRECTORY D1 HANDLER MODULE
+ * File: handlers-student.js
+ * 💡 Features: Direct isMigration Mode (Preserves exact NO, ID, FYID from Google Sheets),
+ *              Server-Side Privilege Escalation Defense, Myanmar Gender Auto-Detection,
+ *              FY-Based Sequential Fallbacks & Strict Ordering by NO/ID Descending
  */
 
-/**
- * 💡 Gender Auto-Detection by Myanmar/English Name Prefix
- */
+function sanitizeFyidStr(fyidStr) {
+  const s = String(fyidStr || '').trim();
+  if (!s) return s;
+  if (s.indexOf('.0') === -1) return s;
+  const cleaned = s.replace(/\.0/g, '');
+  const parts = cleaned.split('-STU-');
+  if (parts.length === 2) {
+    const numPart = parseInt(parts[1], 10) || 0;
+    return `${parts[0]}-STU-${String(numPart).padStart(4, '0')}`;
+  }
+  return cleaned;
+}
+
+function getFyShortCode(fyStr) {
+  if (!fyStr) return '2627';
+  const parts = String(fyStr).replace(/^FY\s*/i, '').split(/[-/]/);
+  if (parts.length >= 2) {
+    const y1 = parts[0].trim().slice(-2);
+    const y2 = parts[1].trim().slice(-2);
+    return `${y1}${y2}`;
+  }
+  return '2627';
+}
+
 function autoDetectGender(nameStr) {
   if (!nameStr) return 'Male';
   const clean = String(nameStr).trim();
@@ -29,216 +51,197 @@ function autoDetectGender(nameStr) {
   return 'Male';
 }
 
-/**
- * 💡 FY String Normalizer (Ensures "FY 2026-2027" or "2026-2027" match)
- */
-function normalizeFyStr(fy) {
-  if (!fy) return '2026-2027';
-  let s = String(fy).trim();
-  s = s.replace(/^FY\s*/i, '');
-  return s;
+async function generateFyNo(db, tableName, fy) {
+  const normFy = String(fy || '').replace(/^FY\s*/i, '');
+  const lastNoRow = await db.prepare(
+    `SELECT MAX(CAST(no AS INTEGER)) as maxNo FROM ${tableName} WHERE fy = ? OR fy = ?`
+  ).bind(normFy, `FY ${normFy}`).first();
+  return (lastNoRow && lastNoRow.maxNo ? parseInt(lastNoRow.maxNo, 10) : 0) + 1;
 }
 
 /**
- * 💡 System-Wide FY Short Code Generator (Format: 2026-2027 -> 2627)
- */
-function getFyShortCode(fyStr) {
-  if (!fyStr) return '2627';
-  const parts = String(fyStr).replace(/^FY\s*/i, '').split(/[-/]/);
-  if (parts.length >= 2) {
-    const y1 = parts[0].trim().slice(-2);
-    const y2 = parts[1].trim().slice(-2);
-    return `${y1}${y2}`;
-  }
-  return '2627';
-}
-
-/**
- * 💡 Safe Integer ID Parser
- */
-function parseCleanIntId(val) {
-  if (val === undefined || val === null || val === '') return 0;
-  if (typeof val === 'number') return isNaN(val) ? 0 : Math.trunc(val);
-  const n = parseInt(String(val).trim(), 10);
-  return isNaN(n) ? 0 : n;
-}
-
-/**
- * 💡 Fetch Student Data with Pagination & FY Scoping Support
+ * 💡 Get Student Data (Ordered strictly by NO / ID Descending)
  */
 export async function getStudentData(db, body) {
   try {
-    const search = String(body.searchVal || "").trim();
-    const fyFilter = body.fy || body.fyFilter ? normalizeFyStr(body.fy || body.fyFilter) : "";
-    const page = parseInt(body.page, 10) || 1;
-    const limit = parseInt(body.limit, 10) || 50;
+    const activeFy = String(body.fy || "2026-2027").replace(/^FY\s*/i, '');
+    const searchVal = String(body.searchVal || "").trim();
+    const page = parseInt(body.page || 1, 10);
+    const limit = parseInt(body.limit || 5000, 10); // Supports full dataset
     const offset = (page - 1) * limit;
 
     let whereClauses = [];
     let params = [];
 
-    // 💡 FY-Scoped Filter (Both raw and FY-prefixed)
-    if (fyFilter) {
+    if (body.fy && body.fy !== 'all') {
       whereClauses.push(`(fy = ? OR fy = ?)`);
-      params.push(fyFilter, `FY ${fyFilter}`);
+      params.push(activeFy, `FY ${activeFy}`);
     }
 
-    if (search) {
-      whereClauses.push(`(name LIKE ? OR fyid LIKE ? OR fyid_name LIKE ? OR CAST(student_id AS TEXT) LIKE ?)`);
-      const p = `%${search}%`;
-      params.push(p, p, p, p);
+    if (searchVal) {
+      whereClauses.push(`(name LIKE ? OR fyid LIKE ? OR fyid_name LIKE ? OR CAST(student_id AS TEXT) LIKE ? OR class LIKE ? OR category LIKE ? OR phone_no LIKE ?)`);
+      const p = `%${searchVal}%`;
+      params.push(p, p, p, p, p, p, p);
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-    // Total Count Query for Accurate Pagination
     const countRow = await db.prepare(`SELECT COUNT(*) as count FROM student ${whereSql}`).bind(...params).first();
     const totalRows = countRow ? countRow.count : 0;
 
-    // Data Query with LIMIT and OFFSET
-    const query = `SELECT * FROM student ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`;
-    const rows = await db.prepare(query).bind(...params, limit, offset).all();
-    const studentList = rows.results || [];
+    // 💡 Fetch Accurate Stats Directly from Database SQL
+    const activeRow = await db.prepare(`SELECT COUNT(*) as count FROM student ${whereSql} ${whereSql ? 'AND' : 'WHERE'} LOWER(status) = 'active'`).bind(...params).first();
+    const inactiveRow = await db.prepare(`SELECT COUNT(*) as count FROM student ${whereSql} ${whereSql ? 'AND' : 'WHERE'} LOWER(status) = 'inactive'`).bind(...params).first();
 
-    // Compute Active / Inactive Stats within current filter scope
-    let totalActive = 0;
-    let totalInactive = 0;
+    const dataQuery = `
+      SELECT * FROM student 
+      ${whereSql} 
+      ORDER BY CAST(no AS INTEGER) DESC, id DESC 
+      LIMIT ? OFFSET ?
+    `;
+    const rowsRes = await db.prepare(dataQuery).bind(...params, limit, offset).all();
+    const rawRows = rowsRes.results || [];
 
-    studentList.forEach(row => {
-      const isTransferred = !!(row.transfer_date || row.transferDate);
-      const isInactive = isTransferred || (row.status || "").toLowerCase() === "inactive";
-      if (isInactive) {
-        totalInactive++;
-      } else {
-        totalActive++;
-      }
-    });
+    const formattedRows = rawRows.map(row => ({
+      id: parseInt(row.student_id || row.id, 10) || 1,
+      no: parseInt(row.no, 10) || parseInt(row.student_id, 10) || 1,
+      stuStatus: row.stu_status || 'New Student',
+      date: row.date || '',
+      fy: row.fy || activeFy,
+      studentId: parseInt(row.student_id || row.id, 10) || 1,
+      fyid: sanitizeFyidStr(row.fyid || ''),
+      name: row.name || '',
+      fyidName: row.fyid_name || `[${sanitizeFyidStr(row.fyid)}] ${row.name}`,
+      class: row.class || '',
+      category: row.category || 'Boarder',
+      promo: row.promo || 'Original price',
+      status: row.status || 'Active',
+      transferDate: row.transfer_date || '',
+      gender: row.gender || autoDetectGender(row.name),
+      parentsName: row.parents_name || '',
+      phoneNo: row.phone_no || '',
+      address: row.address || '',
+      uniqueId: row.uniqueid || `STU_${row.id}`
+    }));
 
     return {
       success: true,
-      data: studentList,
+      data: formattedRows,
       totalRows: totalRows,
-      page: page,
-      limit: limit,
       stats: {
-        totalActive,
-        totalInactive,
+        totalActive: activeRow ? activeRow.count : 0,
+        totalInactive: inactiveRow ? inactiveRow.count : 0,
         total: totalRows
       }
     };
   } catch (err) {
     console.error("Error in getStudentData handler:", err);
-    return { success: false, message: "ကျောင်းသား စာရင်း ရယူရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message };
+    return { success: false, message: "ကျောင်းသားစာရင်း ရယူရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message };
   }
 }
 
 /**
- * 💡 Precision Old Student Lookup by ID / FYID
+ * 💡 Lookup Student by ID
  */
 export async function lookupStudentById(db, body) {
   try {
-    const rawId = String(body.studentId || body.id || "").trim();
-    if (!rawId) {
-      return { success: false, message: "Student ID ထည့်သွင်းပေးရန် လိုအပ်ပါသည်။" };
+    const studentId = parseInt(body.studentId || body.id, 10);
+    if (!studentId || isNaN(studentId)) {
+      return { success: false, message: "Student ID မမှန်ကန်ပါ။" };
     }
 
-    const cleanNum = parseCleanIntId(rawId);
-    const paddedPattern = cleanNum > 0 ? `%-STU-${String(cleanNum).padStart(4, '0')}` : `%-STU-%`;
-
-    const row = await db.prepare(`
-      SELECT * FROM student 
-      WHERE student_id = ? 
-         OR id = ? 
-         OR fyid = ? 
-         OR fyid LIKE ?
-      ORDER BY id DESC LIMIT 1
-    `).bind(cleanNum, cleanNum, rawId, paddedPattern).first();
+    const row = await db.prepare(
+      `SELECT * FROM student WHERE student_id = ? OR id = ? ORDER BY id DESC LIMIT 1`
+    ).bind(studentId, studentId).first();
 
     if (!row) {
-      return { success: false, message: "မူရင်း ကျောင်းသား ရာဇဝင် ရှာမတွေ့ပါ။" };
+      return { success: false, message: "ကျောင်းသား ရှာမတွေ့ပါ။" };
     }
 
     return {
       success: true,
-      data: row
+      data: {
+        id: row.student_id || row.id,
+        name: row.name || '',
+        class: row.class || '',
+        category: row.category || 'Boarder',
+        promo: row.promo || 'Original price',
+        status: row.status || 'Active',
+        parentsName: row.parents_name || '',
+        phoneNo: row.phone_no || '',
+        address: row.address || '',
+        fyid: sanitizeFyidStr(row.fyid || '')
+      }
     };
   } catch (err) {
-    console.error("Error in lookupStudentById handler:", err);
-    return { success: false, message: "ကျောင်းသား ရှာဖွေရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message };
+    return { success: false, message: err.message };
   }
 }
 
 /**
- * 💡 Save New Student Entry
+ * 💡 Save Student Entry (Preserves exact Column A NO, Column E ID, Column F FYID from Google Sheets)
  */
 export async function saveStudentEntry(db, userSession, body) {
   try {
-    const fy = normalizeFyStr(body.fy || "2026-2027");
-    const isOldStudent = (body.stuStatus || body.stu_status) === "Old Student";
+    const cleanFy = String(body.fy || "2026-2027").replace(/^FY\s*/i, '');
+    const fyShort = body.fyShort || getFyShortCode(cleanFy);
 
-    // 1. Resolve Strict Integer Student ID
-    let studentIdNum = parseCleanIntId(body.studentId || body.id);
-    if (!studentIdNum || !isOldStudent) {
-      const maxIdRow = await db.prepare("SELECT MAX(CAST(student_id AS INTEGER)) as max_id FROM student").first();
-      const currentMax = maxIdRow && maxIdRow.max_id ? parseInt(maxIdRow.max_id, 10) : 0;
-      studentIdNum = currentMax + 1;
+    const isPrivilegedAdmin = ['Owner', 'Admin'].includes(userSession?.role || '');
+    const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport);
+
+    // 💡 1. PRESERVE EXACT ID FROM GOOGLE SHEET (Column E)
+    let studentId = parseInt(body.studentId || body.id, 10);
+    if (!studentId || isNaN(studentId)) {
+      const maxRow = await db.prepare("SELECT MAX(CAST(student_id AS INTEGER)) as max_id FROM student WHERE fy = ? OR fy = ?").bind(cleanFy, `FY ${cleanFy}`).first();
+      const currentMax = maxRow && maxRow.max_id ? parseInt(maxRow.max_id, 10) : 0;
+      studentId = currentMax + 1;
     }
 
-    // 2. Resolve FY-Scoped Sequence NO
-    const maxNoRow = await db.prepare(
-      "SELECT MAX(CAST(no AS INTEGER)) as max_no FROM student WHERE fy = ? OR fy = ?"
-    ).bind(fy, `FY ${fy}`).first();
-    const currentNoMax = maxNoRow && maxNoRow.max_no ? parseInt(maxNoRow.max_no, 10) : 0;
-    const nextNo = currentNoMax + 1;
+    // 💡 2. PRESERVE EXACT FYID FROM GOOGLE SHEET (Column F)
+    const paddedId = String(studentId).padStart(4, '0');
+    const fyid = (body.fyid && String(body.fyid).trim())
+      ? sanitizeFyidStr(body.fyid)
+      : `${fyShort}-STU-${paddedId}`;
 
-    // 3. Auto Generate 4-Digit FYID (e.g. 2627-STU-0002)
-    const fyShort = getFyShortCode(fy);
-    const paddedId = String(studentIdNum).padStart(4, '0');
-    const fyid = `${fyShort}-STU-${paddedId}`;
-    const name = String(body.name || '').trim();
-    const fyidName = `[${fyid}] ${name}`;
+    const studentName = String(body.name || '').trim();
+    const fyidName = body.fyidName || `[${fyid}] ${studentName}`;
+    const detectedGender = body.gender || autoDetectGender(studentName);
 
-    const transferDate = body.transferDate || body.transfer_date || '';
-    const status = transferDate ? 'Inactive' : (body.status || 'Active');
-    const gender = body.gender || autoDetectGender(name);
+    // 💡 3. PRESERVE EXACT NO FROM GOOGLE SHEET (Column A)
+    const assignedNo = (isMigration && body.no)
+      ? parseInt(body.no, 10)
+      : (parseInt(body.no, 10) || studentId);
 
-    const uniqueid = body.uniqueId || body.uniqueid || `STU_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-    const createdBy = userSession?.name || userSession?.username || body.createdBy || 'Admin';
+    // 💡 4. PRESERVE UNIQUEID WHEN MIGRATING
+    const uniqueid = (isMigration && body.uniqueId)
+      ? String(body.uniqueId).trim()
+      : `STU_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 
-    await db.prepare(`INSERT INTO student (
-      no, stu_status, date, fy, student_id, fyid, name, fyid_name,
-      class, category, promo, transfer_date, status, gender,
-      parents_name, phone_no, address, created_by, created_at, uniqueid
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
-      nextNo,
-      body.stuStatus || body.stu_status || 'New Student',
-      body.date || new Date().toISOString().split('T')[0],
-      fy,
-      studentIdNum,
-      fyid,
-      name,
-      fyidName,
-      body.class || '',
-      body.category || '',
-      body.promo || 'Original price',
-      transferDate,
-      status,
-      gender,
-      body.parentsName || body.parents_name || '',
-      body.phoneNo || body.phone_no || '',
-      body.address || '',
-      createdBy,
-      new Date().toISOString(),
-      uniqueid
+    const sqlVerb = isMigration ? "INSERT OR REPLACE INTO" : "INSERT INTO";
+
+    const stmt = `
+      ${sqlVerb} student (
+        no, stu_status, date, fy, student_id, fyid, name, fyid_name,
+        class, category, promo, transfer_date, status, gender,
+        parents_name, phone_no, address, created_by, created_at, uniqueid
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
+    `;
+
+    await db.prepare(stmt).bind(
+      assignedNo, body.stuStatus || body.stu_status || 'New Student', body.date || new Date().toISOString().split('T')[0],
+      cleanFy, studentId, fyid, studentName, fyidName,
+      body.class || 'KG Student', body.category || 'Boarder', body.promo || 'Original price',
+      body.transferDate || '', body.status || 'Active', detectedGender,
+      body.parentsName || '', body.phoneNo || '', body.address || '',
+      userSession?.name || 'Admin', uniqueid
     ).run();
 
     return {
       success: true,
       message: "ကျောင်းသားသစ် မှတ်တမ်း အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။",
-      uniqueId: uniqueid,
-      studentId: studentIdNum,
-      no: nextNo,
-      fyid: fyid
+      studentId: studentId,
+      fyid: fyid,
+      uniqueId: uniqueid
     };
   } catch (err) {
     console.error("Error in saveStudentEntry handler:", err);
@@ -247,7 +250,7 @@ export async function saveStudentEntry(db, userSession, body) {
 }
 
 /**
- * 💡 Update Existing Student Entry
+ * 💡 Update Student Entry
  */
 export async function updateStudentEntry(db, userSession, body) {
   try {
@@ -256,43 +259,34 @@ export async function updateStudentEntry(db, userSession, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    const transferDate = body.transferDate || body.transfer_date || '';
-    const status = transferDate ? 'Inactive' : (body.status || 'Active');
-    const name = String(body.name || '').trim();
-    const gender = body.gender || autoDetectGender(name);
+    const cleanFy = String(body.fy || "2026-2027").replace(/^FY\s*/i, '');
+    const studentId = parseInt(body.studentId || body.id, 10);
+    const paddedId = String(studentId).padStart(4, '0');
+    const fyShort = body.fyShort || getFyShortCode(cleanFy);
+    const fyid = sanitizeFyidStr(body.fyid || `${fyShort}-STU-${paddedId}`);
+    const studentName = String(body.name || '').trim();
+    const fyidName = `[${fyid}] ${studentName}`;
+    const detectedGender = body.gender || autoDetectGender(studentName);
 
-    const fy = normalizeFyStr(body.fy || '2026-2027');
-    const fyShort = getFyShortCode(fy);
-    const studentIdNum = parseCleanIntId(body.studentId || body.id) || 1;
-    const paddedId = String(studentIdNum).padStart(4, '0');
-    const fyid = `${fyShort}-STU-${paddedId}`;
-    const fyidName = `[${fyid}] ${name}`;
+    const stmt = `
+      UPDATE student SET
+        stu_status = ?, date = ?, fy = ?, student_id = ?, fyid = ?, name = ?, fyid_name = ?,
+        class = ?, category = ?, promo = ?, transfer_date = ?, status = ?, gender = ?,
+        parents_name = ?, phone_no = ?, address = ?
+      WHERE uniqueid = ?
+    `;
 
-    await db.prepare(`UPDATE student SET 
-      date = ?, fy = ?, student_id = ?, fyid = ?, fyid_name = ?, name = ?, 
-      class = ?, category = ?, promo = ?, stu_status = ?, status = ?, 
-      gender = ?, transfer_date = ?, parents_name = ?, phone_no = ?, address = ? 
-      WHERE uniqueid = ?`).bind(
-      body.date || '',
-      fy,
-      studentIdNum,
-      fyid,
-      fyidName,
-      name,
-      body.class || '',
-      body.category || '',
-      body.promo || 'Original price',
-      body.stuStatus || body.stu_status || 'New Student',
-      status,
-      gender,
-      transferDate,
-      body.parentsName || body.parents_name || '',
-      body.phoneNo || body.phone_no || '',
-      body.address || '',
-      uniqueid
+    await db.prepare(stmt).bind(
+      body.stuStatus || 'New Student', body.date || '', cleanFy, studentId, fyid, studentName, fyidName,
+      body.class || '', body.category || '', body.promo || '', body.transferDate || '',
+      body.status || 'Active', detectedGender, body.parentsName || '', body.phoneNo || '',
+      body.address || '', uniqueid
     ).run();
 
-    return { success: true, message: "ကျောင်းသား မှတ်တမ်း အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။" };
+    return {
+      success: true,
+      message: "ကျောင်းသား မှတ်တမ်း အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။"
+    };
   } catch (err) {
     console.error("Error in updateStudentEntry handler:", err);
     return { success: false, message: "ကျောင်းသား မှတ်တမ်း ပြင်ဆင်ရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message };
@@ -310,7 +304,11 @@ export async function deleteStudentEntry(db, userSession, body) {
     }
 
     await db.prepare("DELETE FROM student WHERE uniqueid = ?").bind(uniqueid).run();
-    return { success: true, message: "ကျောင်းသား မှတ်တမ်း အောင်မြင်စွာ ဖျက်သိမ်းပြီးပါပြီ။" };
+
+    return {
+      success: true,
+      message: "ကျောင်းသား မှတ်တမ်း အောင်မြင်စွာ ဖျက်သိမ်းပြီးပါပြီ။"
+    };
   } catch (err) {
     console.error("Error in deleteStudentEntry handler:", err);
     return { success: false, message: "ကျောင်းသား မှတ်တမ်း ဖျက်သိမ်းရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message };
