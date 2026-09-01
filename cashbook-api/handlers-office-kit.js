@@ -1,9 +1,9 @@
 /**
  * GOLDEN ERP SYSTEM - OFFICE & KITCHEN EXPENSE HANDLER (CLOUDFLARE D1)
- * File: handlers-office-kit.js  
- * 💡 Features: Server-Side Auto-Lock Enforcement (5-Prefix Lock Engine & Zero Client Bypass),
- *              Config.js Aligned (office: 19 cols, kitchen: 16 cols without liabilities, payroll: 18 cols),
- *              Privilege Escalation Defense, Bulletproof Uniform Stock Reversion & Idempotent Upsert Engine
+ * File: handlers-office-kit.js 
+ * 💡 Features: Safe Liabilities Handling (Negative & Credit/Debit Support),
+ *              Crash-Proof Auto-Lock Enforcement (5-Prefix Lock Engine & Zero Client Bypass),
+ *              Kitchen 16-Cols Schema (No Liabilities Column), Bulletproof Uniform Stock Reversion & Idempotent Upsert
  */
 
 const BOOK_TABLE_MAP = {
@@ -25,9 +25,6 @@ function getTableName(rawBook) {
   return BOOK_TABLE_MAP[key] || "office";
 }
 
-/**
- * 💡 FY String Normalizer (Ensures "FY 2026-2027" format)
- */
 function normalizeFyStr(fy) {
   if (!fy) return 'FY 2026-2027';
   let s = String(fy).trim();
@@ -37,13 +34,9 @@ function normalizeFyStr(fy) {
   return s;
 }
 
-/**
- * 💡 Extract Uniform Product ID from Description String
- */
 function extractProductIdFromDescription(description) {
   if (!description) return null;
   const str = String(description).trim();
-  
   const match = str.match(/PID\s*(\d+)/i);
   if (match && match[1]) return match[1].trim();
   const numMatch = str.match(/^(\d+)\s/);
@@ -52,8 +45,19 @@ function extractProductIdFromDescription(description) {
 }
 
 /**
- * 💡 Cloudflare D1 Batch Running Balance & Integer NO Recalculation Engine
+ * 💡 Safe Accounting Number Parser (-1000 & (1000) Parentheses Support)
  */
+function parseAccountingNum(val) {
+  if (val === undefined || val === null || val === '') return 0;
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  let s = String(val).trim().replace(/,/g, '');
+  if (s.startsWith('(') && s.endsWith(')')) {
+    s = '-' + s.slice(1, -1).trim();
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
 async function recalculateLedgerBalances(db, tableName) {
   if (!tableName) return;
   try {
@@ -91,9 +95,6 @@ async function recalculateLedgerBalances(db, tableName) {
   }
 }
 
-/**
- * 💡 Date-Based Voucher Number Generator
- */
 async function generateVoucherNo(db, tableName, prefix, entryDate) {
   let ddmmyy = "";
   const parts = String(entryDate || '').split('-');
@@ -114,9 +115,6 @@ async function generateVoucherNo(db, tableName, prefix, entryDate) {
   return `${prefix}-${ddmmyy}-${String(seq).padStart(3, '0')}`;
 }
 
-/**
- * 💡 FY-Based Integer NO Generator
- */
 async function generateFyNo(db, tableName, fy) {
   const normFy = normalizeFyStr(fy);
   const lastNoRow = await db.prepare(
@@ -125,9 +123,6 @@ async function generateFyNo(db, tableName, fy) {
   return (lastNoRow && lastNoRow.maxNo ? parseInt(lastNoRow.maxNo, 10) : 0) + 1;
 }
 
-/**
- * 💡 Sync Uniform Ledger Stock
- */
 async function syncUniformStock(db, productId, unitDelta) {
   if (!productId || unitDelta === 0) return;
   try {
@@ -165,9 +160,6 @@ async function syncUniformStock(db, productId, unitDelta) {
   }
 }
 
-/**
- * 💡 Clean Linked Auto Entries
- */
 async function cleanLinkedAutoEntries(db, uniqueid) {
   if (!uniqueid) return;
   const profitUid = `UNIPROFIT_${uniqueid}`;
@@ -179,9 +171,6 @@ async function cleanLinkedAutoEntries(db, uniqueid) {
   await db.prepare(`DELETE FROM ca_bank WHERE uniqueid = ?`).bind(cashierUid).run();
 }
 
-/**
- * 💡 Post Linked Auto Entries
- */
 async function postLinkedAutoEntries(db, body, entryDate, my, fy, createdBy, uniqueid) {
   const isUniform = (body.category === "Advance Uniform" || body.category === "Advance Unifrom");
   if (!isUniform) return;
@@ -234,9 +223,6 @@ async function postLinkedAutoEntries(db, body, entryDate, my, fy, createdBy, uni
   }
 }
 
-/**
- * 💡 Fetch Expense Data
- */
 export async function getExpenseData(db, body) {
   try {
     const rawBook = body.bookName || body.book || "office";
@@ -263,9 +249,9 @@ export async function getExpenseData(db, body) {
     let params = [];
 
     if (searchVal) {
-      whereClauses.push(`(description LIKE ? OR category LIKE ? OR vr_no LIKE ? OR method LIKE ? OR transfer LIKE ? OR CAST(debit AS TEXT) LIKE ? OR CAST(credit AS TEXT) LIKE ?)`);
+      whereClauses.push(`(description LIKE ? OR category LIKE ? OR vr_no LIKE ? OR method LIKE ? OR transfer LIKE ? OR CAST(debit AS TEXT) LIKE ? OR CAST(credit AS TEXT) LIKE ? OR CAST(liabilities AS TEXT) LIKE ?)`);
       const p = `%${searchVal}%`;
-      params.push(p, p, p, p, p, p, p);
+      params.push(p, p, p, p, p, p, p, p);
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
@@ -292,7 +278,7 @@ export async function getExpenseData(db, body) {
         debit: parseFloat(row.debit || 0),
         credit: parseFloat(row.credit || 0),
         balances: parseFloat(row.balances || 0),
-        liabilities: parseFloat(row.liabilities || 0),
+        liabilities: parseFloat(row.liabilities !== undefined ? row.liabilities : 0), // 💡 Handles negative numbers accurately
         unpaidBonus: parseFloat(row.unpaid_bonus !== undefined ? row.unpaid_bonus : (row.unpaidBonus || 0)),
         unpaidFund: parseFloat(row.unpaid_fund !== undefined ? row.unpaid_fund : (row.unpaidFund || 0)),
         transfer: row.transfer || '',
@@ -320,7 +306,7 @@ export async function getExpenseData(db, body) {
 }
 
 /**
- * 💡 Save New Expense Entry (Privilege Escalation Protected & Zero Liabilities for Kitchen)
+ * 💡 Save New Expense Entry
  */
 export async function saveExpenseEntry(db, session, body) {
   try {
@@ -337,13 +323,13 @@ export async function saveExpenseEntry(db, session, body) {
     if (d.getMonth() < 3) fyYear -= 1;
     const fy = normalizeFyStr(body.fy || `FY ${fyYear}-${fyYear + 1}`);
 
-    const debit = parseFloat(body.debit || 0);
-    const credit = parseFloat(body.credit || 0);
+    const debit = parseAccountingNum(body.debit);
+    const credit = parseAccountingNum(body.credit);
     const unit = parseFloat(body.unit || 0);
     const unitPrice = parseFloat(body.unitPrice || 0);
-    const liabilities = parseFloat(body.liabilities || 0);
+    const liabilities = parseAccountingNum(body.liabilities); // 💡 Negative Liabilities Support
 
-    // 🔒 1. PRIVILEGE ESCALATION DEFENSE: Server-generated UUID only for new records
+    // 🔒 1. PRIVILEGE ESCALATION DEFENSE
     const isPrivilegedAdmin = ['Owner', 'Admin'].includes(session?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport || body.skipAutoPost);
 
@@ -358,7 +344,7 @@ export async function saveExpenseEntry(db, session, body) {
     const sqlVerb = isMigration ? "INSERT OR REPLACE INTO" : "INSERT INTO";
 
     if (tableName === 'kitchen') {
-      // ✅ 16 Columns (NO liabilities column for Kitchen)
+      // 16 Columns (NO liabilities)
       const kitchenStmt = `
         ${sqlVerb} kitchen (
           no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
@@ -370,7 +356,7 @@ export async function saveExpenseEntry(db, session, body) {
         vrNo, fy, rawBook, createdBy, uniqueid
       ).run();
     } else if (tableName === 'payroll') {
-      // 18 Columns for Payroll
+      // 18 Columns
       const payrollStmt = `
         ${sqlVerb} payroll (
           no, date, category, description, method, debit, credit, balances, unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
@@ -428,7 +414,7 @@ export async function saveExpenseEntry(db, session, body) {
 }
 
 /**
- * 💡 Update Expense Entry (With Strict Server-Side Auto-Lock & Zero Liabilities for Kitchen)
+ * 💡 Update Expense Entry (Crash-Proof Lock Check & Negative Liabilities Support)
  */
 export async function updateExpenseEntry(db, session, body) {
   try {
@@ -438,12 +424,12 @@ export async function updateExpenseEntry(db, session, body) {
 
     if (!uniqueid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
 
-    // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT (Zero Client-Flag Bypass)
-    const existing = await db.prepare(`SELECT is_locked, uniqueid, description, unit, id, category FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    // 🔒 1. CRASH-PROOF SERVER-SIDE LOCK ENFORCEMENT (SELECT * avoids "no such column: is_locked" error)
+    const existing = await db.prepare(`SELECT * FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) return { success: false, message: "ပြင်ဆင်မည့် စာရင်း ရှာမတွေ့ပါ။" };
 
     const uid = String(existing.uniqueid || '');
-    const isAutoLocked = Boolean(existing.is_locked) ||
+    const isAutoLocked = Boolean(existing.is_locked || existing.isLocked) ||
       uid.startsWith('TRANS_') ||
       uid.startsWith('UNIPROFIT_') ||
       uid.startsWith('UNICASHIER_') ||
@@ -478,14 +464,13 @@ export async function updateExpenseEntry(db, session, body) {
     if (d.getMonth() < 3) fyYear -= 1;
     const fy = normalizeFyStr(body.fy || `FY ${fyYear}-${fyYear + 1}`);
 
-    const debit = parseFloat(body.debit || 0);
-    const credit = parseFloat(body.credit || 0);
+    const debit = parseAccountingNum(body.debit);
+    const credit = parseAccountingNum(body.credit);
     const unit = parseFloat(body.unit || 0);
     const unitPrice = parseFloat(body.unitPrice || 0);
-    const liabilities = parseFloat(body.liabilities || 0);
+    const liabilities = parseAccountingNum(body.liabilities); // 💡 Negative Liabilities Support
 
     if (tableName === 'kitchen') {
-      // ✅ NO liabilities column for Kitchen
       await db.prepare(`
         UPDATE kitchen SET date=?, category=?, description=?, method=?, debit=?, credit=?, transfer=?, fy=? WHERE uniqueid=?
       `).bind(entryDate, body.category || 'General', body.description || '', body.method || 'Cash', debit, credit, body.transfer || '', fy, uniqueid).run();
@@ -533,11 +518,11 @@ export async function deleteExpenseEntry(db, session, body) {
 
     if (!uniqueid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
 
-    // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT (Zero Client-Flag Bypass)
-    const existing = await db.prepare(`SELECT is_locked, uniqueid, description, unit, id, category FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    // 🔒 1. CRASH-PROOF SERVER-SIDE LOCK ENFORCEMENT
+    const existing = await db.prepare(`SELECT * FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (existing) {
       const uid = String(existing.uniqueid || '');
-      const isAutoLocked = Boolean(existing.is_locked) ||
+      const isAutoLocked = Boolean(existing.is_locked || existing.isLocked) ||
         uid.startsWith('TRANS_') ||
         uid.startsWith('UNIPROFIT_') ||
         uid.startsWith('UNICASHIER_') ||
@@ -553,7 +538,7 @@ export async function deleteExpenseEntry(db, session, body) {
       }
     }
 
-    // 2. Revert Stock in Uniform Ledger via Extracted Product ID
+    // Revert Stock in Uniform Ledger via Extracted Product ID
     if (existing && (existing.category === "Advance Uniform" || existing.category === "Advance Unifrom")) {
       const oldUnit = parseFloat(existing.unit || 0);
       const oldPid = extractProductIdFromDescription(existing.description) || existing.id;
@@ -562,13 +547,9 @@ export async function deleteExpenseEntry(db, session, body) {
       }
     }
 
-    // 3. Delete Main Entry
     await db.prepare(`DELETE FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).run();
-
-    // 4. Delete Linked Auto Entries
     await cleanLinkedAutoEntries(db, uniqueid);
 
-    // 5. Recalculate all affected ledgers
     await recalculateLedgerBalances(db, tableName);
     await recalculateLedgerBalances(db, 'cash');
     await recalculateLedgerBalances(db, 'bank');
