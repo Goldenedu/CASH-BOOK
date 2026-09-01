@@ -517,32 +517,27 @@ div[id$="-modal"] form::-webkit-scrollbar-thumb:hover {
 }
 
 /* ==============================================================================
- * 💡 BULLETPROOF A4 DUAL-COPY INVOICE & PAYSLIP PRINT ENGINE
+ * 💡 DUAL-MODE ISOLATED PRINT ENGINE (INVOICE vs PAYSLIP SEPARATION)
  * ============================================================================== */
 
-/* Screen ပေါ်တွင် ပုံမှန်အချိန်၌ ပြေစာကို ဝှက်ထားမည် */
+/* Screen ပေါ်တွင် ပုံမှန်အချိန်၌ ပြေစာအားလုံးကို ဝှက်ထားမည် */
 #invoice-print-area, 
 #payslip-print-area {
   display: none !important;
 }
 
 @media print {
-  /* ၁။ Web App မျက်နှာပြင် (Sidebar, Header, Table, Buttons) အားလုံးကို အပြီးတိုင် ဖုံးကွယ်မည် */
+  /* ၁။ Web App မျက်နှာပြင် (Sidebar, Header, Table) အားလုံးကို အပြီးတိုင် ဖုံးကွယ်မည် */
   body * {
     visibility: hidden !important;
   }
 
-  /* ၂။ ကျောင်းသားပြေစာ (သို့မဟုတ်) လစာပြေစာ ဧရိယာတစ်ခုတည်းကိုသာ သီးသန့် အပြည့် ဖော်ပြမည် */
-  #invoice-print-area,
-  #invoice-print-area *,
-  #payslip-print-area,
-  #payslip-print-area * {
+  /* ၂။ Invoice နှိပ်ချိန်တွင် #invoice-print-area သာ သီးသန့် ပေါ်စေမည် */
+  body.print-mode-invoice #invoice-print-area,
+  body.print-mode-invoice #invoice-print-area * {
     visibility: visible !important;
   }
-
-  /* ၃။ A4 စာရွက်အပြည့် နေရာယူစေခြင်း */
-  #invoice-print-area,
-  #payslip-print-area {
+  body.print-mode-invoice #invoice-print-area {
     display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;
@@ -559,7 +554,29 @@ div[id$="-modal"] form::-webkit-scrollbar-thumb:hover {
     z-index: 9999999 !important;
   }
 
-  /* ၄။ အထက်အောက် Dual-Copy ဘောက်ချာ အပိုင်းများ */
+  /* ၃။ Payslip နှိပ်ချိန်တွင် #payslip-print-area သာ သီးသန့် ပေါ်စေမည် */
+  body.print-mode-payslip #payslip-print-area,
+  body.print-mode-payslip #payslip-print-area * {
+    visibility: visible !important;
+  }
+  body.print-mode-payslip #payslip-print-area {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: 100vh !important;
+    background-color: white !important;
+    color: black !important;
+    padding: 8mm !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    z-index: 9999999 !important;
+  }
+
+  /* အထက်အောက် Dual-Copy ဘောက်ချာ အပိုင်းများ */
   .invoice-section, 
   .payslip-section {
     height: 46vh !important;
@@ -574,7 +591,6 @@ div[id$="-modal"] form::-webkit-scrollbar-thumb:hover {
     box-sizing: border-box !important;
   }
 
-  /* အလယ်ပိုင်း ဖြတ်ရန် မျဉ်းကြောင်း */
   .invoice-divider, 
   .payslip-divider {
     height: 4vh !important;
