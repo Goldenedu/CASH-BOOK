@@ -2,7 +2,7 @@
  * GOLDEN ERP SYSTEM - HR PAYROLL EXP BOOK CONTROLLER (D1 DATABASE EDITION)
  * File: js/hr.js   
  * 💡 Features: Bulletproof D1 Staff ID Lookup, Auto Credit (Total Salary),
- *              Full Dataset Limit (1000 rows) & Clean ReferenceError-Free Stats Engine
+ *              Full Dataset Limit (1000 rows), Clean Stats Engine & Isolated Dual-Copy Payslip Printer
  */
 
 var gHrPayrollData = [];
@@ -19,7 +19,7 @@ async function loadHrPayrollData(useCache = true) {
   try {
     if (typeof toggleLoading === 'function') toggleLoading(true);
 
-    // 💡 Fetch up to 1000 rows so all 375 records load completely
+    // 💡 Fetch up to 1000 rows so all records load completely
     const response = await callApi('getExpenseData', {
       bookName: 'HR Payroll Exp Book',
       page: 1,
@@ -98,7 +98,6 @@ async function ensureStaffCacheForCategory(isPartTime) {
   }
 }
 
-// 💡 FIX: ReferenceError ရှင်းလင်းထားသော Stats Renderer
 function renderHrPayrollStats(stats) {
   const elInc = document.getElementById('hr-pay-total-income');
   const elExp = document.getElementById('hr-pay-total-expense');
@@ -228,11 +227,6 @@ function escapeHtmlHr(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
 
-/**
- * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
- * Escapes backslashes/quotes for the JS string literal, then HTML-escapes the
- * result so it can't break out of the surrounding double-quoted HTML attribute.
- */
 function escapeJsAttrHr(str) {
   if (str === null || str === undefined) return '';
   var jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -480,6 +474,9 @@ async function deleteHrPayrollEntry(uniqueId) {
   }
 }
 
+/**
+ * 💡 Precision Payslip Printer (With Strict Print Mode Isolation)
+ */
 function printPayslip(uniqueId) {
   const row = gHrPayrollData.find(item => (item.uniqueid === uniqueId || item.uniqueId === uniqueId));
   if (!row) return;
@@ -519,7 +516,16 @@ function printPayslip(uniqueId) {
   setTxt('print-pay-bonus-bot', unpaidBonus.toLocaleString() + ' MMK');
   setTxt('print-pay-fund-bot', unpaidFund.toLocaleString() + ' MMK');
 
-  window.print();
+  // 💡 FIX: Activate Payslip Print Mode & Hide Invoice Print Area
+  document.body.classList.remove('print-mode-invoice');
+  document.body.classList.add('print-mode-payslip');
+
+  setTimeout(function() {
+    window.print();
+    setTimeout(function() {
+      document.body.classList.remove('print-mode-payslip');
+    }, 500);
+  }, 100);
 }
 
 function exportToCSVHrPayroll() {
