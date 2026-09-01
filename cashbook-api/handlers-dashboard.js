@@ -1,9 +1,10 @@
 /**
  * GOLDEN ERP SYSTEM - DASHBOARD HANDLER (D1 DATABASE)
  * File: handlers-dashboard.js
- * 💡 Features: Full 17-Table System Counter (12 Transaction Books + 5 Master Lists & Inventories),
- *              Active FY Scoped Precision Analytics, Daily Balances, Liabilities, Receivables &
- *              Precision 100% Accurate Gender Demographics Engine
+ * 💡 Features: Bulletproof Receivables Isolation (Uniform vs Snack vs Others Advance),
+ *              Resigned Staff Filter (Excludes resigned staff from Active Staff Demographics),
+ *              Full 17-Table System Counter (12 Transaction Books + 5 Master Lists & Inventories),
+ *              Active FY Scoped Precision Analytics, Daily Balances, Liabilities & Precision Gender Counter
  */
 
 function normalizeFyStr(fy) {
@@ -124,8 +125,8 @@ export async function getDashboardData(db, body) {
     const stuCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM student WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]);
     const promoCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM promotion WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]);
     const uniCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM uniform_ledger`);
-    const ftStaffCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM staff_fulltime WHERE LOWER(status) = 'active'`);
-    const ptStaffCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM staff_parttime WHERE LOWER(status) = 'active'`);
+    const ftStaffCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM staff_fulltime WHERE LOWER(status) = 'active' AND (resigned_date IS NULL OR resigned_date = '')`);
+    const ptStaffCnt = await safeCount(db, `SELECT COUNT(*) as cnt FROM staff_parttime WHERE LOWER(status) = 'active' AND (resigned_date IS NULL OR resigned_date = '')`);
 
     // 🌟 Grand Total Records across all 17 tables
     const totalEntries = incCnt + cashCnt + bankCnt + offCnt + kitCnt + payCnt + stmCnt +
@@ -142,7 +143,7 @@ export async function getDashboardData(db, body) {
     const payrollBal = await safeFirstNum(db, "SELECT COALESCE(SUM(debit - credit), 0) as total FROM payroll");
 
     // ----------------------------------------------------
-    // 💡 4. LIABILITIES & RECEIVABLES
+    // 💡 4. LIABILITIES & RECEIVABLES (Bulletproof Extraction)
     // ----------------------------------------------------
     const bankLoan = await safeFirstNum(db, "SELECT COALESCE(SUM(debit - credit), 0) as total FROM bank WHERE LOWER(category) LIKE '%bank loan%'");
     const cashLoan = await safeFirstNum(db, "SELECT COALESCE(SUM(debit - credit), 0) as total FROM cash WHERE LOWER(category) LIKE '%cash loan%'");
@@ -150,17 +151,57 @@ export async function getDashboardData(db, body) {
     const hrUnpaidBonus = await safeFirstNum(db, "SELECT COALESCE(SUM(unpaid_bonus), 0) as total FROM staff_fulltime WHERE LOWER(status) = 'active'");
     const hrUnpaidFund = await safeFirstNum(db, "SELECT COALESCE(SUM(unpaid_fund), 0) as total FROM staff_fulltime WHERE LOWER(status) = 'active'");
 
-    const advSnack = await safeFirstNum(db, "SELECT COALESCE(SUM(credit - debit), 0) as total FROM office WHERE LOWER(category) LIKE '%snack%'");
-    const advUniform = await safeFirstNum(db, "SELECT COALESCE(SUM(credit - debit), 0) as total FROM office WHERE LOWER(category) LIKE '%uniform%'");
-    const othersAdv = await safeFirstNum(db, "SELECT COALESCE(SUM(credit - debit), 0) as total FROM office WHERE LOWER(category) LIKE '%adv%' AND LOWER(category) NOT LIKE '%snack%' AND LOWER(category) NOT LIKE '%uniform%'");
+    // 💡 1. Advance Snack Shop
+    const advSnack = await safeFirstNum(db, `
+      SELECT COALESCE(SUM(credit - debit), 0) as total 
+      FROM office 
+      WHERE (LOWER(category) LIKE '%snack%' OR LOWER(description) LIKE '%snack%' OR category LIKE '%မုန့်%')
+    `);
+
+    // 💡 2. Advance Uniform (Multi-Match: category/description + uniform/unifrom/ယူနီဖောင်း)
+    const advUniform = await safeFirstNum(db, `
+      SELECT COALESCE(SUM(credit - debit), 0) as total 
+      FROM office 
+      WHERE (
+        LOWER(category) LIKE '%uniform%' OR 
+        LOWER(category) LIKE '%unifrom%' OR 
+        LOWER(category) LIKE '%ယူနီဖောင်း%' OR 
+        LOWER(description) LIKE '%uniform%' OR 
+        LOWER(description) LIKE '%unifrom%' OR 
+        LOWER(description) LIKE '%ယူနီဖောင်း%'
+      ) AND (
+        LOWER(category) NOT LIKE '%snack%' AND 
+        LOWER(description) NOT LIKE '%snack%'
+      )
+    `);
+
+    // 💡 3. Others Advance (Strictly Excludes Snack & Uniform to prevent double-counting)
+    const othersAdv = await safeFirstNum(db, `
+      SELECT COALESCE(SUM(credit - debit), 0) as total 
+      FROM office 
+      WHERE (
+        LOWER(category) LIKE '%adv%' OR 
+        LOWER(category) LIKE '%ကြိုတင်%'
+      ) AND (
+        LOWER(category) NOT LIKE '%snack%' AND 
+        LOWER(description) NOT LIKE '%snack%'
+      ) AND (
+        LOWER(category) NOT LIKE '%uniform%' AND 
+        LOWER(category) NOT LIKE '%unifrom%' AND 
+        LOWER(category) NOT LIKE '%ယူနီဖောင်း%' AND 
+        LOWER(description) NOT LIKE '%uniform%' AND 
+        LOWER(description) NOT LIKE '%unifrom%' AND 
+        LOWER(description) NOT LIKE '%ယူနီဖောင်း%'
+      )
+    `);
 
     // ----------------------------------------------------
-    // 💡 5. ACTIVE DEMOGRAPHIC INFO (Male / Female / Total Active)
+    // 💡 5. ACTIVE DEMOGRAPHIC INFO (Excludes Resigned Staff)
     // ----------------------------------------------------
     let stuRows = [];
     try {
       const res = await db.prepare(
-        `SELECT gender, name, fyid_name FROM student WHERE LOWER(status) = 'active' AND (fy = ? OR fy = ?)`
+        `SELECT gender, name, fyid_name FROM student WHERE LOWER(status) = 'active' AND (transfer_date IS NULL OR transfer_date = '') AND (fy = ? OR fy = ?)`
       ).bind(activeFy, fyPrefixed).all();
       if (res && res.results) stuRows = res.results;
     } catch (e) {}
@@ -168,14 +209,18 @@ export async function getDashboardData(db, body) {
 
     let ftRows = [];
     try {
-      const res = await db.prepare(`SELECT gender, name, staff_idname FROM staff_fulltime WHERE LOWER(status) = 'active'`).all();
+      const res = await db.prepare(
+        `SELECT gender, name, staff_idname FROM staff_fulltime WHERE LOWER(status) = 'active' AND (resigned_date IS NULL OR resigned_date = '')`
+      ).all();
       if (res && res.results) ftRows = res.results;
     } catch (e) {}
     const ftDemo = parseGenderCount(ftRows);
 
     let ptRows = [];
     try {
-      const res = await db.prepare(`SELECT gender, name, staff_idname FROM staff_parttime WHERE LOWER(status) = 'active'`).all();
+      const res = await db.prepare(
+        `SELECT gender, name, staff_idname FROM staff_parttime WHERE LOWER(status) = 'active' AND (resigned_date IS NULL OR resigned_date = '')`
+      ).all();
       if (res && res.results) ptRows = res.results;
     } catch (e) {}
     const ptDemo = parseGenderCount(ptRows);
