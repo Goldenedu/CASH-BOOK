@@ -1,7 +1,8 @@
 /**
  * GOLDEN ERP SYSTEM - OFFICE EXPENSE & INVENTORY MODULE 
  * File: js/office-kit.js 
- * 💡 Features: Cloudflare D1 Database Sync, Direct Uniform Inventory Binding, Profit Calculator & Multi-Book Context Engine
+ * 💡 Features: Negative Liabilities & Accounting Parenthesis "(1000)" Engine (Mathematical Inversion Bug Fixed),
+ *              Direct Uniform Inventory Binding, Profit Calculator, Clean Dropdowns & Multi-Book Context Engine
  */
 
 window.OfficeState = {
@@ -17,7 +18,7 @@ window.OfficeState = {
 window.currentExpenseBook = 'office'; // 'office' | 'kitchen'
 
 var searchTimeoutOffice = null;
-var isOfficeSubmitting = false; // 💡 Double Submit Protection Flag
+var isOfficeSubmitting = false;
 
 /**
  * 💡 Safe Native DOM HTML Escaper
@@ -34,8 +35,6 @@ function escapeHtml(str) {
 
 /**
  * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
- * Escapes backslashes/quotes for the JS string literal, then HTML-escapes the
- * result so it can't break out of the surrounding double-quoted HTML attribute.
  */
 function escapeJsAttr(str) {
   if (str === null || str === undefined) return '';
@@ -52,6 +51,23 @@ function parseCleanNum(val) {
   var str = String(val).replace(/,/g, '').trim();
   var num = parseFloat(str);
   return isNaN(num) ? 0 : num;
+}
+
+/**
+ * 💡 Safe Accounting Number Parser (Correctly handles -1000, (1000), (1,000) & positive numbers)
+ */
+function parseLiabilityAmount(val) {
+  if (val === undefined || val === null || val === '') return 0;
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  var s = String(val).trim().replace(/,/g, '');
+  
+  // Handle accounting parenthesis: "(1000)" or "(1,000)" -> -1000
+  if (s.startsWith('(') && s.endsWith(')')) {
+    s = '-' + s.slice(1, -1).trim();
+  }
+  
+  var n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
 }
 
 /**
@@ -330,7 +346,7 @@ async function onCategoryChangeOffice() {
     if (creditInput) creditInput.disabled = false;
     if (methodSelect) methodSelect.disabled = false;
     if (transSelect) transSelect.disabled = false;
-    if (liabilitiesInput) liabilitiesInput.value = 0;
+    if (liabilitiesInput) liabilitiesInput.value = '0';
   }
 }
 
@@ -494,7 +510,7 @@ function updateStatsOffice() {
 }
 
 /**
- * 💡 Render Office Table Grid Rows
+ * 💡 Render Office Table Grid Rows (Handles Negative Liabilities Display)
  */
 function renderOfficeTable() {
   var tableBody = document.getElementById('office-table-body');
@@ -537,9 +553,17 @@ function renderOfficeTable() {
     var debitStr = row.debit > 0 ? Number(row.debit).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-';
     var creditStr = row.credit > 0 ? Number(row.credit).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-';
     var balStr = Number(row.balances || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    var liabStr = Number(row.liabilities || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    var priceStr = Number(row.unitPrice || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    
+    // 💡 Formatting Negative Liabilities (e.g. -1,000.00)
+    var rawLiab = Number(row.liabilities || 0);
+    var liabStr = '0.00';
+    if (rawLiab < 0) {
+      liabStr = `-${Math.abs(rawLiab).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    } else if (rawLiab > 0) {
+      liabStr = rawLiab.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
 
+    var priceStr = Number(row.unitPrice || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     var displayNo = Math.floor(parseCleanNum(row.no || row.id)) || 1;
 
     return '<tr class="hover:bg-slate-800/20 text-slate-300">' +
@@ -553,7 +577,7 @@ function renderOfficeTable() {
         '<td class="text-right text-emerald-400 font-mono font-semibold py-3 px-2">' + debitStr + '</td>' +
         '<td class="text-right text-rose-400 font-mono font-semibold py-3 px-2">' + creditStr + '</td>' +
         '<td class="text-right text-slate-400 font-mono font-bold py-3 px-2">' + balStr + '</td>' +
-        '<td class="office-liab-col text-right text-rose-400 font-mono font-bold py-3 px-2">' + liabStr + '</td>' +
+        '<td class="office-liab-col text-right ' + (rawLiab < 0 ? 'text-emerald-400' : 'text-rose-400') + ' font-mono font-bold py-3 px-2">' + liabStr + '</td>' +
         '<td class="text-xs text-indigo-400 py-3 px-2">' + escapeHtml(row.transfer || '-') + '</td>' +
         '<td class="font-mono text-xs text-slate-400 py-3 px-2">' + escapeHtml(row.vrNo || '-') + '</td>' +
         '<td class="font-mono text-xs py-3 px-2">' + escapeHtml(row.my || '-') + '</td>' +
@@ -675,16 +699,8 @@ function closeOfficeModal() {
   if (modalEl) modalEl.classList.add('hidden');
 }
 
-function parseLiabilityAmount(val) {
-  if (!val) return 0;
-  var str = String(val).trim();
-  var isNeg = (str.includes('(') && str.includes(')')) || str.startsWith('-');
-  var num = parseCleanNum(str);
-  return isNeg ? -num : num;
-}
-
 /**
- * 💡 Save Office / Kitchen Form with Double Submit Lock
+ * 💡 Save Office / Kitchen Form with Double Submit Lock & Negative Liabilities
  */
 async function saveOfficeForm(e) {
   if (e && e.preventDefault) e.preventDefault();
@@ -733,7 +749,7 @@ async function saveOfficeForm(e) {
     method: document.getElementById('office-method')?.value || 'Cash',
     debit: parseCleanNum(document.getElementById('office-debit')?.value),
     credit: parseCleanNum(document.getElementById('office-credit')?.value),
-    liabilities: parseLiabilityAmount(document.getElementById('office-liabilities')?.value),
+    liabilities: parseLiabilityAmount(document.getElementById('office-liabilities')?.value), // 💡 Handles -1000 and (1000)
     transfer: document.getElementById('office-transfer')?.value || '',
     description: document.getElementById('office-description')?.value || '',
     bookName: getExpenseBookContext().bookName,
@@ -773,7 +789,7 @@ async function saveOfficeForm(e) {
 }
 
 /**
- * 💡 EDIT OFFICE ENTRY (Race Condition & Dropdown Matching Fixed)
+ * 💡 EDIT OFFICE ENTRY (Populates Negative Liabilities accurately)
  */
 async function editOfficeEntry(uniqueId) {
   var row = window.OfficeState.activeData.find(function(item) { return item.uniqueId === uniqueId; });
@@ -836,8 +852,9 @@ async function editOfficeEntry(uniqueId) {
   var creditEl = document.getElementById('office-credit');
   if (creditEl) creditEl.value = row.credit || 0;
 
+  // 💡 Accurately populates Negative Liabilities
   var liabEl = document.getElementById('office-liabilities');
-  if (liabEl) liabEl.value = row.liabilities || 0;
+  if (liabEl) liabEl.value = row.liabilities !== undefined ? row.liabilities : 0;
 
   var transferEl = document.getElementById('office-transfer');
   if (transferEl) transferEl.value = row.transfer || "";
