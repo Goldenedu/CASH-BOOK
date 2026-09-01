@@ -122,8 +122,9 @@ function clearDateFilterIncome() {
 function onSearchInputIncome() {
   if (searchTimeoutIncome) clearTimeout(searchTimeoutIncome);
   searchTimeoutIncome = setTimeout(function() {
-    renderTableIncome();
-  }, 200);
+    incomePage = 1; // ရှာဖွေမှု ရလဒ်အတွက် Page 1 သို့ ရွှေ့မည်
+    loadIncomeData(true, true); // 💡 Databas ထဲမှ တိုက်ရိုက် ရှာဖွေမည်
+  }, 300);
 }
 
 /**
