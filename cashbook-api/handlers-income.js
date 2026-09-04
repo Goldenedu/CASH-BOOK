@@ -1,7 +1,8 @@
 /**
  * GOLDEN ERP SYSTEM - MAIN INCOME BOOK HANDLER (CLOUDFLARE D1)
  * File: handlers-income.js
- * 💡 Features: Server-Side Auto-Lock Enforcement (Zero Client Bypass),
+ * 💡 Features: Crash-Proof SELECT * Lock Check (No "no such column: is_locked" errors),
+ *              Server-Side Auto-Lock Enforcement (Zero Client Bypass),
  *              Privilege Escalation Defense (Server-Generated UUIDs for New Records),
  *              Idempotent Upsert for Cashier & Daily Rollups (INSERT OR REPLACE),
  *              Split Payment Support, Precision FY-Scoped Student Lookup & Auto-Posting Engine
@@ -122,10 +123,8 @@ async function recalculateLedgerBalances(db, tableName) {
       }
     }
 
-    const chunkSize = 100;
-    for (let i = 0; i < statements.length; i += chunkSize) {
-      const chunk = statements.slice(i, i + chunkSize);
-      await db.batch(chunk);
+    for (let i = 0; i < statements.length; i += 100) {
+      await db.batch(statements.slice(i, i + 100));
     }
   } catch (e) {
     console.warn(`Running Balance & NO Recalculation Warning for ${tableName}:`, e);
@@ -140,10 +139,7 @@ async function generateVoucherNo(db, tableName, prefix, entryDate) {
     ddmmyy = `${parts[2]}${parts[1]}${y}`;
   } else {
     const now = new Date();
-    const dd = String(now.getDate()).padStart(2, '0');
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const yy = String(now.getFullYear()).slice(-2);
-    ddmmyy = `${dd}${mm}${yy}`;
+    ddmmyy = `${String(now.getDate()).padStart(2, '0')}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getFullYear()).slice(-2)}`;
   }
 
   const pattern = `${prefix}-${ddmmyy}-%`;
@@ -458,8 +454,6 @@ export async function getIncomeData(db, body) {
 }
 
 export async function saveIncomeEntry(db, session, body) {
-  // 🔒 PRIVILEGE ESCALATION DEFENSE: Server-generated UUID only for new records,
-  // unless an Owner/Admin explicitly requests migration mode.
   const isPrivilegedAdmin = ['Owner', 'Admin'].includes(session?.role || '');
   const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport || body.skipAutoPost);
   const uniqueid = (isMigration && body.uniqueId)
@@ -470,12 +464,7 @@ export async function saveIncomeEntry(db, session, body) {
 }
 
 /**
- * 💡 Internal upsert core, shared by:
- *  - saveIncomeEntry (new records — public entrypoint above always supplies a
- *    server-generated or admin-migration uniqueid, never a raw client value)
- *  - updateIncomeEntry (existing records — caller already verified 'edit'
- *    permission and resolved the target's ORIGINAL uniqueid, which must be
- *    preserved so the record's identity doesn't silently change on every edit)
+ * 💡 Internal upsert core
  */
 async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration) {
   try {
@@ -582,6 +571,9 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration) {
   }
 }
 
+/**
+ * 💡 Update Income Entry (Crash-Proof SELECT * Query)
+ */
 export async function updateIncomeEntry(db, session, body) {
   try {
     const uniqueid = body.uniqueId || body.uniqueid;
@@ -589,14 +581,14 @@ export async function updateIncomeEntry(db, session, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT (Zero Client-Flag Bypass)
-    const existing = await db.prepare(`SELECT is_locked, uniqueid, date, fy FROM income WHERE uniqueid = ?`).bind(uniqueid).first();
+    // 🔒 1. CRASH-PROOF SERVER-SIDE LOCK ENFORCEMENT (SELECT * avoids "no such column: is_locked" error)
+    const existing = await db.prepare(`SELECT * FROM income WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ပြင်ဆင်မည့် ဝင်ငွေစာရင်း ရှာမတွေ့ပါ။" };
     }
 
     const uid = String(existing.uniqueid || '');
-    const isAutoLocked = Boolean(existing.is_locked) ||
+    const isAutoLocked = Boolean(existing.is_locked || existing.isLocked) ||
       uid.startsWith('INCMAIN_') ||
       uid.startsWith('INCCASHIER_') ||
       uid.startsWith('DAILY_INC_');
@@ -613,10 +605,6 @@ export async function updateIncomeEntry(db, session, body) {
     const oldFy = existing?.fy || null;
 
     await cleanLinkedIncomeEntries(db, uniqueid);
-    // 🔒 Preserve the ORIGINAL uniqueid on edit — do not delegate to the public
-    // saveIncomeEntry() entrypoint, which now always mints a fresh id unless an
-    // explicit Owner/Admin migration request is made. Editing a record must never
-    // silently change its identity (breaks receipts, links, and audit continuity).
     const res = await _saveIncomeEntryCore(db, session, body, uniqueid, false);
 
     const entryDate = body.date || new Date().toISOString().split('T')[0];
@@ -636,6 +624,9 @@ export async function updateIncomeEntry(db, session, body) {
   }
 }
 
+/**
+ * 💡 Delete Income Entry (Crash-Proof SELECT * Query)
+ */
 export async function deleteIncomeEntry(db, session, body) {
   try {
     const uniqueid = body.uniqueId || body.uniqueid;
@@ -643,11 +634,11 @@ export async function deleteIncomeEntry(db, session, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT (Zero Client-Flag Bypass)
-    const existing = await db.prepare(`SELECT is_locked, uniqueid, date, fy FROM income WHERE uniqueid = ?`).bind(uniqueid).first();
+    // 🔒 1. CRASH-PROOF SERVER-SIDE LOCK ENFORCEMENT (SELECT * avoids "no such column: is_locked" error)
+    const existing = await db.prepare(`SELECT * FROM income WHERE uniqueid = ?`).bind(uniqueid).first();
     if (existing) {
       const uid = String(existing.uniqueid || '');
-      const isAutoLocked = Boolean(existing.is_locked) ||
+      const isAutoLocked = Boolean(existing.is_locked || existing.isLocked) ||
         uid.startsWith('INCMAIN_') ||
         uid.startsWith('INCCASHIER_') ||
         uid.startsWith('DAILY_INC_');
