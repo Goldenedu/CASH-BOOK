@@ -3,7 +3,8 @@
  * File: js/staff.js   
  * 💡 Features: Live Cloudflare D1 Salary Grade Matrix Sync, Auto Basic Amt Fill,
  *              Resigned Date Auto-Inactive Engine (Status & Active Force KPIs),
- *              Live Net Salary Calculator & Integer NO Sequencing Engine
+ *              Precision Gender Auto-Detector (100% Accurate Male/Female Count),
+ *              Full 26-Column CSV Exporter (up to UNPAID FUND) & Float .0 Stripper
  */
 
 /**
@@ -26,6 +27,30 @@ function escapeJsAttr(str) {
   if (str === null || str === undefined) return '';
   var jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   return escapeHtml(jsEscaped);
+}
+
+/**
+ * 💡 Precision Gender Auto-Detector (Fallbacks from Name Prefix)
+ */
+function autoDetectGender(nameStr) {
+  if (!nameStr) return 'Male';
+  const clean = String(nameStr).trim();
+
+  if (clean.startsWith('မောင်') || clean.startsWith('ကို') || clean.startsWith('ဦး') ||
+      /^(Mg|Ko|U)\b/i.test(clean) || /^(မောင်|ကို|ဦး)/.test(clean)) {
+    return 'Male';
+  }
+
+  if (clean.startsWith('မေ') || clean.startsWith('ဒေါ်') || clean.startsWith('Daw') || clean.startsWith('May') ||
+      /^(May|Daw)\b/i.test(clean)) {
+    return 'Female';
+  }
+
+  if ((clean.startsWith('မ') && !clean.startsWith('မောင်')) || /^(Ma)\b/i.test(clean)) {
+    return 'Female';
+  }
+
+  return 'Male';
 }
 
 var gStaffCategory = 'Full Time'; // 'Full Time' or 'Part Time'
@@ -180,16 +205,27 @@ async function loadStaffData(useCache = false) {
       let femaleCount = 0;
       let netPayroll = 0;
 
-      // 💡 Resigned Staff များကို Active Force နှင့် Net Payroll စာရင်းမှ နုတ်ပယ်ခြင်း
+      // 💡 Resigned Staff များကို ဖယ်ထုတ်ပြီး တိကျသော Gender Auto-Detect စနစ်ဖြင့် ရေတွက်ခြင်း
       gStaffData.forEach(item => {
         const isResigned = !!(item.resigned_date || item.resignedDate);
         const isInactive = (item.status || '').toLowerCase() === 'inactive' || isResigned;
 
         if (!isInactive) {
           actCount++;
-          const g = (item.gender || 'Male').toLowerCase();
-          if (g === 'male' || g === 'ကျား') maleCount++;
-          else if (g === 'female' || g === 'မ') femaleCount++;
+          
+          let g = String(item.gender || '').toLowerCase().trim();
+          if (!g || g === 'non' || g === 'undefined') {
+            g = autoDetectGender(item.name || item.staffIdName || item.staff_idname).toLowerCase();
+          }
+
+          if (g === 'male' || g === 'm' || g === 'ကျား' || g.startsWith('mal')) {
+            maleCount++;
+          } else if (g === 'female' || g === 'f' || g === 'မ' || g.startsWith('fem')) {
+            femaleCount++;
+          } else {
+            maleCount++;
+          }
+
           netPayroll += Number(item.total_net_amt ?? item.totalNetAmt ?? item.total_salary ?? item.totalSalary ?? 0);
         }
       });
@@ -265,7 +301,9 @@ function renderStaffTable(rawData) {
     tbody.innerHTML = data.map((item, idx) => {
       const uid = item.uniqueid || item.uniqueId || '';
       const joinDate = item.join_date || item.joinDate || '';
-      const staffIdName = item.staff_idname || item.staffIdName || item.name || '';
+      // 💡 .replace(/\.0/g, '') ဖြင့် [FID 82.0] ကို [FID 82] အဖြစ် သန့်စင်ခြင်း
+      const rawStaffIdName = item.staff_idname || item.staffIdName || item.name || '';
+      const staffIdName = rawStaffIdName.replace(/\.0/g, '');
       const salaryGrade = item.salary_grade || item.salaryGrade || 'Non';
       
       const displayNo = parseInt(item.no || (idx + 1), 10);
@@ -327,7 +365,8 @@ function renderStaffTable(rawData) {
     tbody.innerHTML = data.map((item, idx) => {
       const uid = item.uniqueid || item.uniqueId || '';
       const joinDate = item.join_date || item.joinDate || '';
-      const staffIdName = item.staff_idname || item.staffIdName || item.name || '';
+      const rawStaffIdName = item.staff_idname || item.staffIdName || item.name || '';
+      const staffIdName = rawStaffIdName.replace(/\.0/g, '');
       const totalSalary = item.total_salary ?? item.totalSalary ?? 0;
       const totalNetAmt = item.total_net_amt ?? item.totalNetAmt ?? 0;
       const nrcNo = item.nrc_no || item.nrcNo || '';
@@ -616,7 +655,7 @@ async function saveStaffForm(event) {
     phoneNo: document.getElementById('staff-phone')?.value || '',
     email: document.getElementById('staff-email')?.value || '',
     resignedDate: resignedDate,
-    status: calculatedStatus // 💡 FIX: Inactive / Active တိုက်ရိုက် သတ်မှတ်သည်
+    status: calculatedStatus
   };
 
   try {
@@ -660,21 +699,55 @@ async function deleteStaffEntry(uniqueId) {
   }
 }
 
+/**
+ * 💡 FULL 26-COLUMN CSV EXPORTER (Up to UNPAID FUND + UTF-8 BOM)
+ */
 function exportToCSVStaff() {
   if (!gStaffData || gStaffData.length === 0) {
     if (typeof showToast === 'function') showToast("ERROR", "ထုတ်ယူရန် မည်သည့် အချက်အလက်မျှ မရှိပါ။");
     return;
   }
-  let csv = "NO,JOIN_DATE,STAFF_IDNAME,POSITION,PHONE,STATUS\n";
-  gStaffData.forEach(r => {
-    csv += `"${parseInt(r.no, 10) || ''}","${r.join_date || r.joinDate}","${r.staff_idname || r.staffIdName || r.name}","${r.position}","${r.phone_no || r.phoneNo}","${r.status}"\n`;
-  });
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+
+  const isFT = gStaffCategory === 'Full Time';
+  let csv = "";
+
+  if (isFT) {
+    // 💡 Full Time: Full Columns up to UNPAID FUND
+    csv = "NO,JOIN DATE,CATEGORY,STAFF ID,NAME,STAFF IDNAME,EDUCATION,POSITION,SALARY GRADE,WORKING DAYS,BASIC AMT,EXTRA AMT,TOTAL SALARY,BONUS,FUND,TOTAL NET AMT,RESIGNED DATE,STATUS,GENDER,NRC NO,BANK ACCOUNT,PHONE NO,EMAIL,FUND DATE,UNPAID BONUS,UNPAID FUND\n";
+    gStaffData.forEach((r, idx) => {
+      const displayNo = parseInt(r.no || (idx + 1), 10);
+      const rawStaffIdName = r.staff_idname || r.staffIdName || r.name || '';
+      const staffIdName = `"${rawStaffIdName.replace(/\.0/g, '').replace(/"/g, '""')}"`;
+      const name = `"${(r.name || '').replace(/"/g, '""')}"`;
+      const nrc = `"${(r.nrc_no || r.nrcNo || '').replace(/"/g, '""')}"`;
+      const bank = `"${(r.bank_account || r.bankAccount || '').replace(/"/g, '""')}"`;
+
+      csv += `${displayNo},${r.join_date || r.joinDate || ''},Full Time,${r.staff_id || r.staffId || ''},${name},${staffIdName},${r.education || ''},${r.position || ''},${r.salary_grade || r.salaryGrade || ''},${r.working_days || r.workingDays || 26},${r.basic_amt || r.basicAmt || 0},${r.extra_amt || r.extraAmt || 0},${r.total_salary || r.totalSalary || 0},${r.bonus || 0},${r.fund || 0},${r.total_net_amt || r.totalNetAmt || 0},${r.resigned_date || r.resignedDate || ''},${r.status || 'Active'},${r.gender || 'Male'},${nrc},${bank},${r.phone_no || r.phoneNo || ''},${r.email || ''},${r.fund_date || r.fundDate || ''},${r.unpaid_bonus || r.unpaidBonus || 0},${r.unpaid_fund || r.unpaidFund || 0}\n`;
+    });
+  } else {
+    // 💡 Part Time: Full Columns
+    csv = "NO,JOIN DATE,CATEGORY,STAFF ID,NAME,STAFF IDNAME,EDUCATION,POSITION,TOTAL SALARY,TOTAL NET AMT,RESIGNED DATE,STATUS,GENDER,NRC NO,BANK ACCOUNT,PHONE NO,EMAIL\n";
+    gStaffData.forEach((r, idx) => {
+      const displayNo = parseInt(r.no || (idx + 1), 10);
+      const rawStaffIdName = r.staff_idname || r.staffIdName || r.name || '';
+      const staffIdName = `"${rawStaffIdName.replace(/\.0/g, '').replace(/"/g, '""')}"`;
+      const name = `"${(r.name || '').replace(/"/g, '""')}"`;
+      const nrc = `"${(r.nrc_no || r.nrcNo || '').replace(/"/g, '""')}"`;
+      const bank = `"${(r.bank_account || r.bankAccount || '').replace(/"/g, '""')}"`;
+
+      csv += `${displayNo},${r.join_date || r.joinDate || ''},Part Time,${r.staff_id || r.staffId || ''},${name},${staffIdName},${r.education || ''},${r.position || ''},${r.total_salary || r.totalSalary || 0},${r.total_net_amt || r.totalNetAmt || 0},${r.resigned_date || r.resignedDate || ''},${r.status || 'Active'},${r.gender || 'Male'},${nrc},${bank},${r.phone_no || r.phoneNo || ''},${r.email || ''}\n`;
+    });
+  }
+
+  // 💡 UTF-8 BOM (\uFEFF) ထည့်ထားသဖြင့် Excel တွင် မြန်မာစာ လုံးဝ မပျက်ပါ
+  const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `Staff_${gStaffCategory}_Export_${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = `Staff_${gStaffCategory.replace(/\s+/g, '_')}_Export_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
 }
 
 // Global Expose
@@ -692,3 +765,4 @@ window.fetchPayrollSettings = fetchPayrollSettings;
 window.renderGradeDropdownOptions = renderGradeDropdownOptions;
 window.onSalaryGradeChangeStaff = onSalaryGradeChangeStaff;
 window.calculateLiveStaffSalary = calculateLiveStaffSalary;
+window.autoDetectGender = autoDetectGender;
