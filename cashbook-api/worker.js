@@ -694,9 +694,14 @@ export default {
           result = await ReportHandlers.getFundReportData(db, body);
           break;
 
-        // 🎒 12. STUDENT MONEY LEDGER ROUTES
+        // 🎒 12. STUDENT MONEY LEDGER ROUTES (Summary + Transactions)
         case 'getStudentMoneyData':
           result = await StudentMoneyHandlers.getStudentMoneyData(db, body);
+          break;
+
+        // 💡 ကျောင်းသားတစ်ဦးချင်း လက်ကျန်ချုပ် (1 Student = 1 Row) အတွက် Route အသစ်
+        case 'getStudentMoneySummary':
+          result = await StudentMoneyHandlers.getStudentMoneySummary(db, body);
           break;
 
         case 'saveStudentMoneyEntry':
