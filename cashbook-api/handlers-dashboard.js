@@ -1,10 +1,10 @@
 /**
  * GOLDEN ERP SYSTEM - DASHBOARD HANDLER (D1 DATABASE)
  * File: handlers-dashboard.js
- * 💡 Features: Bulletproof Receivables Isolation (Uniform vs Snack vs Others Advance),
+ * 💡 Features: Strict Category-Based Receivables (Zero Description Pollution / No Admin Exp Mix-ups),
  *              Resigned Staff Filter (Excludes resigned staff from Active Staff Demographics),
  *              Full 17-Table System Counter (12 Transaction Books + 5 Master Lists & Inventories),
- *              Active FY Scoped Precision Analytics, Daily Balances, Liabilities & Precision Gender Counter
+ *              Active FY Scoped Precision Analytics, Daily Balances, Liabilities & Precision Demographics Engine
  */
 
 function normalizeFyStr(fy) {
@@ -143,7 +143,7 @@ export async function getDashboardData(db, body) {
     const payrollBal = await safeFirstNum(db, "SELECT COALESCE(SUM(debit - credit), 0) as total FROM payroll");
 
     // ----------------------------------------------------
-    // 💡 4. LIABILITIES & RECEIVABLES (Bulletproof Extraction)
+    // 💡 4. LIABILITIES (ပေးရန်ကြွေးမြီ စာရင်းများ)
     // ----------------------------------------------------
     const bankLoan = await safeFirstNum(db, "SELECT COALESCE(SUM(debit - credit), 0) as total FROM bank WHERE LOWER(category) LIKE '%bank loan%'");
     const cashLoan = await safeFirstNum(db, "SELECT COALESCE(SUM(debit - credit), 0) as total FROM cash WHERE LOWER(category) LIKE '%cash loan%'");
@@ -151,52 +151,35 @@ export async function getDashboardData(db, body) {
     const hrUnpaidBonus = await safeFirstNum(db, "SELECT COALESCE(SUM(unpaid_bonus), 0) as total FROM staff_fulltime WHERE LOWER(status) = 'active'");
     const hrUnpaidFund = await safeFirstNum(db, "SELECT COALESCE(SUM(unpaid_fund), 0) as total FROM staff_fulltime WHERE LOWER(status) = 'active'");
 
-    // 💡 1. Advance Snack Shop
+    // ----------------------------------------------------
+    // 💡 5. RECEIVABLES (Strict Category-Based Calculation - Zero Description Pollution)
+    // ----------------------------------------------------
+    // ၁။ Advance Snack Shop (မုန့်ဆိုင်ကြိုတင်ငွေ)
     const advSnack = await safeFirstNum(db, `
       SELECT COALESCE(SUM(credit - debit), 0) as total 
       FROM office 
-      WHERE (LOWER(category) LIKE '%snack%' OR LOWER(description) LIKE '%snack%' OR category LIKE '%မုန့်%')
+      WHERE LOWER(category) LIKE '%snack%'
     `);
 
-    // 💡 2. Advance Uniform (Multi-Match: category/description + uniform/unifrom/ယူနီဖောင်း)
+    // ၂။ Advance Uniform (ယူနီဖောင်းစရံကြိုတင်ငွေ - Strict Category Check)
     const advUniform = await safeFirstNum(db, `
       SELECT COALESCE(SUM(credit - debit), 0) as total 
       FROM office 
-      WHERE (
-        LOWER(category) LIKE '%uniform%' OR 
-        LOWER(category) LIKE '%unifrom%' OR 
-        LOWER(category) LIKE '%ယူနီဖောင်း%' OR 
-        LOWER(description) LIKE '%uniform%' OR 
-        LOWER(description) LIKE '%unifrom%' OR 
-        LOWER(description) LIKE '%ယူနီဖောင်း%'
-      ) AND (
-        LOWER(category) NOT LIKE '%snack%' AND 
-        LOWER(description) NOT LIKE '%snack%'
-      )
+      WHERE (LOWER(category) LIKE '%uniform%' OR LOWER(category) LIKE '%unifrom%')
     `);
 
-    // 💡 3. Others Advance (Strictly Excludes Snack & Uniform to prevent double-counting)
+    // ၃။ Others Advance (အထွေထွေ ကြိုတင်ငွေ - Snack နှင့် Uniform မပါသော အခြား Adv/Ref စာရင်းများ)
     const othersAdv = await safeFirstNum(db, `
       SELECT COALESCE(SUM(credit - debit), 0) as total 
       FROM office 
-      WHERE (
-        LOWER(category) LIKE '%adv%' OR 
-        LOWER(category) LIKE '%ကြိုတင်%'
-      ) AND (
-        LOWER(category) NOT LIKE '%snack%' AND 
-        LOWER(description) NOT LIKE '%snack%'
-      ) AND (
-        LOWER(category) NOT LIKE '%uniform%' AND 
-        LOWER(category) NOT LIKE '%unifrom%' AND 
-        LOWER(category) NOT LIKE '%ယူနီဖောင်း%' AND 
-        LOWER(description) NOT LIKE '%uniform%' AND 
-        LOWER(description) NOT LIKE '%unifrom%' AND 
-        LOWER(description) NOT LIKE '%ယူနီဖောင်း%'
-      )
+      WHERE (LOWER(category) LIKE '%adv%' OR LOWER(category) LIKE '%ကြိုတင်%') 
+        AND LOWER(category) NOT LIKE '%snack%' 
+        AND LOWER(category) NOT LIKE '%uniform%' 
+        AND LOWER(category) NOT LIKE '%unifrom%'
     `);
 
     // ----------------------------------------------------
-    // 💡 5. ACTIVE DEMOGRAPHIC INFO (Excludes Resigned Staff)
+    // 💡 6. ACTIVE DEMOGRAPHIC INFO (Excludes Resigned Staff)
     // ----------------------------------------------------
     let stuRows = [];
     try {
