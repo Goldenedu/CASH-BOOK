@@ -1,159 +1,308 @@
-<!-- views/student-money.html -->  
+<!-- views/student-money.html -->
 <div class="space-y-5">
 
-  <!-- ၁။ Top KPI Cards Grid (4 Cards - DEBIT = Income, CREDIT = Expense) -->
-  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400"><i class="fa-solid fa-arrow-trend-up text-xl"></i></div>
-      <div><p class="text-[10px] uppercase font-bold text-slate-500">Total Income (Debit)</p><h3 id="stm-total-income" class="text-base font-extrabold text-emerald-400 mt-1">0 MMK</h3></div>
-    </div>
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-rose-500/10 text-rose-400"><i class="fa-solid fa-arrow-trend-down text-xl"></i></div>
-      <div><p class="text-[10px] uppercase font-bold text-slate-500">Total Expense (Credit)</p><h3 id="stm-total-expense" class="text-base font-extrabold text-rose-400 mt-1">0 MMK</h3></div>
-    </div>
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-indigo-500/10 text-indigo-400"><i class="fa-solid fa-wallet text-xl"></i></div>
-      <div><p class="text-[10px] uppercase font-bold text-slate-500">Total Balances</p><h3 id="stm-balance" class="text-base font-extrabold text-white mt-1">0 MMK</h3></div>
-    </div>
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-sky-500/10 text-sky-400"><i class="fa-solid fa-list-check text-xl"></i></div>
-      <div><p class="text-[10px] uppercase font-bold text-slate-500">Total Entries</p><h3 id="stm-entries-count" class="text-base font-extrabold text-white mt-1">0</h3></div>
-    </div>
-  </div>
-
-  <!-- ၂။ Control Search & Action Bar -->
-  <div class="flex flex-col lg:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
-    <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
-      <div class="relative w-full sm:w-64">
-        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
-        <input type="text" id="stm-search" oninput="onSearchInputStudentMoney()" placeholder="Search student name, FYID, ID..." class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white focus:outline-none focus:border-indigo-500 transition-all">
-      </div>
-
-      <!-- Date Range Filter -->
-      <div class="flex items-center gap-1.5 w-full sm:w-auto bg-[#0f172a] border border-slate-800 p-1 rounded-lg text-xs">
-        <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">From:</span>
-        <input type="date" id="stm-date-from" onchange="onSearchInputStudentMoney()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
-        <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">To:</span>
-        <input type="date" id="stm-date-to" onchange="onSearchInputStudentMoney()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
-        <button onclick="clearDateFilterStudentMoney()" class="p-1 text-slate-400 hover:text-rose-400 transition" title="Clear Date Filter"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
-      </div>
-    </div>
-
-    <div class="flex items-center gap-2.5 w-full lg:w-auto justify-end">
-      <button onclick="loadStudentMoneyData(false, true)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all"><i class="fa-solid fa-rotate text-xs"></i> Refresh</button>
-      <button onclick="exportToCSVStudentMoney()" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all"><i class="fa-solid fa-file-export text-xs"></i> Export CSV</button>
-      <button onclick="openAddModalStudentMoney()" class="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/10 transition-all"><i class="fa-solid fa-plus text-xs"></i> Add Entry</button>
-    </div>
-  </div>
-
-  <!-- ၃။ 13-Column Grid Table (DEBIT = Green, CREDIT = Red) -->
-  <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
-    <table class="w-full text-left border-collapse min-w-[1500px]">
-      <thead>
-        <tr class="bg-[#0e172a]">
-          <th scope="col" class="w-12 text-center text-slate-400 text-xs py-3">NO</th>
-          <th scope="col" class="w-28 text-slate-400 text-xs py-3">DATE</th>
-          <th scope="col" class="w-24 text-slate-400 text-xs py-3">FY</th>
-          <th scope="col" class="w-20 text-slate-400 text-xs py-3">ID</th>
-          <th scope="col" class="w-32 text-slate-400 text-xs py-3">FYID</th>
-          <th scope="col" class="min-w-[200px] text-slate-400 text-xs py-3">FYID NAME</th>
-          <th scope="col" class="w-28 text-slate-400 text-xs py-3">CLASS</th>
-          <th scope="col" class="w-24 text-slate-400 text-xs py-3">METHOD</th>
-          <th scope="col" class="w-32 text-right text-emerald-400 text-xs py-3">DEBIT (ဝင်ငွေ)</th>
-          <th scope="col" class="w-32 text-right text-rose-400 text-xs py-3">CREDIT (ထွက်ငွေ)</th>
-          <th scope="col" class="w-36 text-right text-indigo-400 text-xs py-3">BALANCES</th>
-          <th scope="col" class="min-w-[150px] text-slate-400 text-xs py-3">REMARK</th>
-          <th scope="col" class="w-28 text-center text-slate-400 text-xs py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">ACTION</th>
-        </tr>
-      </thead>
-      <tbody id="stm-table-body" class="divide-y divide-slate-800/40 text-slate-300">
-        <!-- Dynamic Rows via js/student-money.js -->
-      </tbody>
-    </table>
-  </div>
-
-  <!-- ၄။ Pagination Tray -->
-  <div class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
-    <div id="stm-pagination-info" class="text-xs font-semibold text-slate-400 tracking-wide">Showing entries...</div>
+  <!-- 💡 ၁။ Sub-Tab Navigation Bar (Dual Mode Toggle) -->
+  <div class="flex items-center justify-between bg-[#0c1322] border border-slate-800 p-2 rounded-xl">
     <div class="flex items-center gap-2">
-      <button onclick="changePageStudentMoney(-1)" id="stm-btn-prev" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all text-xs"><i class="fa-solid fa-chevron-left text-[10px]"></i> Previous</button>
-      <button onclick="changePageStudentMoney(1)" id="stm-btn-next" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all text-xs">Next <i class="fa-solid fa-chevron-right text-[10px]"></i></button>
+      <button id="stm-tab-history" onclick="switchStudentMoneySubTab('history')" class="px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 bg-indigo-600 text-white shadow-lg shadow-indigo-600/20">
+        <i class="fa-solid fa-list-check"></i> 1. Transaction History (နေ့စဉ် အသွင်း/အထုတ်)
+      </button>
+      <button id="stm-tab-summary" onclick="switchStudentMoneySubTab('summary')" class="px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 bg-slate-800 text-slate-400 hover:text-white border border-slate-700/50">
+        <i class="fa-solid fa-wallet text-amber-400"></i> 2. Student Wallet Balances (ကျောင်းသားတစ်ဦးချင်း လက်ကျန်ချုပ်)
+      </button>
+    </div>
+
+    <div class="hidden sm:flex items-center gap-2 px-3 text-[11px] font-mono font-bold text-slate-400">
+      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Trust Account Engine
+    </div>
+  </div>
+
+  <!-- 💡 ၂။ Top KPI Stats Cards Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <!-- Total Inflow / Deposited -->
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400"><i class="fa-solid fa-circle-arrow-down text-xl"></i></div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500" id="stm-kpi-1-label">TOTAL DEPOSITED (အပ်ငွေ)</p>
+        <h3 id="stm-total-income" class="text-base font-extrabold text-emerald-400 mt-1">0 MMK</h3>
+      </div>
+    </div>
+
+    <!-- Total Outflow / Withdrawn -->
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-rose-500/10 text-rose-400"><i class="fa-solid fa-circle-arrow-up text-xl"></i></div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500" id="stm-kpi-2-label">TOTAL WITHDRAWN (ထုတ်ငွေ)</p>
+        <h3 id="stm-total-expense" class="text-base font-extrabold text-rose-400 mt-1">0 MMK</h3>
+      </div>
+    </div>
+
+    <!-- Net Fund in Trust / Balance -->
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-indigo-500/10 text-indigo-400"><i class="fa-solid fa-vault text-xl"></i></div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">CURRENT TRUST BALANCE</p>
+        <h3 id="stm-balance" class="text-base font-extrabold text-white mt-1">0 MMK</h3>
+      </div>
+    </div>
+
+    <!-- Total Count -->
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-amber-500/10 text-amber-400"><i class="fa-solid fa-users text-xl"></i></div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500" id="stm-kpi-4-label">TOTAL ENTRIES</p>
+        <h3 id="stm-entries-count" class="text-base font-extrabold text-amber-400 mt-1">0</h3>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 1: TRANSACTION HISTORY VIEW ==================== -->
+  <div id="stm-history-view" class="space-y-4">
+    <!-- Control Search & Action Bar -->
+    <div class="flex flex-col lg:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
+      <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
+        <div class="relative w-full sm:w-72">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
+          <input type="text" id="stm-search" oninput="onSearchInputStudentMoney()" placeholder="Search student name, FYID, ID, remark..." class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white focus:outline-none focus:border-indigo-500 transition-all">
+        </div>
+
+        <div class="flex items-center gap-1.5 w-full sm:w-auto bg-[#0f172a] border border-slate-800 p-1 rounded-lg text-xs">
+          <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">From:</span>
+          <input type="date" id="stm-date-from" onchange="onSearchInputStudentMoney()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
+          <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">To:</span>
+          <input type="date" id="stm-date-to" onchange="onSearchInputStudentMoney()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
+          <button onclick="clearDateFilterStudentMoney()" class="p-1 text-slate-400 hover:text-rose-400 transition" title="Clear Date Filter"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2.5 w-full lg:w-auto justify-end">
+        <button onclick="loadStudentMoneyData(false)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all" title="Refresh Data">
+          <i class="fa-solid fa-rotate text-xs"></i> Refresh
+        </button>
+
+        <button onclick="exportToCSVStudentMoney()" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
+          <i class="fa-solid fa-file-export text-xs"></i> Export CSV
+        </button>
+
+        <button onclick="openAddModalStudentMoney()" class="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/10 transition-all">
+          <i class="fa-solid fa-plus text-xs"></i> Add Entry
+        </button>
+      </div>
+    </div>
+
+    <!-- 13-Column Visual Table Grid -->
+    <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
+      <table class="w-full text-left border-collapse min-w-[1400px]">
+        <thead>
+          <tr class="bg-[#0e172a]">
+            <th scope="col" class="w-12 text-center text-slate-400 text-xs py-3">NO</th>
+            <th scope="col" class="w-28 text-slate-400 text-xs py-3">DATE</th>
+            <th scope="col" class="w-24 text-slate-400 text-xs py-3">FY</th>
+            <th scope="col" class="w-20 text-slate-400 text-xs py-3">ID</th>
+            <th scope="col" class="w-32 text-slate-400 text-xs py-3">FYID</th>
+            <th scope="col" class="min-w-[200px] text-slate-400 text-xs py-3">FYID NAME</th>
+            <th scope="col" class="w-28 text-slate-400 text-xs py-3">CLASS</th>
+            <th scope="col" class="w-24 text-slate-400 text-xs py-3">METHOD</th>
+            <th scope="col" class="w-32 text-right text-emerald-400 text-xs py-3">DEBIT (အပ်ငွေ)</th>
+            <th scope="col" class="w-32 text-right text-rose-400 text-xs py-3">CREDIT (ထုတ်ငွေ)</th>
+            <th scope="col" class="w-36 text-right text-indigo-400 text-xs py-3">BALANCES</th>
+            <th scope="col" class="min-w-[180px] text-slate-400 text-xs py-3">REMARK</th>
+            <th scope="col" class="w-24 text-center text-slate-400 text-xs py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">ACTION</th>
+          </tr>
+        </thead>
+        <tbody id="stm-table-body" class="divide-y divide-slate-800/40 text-slate-300">
+          <!-- Dynamic Rows generated by js/student-money.js -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination Controller Tray -->
+    <div class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
+      <div id="stm-pagination-info" class="text-xs font-semibold text-slate-400 tracking-wide">Showing entries...</div>
+      <div class="flex items-center gap-2">
+        <button onclick="changePageStudentMoney(-1)" id="stm-btn-prev" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+          <i class="fa-solid fa-chevron-left text-[10px]"></i> Previous
+        </button>
+        <button onclick="changePageStudentMoney(1)" id="stm-btn-next" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+          Next <i class="fa-solid fa-chevron-right text-[10px]"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 2: STUDENT WALLET SUMMARY VIEW (1 Student = 1 Row) ==================== -->
+  <div id="stm-summary-view" class="space-y-4 hidden">
+    <div class="flex flex-col sm:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
+      <div class="relative w-full sm:w-80">
+        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
+        <input type="text" id="stm-summary-search" oninput="onSearchInputStudentMoneySummary()" placeholder="Search student name, ID, class, FYID..." class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white focus:outline-none focus:border-amber-500 transition-all">
+      </div>
+
+      <div class="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+        <button onclick="loadStudentMoneySummaryData(false)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
+          <i class="fa-solid fa-rotate text-xs"></i> Refresh
+        </button>
+        <button onclick="exportStudentMoneySummaryToCSV()" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
+          <i class="fa-solid fa-file-excel text-emerald-400 text-xs"></i> Export Wallet CSV
+        </button>
+      </div>
+    </div>
+
+    <!-- Student Wallet Summary Table Grid -->
+    <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
+      <table class="w-full text-left border-collapse min-w-[1100px]">
+        <thead>
+          <tr class="bg-[#0e172a] text-slate-400 text-xs">
+            <th scope="col" class="w-12 text-center py-3">NO</th>
+            <th scope="col" class="w-20 py-3">ID</th>
+            <th scope="col" class="w-32 py-3">FYID</th>
+            <th scope="col" class="min-w-[220px] py-3">STUDENT NAME</th>
+            <th scope="col" class="w-28 py-3">CLASS</th>
+            <th scope="col" class="w-36 text-right text-emerald-400 py-3">TOTAL DEPOSITED (အပ်ငွေ)</th>
+            <th scope="col" class="w-36 text-right text-rose-400 py-3">TOTAL WITHDRAWN (ထုတ်ငွေ)</th>
+            <th scope="col" class="w-36 text-right text-amber-300 py-3">WALLET BALANCE (လက်ကျန်)</th>
+            <th scope="col" class="w-28 text-center py-3">STATUS</th>
+            <th scope="col" class="w-28 text-center py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">STATEMENT</th>
+          </tr>
+        </thead>
+        <tbody id="stm-summary-table-body" class="divide-y divide-slate-800/40 text-slate-300 text-xs">
+          <!-- Dynamic Rows generated by js/student-money.js -->
+        </tbody>
+      </table>
     </div>
   </div>
 
 </div>
 
-<!-- ၅။ ADD / EDIT MODAL -->
-<div id="stm-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+<!-- 💡 ၃။ ADD / EDIT STUDENT MONEY MODAL -->
+<div id="student-money-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
   <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
     <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
       <h3 id="stm-form-title" class="text-sm font-black text-white uppercase tracking-wider">Add Student Money Entry</h3>
       <button onclick="closeStudentMoneyModal()" class="text-slate-500 hover:text-white transition"><i class="fa-solid fa-xmark text-sm"></i></button>
     </div>
 
-    <form id="stm-form" onsubmit="saveStudentMoneyForm(event)" class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+    <form id="student-money-form" onsubmit="saveStudentMoneyForm(event)" class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
       <input type="hidden" id="stm-uniqueId">
 
-      <div class="grid grid-cols-3 gap-4">
+      <div class="grid grid-cols-2 gap-4">
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Select FY</label>
-          <select id="stm-fy" onchange="onStudentIdOrFYChangeStudentMoney()" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500 font-bold"></select>
+          <select id="stm-fy" onchange="onStudentIdOrFYChangeMoney()" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500 font-mono"></select>
         </div>
         <div class="flex flex-col gap-1">
-          <label class="font-bold text-slate-400 uppercase tracking-wide">Student ID</label>
-          <input type="number" id="stm-id-search" lang="en" oninput="onStudentIdOrFYChangeStudentMoney()" required placeholder="e.g. 1" class="w-full font-bold text-slate-100 font-mono bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-indigo-500">
-        </div>
-        <div class="flex flex-col gap-1">
-          <label class="font-bold text-slate-400 uppercase tracking-wide">Date</label>
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Transaction Date</label>
           <input type="date" id="stm-date" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
         </div>
       </div>
 
-      <div class="grid grid-cols-2 gap-4">
+      <!-- Student Lookup Input -->
+      <div class="grid grid-cols-3 gap-3">
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-indigo-400 uppercase tracking-wide">Student ID</label>
+          <input type="number" id="stm-id-search" oninput="onStudentIdOrFYChangeMoney()" placeholder="e.g. 1" required class="w-full font-mono font-bold text-indigo-300 bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+        </div>
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Generated FYID</label>
-          <input type="text" id="stm-fyid-show" readonly placeholder="Auto-generated..." class="w-full bg-slate-950/40 text-indigo-400 border border-slate-800 cursor-not-allowed font-bold font-mono rounded-lg p-2.5">
+          <input type="text" id="stm-fyid-show" readonly class="w-full font-mono bg-slate-900/60 border border-slate-800 text-slate-400 rounded-lg p-2.5 outline-none">
         </div>
-        <div class="flex flex-col gap-1">
-          <label class="font-bold text-slate-400 uppercase tracking-wide">Student Name</label>
-          <input type="text" id="stm-fyidname-show" readonly placeholder="Auto-detecting..." class="w-full bg-slate-950/40 text-slate-300 border border-slate-800 cursor-not-allowed font-bold rounded-lg p-2.5">
-        </div>
-      </div>
-
-      <div class="grid grid-cols-2 gap-4">
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Class</label>
-          <input type="text" id="stm-class" readonly class="w-full bg-slate-950/40 text-slate-400 border border-slate-800 cursor-not-allowed font-bold rounded-lg p-2.5">
-        </div>
-        <div class="flex flex-col gap-1">
-          <label class="font-bold text-slate-400 uppercase tracking-wide">Payment Method</label>
-          <select id="stm-method" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500 font-bold">
-            <option value="Cash">Cash</option>
-            <option value="Bank">Bank</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-2 gap-4">
-        <div class="flex flex-col gap-1">
-          <label class="font-bold text-emerald-400 uppercase tracking-wide">Debit (ဝင်ငွေ/အပ်ငွေ)</label>
-          <input type="number" id="stm-debit" value="0" lang="en" class="w-full text-right text-emerald-400 font-bold font-mono bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 focus:border-emerald-500">
-        </div>
-        <div class="flex flex-col gap-1">
-          <label class="font-bold text-rose-400 uppercase tracking-wide">Credit (ထွက်ငွေ/သုံးငွေ)</label>
-          <input type="number" id="stm-credit" value="0" lang="en" class="w-full text-right text-rose-400 font-bold font-mono bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 focus:border-rose-500">
+          <input type="text" id="stm-class" readonly class="w-full bg-slate-900/60 border border-slate-800 text-slate-400 rounded-lg p-2.5 outline-none">
         </div>
       </div>
 
       <div class="flex flex-col gap-1">
-        <label class="font-bold text-slate-400 uppercase tracking-wide">Remark (မှတ်ချက်)</label>
-        <textarea id="stm-remark" rows="2" placeholder="အသေးစိတ် မှတ်ချက်..." class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500"></textarea>
+        <label class="font-bold text-slate-400 uppercase tracking-wide">Student Name</label>
+        <input type="text" id="stm-fyidname-show" readonly class="w-full font-bold text-white bg-slate-900/60 border border-slate-800 rounded-lg p-2.5 outline-none">
+      </div>
+
+      <!-- 💡 Current Wallet Live Balance Indicator -->
+      <div id="stm-wallet-live-badge" class="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center justify-between text-xs hidden">
+        <span class="font-bold text-amber-300 flex items-center gap-2"><i class="fa-solid fa-wallet"></i> လက်ရှိ အိတ်ကပ်ငွေ လက်ကျန်:</span>
+        <span id="stm-wallet-live-amount" class="font-mono font-black text-amber-400 text-sm">0 MMK</span>
+      </div>
+
+      <div class="grid grid-cols-3 gap-3">
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Payment Method</label>
+          <select id="stm-method" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+            <option value="Cash" selected>Cash</option>
+            <option value="Bank">Bank</option>
+          </select>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-emerald-400 uppercase tracking-wide">Deposit / အပ်ငွေ (Debit)</label>
+          <input type="number" id="stm-debit" value="0" class="w-full text-right font-bold text-emerald-400 font-mono bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-emerald-500">
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-rose-400 uppercase tracking-wide">Withdraw / ထုတ်ငွေ (Credit)</label>
+          <input type="number" id="stm-credit" value="0" class="w-full text-right font-bold text-rose-400 font-mono bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-rose-500">
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-1">
+        <label class="font-bold text-slate-400 uppercase tracking-wide">Remark (မှတ်ချက် / အသုံးပြုအကြောင်းပြချက်)</label>
+        <textarea id="stm-remark" rows="2" placeholder="ဥပမာ - မုန့်ဖိုးထုတ်ယူငွေ၊ စာရေးကိရိယာဝယ်ယူငွေ..." class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500"></textarea>
       </div>
 
       <div class="flex justify-end items-center gap-3 pt-4 border-t border-slate-800">
         <button type="button" onclick="closeStudentMoneyModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">Cancel</button>
-        <button type="submit" class="px-5 py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10 transition-all">Confirm</button>
+        <button type="submit" class="px-5 py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10 transition-all">Confirm Entry</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- 💡 ၄။ INDIVIDUAL STUDENT STATEMENT TIMELINE MODAL -->
+<div id="stm-statement-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+    <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
+      <div>
+        <h3 id="stm-stmt-student-name" class="text-sm font-black text-white uppercase tracking-wider">Student Pocket Money Statement</h3>
+        <p id="stm-stmt-student-info" class="text-[11px] text-slate-400 mt-0.5 font-mono"></p>
+      </div>
+      <button onclick="closeStudentStatementModal()" class="text-slate-500 hover:text-white transition"><i class="fa-solid fa-xmark text-sm"></i></button>
+    </div>
+
+    <div class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+      <div class="grid grid-cols-3 gap-3">
+        <div class="p-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-center">
+          <span class="text-[10px] font-bold text-slate-400 uppercase">Total Deposited</span>
+          <h4 id="stm-stmt-total-deposit" class="text-sm font-black text-emerald-400 font-mono mt-0.5">0 MMK</h4>
+        </div>
+        <div class="p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-xl text-center">
+          <span class="text-[10px] font-bold text-slate-400 uppercase">Total Withdrawn</span>
+          <h4 id="stm-stmt-total-withdraw" class="text-sm font-black text-rose-400 font-mono mt-0.5">0 MMK</h4>
+        </div>
+        <div class="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-center">
+          <span class="text-[10px] font-bold text-slate-400 uppercase">Current Balance</span>
+          <h4 id="stm-stmt-current-balance" class="text-sm font-black text-amber-300 font-mono mt-0.5">0 MMK</h4>
+        </div>
+      </div>
+
+      <div class="table-container bg-[#080e1c] border border-slate-800 rounded-xl overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="bg-[#0e172a] text-slate-400 border-b border-slate-800 text-[11px]">
+              <th class="py-2.5 px-3 w-10 text-center">NO</th>
+              <th class="py-2.5 px-3 w-24">DATE</th>
+              <th class="py-2.5 px-3 w-20">METHOD</th>
+              <th class="py-2.5 px-3 text-right text-emerald-400 w-28">DEPOSIT</th>
+              <th class="py-2.5 px-3 text-right text-rose-400 w-28">WITHDRAW</th>
+              <th class="py-2.5 px-3 text-right text-indigo-400 w-28">BALANCE</th>
+              <th class="py-2.5 px-3">REMARK / PURPOSE</th>
+            </tr>
+          </thead>
+          <tbody id="stm-stmt-table-body" class="divide-y divide-slate-800/40 text-slate-300">
+            <!-- Timeline rows -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="px-6 py-3 border-t border-slate-800 bg-[#0e172a] flex justify-end items-center shrink-0">
+      <button onclick="closeStudentStatementModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition">Close Statement</button>
+    </div>
   </div>
 </div>
