@@ -3,6 +3,7 @@
  * File: js/student-money.js
  * 💡 Features: Dual Sub-Tab Switcher (1. Transaction History | 2. Student Wallet Balances),
  *              1 Student = 1 Row Summary, Live Student Statement Timeline Modal,
+ *              Crash-Proof Name & ID Extraction in Form Payload (400 Bad Request Fixed),
  *              FY-Scoped Student Auto-Lookup, Live Balance Indicator & Multi-CSV Exporter
  */
 
@@ -555,6 +556,9 @@ function populateFYDropdownMoney() {
   `;
 }
 
+/**
+ * 💡 SAVE STUDENT MONEY FORM (Crash-Proof Payload with Explicit Name & ID)
+ */
 async function saveStudentMoneyForm(e) {
   if (e && e.preventDefault) e.preventDefault();
 
@@ -563,7 +567,13 @@ async function saveStudentMoneyForm(e) {
 
   const idVal = parseInt(document.getElementById('stm-id-search')?.value, 10);
   const fyidShowVal = document.getElementById('stm-fyid-show')?.value;
-  const fyidNameVal = document.getElementById('stm-fyidname-show')?.value;
+  const fyidNameVal = document.getElementById('stm-fyidname-show')?.value || '';
+
+  // 💡 Extract pure name from "[2627-STU-0001] မောင်မောင်"
+  let pureName = fyidNameVal;
+  if (pureName.includes(']')) {
+    pureName = pureName.split(']')[1].trim();
+  }
 
   if (!idVal || !fyidShowVal || fyidNameVal.includes("ကျောင်းသား ရှာမတွေ့ပါ")) {
     isStudentMoneySubmitting = false;
@@ -575,6 +585,8 @@ async function saveStudentMoneyForm(e) {
   const payload = {
     uniqueId: uid,
     studentId: idVal,
+    id: idVal,
+    name: pureName, // 💡 Explicit Student Name passed to prevent 400 Bad Request
     fyid: fyidShowVal,
     fyidName: fyidNameVal,
     class: document.getElementById('stm-class')?.value || '',
