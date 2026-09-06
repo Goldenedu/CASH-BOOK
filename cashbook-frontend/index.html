@@ -460,6 +460,21 @@
   <script src="js/settings.js?v=20260808b" defer></script>
   <script src="js/dashboard.js?v=20260808b" defer></script>
   <script src="js/app.js?v=20260808b" defer></script>
+
+  <!-- 💡 Service Worker Registration for 0ms Offline Navigation -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('./sw.js')
+          .then(function(reg) {
+            console.log('✅ ServiceWorker Registered Successfully for Offline Mode:', reg.scope);
+          })
+          .catch(function(err) {
+            console.warn('ServiceWorker Registration Error:', err);
+          });
+      });
+    }
+  </script>
 </body>
 </html>
 
