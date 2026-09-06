@@ -1,7 +1,8 @@
 /**
  * GOLDEN ERP SYSTEM - STUDENT MONEY LEDGER & WALLET HANDLER (CLOUDFLARE D1)
  * File: handlers-money.js
- * 💡 Features: Individual Student Wallet Summary (Group By Student ID), Statement Timelines,
+ * 💡 Features: Crash-Proof Student Name Extraction & Auto-Lookup from student Table,
+ *              Individual Student Wallet Summary (Group By Student ID), Statement Timelines,
  *              Chronological Running Balance Recalculator & Idempotent Upsert Engine
  */
 
@@ -235,7 +236,7 @@ export async function getStudentMoneySummary(db, body) {
 }
 
 /**
- * 💡 Save Student Money Entry
+ * 💡 Save Student Money Entry (Crash-Proof Auto Name Lookup)
  */
 export async function saveStudentMoneyEntry(db, userSession, body) {
   try {
@@ -249,7 +250,33 @@ export async function saveStudentMoneyEntry(db, userSession, body) {
     const cleanFy = normalizeFyStr(body.fy || "2026-2027");
     const studentId = parseInt(body.studentId || body.id, 10) || 1;
     const fyid = sanitizeFyidStr(body.fyid || '');
-    const fyidName = body.fyidName || `[${fyid}] ${body.name || ''}`;
+
+    // 💡 INTELLIGENT STUDENT NAME RESOLVER
+    let studentName = String(body.name || body.studentName || '').trim();
+    let rawFyidName = String(body.fyidName || body.fyid_name || '').trim();
+    let studentClass = String(body.class || '').trim();
+
+    if (!studentName && rawFyidName.includes(']')) {
+      const parts = rawFyidName.split(']');
+      studentName = parts.length > 1 ? parts[1].trim() : rawFyidName;
+    }
+
+    // 💡 Auto-Lookup from `student` table if name or class is missing
+    if ((!studentName || !studentClass) && studentId) {
+      try {
+        const studentRow = await db.prepare(
+          "SELECT name, fyid_name, class FROM student WHERE student_id = ? OR id = ?"
+        ).bind(studentId, studentId).first();
+
+        if (studentRow) {
+          if (!studentName) studentName = studentRow.name || '';
+          if (!rawFyidName) rawFyidName = studentRow.fyid_name || '';
+          if (!studentClass) studentClass = studentRow.class || '';
+        }
+      } catch (e) {}
+    }
+
+    const finalFyidName = rawFyidName || (studentName ? `[${fyid}] ${studentName}` : `[${fyid}] ID ${studentId}`);
 
     const debit = parseFloat(body.debit || 0);
     const credit = parseFloat(body.credit || 0);
@@ -271,8 +298,8 @@ export async function saveStudentMoneyEntry(db, userSession, body) {
       cleanFy,
       studentId,
       fyid,
-      fyidName,
-      body.class || '',
+      finalFyidName,
+      studentClass,
       body.method || 'Cash',
       debit,
       credit,
@@ -297,7 +324,7 @@ export async function saveStudentMoneyEntry(db, userSession, body) {
 }
 
 /**
- * 💡 Update Student Money Entry
+ * 💡 Update Student Money Entry (Crash-Proof Auto Name Lookup)
  */
 export async function updateStudentMoneyEntry(db, userSession, body) {
   try {
@@ -307,7 +334,31 @@ export async function updateStudentMoneyEntry(db, userSession, body) {
     const cleanFy = normalizeFyStr(body.fy || "2026-2027");
     const studentId = parseInt(body.studentId || body.id, 10) || 1;
     const fyid = sanitizeFyidStr(body.fyid || '');
-    const fyidName = body.fyidName || `[${fyid}] ${body.name || ''}`;
+
+    let studentName = String(body.name || body.studentName || '').trim();
+    let rawFyidName = String(body.fyidName || body.fyid_name || '').trim();
+    let studentClass = String(body.class || '').trim();
+
+    if (!studentName && rawFyidName.includes(']')) {
+      const parts = rawFyidName.split(']');
+      studentName = parts.length > 1 ? parts[1].trim() : rawFyidName;
+    }
+
+    if ((!studentName || !studentClass) && studentId) {
+      try {
+        const studentRow = await db.prepare(
+          "SELECT name, fyid_name, class FROM student WHERE student_id = ? OR id = ?"
+        ).bind(studentId, studentId).first();
+
+        if (studentRow) {
+          if (!studentName) studentName = studentRow.name || '';
+          if (!rawFyidName) rawFyidName = studentRow.fyid_name || '';
+          if (!studentClass) studentClass = studentRow.class || '';
+        }
+      } catch (e) {}
+    }
+
+    const finalFyidName = rawFyidName || (studentName ? `[${fyid}] ${studentName}` : `[${fyid}] ID ${studentId}`);
 
     const debit = parseFloat(body.debit || 0);
     const credit = parseFloat(body.credit || 0);
@@ -321,8 +372,8 @@ export async function updateStudentMoneyEntry(db, userSession, body) {
       cleanFy,
       studentId,
       fyid,
-      fyidName,
-      body.class || '',
+      finalFyidName,
+      studentClass,
       body.method || 'Cash',
       debit,
       credit,
