@@ -1,7 +1,8 @@
 /** 
- * GOLDEN ERP SYSTEM - CENTRAL API BRIDGE & UTILITIES (D1 DATABASE EDITION)
+ * GOLDEN ERP SYSTEM - CENTRAL API BRIDGE & OFFLINE INTERCEPTOR (D1 DATABASE EDITION)
  * File: js/api.js 
- * 💡 SECURED: D1 Database Compatible API Bridge & SWR In-Memory Caching Engine
+ * 💡 Features: Offline-First Network Interceptor, Background Outbox Auto-Routing,
+ *              D1 Database Compatible API Bridge & SWR In-Memory Caching Engine
  */
 
 // 💡 Corrected Worker URL matching Cloudflare Service Name (cashbook-app-api)
@@ -171,24 +172,37 @@ window.toggleLoading = function(show) {
 };
 
 /**
- * 💡 Central D1-Compatible API Fetch Engine (Scope Bug Fixed)
+ * 💡 Central D1-Compatible API Fetch Engine with Offline-First Interceptor
  */
 window.callApi = async function(action, payload = {}, method = 'POST') {
   let serverPayload = {};
   let url = API_WORKER_URL;
 
+  const isReadAction = action.startsWith('get') || action.startsWith('check');
+  const isWriteAction = action.startsWith('save') || action.startsWith('update') || action.startsWith('delete') || action.startsWith('trigger') || action.startsWith('backup') || action.startsWith('export') || action.startsWith('send');
+  const forceRefresh = payload.forceRefresh === true;
+
+  const { forceRefresh: _, ...extractedPayload } = payload;
+  serverPayload = extractedPayload; // Safely assigned in outer scope
+
+  const cacheKey = `${action}_${JSON.stringify(serverPayload)}`;
+
+  // 1. FAST OFFLINE CHECK FOR WRITES: If strictly offline, enqueue immediately without waiting for timeout
+  if (isWriteAction && !navigator.onLine && window.OfflineSync) {
+    console.warn(`[OfflineSync] Offline detected. Enqueueing ${action} immediately...`);
+    await window.OfflineSync.enqueue(action, serverPayload, method);
+    window.clearAllApiCache();
+    window.showToast("SUCCESS", "📶 အင်တာနက်လိုင်း မရှိသေးသဖြင့် စက်ထဲတွင် ယာယီသိမ်းထားပါသည် (Offline Queue)။ လိုင်းရသည်နှင့် အလိုအလျောက် ပို့ပေးပါမည်။");
+    return {
+      success: true,
+      isOfflineQueued: true,
+      message: "စာရင်းအား စက်ထဲတွင် ယာယီသိမ်းဆည်းထားပါသည် (Offline Queue)"
+    };
+  }
+
   try {
     const currentToken = getFreshAuthToken();
     const currentRole = localStorage.getItem('golden_user_role') || (window.AppState ? window.AppState.currentUserRole : '') || '';
-
-    const isReadAction = action.startsWith('get') || action.startsWith('check');
-    const isWriteAction = action.startsWith('save') || action.startsWith('update') || action.startsWith('delete') || action.startsWith('trigger') || action.startsWith('backup') || action.startsWith('export') || action.startsWith('send');
-    const forceRefresh = payload.forceRefresh === true;
-
-    const { forceRefresh: _, ...extractedPayload } = payload;
-    serverPayload = extractedPayload; // Safely assigned in outer scope
-
-    const cacheKey = `${action}_${JSON.stringify(serverPayload)}`;
 
     if (isReadAction && !forceRefresh) {
       const cachedRes = window.getApiCache(cacheKey);
@@ -274,6 +288,39 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
     return result;
 
   } catch (err) {
+    // 💡 2. NETWORK DROP INTERCEPTOR: If request failed due to offline/network disconnect
+    const isNetworkErr = !navigator.onLine || 
+                         err.name === 'TypeError' ||
+                         (err.message && (
+                           err.message.includes('Failed to fetch') ||
+                           err.message.includes('NetworkError') ||
+                           err.message.includes('Load failed') ||
+                           err.message.includes('network')
+                         ));
+
+    if (isWriteAction && isNetworkErr && window.OfflineSync) {
+      console.warn(`[OfflineSync Interceptor] Network error during ${action}. Diverting to IndexedDB Outbox...`);
+      await window.OfflineSync.enqueue(action, serverPayload, method);
+      window.clearAllApiCache();
+      
+      window.showToast("SUCCESS", "📶 အင်တာနက်လိုင်း နှေးကွေး/ပြတ်တောက်နေသဖြင့် စက်ထဲတွင် ယာယီသိမ်းထားပါသည် (Offline Mode)။ လိုင်းရသည်နှင့် အလိုအလျောက် ပို့ပေးပါမည်။");
+
+      return {
+        success: true,
+        isOfflineQueued: true,
+        message: "စာရင်းအား စက်ထဲတွင် ယာယီသိမ်းဆည်းထားပါသည် (Offline Queue)"
+      };
+    }
+
+    // If Read Action failed offline, try to serve from Cache
+    if (isReadAction && isNetworkErr) {
+      const staleCache = window.getApiCache(cacheKey);
+      if (staleCache) {
+        console.info(`[Offline Read] Serving stale cache for ${action}`);
+        return staleCache;
+      }
+    }
+
     if (window.ErrorLogger) {
       window.ErrorLogger.logError(`API_CALL_${action}`, err, {
         action: action,
