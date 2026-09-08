@@ -4,7 +4,9 @@
  * 💡 Features: Server-Side Auto-Lock Enforcement (5-Prefix Lock Engine & Zero Client Bypass),
  *              Direct isMigration Mode (Preserves Column A NO 1..656 & Bypasses Auto-Transfers),
  *              Strict Net Balances Calculation (Total Income - Total Expense),
- *              Dynamic Month-Year (MY) Generator & Idempotent Cross-Book Transfer Engine
+ *              Dynamic Month-Year (MY) Generator & Idempotent Cross-Book Transfer Engine,
+ *              ⚡ O(1) D1 Write-Optimized Window Function Recalculator (Zero D1 Quota Waste),
+ *              🎯 Bug #1 Fixed (Date-derived FY Variable Integrity Across Save/Update)
  */
 
 const BOOK_TABLE_MAP = {
@@ -65,47 +67,60 @@ function normalizeFyStr(fy) {
 }
 
 /**
- * 💡 Cloudflare D1 Batch Running Balance & Integer NO Recalculation Engine
+ * ⚡ FIX PERF #1: O(1) D1 Single-Query Window Function Recalculation Engine
+ * Loops, in-memory row iteration နှင့် 100-batch updates များကို ဖယ်ရှားပြီး
+ * SQLite Window Function ဖြင့် ၁ ကြိမ်တည်း Update ပြုလုပ်ပေးသည်။
  */
-async function recalculateLedgerBalances(db, tableName) {
+async function recalculateLedgerBalances(db, tableName, targetFy = null) {
   if (!tableName) return;
   try {
-    const fysRes = await db.prepare(`SELECT DISTINCT fy FROM ${tableName}`).all();
-    const rawFys = (fysRes.results || []).map(r => normalizeFyStr(r.fy)).filter(Boolean);
-    const fys = Array.from(new Set(rawFys));
+    if (targetFy) {
+      // 🎯 သီးသန့် FY တစ်ခုတည်းကိုသာ ထိရောက်စွာ Update လုပ်ခြင်း
+      const normFy = normalizeFyStr(targetFy);
+      const cleanFy = normFy.replace(/^FY\s*/i, '');
 
-    if (fys.length === 0) {
-      fys.push('FY 2026-2027');
-    }
-
-    const statements = [];
-
-    for (const fyVal of fys) {
-      const rows = await db.prepare(
-        `SELECT id, debit, credit FROM ${tableName} WHERE fy = ? OR fy = ? ORDER BY date ASC, id ASC`
-      ).bind(fyVal, fyVal.replace(/^FY\s*/i, '')).all();
-
-      const list = rows.results || [];
-      let currentBal = 0;
-      let seqNo = 1;
-
-      for (const row of list) {
-        const debit = parseFloat(row.debit || 0);
-        const credit = parseFloat(row.credit || 0);
-        currentBal = currentBal + debit - credit;
-
-        statements.push(
-          db.prepare(`UPDATE ${tableName} SET balances = ?, no = ?, fy = ? WHERE id = ?`).bind(currentBal, seqNo, fyVal, row.id)
-        );
-        seqNo++;
-      }
-    }
-
-    for (let i = 0; i < statements.length; i += 100) {
-      await db.batch(statements.slice(i, i + 100));
+      await db.prepare(`
+        WITH calculated AS (
+          SELECT id,
+                 ROW_NUMBER() OVER (
+                   ORDER BY date ASC, id ASC
+                 ) as calc_no,
+                 SUM(debit - credit) OVER (
+                   ORDER BY date ASC, id ASC 
+                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                 ) as calc_bal
+          FROM ${tableName}
+          WHERE fy = ? OR fy = ?
+        )
+        UPDATE ${tableName} 
+        SET no = (SELECT calc_no FROM calculated WHERE calculated.id = ${tableName}.id),
+            balances = (SELECT calc_bal FROM calculated WHERE calculated.id = ${tableName}.id)
+        WHERE id IN (SELECT id FROM calculated);
+      `).bind(normFy, cleanFy).run();
+    } else {
+      // 🎯 FY သီးသန့်မပါပါက FY အားလုံးကို PARTITION BY fy ဖြင့် Query ၁ ကြိမ်တည်း တွက်ချက်ခြင်း
+      await db.prepare(`
+        WITH calculated AS (
+          SELECT id,
+                 ROW_NUMBER() OVER (
+                   PARTITION BY fy
+                   ORDER BY date ASC, id ASC
+                 ) as calc_no,
+                 SUM(debit - credit) OVER (
+                   PARTITION BY fy
+                   ORDER BY date ASC, id ASC 
+                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                 ) as calc_bal
+          FROM ${tableName}
+        )
+        UPDATE ${tableName} 
+        SET no = (SELECT calc_no FROM calculated WHERE calculated.id = ${tableName}.id),
+            balances = (SELECT calc_bal FROM calculated WHERE calculated.id = ${tableName}.id)
+        WHERE id IN (SELECT id FROM calculated);
+      `).run();
     }
   } catch (e) {
-    console.warn(`Running Balance & NO Recalculation Warning for ${tableName}:`, e);
+    console.warn(`Running Balance & NO Recalculation Warning for ${tableName}:`, e.message);
   }
 }
 
@@ -144,7 +159,7 @@ async function generateFyNo(db, tableName, fy) {
 }
 
 /**
- * 💡 Clean Linked Transfer Auto Entries
+ * 💡 Clean Linked Transfer Auto Entries (Optimized to only recalculate affected tables)
  */
 async function cleanLinkedTransfer(db, uniqueid) {
   if (!uniqueid) return;
@@ -152,8 +167,11 @@ async function cleanLinkedTransfer(db, uniqueid) {
   const tables = ['bank', 'cash', 'office', 'kitchen', 'payroll'];
   for (const tbl of tables) {
     try {
-      await db.prepare(`DELETE FROM ${tbl} WHERE uniqueid = ?`).bind(transferUid).run();
-      await recalculateLedgerBalances(db, tbl);
+      const delRes = await db.prepare(`DELETE FROM ${tbl} WHERE uniqueid = ?`).bind(transferUid).run();
+      // ⚡ အမှန်တကယ် delete ဖြစ်မှသာ အဆိုပါ table ၏ balance ကို recalculate ပြုလုပ်မည်
+      if (delRes?.meta?.changes > 0) {
+        await recalculateLedgerBalances(db, tbl);
+      }
     } catch (e) {}
   }
 }
@@ -180,7 +198,6 @@ async function postCrossBookTransfer(db, body, sourceBookName, entryDate, my, fy
   const targetPrefix = getTablePrefix(targetTable);
   const targetVrNo = await generateVoucherNo(db, targetTable, targetPrefix, entryDate);
   const targetNo = await generateFyNo(db, targetTable, normFy);
-  // 🔒 Use each book's own proper title, not the raw source string, for readability
   const sourceBookTitle = getBookTitle(sourceTable);
   const targetBookTitle = getBookTitle(targetTable);
   const targetDesc = `[Transfer from ${sourceBookTitle}] ${body.description || ''}`.trim();
@@ -194,7 +211,6 @@ async function postCrossBookTransfer(db, body, sourceBookName, entryDate, my, fy
     `).bind(
       targetNo, entryDate, 'Transfer', targetDesc, 0, 0, body.method || 'Cash',
       targetDebit, targetCredit, sourceBookTitle, targetVrNo, my, normFy,
-      // 🔒 FIX: book_name must describe THIS row's own book (target), not the source
       targetBookTitle, createdBy, transferUid
     ).run();
   } else if (targetTable === 'payroll') {
@@ -221,7 +237,8 @@ async function postCrossBookTransfer(db, body, sourceBookName, entryDate, my, fy
     ).run();
   }
 
-  await recalculateLedgerBalances(db, targetTable);
+  // ⚡ Target table ၏ target FY တစ်ခုတည်းကိုသာ တွက်ချက်ခြင်းဖြင့် Speed မြှင့်တင်သည်
+  await recalculateLedgerBalances(db, targetTable, normFy);
 }
 
 /**
@@ -260,7 +277,6 @@ export async function getBankCashData(db, body) {
       totalExpense = parseFloat(allStats.totalExpense || 0);
     }
 
-    // 💡 Strict Net Balance Calculation: Total Income - Total Expense
     const balance = totalIncome - totalExpense;
 
     let whereClauses = [];
@@ -347,12 +363,12 @@ export async function saveBankCashEntry(db, session, body) {
     
     let fyYear = d.getFullYear();
     if (d.getMonth() < 3) fyYear -= 1;
+    // 🎯 Date-based calculated FY
     const fy = normalizeFyStr(body.fy || `FY ${fyYear}-${fyYear + 1}`);
 
     const debit = parseFloat(body.debit || 0);
     const credit = parseFloat(body.credit || 0);
 
-    // 🔒 1. PRIVILEGE ESCALATION DEFENSE: Server-generated UUID only for new records
     const isPrivilegedAdmin = ['Owner', 'Admin'].includes(session?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport || body.skipAutoPost);
 
@@ -360,7 +376,6 @@ export async function saveBankCashEntry(db, session, body) {
       ? String(body.uniqueId).trim()
       : `BCK_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 
-    // 💡 Use exact sequential NO from Google Sheet Column A when migrating
     const newNo = (isMigration && body.no) ? parseInt(body.no, 10) : await generateFyNo(db, tableName, fy);
     const prefix = getTablePrefix(tableName);
     const vrNo = body.vrNo || await generateVoucherNo(db, tableName, prefix, entryDate);
@@ -373,10 +388,11 @@ export async function saveBankCashEntry(db, session, body) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
     `;
 
+    // 🎯 FIX BUG #1: Changed normalizeFyStr(body.fy) to the date-derived `fy` variable
     await db.prepare(stmt).bind(
       newNo, entryDate, body.category || 'Income', body.description || '',
       body.method || (tableName === 'bank' ? 'Bank' : 'Cash'), debit, credit,
-      body.transfer || '', vrNo, my, normalizeFyStr(body.fy), rawBook, createdBy, uniqueid
+      body.transfer || '', vrNo, my, fy, rawBook, createdBy, uniqueid
     ).run();
 
     if (isMigration) {
@@ -388,8 +404,8 @@ export async function saveBankCashEntry(db, session, body) {
       };
     }
 
-    // 💡 LIVE OPERATIONAL MODE (Normal Daily Manual Use)
-    await recalculateLedgerBalances(db, tableName);
+    // ⚡ LIVE OPERATIONAL MODE: Recalculate only the affected FY
+    await recalculateLedgerBalances(db, tableName, fy);
     await postCrossBookTransfer(db, body, rawBook, entryDate, my, fy, createdBy, uniqueid);
 
     return {
@@ -408,7 +424,7 @@ export async function saveBankCashEntry(db, session, body) {
 }
 
 /**
- * 💡 Update Bank / Cash Entry (With Strict Server-Side Auto-Lock & Role Protection)
+ * 💡 Update Bank / Cash Entry (With Strict Server-Side Auto-Lock & Multi-FY Safety)
  */
 export async function updateBankCashEntry(db, session, body) {
   try {
@@ -420,8 +436,8 @@ export async function updateBankCashEntry(db, session, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT (All 5 Lock Types Protected, Zero Client-Flag Bypass)
-    const existing = await db.prepare(`SELECT is_locked, uniqueid, transfer FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT & Fetch previous FY for multi-FY balance safety
+    const existing = await db.prepare(`SELECT is_locked, uniqueid, transfer, fy FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ပြင်ဆင်မည့် စာရင်း ရှာမတွေ့ပါ။" };
     }
@@ -435,13 +451,14 @@ export async function updateBankCashEntry(db, session, body) {
 
     const isPrivilegedAdmin = ['Owner', 'Admin'].includes(session?.role || '');
 
-    // 🛡️ Lock rejection: Non-admin users cannot alter linked/auto-generated rows
     if (isAutoLocked && !isPrivilegedAdmin) {
       return { 
         success: false, 
         message: "ဤစာရင်းသည် စနစ်မှ အလိုအလျောက် သို့မဟုတ် အခြားစာအုပ်မှ လွှဲပြောင်းထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ပြင်ဆင်နိုင်ပါသည်။" 
       };
     }
+
+    const oldFy = existing.fy ? normalizeFyStr(existing.fy) : null;
 
     await cleanLinkedTransfer(db, uniqueid);
 
@@ -470,7 +487,14 @@ export async function updateBankCashEntry(db, session, body) {
       body.transfer || '', my, fy, uniqueid
     ).run();
 
-    await recalculateLedgerBalances(db, tableName);
+    // ⚡ Recalculate new FY balances
+    await recalculateLedgerBalances(db, tableName, fy);
+
+    // ⚡ If the entry was moved from another FY, also recompute the old FY balances
+    if (oldFy && oldFy !== fy) {
+      await recalculateLedgerBalances(db, tableName, oldFy);
+    }
+
     await postCrossBookTransfer(db, body, rawBook, entryDate, my, fy, session?.name || 'Admin', uniqueid);
 
     return {
@@ -487,7 +511,7 @@ export async function updateBankCashEntry(db, session, body) {
 }
 
 /**
- * 💡 Delete Bank / Cash Entry (With Strict Server-Side Auto-Lock & Role Protection)
+ * 💡 Delete Bank / Cash Entry (With Strict Server-Side Auto-Lock & Fast Recalculation)
  */
 export async function deleteBankCashEntry(db, session, body) {
   try {
@@ -499,8 +523,8 @@ export async function deleteBankCashEntry(db, session, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT (All 5 Lock Types Protected, Zero Client-Flag Bypass)
-    const existing = await db.prepare(`SELECT is_locked, uniqueid FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT & Fetch FY before deletion
+    const existing = await db.prepare(`SELECT is_locked, uniqueid, fy FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (existing) {
       const uid = String(existing.uniqueid || '');
       const isAutoLocked = Boolean(existing.is_locked) ||
@@ -511,7 +535,6 @@ export async function deleteBankCashEntry(db, session, body) {
 
       const isPrivilegedAdmin = ['Owner', 'Admin'].includes(session?.role || '');
 
-      // 🛡️ Lock rejection: Non-admin users cannot directly delete linked/auto-generated rows
       if (isAutoLocked && !isPrivilegedAdmin) {
         return { 
           success: false, 
@@ -520,9 +543,13 @@ export async function deleteBankCashEntry(db, session, body) {
       }
     }
 
+    const targetFy = existing?.fy ? normalizeFyStr(existing.fy) : null;
+
     await db.prepare(`DELETE FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).run();
     await cleanLinkedTransfer(db, uniqueid);
-    await recalculateLedgerBalances(db, tableName);
+
+    // ⚡ သက်ဆိုင်ရာ FY ၏ balances ကိုသာ O(1) query ဖြင့် ချက်ချင်း recalculate ပြုလုပ်သည်
+    await recalculateLedgerBalances(db, tableName, targetFy);
 
     return {
       success: true,
