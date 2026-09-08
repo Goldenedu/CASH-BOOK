@@ -269,16 +269,25 @@ function renderTableIncome() {
 /**
  * 💡 FY-Scoped Student Lookup
  */
+/**
+ * 💡 Auto Lookup Student & Sync Standard AUT Amount with Credit (Payment Amount)
+ */
 async function onStudentIdOrFYChangeIncome() {
   var fyVal = document.getElementById('inc-fy')?.value || '2026-2027';
   var idVal = document.getElementById('inc-id-search')?.value.trim();
 
   var fyidShow = document.getElementById('inc-fyid-show');
   var fyidNameShow = document.getElementById('inc-fyidname-show');
+  var creditEl = document.getElementById('inc-credit') || document.getElementById('income-credit');
+  var debitEl = document.getElementById('inc-debit') || document.getElementById('income-debit');
+  var autAmtEl = document.getElementById('inc-autamount') || document.getElementById('inc-aut-amount');
 
   if (!idVal) {
     if (fyidShow) fyidShow.value = "";
     if (fyidNameShow) fyidNameShow.value = "";
+    if (autAmtEl) autAmtEl.value = 0;
+    if (creditEl) creditEl.value = 0;
+    if (debitEl) debitEl.value = 0;
     return;
   }
 
@@ -326,8 +335,10 @@ async function onStudentIdOrFYChangeIncome() {
     if (catEl) catEl.value = student.category || 'Boarder';
     if (promoEl) promoEl.value = student.promo || 'Original price';
 
-    // 💡 Auto calculate fee rate instantly
-    await onAccountNameOrCategoryChangeIncome();
+    // 💡 Auto calculate fee rate instantly & auto-fill Credit input
+    if (typeof onAccountNameOrCategoryChangeIncome === 'function') {
+      await onAccountNameOrCategoryChangeIncome();
+    }
   } else {
     if (fyidShow) fyidShow.value = targetFyid;
     if (fyidNameShow) fyidNameShow.value = "ကျောင်းသား စာရင်း ရှာမတွေ့ပါ။";
@@ -335,11 +346,12 @@ async function onStudentIdOrFYChangeIncome() {
     if (document.getElementById('inc-class')) document.getElementById('inc-class').value = "";
     if (document.getElementById('inc-promo')) document.getElementById('inc-promo').value = "";
     
-    var autAmtEl = document.getElementById('inc-autamount') || document.getElementById('inc-aut-amount');
+    // 💡 Reset amounts to 0 when student not found
     if (autAmtEl) autAmtEl.value = 0;
+    if (creditEl) creditEl.value = 0;
+    if (debitEl) debitEl.value = 0;
   }
 }
-
 /**
  * 💡 Precision Promotion Matrix Rate Auto-Calculation Engine
  */
