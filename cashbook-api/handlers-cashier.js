@@ -1,10 +1,14 @@
 /**
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - CASHIER SUB-LEDGER HANDLER (CLOUDFLARE D1)
  * File: handlers-cashier.js  
  * 💡 Features: Server-Side Auto-Lock Enforcement (Zero Client Bypass),
  *              Privilege Escalation Defense (Server-Generated UUIDs for New Records),
  *              17-Column Schema Alignment (With Responsibility Person),
- *              Today's Income Live Feed for Invoice Printer & Cross-Book Transfer Engine
+ *              Today's Income Live Feed for Invoice Printer & Cross-Book Transfer Engine,
+ *              ⚡ O(1) D1 Write-Optimized Window Function Recalculator (Zero D1 Quota Waste),
+ *              🎯 Multi-FY Cross-Year Transition Safety & Scoped Recalculation
+ * ==============================================================================
  */
 
 const CASHIER_TABLE_MAP = {
@@ -71,47 +75,60 @@ function normalizeFyStr(fy) {
 }
 
 /**
- * 💡 Cloudflare D1 Batch Running Balance & Integer NO Recalculation Engine for Cashier
+ * ⚡ FIX PERF #1: O(1) Single-Query Window Function Recalculation Engine for Cashier Sub-Ledgers
+ * Row-by-row batch loop (100 rows/batch) များကို ဖယ်ရှားပြီး
+ * SQLite Window Function ဖြင့် ၁ ကြိမ်တည်း Update လုပ်သည်။
  */
-async function recalculateLedgerBalances(db, tableName) {
+async function recalculateLedgerBalances(db, tableName, targetFy = null) {
   if (!tableName) return;
   try {
-    const fysRes = await db.prepare(`SELECT DISTINCT fy FROM ${tableName}`).all();
-    const rawFys = (fysRes.results || []).map(r => normalizeFyStr(r.fy)).filter(Boolean);
-    const fys = Array.from(new Set(rawFys));
+    if (targetFy) {
+      // 🎯 သီးသန့် FY တစ်ခုတည်းကိုသာ ထိရောက်စွာ Update လုပ်ခြင်း
+      const normFy = normalizeFyStr(targetFy);
+      const cleanFy = normFy.replace(/^FY\s*/i, '');
 
-    if (fys.length === 0) {
-      fys.push('FY 2026-2027');
-    }
-
-    const statements = [];
-
-    for (const fyVal of fys) {
-      const rows = await db.prepare(
-        `SELECT id, debit, credit FROM ${tableName} WHERE fy = ? OR fy = ? ORDER BY date ASC, id ASC`
-      ).bind(fyVal, fyVal.replace(/^FY\s*/i, '')).all();
-
-      const list = rows.results || [];
-      let currentBal = 0;
-      let seqNo = 1;
-
-      for (const row of list) {
-        const debit = parseFloat(row.debit || 0);
-        const credit = parseFloat(row.credit || 0);
-        currentBal = currentBal + debit - credit;
-
-        statements.push(
-          db.prepare(`UPDATE ${tableName} SET balances = ?, no = ?, fy = ? WHERE id = ?`).bind(currentBal, seqNo, fyVal, row.id)
-        );
-        seqNo++;
-      }
-    }
-
-    for (let i = 0; i < statements.length; i += 100) {
-      await db.batch(statements.slice(i, i + 100));
+      await db.prepare(`
+        WITH calculated AS (
+          SELECT id,
+                 ROW_NUMBER() OVER (
+                   ORDER BY date ASC, id ASC
+                 ) as calc_no,
+                 SUM(debit - credit) OVER (
+                   ORDER BY date ASC, id ASC 
+                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                 ) as calc_bal
+          FROM ${tableName}
+          WHERE fy = ? OR fy = ?
+        )
+        UPDATE ${tableName} 
+        SET no = (SELECT calc_no FROM calculated WHERE calculated.id = ${tableName}.id),
+            balances = (SELECT calc_bal FROM calculated WHERE calculated.id = ${tableName}.id)
+        WHERE id IN (SELECT id FROM calculated);
+      `).bind(normFy, cleanFy).run();
+    } else {
+      // 🎯 FY သီးသန့်မပါပါက FY အားလုံးကို PARTITION BY fy ဖြင့် Query ၁ ကြိမ်တည်း တွက်ချက်ခြင်း
+      await db.prepare(`
+        WITH calculated AS (
+          SELECT id,
+                 ROW_NUMBER() OVER (
+                   PARTITION BY fy
+                   ORDER BY date ASC, id ASC
+                 ) as calc_no,
+                 SUM(debit - credit) OVER (
+                   PARTITION BY fy
+                   ORDER BY date ASC, id ASC 
+                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                 ) as calc_bal
+          FROM ${tableName}
+        )
+        UPDATE ${tableName} 
+        SET no = (SELECT calc_no FROM calculated WHERE calculated.id = ${tableName}.id),
+            balances = (SELECT calc_bal FROM calculated WHERE calculated.id = ${tableName}.id)
+        WHERE id IN (SELECT id FROM calculated);
+      `).run();
     }
   } catch (e) {
-    console.warn(`Running Balance & NO Recalculation Warning for ${tableName}:`, e);
+    console.warn(`Running Balance & NO Recalculation Warning for ${tableName}:`, e.message);
   }
 }
 
@@ -150,7 +167,7 @@ async function generateFyNo(db, tableName, fy) {
 }
 
 /**
- * 💡 Clean Linked Transfer Auto Entries for Cashier Sub-Ledgers
+ * 💡 Clean Linked Transfer Auto Entries for Cashier Sub-Ledgers (Optimized)
  */
 async function cleanLinkedTransfer(db, uniqueid) {
   if (!uniqueid) return;
@@ -158,8 +175,11 @@ async function cleanLinkedTransfer(db, uniqueid) {
   const tables = ['ca_bank', 'ca_cash', 'ca_office', 'ca_kitchen', 'ca_payroll'];
   for (const tbl of tables) {
     try {
-      await db.prepare(`DELETE FROM ${tbl} WHERE uniqueid = ?`).bind(transferUid).run();
-      await recalculateLedgerBalances(db, tbl);
+      const delRes = await db.prepare(`DELETE FROM ${tbl} WHERE uniqueid = ?`).bind(transferUid).run();
+      // ⚡ အမှန်တကယ် delete ဖြစ်မှသာ အဆိုပါ table ၏ balance ကို recalculate ပြုလုပ်မည်
+      if (delRes?.meta?.changes > 0) {
+        await recalculateLedgerBalances(db, tbl);
+      }
     } catch (e) {}
   }
 }
@@ -185,7 +205,6 @@ async function postCashierCrossBookTransfer(db, body, sourceBookName, entryDate,
 
   const targetVrNo = await generateVoucherNo(db, targetTable, targetPrefix, entryDate);
   const targetNo = await generateFyNo(db, targetTable, normFy);
-  // 🔒 Use the human-readable source book title here, not the raw book key
   const targetDesc = `[Transfer from ${sourceBookTitle}] ${body.description || ''}`.trim();
   const respPersonVal = body.respPerson || body.responsibility_person || '';
 
@@ -195,14 +214,12 @@ async function postCashierCrossBookTransfer(db, body, sourceBookName, entryDate,
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
   `).bind(
     targetNo, entryDate, respPersonVal, 'Transfer', targetDesc, body.method || 'Cash',
-    // 🔒 FIX: 'transfer' records where the money came FROM (source book title);
-    // 'book_name' must describe the row's OWN book (target's title) — previously
-    // both were bound to the source name, mislabeling every transfer-posted row.
     targetDebit, targetCredit, sourceBookTitle, targetVrNo, my, normFy,
     targetBookTitle, createdBy, transferUid
   ).run();
 
-  await recalculateLedgerBalances(db, targetTable);
+  // ⚡ Target table ၏ သက်ဆိုင်ရာ FY တစ်ခုတည်းကိုသာ တွက်ချက်သည်
+  await recalculateLedgerBalances(db, targetTable, normFy);
 }
 
 /**
@@ -367,7 +384,7 @@ export async function getTodayIncomeForCashier(db, body) {
 }
 
 /**
- * 💡 Save Cashier Entry (Privilege Escalation Protected)
+ * 💡 Save Cashier Entry (Privilege Escalation Protected & Fast Recalculation)
  */
 export async function saveCashierEntry(db, session, body) {
   try {
@@ -422,8 +439,8 @@ export async function saveCashierEntry(db, session, body) {
       };
     }
 
-    // 💡 LIVE OPERATIONAL MODE
-    await recalculateLedgerBalances(db, tableName);
+    // ⚡ LIVE OPERATIONAL MODE: Recalculate only the affected FY
+    await recalculateLedgerBalances(db, tableName, fy);
     await postCashierCrossBookTransfer(db, body, rawBook, entryDate, my, fy, createdBy, uniqueid);
 
     return {
@@ -442,7 +459,7 @@ export async function saveCashierEntry(db, session, body) {
 }
 
 /**
- * 💡 Update Cashier Entry (With Strict Server-Side Auto-Lock Guard)
+ * 💡 Update Cashier Entry (With Multi-FY Balance Safety & Fast Recalculation)
  */
 export async function updateCashierEntry(db, session, body) {
   try {
@@ -454,8 +471,8 @@ export async function updateCashierEntry(db, session, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT (Zero Client-Flag Bypass)
-    const existing = await db.prepare(`SELECT is_locked, uniqueid, transfer FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT & Capture old FY
+    const existing = await db.prepare(`SELECT is_locked, uniqueid, transfer, fy FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ပြင်ဆင်မည့် စာရင်း ရှာမတွေ့ပါ။" };
     }
@@ -475,6 +492,8 @@ export async function updateCashierEntry(db, session, body) {
         message: "ဤစာရင်းသည် မူရင်းစာအုပ်မှ အလိုအလျောက် ရောက်ရှိလာသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ပြင်ဆင်နိုင်ပါသည်။" 
       };
     }
+
+    const oldFy = existing.fy ? normalizeFyStr(existing.fy) : null;
 
     await cleanLinkedTransfer(db, uniqueid);
 
@@ -503,7 +522,14 @@ export async function updateCashierEntry(db, session, body) {
       body.method || 'Cash', debit, credit, body.transfer || '', my, fy, uniqueid
     ).run();
 
-    await recalculateLedgerBalances(db, tableName);
+    // ⚡ Recalculate target FY balances
+    await recalculateLedgerBalances(db, tableName, fy);
+
+    // ⚡ If the entry was moved from another FY, also recalculate the old FY
+    if (oldFy && oldFy !== fy) {
+      await recalculateLedgerBalances(db, tableName, oldFy);
+    }
+
     await postCashierCrossBookTransfer(db, body, rawBook, entryDate, my, fy, session?.name || 'Cashier', uniqueid);
 
     return {
@@ -520,7 +546,7 @@ export async function updateCashierEntry(db, session, body) {
 }
 
 /**
- * 💡 Delete Cashier Entry (With Strict Server-Side Auto-Lock Guard)
+ * 💡 Delete Cashier Entry (With Fast Scoped Recalculation)
  */
 export async function deleteCashierEntry(db, session, body) {
   try {
@@ -532,8 +558,8 @@ export async function deleteCashierEntry(db, session, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT (Zero Client-Flag Bypass)
-    const existing = await db.prepare(`SELECT is_locked, uniqueid FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT & Capture target FY
+    const existing = await db.prepare(`SELECT is_locked, uniqueid, fy FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (existing) {
       const uid = String(existing.uniqueid || '');
       const isAutoLocked = Boolean(existing.is_locked) ||
@@ -552,9 +578,13 @@ export async function deleteCashierEntry(db, session, body) {
       }
     }
 
+    const targetFy = existing?.fy ? normalizeFyStr(existing.fy) : null;
+
     await db.prepare(`DELETE FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).run();
     await cleanLinkedTransfer(db, uniqueid);
-    await recalculateLedgerBalances(db, tableName);
+
+    // ⚡ သက်ဆိုင်ရာ FY ကိုသာ O(1) query ဖြင့် ချက်ချင်း recalculate လုပ်သည်
+    await recalculateLedgerBalances(db, tableName, targetFy);
 
     return {
       success: true,
