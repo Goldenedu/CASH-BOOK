@@ -2,7 +2,7 @@
  * GOLDEN ERP SYSTEM - MAIN INCOME BOOK MODULE
  * File: js/income.js 
  * 💡 Features: Precision FY-Scoped Student Lookup, Dynamic Promotion Matrix AUT Calculator (FY+Class+Category+Promo),
- *              Auto-Fill Credit Amount, Split Payment & Universal Invoice Printer
+ *              Live Credit Auto-Fill on Account/Category/Promo Change, Split Payment & Universal Invoice Printer
  */
 
 var incomePage = 1;
@@ -29,8 +29,6 @@ function escapeHtml(str) {
 
 /**
  * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
- * Escapes backslashes/quotes for the JS string literal, then HTML-escapes the
- * result so it can't break out of the surrounding double-quoted HTML attribute.
  */
 function escapeJsAttr(str) {
   if (str === null || str === undefined) return '';
@@ -122,8 +120,8 @@ function clearDateFilterIncome() {
 function onSearchInputIncome() {
   if (searchTimeoutIncome) clearTimeout(searchTimeoutIncome);
   searchTimeoutIncome = setTimeout(function() {
-    incomePage = 1; // ရှာဖွေမှု ရလဒ်အတွက် Page 1 သို့ ရွှေ့မည်
-    loadIncomeData(true, true); // 💡 Databas ထဲမှ တိုက်ရိုက် ရှာဖွေမည်
+    incomePage = 1;
+    loadIncomeData(true, true);
   }, 300);
 }
 
@@ -163,7 +161,6 @@ async function loadIncomeData(isSilent, forceRefresh) {
     renderTableIncome();
     updatePaginationUIIncome();
 
-    // 💡 Preload Promotion Matrix Rates into Cache in Background
     preloadPromotionMatrix();
 
   } catch (err) {
@@ -267,10 +264,7 @@ function renderTableIncome() {
 }
 
 /**
- * 💡 FY-Scoped Student Lookup
- */
-/**
- * 💡 Auto Lookup Student & Sync Standard AUT Amount with Credit (Payment Amount)
+ * 💡 FY-Scoped Student Lookup & Live Rate Calculation
  */
 async function onStudentIdOrFYChangeIncome() {
   var fyVal = document.getElementById('inc-fy')?.value || '2026-2027';
@@ -278,16 +272,11 @@ async function onStudentIdOrFYChangeIncome() {
 
   var fyidShow = document.getElementById('inc-fyid-show');
   var fyidNameShow = document.getElementById('inc-fyidname-show');
-  var creditEl = document.getElementById('inc-credit') || document.getElementById('income-credit');
-  var debitEl = document.getElementById('inc-debit') || document.getElementById('income-debit');
-  var autAmtEl = document.getElementById('inc-autamount') || document.getElementById('inc-aut-amount');
 
   if (!idVal) {
     if (fyidShow) fyidShow.value = "";
     if (fyidNameShow) fyidNameShow.value = "";
-    if (autAmtEl) autAmtEl.value = 0;
-    if (creditEl) creditEl.value = 0;
-    if (debitEl) debitEl.value = 0;
+    resetIncomeAmounts(0);
     return;
   }
 
@@ -335,10 +324,8 @@ async function onStudentIdOrFYChangeIncome() {
     if (catEl) catEl.value = student.category || 'Boarder';
     if (promoEl) promoEl.value = student.promo || 'Original price';
 
-    // 💡 Auto calculate fee rate instantly & auto-fill Credit input
-    if (typeof onAccountNameOrCategoryChangeIncome === 'function') {
-      await onAccountNameOrCategoryChangeIncome();
-    }
+    // 💡 Trigger Live Fee Calculation & Credit Sync
+    await onAccountNameOrCategoryChangeIncome();
   } else {
     if (fyidShow) fyidShow.value = targetFyid;
     if (fyidNameShow) fyidNameShow.value = "ကျောင်းသား စာရင်း ရှာမတွေ့ပါ။";
@@ -346,31 +333,41 @@ async function onStudentIdOrFYChangeIncome() {
     if (document.getElementById('inc-class')) document.getElementById('inc-class').value = "";
     if (document.getElementById('inc-promo')) document.getElementById('inc-promo').value = "";
     
-    // 💡 Reset amounts to 0 when student not found
-    if (autAmtEl) autAmtEl.value = 0;
-    if (creditEl) creditEl.value = 0;
-    if (debitEl) debitEl.value = 0;
+    resetIncomeAmounts(0);
   }
 }
+
+function resetIncomeAmounts(amount = 0) {
+  var autAmtEl = document.getElementById('inc-autamount') || document.getElementById('inc-aut-amount');
+  var creditEl = document.getElementById('inc-credit') || document.getElementById('income-credit');
+  var debitEl = document.getElementById('inc-debit') || document.getElementById('income-debit');
+
+  if (autAmtEl) autAmtEl.value = amount;
+  if (creditEl) creditEl.value = amount;
+  if (debitEl) debitEl.value = 0;
+}
+
 /**
- * 💡 Precision Promotion Matrix Rate Auto-Calculation Engine
+ * 💡 Precision Promotion Matrix Rate Auto-Calculation & 100% Guaranteed Credit Sync Engine
  */
 async function onAccountNameOrCategoryChangeIncome() {
   var fyVal = document.getElementById('inc-fy')?.value || '2026-2027';
   var cleanFy = String(fyVal).trim().replace(/^FY\s*/i, '');
-  var accountName = document.getElementById('inc-account')?.value || document.getElementById('inc-account-name')?.value || 'Registration';
+
+  // 💡 Supports both inc-account and inc-account-name IDs
+  var accEl = document.getElementById('inc-account-name') || document.getElementById('inc-account');
+  var accountName = accEl ? accEl.value : 'Registration';
+
   var classVal = String(document.getElementById('inc-class')?.value || '').trim();
-  var categoryVal = String(document.getElementById('inc-category')?.value || '').trim();
+  var categoryVal = String(document.getElementById('inc-category')?.value || 'Boarder').trim();
   var promoVal = String(document.getElementById('inc-promo')?.value || 'Original price').trim();
 
   var autAmtEl = document.getElementById('inc-autamount') || document.getElementById('inc-aut-amount');
   var creditEl = document.getElementById('inc-credit') || document.getElementById('income-credit');
   var debitEl = document.getElementById('inc-debit') || document.getElementById('income-debit');
 
-  if (!autAmtEl) return;
-
   if (accountName !== "Registration" && accountName !== "Services") {
-    autAmtEl.value = 0;
+    if (autAmtEl) autAmtEl.value = 0;
     return;
   }
 
@@ -387,7 +384,7 @@ async function onAccountNameOrCategoryChangeIncome() {
   }
 
   if (promoMatrixCache && Array.isArray(promoMatrixCache)) {
-    // 💡 1. Strict Match: Match by FY, Class AND Category
+    // 💡 1. Strict Match: Match by FY, Class AND Category (Case-Insensitive)
     var match = promoMatrixCache.find(function(r) {
       var rFy = String(r.fy || '').trim().replace(/^FY\s*/i, '');
       var rClass = String(r.class || '').trim().toLowerCase();
@@ -415,33 +412,33 @@ async function onAccountNameOrCategoryChangeIncome() {
       if (accountName === "Registration") {
         calculatedFee = Number(match.registration ?? match.Registration ?? 0);
       } else if (accountName === "Services") {
-        var promoKeyMap = {
-          'Original price': match.originalPrice ?? match.original_price ?? 0,
-          'Pro A': match.proA ?? match.pro_a ?? 0,
-          'Pro B': match.proB ?? match.pro_b ?? 0,
-          'Pro C': match.proC ?? match.pro_c ?? 0,
-          'Pro D': match.proD ?? match.pro_d ?? 0,
-          'Pro E': match.proE ?? match.pro_e ?? 0,
-          'Half scholar': match.halfScholar ?? match.half_scholar ?? 0,
-          'Full scholar': match.fullScholar ?? match.full_scholar ?? 0
-        };
-
-        calculatedFee = Number(promoKeyMap[promoVal] !== undefined ? promoKeyMap[promoVal] : (match.originalPrice || match.original_price || 0));
+        var pClean = promoVal.toLowerCase().replace(/[^a-z0-9]/g, '');
+        
+        if (pClean.includes('proa')) calculatedFee = Number(match.proA ?? match.pro_a ?? 0);
+        else if (pClean.includes('prob')) calculatedFee = Number(match.proB ?? match.pro_b ?? 0);
+        else if (pClean.includes('proc')) calculatedFee = Number(match.proC ?? match.pro_c ?? 0);
+        else if (pClean.includes('prod')) calculatedFee = Number(match.proD ?? match.pro_d ?? 0);
+        else if (pClean.includes('proe')) calculatedFee = Number(match.proE ?? match.pro_e ?? 0);
+        else if (pClean.includes('half')) calculatedFee = Number(match.halfScholar ?? match.half_scholar ?? 0);
+        else if (pClean.includes('full')) calculatedFee = Number(match.fullScholar ?? match.full_scholar ?? 0);
+        else calculatedFee = Number(match.originalPrice ?? match.original_price ?? 0);
       }
 
-      // 1. Standard AUT Amount ထည့်သွင်းခြင်း
-      autAmtEl.value = calculatedFee;
+      // 💡 1. Set Standard AUT Amount
+      if (autAmtEl) {
+        autAmtEl.value = calculatedFee;
+      }
 
-      // 💡 2. FIX: Credit (ပေးချေငွေ) အကွက်ထဲသို့ တန်ဖိုး တိုက်ရိုက် တန်းထည့်ပေးမည်
+      // 💡 2. 100% GUARANTEED CREDIT SYNC (Overwrites Credit field with calculated rate)
       if (creditEl) {
-        creditEl.value = calculatedFee; // 👈 ၁၀ သိန်း (1000000) ချက်ချင်း တန်းဝင်သွားမည်
+        creditEl.value = calculatedFee;
       }
 
       if (debitEl) {
         debitEl.value = 0;
       }
 
-      // 3. Split Payment ခွဲငွေပါ အလိုအလျောက် ညှိပေးခြင်း
+      // 💡 3. Update Split Payment Breakdown if split is checked
       if (typeof updateSplitAmountsIncome === 'function') {
         updateSplitAmountsIncome();
       }
@@ -450,11 +447,11 @@ async function onAccountNameOrCategoryChangeIncome() {
     }
   }
 
-  autAmtEl.value = 0;
+  if (autAmtEl) autAmtEl.value = 0;
 }
 
 /**
- * 💡 Toggle Split Payment UI
+ * 💡 Toggle Split Payment UI & Auto Sync Split Amounts
  */
 function toggleSplitPaymentIncome() {
   var isSplit = document.getElementById('inc-is-split')?.checked;
@@ -464,9 +461,55 @@ function toggleSplitPaymentIncome() {
   if (isSplit) {
     if (normalDiv) normalDiv.classList.add('hidden');
     if (splitDiv) splitDiv.classList.remove('hidden');
+    updateSplitAmountsIncome();
   } else {
     if (normalDiv) normalDiv.classList.remove('hidden');
     if (splitDiv) splitDiv.classList.add('hidden');
+  }
+}
+
+function updateSplitAmountsIncome() {
+  var isSplit = document.getElementById('inc-is-split')?.checked;
+  if (!isSplit) return;
+
+  var creditEl = document.getElementById('inc-credit') || document.getElementById('income-credit');
+  var totalAmt = parseFloat(creditEl?.value || 0);
+
+  var cashInput = document.getElementById('inc-cash-amount');
+  var bankInput = document.getElementById('inc-bank-amount');
+
+  if (cashInput && bankInput) {
+    var cashVal = parseFloat(cashInput.value || 0);
+    if (cashVal === 0 && totalAmt > 0) {
+      cashInput.value = totalAmt;
+      bankInput.value = 0;
+    }
+  }
+}
+
+/**
+ * 💡 Dynamic Event Binder for Modal Inputs
+ */
+function bindIncomeModalLiveEvents() {
+  var accEl = document.getElementById('inc-account-name') || document.getElementById('inc-account');
+  if (accEl) {
+    accEl.onchange = onAccountNameOrCategoryChangeIncome;
+  }
+
+  var catEl = document.getElementById('inc-category');
+  if (catEl) {
+    catEl.onchange = onAccountNameOrCategoryChangeIncome;
+  }
+
+  var idSearchEl = document.getElementById('inc-id-search');
+  if (idSearchEl) {
+    idSearchEl.oninput = onStudentIdOrFYChangeIncome;
+  }
+
+  var promoEl = document.getElementById('inc-promo');
+  if (promoEl) {
+    promoEl.onchange = onAccountNameOrCategoryChangeIncome;
+    promoEl.oninput = onAccountNameOrCategoryChangeIncome;
   }
 }
 
@@ -487,11 +530,10 @@ async function openAddModalIncome() {
   var effDateEl = document.getElementById('inc-effdate');
   if (effDateEl) effDateEl.value = today;
 
-  var autAmtEl = document.getElementById('inc-autamount') || document.getElementById('inc-aut-amount');
-  if (autAmtEl) autAmtEl.value = 0;
-
+  resetIncomeAmounts(0);
   populateFYDropdownIncome();
   toggleSplitPaymentIncome();
+  bindIncomeModalLiveEvents();
 
   var titleEl = document.getElementById('inc-form-title');
   if (titleEl) titleEl.innerText = "Add Income Entry";
@@ -499,7 +541,6 @@ async function openAddModalIncome() {
   var modalEl = document.getElementById('income-modal');
   if (modalEl) modalEl.classList.remove('hidden');
 
-  // Preload Promo Matrix to be 100% ready for instant calculation
   await preloadPromotionMatrix();
 }
 
@@ -542,6 +583,9 @@ async function saveIncomeForm(e) {
   }
 
   var autAmtEl = document.getElementById('inc-autamount') || document.getElementById('inc-aut-amount');
+  var accEl = document.getElementById('inc-account-name') || document.getElementById('inc-account');
+  var creditEl = document.getElementById('inc-credit') || document.getElementById('income-credit');
+  var debitEl = document.getElementById('inc-debit') || document.getElementById('income-debit');
 
   var payload = {
     uniqueId: document.getElementById('inc-uniqueId')?.value || "",
@@ -552,16 +596,16 @@ async function saveIncomeForm(e) {
     fyid: fyidShowVal,
     fyidName: document.getElementById('inc-fyidname-show')?.value || "",
     class: document.getElementById('inc-class')?.value || "",
-    category: document.getElementById('inc-category')?.value || "",
-    promo: document.getElementById('inc-promo')?.value || "",
-    accountName: document.getElementById('inc-account')?.value || "",
+    category: document.getElementById('inc-category')?.value || "Boarder",
+    promo: document.getElementById('inc-promo')?.value || "Original price",
+    accountName: accEl ? accEl.value : "Registration",
     autAmount: parseFloat(autAmtEl?.value) || 0,
     remark: document.getElementById('inc-remark')?.value || "",
     isSplit: isSplit,
 
     method: document.getElementById('inc-method')?.value || "Cash",
-    debit: parseFloat(document.getElementById('inc-debit')?.value) || 0,
-    credit: parseFloat(document.getElementById('inc-credit')?.value) || 0,
+    debit: parseFloat(debitEl?.value) || 0,
+    credit: parseFloat(creditEl?.value) || 0,
 
     cashAmount: parseFloat(document.getElementById('inc-cash-amount')?.value) || 0,
     bankAmount: parseFloat(document.getElementById('inc-bank-amount')?.value) || 0
@@ -620,16 +664,16 @@ function editIncomeEntry(uniqueId) {
   var catEl = document.getElementById('inc-category');
   if (catEl) catEl.value = row.category || "Boarder";
 
-  var accEl = document.getElementById('inc-account');
+  var accEl = document.getElementById('inc-account-name') || document.getElementById('inc-account');
   if (accEl) accEl.value = row.accountName || "Registration";
 
   var methodEl = document.getElementById('inc-method');
   if (methodEl) methodEl.value = row.method || "Cash";
 
-  var debitEl = document.getElementById('inc-debit');
+  var debitEl = document.getElementById('inc-debit') || document.getElementById('income-debit');
   if (debitEl) debitEl.value = row.debit || 0;
 
-  var creditEl = document.getElementById('inc-credit');
+  var creditEl = document.getElementById('inc-credit') || document.getElementById('income-credit');
   if (creditEl) creditEl.value = row.credit || 0;
 
   var autAmtEl = document.getElementById('inc-autamount') || document.getElementById('inc-aut-amount');
@@ -663,7 +707,7 @@ async function deleteIncomeEntry(uniqueId) {
   } catch (err) {
     if (typeof showToast === 'function') showToast("ERROR", "ဖျက်သိမ်းမှု အမှား: " + err.message);
   } finally {
-    if (typeof toggleLoading === 'function') toggleLoading(false);
+    if (!typeof toggleLoading === 'function') toggleLoading(false);
   }
 }
 
@@ -781,7 +825,6 @@ function printInvoice(uniqueId) {
     if (totEl) totEl.textContent = Number(displayAmount).toLocaleString('en-US') + " MMK";
   });
 
-  // 💡 FIX: Invoice Mode သီးသန့် ဖွင့်ပြီး Payslip ကို အပြီးတိုင် ဖုံးကွယ်စေခြင်း
   document.body.classList.remove('print-mode-payslip');
   document.body.classList.add('print-mode-invoice');
 
@@ -799,6 +842,8 @@ window.onSearchInputIncome = onSearchInputIncome;
 window.clearDateFilterIncome = clearDateFilterIncome;
 window.onStudentIdOrFYChangeIncome = onStudentIdOrFYChangeIncome;
 window.onAccountNameOrCategoryChangeIncome = onAccountNameOrCategoryChangeIncome;
+window.onAccountNameChangeIncome = onAccountNameOrCategoryChangeIncome;
+window.bindIncomeModalLiveEvents = bindIncomeModalLiveEvents;
 window.toggleSplitPaymentIncome = toggleSplitPaymentIncome;
 window.openAddModalIncome = openAddModalIncome;
 window.closeIncomeModal = closeIncomeModal;
