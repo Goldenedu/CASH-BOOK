@@ -1,11 +1,60 @@
 /**
  * GOLDEN ERP SYSTEM - STUDENT DIRECTORY D1 HANDLER MODULE
  * File: handlers-student.js
- * 💡 Features: Direct isMigration Mode (Preserves exact NO, ID, FYID from Google Sheets),
+ * 💡 Features: Universal Dynamic FY Generator (No Hardcoded 2627), Float .0 Sanitizer,
+ *              Direct isMigration Mode (Preserves exact NO, ID, FYID from Google Sheets),
  *              Server-Side Privilege Escalation Defense, Myanmar Gender Auto-Detection,
  *              FY-Based Sequential Fallbacks & Strict Ordering by NO/ID Descending
  */
 
+/**
+ * 💡 1. Universal Dynamic Academic Year Generator (e.g. "2026-2027", "2027-2028")
+ */
+function getCurrentAcademicYear(dateInput) {
+  const d = dateInput ? new Date(dateInput) : new Date();
+  const validDate = isNaN(d.getTime()) ? new Date() : d;
+  let y = validDate.getFullYear();
+
+  if (validDate.getMonth() < 3) {
+    y -= 1;
+  }
+  return `${y}-${y + 1}`;
+}
+
+/**
+ * 💡 2. Dynamic FY String Normalizer (Returns clean "YYYY-YYYY" format)
+ */
+function normalizeFyClean(fy) {
+  let s = fy ? String(fy).trim() : getCurrentAcademicYear();
+  if (!s) s = getCurrentAcademicYear();
+  return s.replace(/^FY\s*/i, '');
+}
+
+/**
+ * 💡 3. System-Wide Dynamic FY Short Code Generator (Format: "2026-2027" -> "2627")
+ */
+function getFyShortCode(fyStr) {
+  if (fyStr) {
+    const clean = String(fyStr).replace(/^FY\s*/i, '').trim();
+    const parts = clean.split(/[-/]/);
+    if (parts.length >= 2 && parts[0].trim() && parts[1].trim()) {
+      const y1 = parts[0].trim().slice(-2);
+      const y2 = parts[1].trim().slice(-2);
+      return y1 + y2;
+    }
+    if (/^\d{4}$/.test(clean)) {
+      return clean;
+    }
+  }
+
+  const currentFy = getCurrentAcademicYear();
+  const p = currentFy.split('-');
+  return p[0].slice(-2) + p[1].slice(-2);
+}
+
+/**
+ * 💡 FYID Float .0 Sanitizer
+ */
 function sanitizeFyidStr(fyidStr) {
   const s = String(fyidStr || '').trim();
   if (!s) return s;
@@ -17,17 +66,6 @@ function sanitizeFyidStr(fyidStr) {
     return `${parts[0]}-STU-${String(numPart).padStart(4, '0')}`;
   }
   return cleaned;
-}
-
-function getFyShortCode(fyStr) {
-  if (!fyStr) return '2627';
-  const parts = String(fyStr).replace(/^FY\s*/i, '').split(/[-/]/);
-  if (parts.length >= 2) {
-    const y1 = parts[0].trim().slice(-2);
-    const y2 = parts[1].trim().slice(-2);
-    return `${y1}${y2}`;
-  }
-  return '2627';
 }
 
 function autoDetectGender(nameStr) {
@@ -52,7 +90,7 @@ function autoDetectGender(nameStr) {
 }
 
 async function generateFyNo(db, tableName, fy) {
-  const normFy = String(fy || '').replace(/^FY\s*/i, '');
+  const normFy = normalizeFyClean(fy);
   const lastNoRow = await db.prepare(
     `SELECT MAX(CAST(no AS INTEGER)) as maxNo FROM ${tableName} WHERE fy = ? OR fy = ?`
   ).bind(normFy, `FY ${normFy}`).first();
@@ -64,7 +102,7 @@ async function generateFyNo(db, tableName, fy) {
  */
 export async function getStudentData(db, body) {
   try {
-    const activeFy = String(body.fy || "2026-2027").replace(/^FY\s*/i, '');
+    const activeFy = normalizeFyClean(body.fy);
     const searchVal = String(body.searchVal || "").trim();
     const page = parseInt(body.page || 1, 10);
     const limit = parseInt(body.limit || 5000, 10); // Supports full dataset
@@ -183,7 +221,7 @@ export async function lookupStudentById(db, body) {
  */
 export async function saveStudentEntry(db, userSession, body) {
   try {
-    const cleanFy = String(body.fy || "2026-2027").replace(/^FY\s*/i, '');
+    const cleanFy = normalizeFyClean(body.fy);
     const fyShort = body.fyShort || getFyShortCode(cleanFy);
 
     const isPrivilegedAdmin = ['Owner', 'Admin'].includes(userSession?.role || '');
@@ -259,7 +297,7 @@ export async function updateStudentEntry(db, userSession, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    const cleanFy = String(body.fy || "2026-2027").replace(/^FY\s*/i, '');
+    const cleanFy = normalizeFyClean(body.fy);
     const studentId = parseInt(body.studentId || body.id, 10);
     const paddedId = String(studentId).padStart(4, '0');
     const fyShort = body.fyShort || getFyShortCode(cleanFy);
