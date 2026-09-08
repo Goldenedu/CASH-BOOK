@@ -3,7 +3,10 @@
  * File: handlers-office-kit.js 
  * 💡 Features: Safe Liabilities Handling (Negative & Credit/Debit Support),
  *              Crash-Proof Auto-Lock Enforcement (5-Prefix Lock Engine & Zero Client Bypass),
- *              Kitchen 16-Cols Schema (No Liabilities Column), Bulletproof Uniform Stock Reversion & Idempotent Upsert
+ *              Kitchen 16-Cols Schema (No Liabilities Column), Bulletproof Uniform Stock Reversion & Idempotent Upsert,
+ *              ⚡ O(1) D1 Write-Optimized Window Function Recalculator (Zero D1 Quota Waste),
+ *              🎯 Multi-Table Ghost Recalculation Leak Elimination (Only syncs linked books when needed),
+ *              🎯 Payroll Branch FY Variable Integrity Fixed
  */
 
 const BOOK_TABLE_MAP = {
@@ -58,40 +61,59 @@ function parseAccountingNum(val) {
   return isNaN(n) ? 0 : n;
 }
 
-async function recalculateLedgerBalances(db, tableName) {
+/**
+ * ⚡ FIX PERF #1: O(1) Single-Query Window Function Recalculation Engine
+ * JS loops နှင့် batch updates (100 rows/batch) များကို ဖယ်ရှားပြီး
+ * SQLite Window Function ဖြင့် ၁ ကြိမ်တည်း Update လုပ်သည်။
+ */
+async function recalculateLedgerBalances(db, tableName, targetFy = null) {
   if (!tableName) return;
   try {
-    const fysRes = await db.prepare(`SELECT DISTINCT fy FROM ${tableName}`).all();
-    const rawFys = (fysRes.results || []).map(r => normalizeFyStr(r.fy)).filter(Boolean);
-    const fys = Array.from(new Set(rawFys));
-    if (fys.length === 0) fys.push('FY 2026-2027');
+    if (targetFy) {
+      const normFy = normalizeFyStr(targetFy);
+      const cleanFy = normFy.replace(/^FY\s*/i, '');
 
-    const statements = [];
-    for (const fyVal of fys) {
-      const rows = await db.prepare(
-        `SELECT id, debit, credit FROM ${tableName} WHERE fy = ? OR fy = ? ORDER BY date ASC, id ASC`
-      ).bind(fyVal, fyVal.replace(/^FY\s*/i, '')).all();
-
-      const list = rows.results || [];
-      let currentBal = 0;
-      let seqNo = 1;
-
-      for (const row of list) {
-        const debit = parseFloat(row.debit || 0);
-        const credit = parseFloat(row.credit || 0);
-        currentBal = currentBal + debit - credit;
-        statements.push(
-          db.prepare(`UPDATE ${tableName} SET balances = ?, no = ?, fy = ? WHERE id = ?`).bind(currentBal, seqNo, fyVal, row.id)
-        );
-        seqNo++;
-      }
-    }
-
-    for (let i = 0; i < statements.length; i += 100) {
-      await db.batch(statements.slice(i, i + 100));
+      await db.prepare(`
+        WITH calculated AS (
+          SELECT id,
+                 ROW_NUMBER() OVER (
+                   ORDER BY date ASC, id ASC
+                 ) as calc_no,
+                 SUM(debit - credit) OVER (
+                   ORDER BY date ASC, id ASC 
+                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                 ) as calc_bal
+          FROM ${tableName}
+          WHERE fy = ? OR fy = ?
+        )
+        UPDATE ${tableName} 
+        SET no = (SELECT calc_no FROM calculated WHERE calculated.id = ${tableName}.id),
+            balances = (SELECT calc_bal FROM calculated WHERE calculated.id = ${tableName}.id)
+        WHERE id IN (SELECT id FROM calculated);
+      `).bind(normFy, cleanFy).run();
+    } else {
+      await db.prepare(`
+        WITH calculated AS (
+          SELECT id,
+                 ROW_NUMBER() OVER (
+                   PARTITION BY fy
+                   ORDER BY date ASC, id ASC
+                 ) as calc_no,
+                 SUM(debit - credit) OVER (
+                   PARTITION BY fy
+                   ORDER BY date ASC, id ASC 
+                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                 ) as calc_bal
+          FROM ${tableName}
+        )
+        UPDATE ${tableName} 
+        SET no = (SELECT calc_no FROM calculated WHERE calculated.id = ${tableName}.id),
+            balances = (SELECT calc_bal FROM calculated WHERE calculated.id = ${tableName}.id)
+        WHERE id IN (SELECT id FROM calculated);
+      `).run();
     }
   } catch (e) {
-    console.warn(`Running Balance & NO Recalculation Warning for ${tableName}:`, e);
+    console.warn(`Running Balance & NO Recalculation Warning for ${tableName}:`, e.message);
   }
 }
 
@@ -160,15 +182,25 @@ async function syncUniformStock(db, productId, unitDelta) {
   }
 }
 
+/**
+ * ⚡ Optimized: Return exact tables where linked records were deleted
+ */
 async function cleanLinkedAutoEntries(db, uniqueid) {
-  if (!uniqueid) return;
+  if (!uniqueid) return { cash: false, bank: false, ca_cash: false, ca_bank: false };
   const profitUid = `UNIPROFIT_${uniqueid}`;
   const cashierUid = `UNICASHIER_${uniqueid}`;
 
-  await db.prepare(`DELETE FROM cash WHERE uniqueid = ?`).bind(profitUid).run();
-  await db.prepare(`DELETE FROM bank WHERE uniqueid = ?`).bind(profitUid).run();
-  await db.prepare(`DELETE FROM ca_cash WHERE uniqueid = ?`).bind(cashierUid).run();
-  await db.prepare(`DELETE FROM ca_bank WHERE uniqueid = ?`).bind(cashierUid).run();
+  const delCash = await db.prepare(`DELETE FROM cash WHERE uniqueid = ?`).bind(profitUid).run();
+  const delBank = await db.prepare(`DELETE FROM bank WHERE uniqueid = ?`).bind(profitUid).run();
+  const delCaCash = await db.prepare(`DELETE FROM ca_cash WHERE uniqueid = ?`).bind(cashierUid).run();
+  const delCaBank = await db.prepare(`DELETE FROM ca_bank WHERE uniqueid = ?`).bind(cashierUid).run();
+
+  return {
+    cash: (delCash?.meta?.changes > 0),
+    bank: (delBank?.meta?.changes > 0),
+    ca_cash: (delCaCash?.meta?.changes > 0),
+    ca_bank: (delCaBank?.meta?.changes > 0)
+  };
 }
 
 async function postLinkedAutoEntries(db, body, entryDate, my, fy, createdBy, uniqueid) {
@@ -199,7 +231,7 @@ async function postLinkedAutoEntries(db, body, entryDate, my, fy, createdBy, uni
       mainVrNo, my, normFy, sourceBookTitle, createdBy, new Date().toISOString(), mainProfitUid
     ).run();
 
-    await recalculateLedgerBalances(db, mainTable);
+    await recalculateLedgerBalances(db, mainTable, normFy);
   }
 
   if (totalCashierIncome > 0) {
@@ -219,7 +251,7 @@ async function postLinkedAutoEntries(db, body, entryDate, my, fy, createdBy, uni
       caVrNo, my, normFy, sourceBookTitle, createdBy, new Date().toISOString(), caUid
     ).run();
 
-    await recalculateLedgerBalances(db, caTable);
+    await recalculateLedgerBalances(db, caTable, normFy);
   }
 }
 
@@ -278,7 +310,7 @@ export async function getExpenseData(db, body) {
         debit: parseFloat(row.debit || 0),
         credit: parseFloat(row.credit || 0),
         balances: parseFloat(row.balances || 0),
-        liabilities: parseFloat(row.liabilities !== undefined ? row.liabilities : 0), // 💡 Handles negative numbers accurately
+        liabilities: parseFloat(row.liabilities !== undefined ? row.liabilities : 0),
         unpaidBonus: parseFloat(row.unpaid_bonus !== undefined ? row.unpaid_bonus : (row.unpaidBonus || 0)),
         unpaidFund: parseFloat(row.unpaid_fund !== undefined ? row.unpaid_fund : (row.unpaidFund || 0)),
         transfer: row.transfer || '',
@@ -327,7 +359,7 @@ export async function saveExpenseEntry(db, session, body) {
     const credit = parseAccountingNum(body.credit);
     const unit = parseFloat(body.unit || 0);
     const unitPrice = parseFloat(body.unitPrice || 0);
-    const liabilities = parseAccountingNum(body.liabilities); // 💡 Negative Liabilities Support
+    const liabilities = parseAccountingNum(body.liabilities);
 
     // 🔒 1. PRIVILEGE ESCALATION DEFENSE
     const isPrivilegedAdmin = ['Owner', 'Admin'].includes(session?.role || '');
@@ -362,10 +394,11 @@ export async function saveExpenseEntry(db, session, body) {
           no, date, category, description, method, debit, credit, balances, unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
         ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, '', ?, ?, ?, datetime('now'), ?)
       `;
+      // 🎯 FIX: Bound date-derived `fy` instead of normalizeFyStr(body.fy)
       await db.prepare(payrollStmt).bind(
         newNo, entryDate, body.category || 'Full Time Salary', body.description || '',
         body.method || 'Cash', debit, credit, parseFloat(body.unpaidBonus || 0), parseFloat(body.unpaidFund || 0),
-        body.transfer || '', vrNo, normalizeFyStr(body.fy), rawBook, createdBy, uniqueid
+        body.transfer || '', vrNo, fy, rawBook, createdBy, uniqueid
       ).run();
     } else {
       // 19 Columns for Office (Includes liabilities)
@@ -390,8 +423,8 @@ export async function saveExpenseEntry(db, session, body) {
       };
     }
 
-    // 💡 LIVE OPERATIONAL MODE
-    await recalculateLedgerBalances(db, tableName);
+    // ⚡ LIVE OPERATIONAL MODE: Recalculate only the affected FY
+    await recalculateLedgerBalances(db, tableName, fy);
 
     const isUniform = (body.category === "Advance Uniform" || body.category === "Advance Unifrom");
     const targetPid = body.id || extractProductIdFromDescription(body.description);
@@ -414,7 +447,7 @@ export async function saveExpenseEntry(db, session, body) {
 }
 
 /**
- * 💡 Update Expense Entry (Crash-Proof Lock Check & Negative Liabilities Support)
+ * 💡 Update Expense Entry (Crash-Proof Lock Check & Multi-FY Safety)
  */
 export async function updateExpenseEntry(db, session, body) {
   try {
@@ -424,7 +457,7 @@ export async function updateExpenseEntry(db, session, body) {
 
     if (!uniqueid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
 
-    // 🔒 1. CRASH-PROOF SERVER-SIDE LOCK ENFORCEMENT (SELECT * avoids "no such column: is_locked" error)
+    // 🔒 1. CRASH-PROOF SERVER-SIDE LOCK ENFORCEMENT & Capture old FY
     const existing = await db.prepare(`SELECT * FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) return { success: false, message: "ပြင်ဆင်မည့် စာရင်း ရှာမတွေ့ပါ။" };
 
@@ -444,6 +477,8 @@ export async function updateExpenseEntry(db, session, body) {
       };
     }
 
+    const oldFy = existing?.fy ? normalizeFyStr(existing.fy) : null;
+
     // 2. Fetch Old Entry to Revert Stock using Extracted Product ID
     if (existing.category === "Advance Uniform" || existing.category === "Advance Unifrom") {
       const oldUnit = parseFloat(existing.unit || 0);
@@ -453,7 +488,8 @@ export async function updateExpenseEntry(db, session, body) {
       }
     }
 
-    await cleanLinkedAutoEntries(db, uniqueid);
+    // ⚡ Clean linked auto entries and detect which tables were actually modified
+    const cleanResults = await cleanLinkedAutoEntries(db, uniqueid);
 
     const entryDate = body.date || new Date().toISOString().split('T')[0];
     const d = new Date(entryDate);
@@ -468,7 +504,7 @@ export async function updateExpenseEntry(db, session, body) {
     const credit = parseAccountingNum(body.credit);
     const unit = parseFloat(body.unit || 0);
     const unitPrice = parseFloat(body.unitPrice || 0);
-    const liabilities = parseAccountingNum(body.liabilities); // 💡 Negative Liabilities Support
+    const liabilities = parseAccountingNum(body.liabilities);
 
     if (tableName === 'kitchen') {
       await db.prepare(`
@@ -484,7 +520,13 @@ export async function updateExpenseEntry(db, session, body) {
       `).bind(entryDate, body.category || 'General', body.description || '', unit, unitPrice, body.method || 'Cash', debit, credit, liabilities, body.transfer || '', fy, uniqueid).run();
     }
 
-    await recalculateLedgerBalances(db, tableName);
+    // ⚡ Recalculate target FY balances
+    await recalculateLedgerBalances(db, tableName, fy);
+
+    // ⚡ If the entry was moved from another FY, also recalculate the old FY
+    if (oldFy && oldFy !== fy) {
+      await recalculateLedgerBalances(db, tableName, oldFy);
+    }
 
     // 3. Deduct New Stock
     const isUniform = (body.category === "Advance Uniform" || body.category === "Advance Unifrom");
@@ -493,12 +535,14 @@ export async function updateExpenseEntry(db, session, body) {
       await syncUniformStock(db, targetPid, unit);
     }
 
-    // 4. Re-post Updated Linked Auto Entries & Recalculate Linked Books
+    // 4. Re-post Updated Linked Auto Entries
     await postLinkedAutoEntries(db, body, entryDate, my, fy, session?.name || 'Admin', uniqueid);
-    await recalculateLedgerBalances(db, 'cash');
-    await recalculateLedgerBalances(db, 'bank');
-    await recalculateLedgerBalances(db, 'ca_cash');
-    await recalculateLedgerBalances(db, 'ca_bank');
+
+    // ⚡ FIX: Only recalculate external tables if records were actually cleaned/modified
+    if (cleanResults.cash) await recalculateLedgerBalances(db, 'cash', oldFy || fy);
+    if (cleanResults.bank) await recalculateLedgerBalances(db, 'bank', oldFy || fy);
+    if (cleanResults.ca_cash) await recalculateLedgerBalances(db, 'ca_cash', oldFy || fy);
+    if (cleanResults.ca_bank) await recalculateLedgerBalances(db, 'ca_bank', oldFy || fy);
 
     return { success: true, message: "စာရင်း အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။" };
   } catch (err) {
@@ -508,7 +552,7 @@ export async function updateExpenseEntry(db, session, body) {
 }
 
 /**
- * 💡 Delete Expense Entry (With Strict Server-Side Auto-Lock Guard)
+ * 💡 Delete Expense Entry (With Strict Server-Side Auto-Lock & Fast Recalculation)
  */
 export async function deleteExpenseEntry(db, session, body) {
   try {
@@ -518,7 +562,7 @@ export async function deleteExpenseEntry(db, session, body) {
 
     if (!uniqueid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
 
-    // 🔒 1. CRASH-PROOF SERVER-SIDE LOCK ENFORCEMENT
+    // 🔒 1. CRASH-PROOF SERVER-SIDE LOCK ENFORCEMENT & Capture FY
     const existing = await db.prepare(`SELECT * FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (existing) {
       const uid = String(existing.uniqueid || '');
@@ -538,6 +582,8 @@ export async function deleteExpenseEntry(db, session, body) {
       }
     }
 
+    const targetFy = existing?.fy ? normalizeFyStr(existing.fy) : null;
+
     // Revert Stock in Uniform Ledger via Extracted Product ID
     if (existing && (existing.category === "Advance Uniform" || existing.category === "Advance Unifrom")) {
       const oldUnit = parseFloat(existing.unit || 0);
@@ -548,13 +594,16 @@ export async function deleteExpenseEntry(db, session, body) {
     }
 
     await db.prepare(`DELETE FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).run();
-    await cleanLinkedAutoEntries(db, uniqueid);
+    
+    // ⚡ Clean linked auto entries and only recalculate tables that actually changed
+    const cleanResults = await cleanLinkedAutoEntries(db, uniqueid);
 
-    await recalculateLedgerBalances(db, tableName);
-    await recalculateLedgerBalances(db, 'cash');
-    await recalculateLedgerBalances(db, 'bank');
-    await recalculateLedgerBalances(db, 'ca_cash');
-    await recalculateLedgerBalances(db, 'ca_bank');
+    await recalculateLedgerBalances(db, tableName, targetFy);
+
+    if (cleanResults.cash) await recalculateLedgerBalances(db, 'cash', targetFy);
+    if (cleanResults.bank) await recalculateLedgerBalances(db, 'bank', targetFy);
+    if (cleanResults.ca_cash) await recalculateLedgerBalances(db, 'ca_cash', targetFy);
+    if (cleanResults.ca_bank) await recalculateLedgerBalances(db, 'ca_bank', targetFy);
 
     return { success: true, message: "စာရင်း အောင်မြင်စွာ ဖျက်သိမ်းပြီးပါပြီ။" };
   } catch (err) {
