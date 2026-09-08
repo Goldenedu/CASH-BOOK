@@ -1,8 +1,14 @@
 /**
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - OFFICE EXPENSE & INVENTORY MODULE 
  * File: js/office-kit.js 
  * 💡 Features: Negative Liabilities & Accounting Parenthesis "(1000)" Engine (Mathematical Inversion Bug Fixed),
- *              Direct Uniform Inventory Binding, Profit Calculator, Clean Dropdowns & Multi-Book Context Engine
+ *              Direct Uniform Inventory Binding, Profit Calculator, Clean Dropdowns & Multi-Book Context Engine,
+ *              🛡️ Universal CSV Formula Injection Sanitizer (safeCsvCell),
+ *              🔍 Full Database Real-Time Backend Search Engine (Cross-page search),
+ *              🎯 Context-Aware CSV Exporter (Office 16-Cols vs Kitchen 13-Cols),
+ *              🎯 Bug #2 Fixed (Resilient Local escapeHtml / escapeJsAttr Callbacks)
+ * ==============================================================================
  */
 
 window.OfficeState = {
@@ -21,7 +27,7 @@ var searchTimeoutOffice = null;
 var isOfficeSubmitting = false;
 
 /**
- * 💡 Safe Native DOM HTML Escaper
+ * 💡 Safe Native DOM HTML Escaper (Bug #2 Resilient Fallback)
  */
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
@@ -38,8 +44,36 @@ function escapeHtml(str) {
  */
 function escapeJsAttr(str) {
   if (str === null || str === undefined) return '';
+  if (typeof window.escapeJsAttr === 'function' && window.escapeJsAttr !== escapeJsAttr) {
+    return window.escapeJsAttr(str);
+  }
   var jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   return escapeHtml(jsEscaped);
+}
+
+/**
+ * 🛡️ Safe CSV Cell Helper (Local Fallback if api.js is not loaded yet)
+ */
+function safeCsvCell(val) {
+  if (typeof window.safeCsvCell === 'function') {
+    return window.safeCsvCell(val);
+  }
+  if (val === null || val === undefined) return '""';
+  if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
+
+  var str = String(val).trim();
+  if (str === '') return '""';
+
+  var cleanNumStr = str.replace(/,/g, '');
+  if (!isNaN(Number(cleanNumStr)) && cleanNumStr !== '') {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+
+  return `"${str.replace(/"/g, '""')}"`;
 }
 
 /**
@@ -256,7 +290,8 @@ function clearDateFilterOffice() {
   var toEl = document.getElementById('office-date-to');
   if (fromEl) fromEl.value = '';
   if (toEl) toEl.value = '';
-  onSearchInputOffice();
+  window.OfficeState.page = 1;
+  loadOfficeData(true, true);
 }
 
 /**
@@ -641,14 +676,17 @@ function changePageOffice(dir) {
   }
 }
 
+/**
+ * 🔍 Debounced Search Input Handler (⚡ Triggers real Database Query across all records)
+ */
 function onSearchInputOffice() {
   clearTimeout(searchTimeoutOffice);
   searchTimeoutOffice = setTimeout(function() {
     var input = document.getElementById('office-search');
     window.OfficeState.searchVal = input ? input.value.trim() : '';
     window.OfficeState.page = 1;
-    renderOfficeTable();
-  }, 200);
+    loadOfficeData(true, true); // ⚡ Real Database Search across all pages!
+  }, 250);
 }
 
 function bindModalOfficeListeners() {
@@ -708,6 +746,7 @@ async function saveOfficeForm(e) {
   if (isOfficeSubmitting) return;
   isOfficeSubmitting = true;
 
+  var ctx = getExpenseBookContext();
   var uniqueId = document.getElementById('office-uniqueId')?.value || '';
   var isAdd = (!uniqueId);
   var category = document.getElementById('office-category')?.value || '';
@@ -738,6 +777,9 @@ async function saveOfficeForm(e) {
     }
   }
 
+  // 💡 Kitchen Exp Book တွင် Liabilities လုံးဝ မပါရှိစေဘဲ 0 သတ်မှတ်သည်
+  var finalLiabilities = ctx.isKitchen ? 0 : parseLiabilityAmount(document.getElementById('office-liabilities')?.value);
+
   var entry = {
     uniqueId: uniqueId,
     date: document.getElementById('office-date')?.value || '',
@@ -749,10 +791,10 @@ async function saveOfficeForm(e) {
     method: document.getElementById('office-method')?.value || 'Cash',
     debit: parseCleanNum(document.getElementById('office-debit')?.value),
     credit: parseCleanNum(document.getElementById('office-credit')?.value),
-    liabilities: parseLiabilityAmount(document.getElementById('office-liabilities')?.value), // 💡 Handles -1000 and (1000)
+    liabilities: finalLiabilities, // 💡 Handles -1000 and (1000)
     transfer: document.getElementById('office-transfer')?.value || '',
     description: document.getElementById('office-description')?.value || '',
-    bookName: getExpenseBookContext().bookName,
+    bookName: ctx.bookName,
     createdBy: (window.AppState && window.AppState.currentUser) ? window.AppState.currentUser : "Admin"
   };
 
@@ -765,10 +807,13 @@ async function saveOfficeForm(e) {
 
     if (response && response.success) {
       if (typeof showToast === 'function') {
-        var label = getExpenseBookContext().label;
+        var label = ctx.label;
         showToast("SUCCESS", isAdd ? (label + " Expense စာရင်းသစ် အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။") : (label + " Expense စာရင်း အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။"));
       }
       
+      // ⚡ Clear Cache on Data Mutation
+      if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
+
       if (category === "Advance Uniform" || category === "Advance Unifrom") {
         window.OfficeState.uniformProducts = [];
         if (typeof window.loadUniformData === 'function') {
@@ -879,6 +924,7 @@ async function deleteOfficeEntry(uniqueId) {
 
       if (response && response.success) {
         if (typeof showToast === 'function') showToast("SUCCESS", "စာရင်းအား အောင်မြင်စွာ ဖျက်သိမ်းပြီးပါပြီ။");
+        if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
         loadOfficeData(true, true);
       } else {
         if (typeof showToast === 'function') showToast("ERROR", "ဖျက်သိမ်းမှု မအောင်မြင်ပါ: " + (response ? response.message : ""));
@@ -891,6 +937,9 @@ async function deleteOfficeEntry(uniqueId) {
   }
 }
 
+/**
+ * 💡 CONTEXT-AWARE CSV EXPORTER (Formula Injection Protected via safeCsvCell + UTF-8 BOM)
+ */
 function exportToCSVOffice() {
   var data = window.OfficeState.activeData;
   if (!data || data.length === 0) {
@@ -898,18 +947,55 @@ function exportToCSVOffice() {
     return;
   }
 
-  var csv = "NO,DATE,CATEGORY,DESCRIPTION,UNIT,UNIT PRICE,METHOD,DEBIT,CREDIT,BALANCES,LIABILITIES,TRANSFER,VR NO,MY,FY,UNIQUEID\n";
-  data.forEach(function(row) {
-    var desc = '"' + (row.description || '').replace(/"/g, '""') + '"';
-    var cat = '"' + (row.category || '').replace(/"/g, '""') + '"';
-    csv += (row.no || '') + ',' + (row.date || '') + ',' + cat + ',' + desc + ',' + (row.unit || 0) + ',' + (row.unitPrice || 0) + ',' + (row.method || '') + ',' + (row.debit || 0) + ',' + (row.credit || 0) + ',' + (row.balances || 0) + ',' + (row.liabilities || 0) + ',' + (row.transfer || '') + ',' + (row.vrNo || '') + ',' + (row.my || '') + ',' + (row.fy || '') + ',' + (row.uniqueId || '') + '\n';
-  });
+  var ctx = getExpenseBookContext();
+  var csv = "";
+
+  if (ctx.isKitchen) {
+    // 💡 Kitchen Exp Book (13 Columns - No liabilities column)
+    csv = "NO,DATE,CATEGORY,DESCRIPTION,METHOD,DEBIT,CREDIT,BALANCES,TRANSFER,VR NO,MY,FY,UNIQUEID\n";
+    data.forEach(function(row) {
+      csv += (row.no || '') + ',' +
+             safeCsvCell(row.date || '') + ',' +
+             safeCsvCell(row.category || '') + ',' +
+             safeCsvCell(row.description || '') + ',' +
+             safeCsvCell(row.method || '') + ',' +
+             (row.debit || 0) + ',' +
+             (row.credit || 0) + ',' +
+             (row.balances || 0) + ',' +
+             safeCsvCell(row.transfer || '') + ',' +
+             safeCsvCell(row.vrNo || row.vr_no || '') + ',' +
+             safeCsvCell(row.my || '') + ',' +
+             safeCsvCell(row.fy || '') + ',' +
+             safeCsvCell(row.uniqueId || row.uniqueid || '') + '\n';
+    });
+  } else {
+    // 💡 Office Exp Book (16 Columns - Includes liabilities)
+    csv = "NO,DATE,CATEGORY,DESCRIPTION,UNIT,UNIT PRICE,METHOD,DEBIT,CREDIT,BALANCES,LIABILITIES,TRANSFER,VR NO,MY,FY,UNIQUEID\n";
+    data.forEach(function(row) {
+      csv += (row.no || '') + ',' +
+             safeCsvCell(row.date || '') + ',' +
+             safeCsvCell(row.category || '') + ',' +
+             safeCsvCell(row.description || '') + ',' +
+             (row.unit || 0) + ',' +
+             (row.unitPrice || 0) + ',' +
+             safeCsvCell(row.method || '') + ',' +
+             (row.debit || 0) + ',' +
+             (row.credit || 0) + ',' +
+             (row.balances || 0) + ',' +
+             (row.liabilities || 0) + ',' +
+             safeCsvCell(row.transfer || '') + ',' +
+             safeCsvCell(row.vrNo || row.vr_no || '') + ',' +
+             safeCsvCell(row.my || '') + ',' +
+             safeCsvCell(row.fy || '') + ',' +
+             safeCsvCell(row.uniqueId || row.uniqueid || '') + '\n';
+    });
+  }
 
   var blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
   var link = document.createElement("a");
   var url = URL.createObjectURL(blob);
   link.setAttribute("href", url);
-  link.setAttribute("download", 'office_expense_' + new Date().toISOString().slice(0,10) + '.csv');
+  link.setAttribute("download", (ctx.isKitchen ? 'kitchen_expense_' : 'office_expense_') + new Date().toISOString().slice(0,10) + '.csv');
   link.style.visibility = 'hidden';
   document.body.appendChild(link);
   link.click();
