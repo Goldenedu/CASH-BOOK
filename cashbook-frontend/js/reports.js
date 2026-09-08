@@ -1,7 +1,13 @@
 /**
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - FINANCIAL & DEMOGRAPHIC REPORTS CONTROLLER
  * File: js/reports.js 
- * 💡 Features: Active Sub-Tab Highlights, InDetail Matrix (1 Student = 1 Row), InRep 13-Month Fiscal Engine, Demographics & Full Global Handlers
+ * 💡 Features: Active Sub-Tab Highlights, InDetail Matrix (1 Student = 1 Row),
+ *              InRep 13-Month Fiscal Engine, Demographics & Full Global Handlers,
+ *              🛡️ Universal CSV Formula Injection Sanitizer (safeCsvCell) across all 5 Exports,
+ *              🎯 Dynamic Fiscal Year Dropdown Generator (No static 2025-2028 hardcoding),
+ *              🎯 Bug #2 Fixed (Resilient Local escapeHtml Callback)
+ * ==============================================================================
  */
 
 var gStudentReportRawData = null;
@@ -11,7 +17,7 @@ var gMonthlyIncomeRawData = null;
 var gStaffFundRawData = null;
 
 /**
- * 💡 Safe Native DOM HTML Escaper
+ * 💡 Safe Native DOM HTML Escaper (Bug #2 Resilient Fallback)
  */
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
@@ -23,13 +29,57 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+/**
+ * 🛡️ Safe CSV Cell Helper (Local Fallback if api.js is not loaded yet)
+ */
+function safeCsvCell(val) {
+  if (typeof window.safeCsvCell === 'function') {
+    return window.safeCsvCell(val);
+  }
+  if (val === null || val === undefined) return '""';
+  if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
+
+  var str = String(val).trim();
+  if (str === '') return '""';
+
+  var cleanNumStr = str.replace(/,/g, '');
+  if (!isNaN(Number(cleanNumStr)) && cleanNumStr !== '') {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
+/**
+ * 💡 Dynamic Report Fiscal Year Options Generator
+ */
+function getDynamicReportFiscalYears() {
+  if (window.gAvailableFys && Array.isArray(window.gAvailableFys) && window.gAvailableFys.length > 0) {
+    return window.gAvailableFys;
+  }
+  const d = new Date();
+  let y = d.getFullYear();
+  if (d.getMonth() < 3) y -= 1;
+  return [`${y - 1}-${y}`, `${y}-${y + 1}`, `${y + 1}-${y + 2}`];
+}
+
 function populateReportFyDropdowns() {
-  const options = ['2025-2026', '2026-2027', '2027-2028'];
+  const options = getDynamicReportFiscalYears();
+  const d = new Date();
+  let currentStartYear = d.getFullYear();
+  if (d.getMonth() < 3) currentStartYear -= 1;
+  const currentFyStr = `${currentStartYear}-${currentStartYear + 1}`;
+
   const dropdownIds = ['report-fin-fy', 'report-income-fy', 'report-general-fy', 'report-student-fy', 'report-staff-fund-fy'];
   dropdownIds.forEach(id => {
     const select = document.getElementById(id);
     if (select) {
-      select.innerHTML = options.map(fy => `<option value="${fy}" ${fy === '2026-2027' ? 'selected' : ''}>FY ${fy}</option>`).join('');
+      const selectedVal = select.value || currentFyStr;
+      select.innerHTML = options.map(fy => `<option value="${fy}" ${fy === selectedVal ? 'selected' : ''}>FY ${fy}</option>`).join('');
     }
   });
 }
@@ -57,7 +107,11 @@ function safeShowToast(msg, type = 'info') {
 
 function formatNumWithCommas(val) {
   if (val === null || val === undefined || val === '') return '0';
-  const num = parseFloat(String(val).replace(/,/g, ''));
+  let s = String(val).trim().replace(/,/g, '');
+  if (s.startsWith('(') && s.endsWith(')')) {
+    s = '-' + s.slice(1, -1).trim();
+  }
+  const num = parseFloat(s);
   if (isNaN(num)) return String(val);
   return num.toLocaleString('en-US');
 }
@@ -195,7 +249,7 @@ function renderFinancialReportData(data) {
     expBody.innerHTML = items.map(item => `
       <tr class="hover:bg-slate-800/30 transition border-b border-slate-800/40">
         <td class="text-center font-bold text-slate-400 py-2.5 px-2">${item.no}</td>
-        <td class="font-semibold text-slate-300 py-2.5 px-2">${item.head}</td>
+        <td class="font-semibold text-slate-300 py-2.5 px-2">${escapeHtml(item.head)}</td>
         <td class="text-right font-bold text-rose-400 font-mono pr-2 py-2.5 px-2">${formatNumWithCommas(item.amt)} MMK</td>
       </tr>
     `).join('') + `
@@ -218,6 +272,9 @@ function onSearchInputReportFinancial() {
   });
 }
 
+/**
+ * 💡 CSV Exporter for Financial Statement (Formula Injection Protected)
+ */
 function exportToCSVReportFinancial() {
   if (!gFinancialReportRawData) {
     safeShowToast('ထုတ်ယူရန် ဘဏ္ဍာရေး အစီရင်ခံစာ အချက်အလက် မရှိပါ။', 'warning');
@@ -228,19 +285,19 @@ function exportToCSVReportFinancial() {
   let csv = "SECTION,HEAD / CATEGORY,AMOUNT (MMK)\n";
 
   if (d.categories) {
-    csv += `"Income by Category","Boarder",${d.categories.boarder || 0}\n`;
-    csv += `"Income by Category","Semi Boarder",${d.categories.semiBoarder || 0}\n`;
-    csv += `"Income by Category","Day Student",${d.categories.dayStudent || 0}\n`;
-    csv += `"Income by Category","Total Category Income",${d.categories.total || 0}\n\n`;
+    csv += `${safeCsvCell("Income by Category")},${safeCsvCell("Boarder")},${d.categories.boarder || 0}\n`;
+    csv += `${safeCsvCell("Income by Category")},${safeCsvCell("Semi Boarder")},${d.categories.semiBoarder || 0}\n`;
+    csv += `${safeCsvCell("Income by Category")},${safeCsvCell("Day Student")},${d.categories.dayStudent || 0}\n`;
+    csv += `${safeCsvCell("Income by Category")},${safeCsvCell("Total Category Income")},${d.categories.total || 0}\n\n`;
   }
 
   if (d.accounts) {
-    csv += `"Income by Account","Registration",${d.accounts.registration || 0}\n`;
-    csv += `"Income by Account","Services",${d.accounts.services || 0}\n`;
-    csv += `"Income by Account","Ferry",${d.accounts.ferry || 0}\n`;
-    csv += `"Income by Account","Night Study Fees",${d.accounts.nightStudy || 0}\n`;
-    csv += `"Income by Account","Others",${d.accounts.others || 0}\n`;
-    csv += `"Income by Account","Total Account Income",${d.accounts.total || 0}\n\n`;
+    csv += `${safeCsvCell("Income by Account")},${safeCsvCell("Registration")},${d.accounts.registration || 0}\n`;
+    csv += `${safeCsvCell("Income by Account")},${safeCsvCell("Services")},${d.accounts.services || 0}\n`;
+    csv += `${safeCsvCell("Income by Account")},${safeCsvCell("Ferry")},${d.accounts.ferry || 0}\n`;
+    csv += `${safeCsvCell("Income by Account")},${safeCsvCell("Night Study Fees")},${d.accounts.nightStudy || 0}\n`;
+    csv += `${safeCsvCell("Income by Account")},${safeCsvCell("Others")},${d.accounts.others || 0}\n`;
+    csv += `${safeCsvCell("Income by Account")},${safeCsvCell("Total Account Income")},${d.accounts.total || 0}\n\n`;
   }
 
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
@@ -292,7 +349,7 @@ function renderIncomeDetailMatrixTable() {
   let headHtml = '<thead><tr class="bg-[#0e172a] text-slate-300 text-xs uppercase font-extrabold border-b border-slate-800">';
   headers.forEach((h, i) => {
     const alignClass = (i >= 10) ? 'text-right' : 'text-left';
-    headHtml += `<th class="px-3 py-3 border border-slate-800 ${alignClass}">${h || ''}</th>`;
+    headHtml += `<th class="px-3 py-3 border border-slate-800 ${alignClass}">${escapeHtml(h || '')}</th>`;
   });
   headHtml += '</tr></thead>';
 
@@ -351,15 +408,24 @@ function onSearchInputReportIncome() {
   renderIncomeDetailMatrixTable();
 }
 
+/**
+ * 💡 CSV Exporter for Income Detail (Formula Injection Protected via safeCsvCell)
+ */
 function exportToCSVReportIncome() {
   if (!gIncomeDetailRawData || !gIncomeDetailRawData.data) {
     return safeShowToast('ထုတ်ယူရန် ဝင်ငွေ အသေးစိတ် အချက်အလက် မရှိပါ။', 'warning');
   }
 
   let csvRows = [];
-  if (gIncomeDetailRawData.headers) csvRows.push(gIncomeDetailRawData.headers.map(h => `"${h || ''}"`));
-  gIncomeDetailRawData.data.forEach(r => csvRows.push(r.map(c => `"${c || ''}"`)));
-  if (gIncomeDetailRawData.grandTotalRow) csvRows.push(gIncomeDetailRawData.grandTotalRow.map(c => `"${c || ''}"`));
+  if (gIncomeDetailRawData.headers) {
+    csvRows.push(gIncomeDetailRawData.headers.map(h => safeCsvCell(h || '')));
+  }
+  gIncomeDetailRawData.data.forEach(r => {
+    csvRows.push(r.map(c => safeCsvCell(c || '')));
+  });
+  if (gIncomeDetailRawData.grandTotalRow) {
+    csvRows.push(gIncomeDetailRawData.grandTotalRow.map(c => safeCsvCell(c || '')));
+  }
 
   const csvContent = "\uFEFF" + csvRows.map(e => e.join(",")).join("\n");
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -402,7 +468,7 @@ function renderInRepTable(tableId, headers, rows, totalRow, themeColor) {
 
   let headHtml = `<thead><tr class="bg-[#0e172a] ${headerColorClass} text-xs uppercase font-extrabold border-b border-slate-800">`;
   headers.forEach((h, i) => {
-    headHtml += `<th class="px-3 py-3 border border-slate-800 ${i > 0 ? 'text-right' : 'text-left'}">${h || ''}</th>`;
+    headHtml += `<th class="px-3 py-3 border border-slate-800 ${i > 0 ? 'text-right' : 'text-left'}">${escapeHtml(h || '')}</th>`;
   });
   headHtml += '</tr></thead>';
 
@@ -426,7 +492,7 @@ function renderInRepTable(tableId, headers, rows, totalRow, themeColor) {
     footHtml += `<tfoot class="${totalBgClass} font-black border-t-2 text-xs"><tr>`;
     totalRow.forEach((cell, i) => {
       if (i === 0) {
-        footHtml += `<td class="px-3 py-3 uppercase tracking-wider border ${totalCellBorder}">${cell || 'Total'}</td>`;
+        footHtml += `<td class="px-3 py-3 uppercase tracking-wider border ${totalCellBorder}">${escapeHtml(cell || 'Total')}</td>`;
       } else {
         const numVal = parseFloat(cell) || 0;
         footHtml += `<td class="px-3 py-3 text-right font-mono border ${totalCellBorder}">${formatNumWithCommas(numVal)}</td>`;
@@ -438,6 +504,9 @@ function renderInRepTable(tableId, headers, rows, totalRow, themeColor) {
   table.innerHTML = headHtml + bodyHtml + footHtml;
 }
 
+/**
+ * 💡 CSV Exporter for Monthly Income (Formula Injection Protected via safeCsvCell)
+ */
 function exportToCSVReportGeneral() {
   if (!gMonthlyIncomeRawData) {
     return safeShowToast('ထုတ်ယူရန် လအလိုက် ဝင်ငွေ အချက်အလက် မရှိပါ။', 'warning');
@@ -447,18 +516,18 @@ function exportToCSVReportGeneral() {
   const { table1, table2 } = gMonthlyIncomeRawData;
 
   if (table1) {
-    csvRows.push(['"Primary Revenue Breakdown (EFFECT DATE BASIS)"']);
-    if (table1.headers) csvRows.push(table1.headers.map(h => `"${h || ''}"`));
-    if (table1.data) table1.data.forEach(r => csvRows.push(r.map(c => `"${c || ''}"`)));
-    if (table1.totalRow) csvRows.push(table1.totalRow.map(c => `"${c || ''}"`));
+    csvRows.push([safeCsvCell("Primary Revenue Breakdown (EFFECT DATE BASIS)")]);
+    if (table1.headers) csvRows.push(table1.headers.map(h => safeCsvCell(h || '')));
+    if (table1.data) table1.data.forEach(r => csvRows.push(r.map(c => safeCsvCell(c || ''))));
+    if (table1.totalRow) csvRows.push(table1.totalRow.map(c => safeCsvCell(c || '')));
     csvRows.push([]);
   }
 
   if (table2) {
-    csvRows.push(['"Secondary Category Summary (CASH FLOW DATE BASIS)"']);
-    if (table2.headers) csvRows.push(table2.headers.map(h => `"${h || ''}"`));
-    if (table2.data) table2.data.forEach(r => csvRows.push(r.map(c => `"${c || ''}"`)));
-    if (table2.totalRow) csvRows.push(table2.totalRow.map(c => `"${c || ''}"`));
+    csvRows.push([safeCsvCell("Secondary Category Summary (CASH FLOW DATE BASIS)")]);
+    if (table2.headers) csvRows.push(table2.headers.map(h => safeCsvCell(h || '')));
+    if (table2.data) table2.data.forEach(r => csvRows.push(r.map(c => safeCsvCell(c || ''))));
+    if (table2.totalRow) csvRows.push(table2.totalRow.map(c => safeCsvCell(c || '')));
   }
 
   const csvContent = "\uFEFF" + csvRows.map(e => e.join(",")).join("\n");
@@ -511,7 +580,7 @@ function renderStudentReportTables() {
     <div class="bg-[#0c1322] border border-emerald-500/30 rounded-2xl p-5 shadow-2xl space-y-4">
       <div class="flex justify-between items-center border-b border-emerald-500/20 pb-3">
         <h3 class="text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center gap-2">
-          <i class="fa-solid fa-graduation-cap text-base"></i> ${table1?.title || 'Student Demographics Report'}
+          <i class="fa-solid fa-graduation-cap text-base"></i> ${escapeHtml(table1?.title || 'Student Demographics Report')}
         </h3>
         <span class="text-[10px] font-bold text-emerald-300 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
           Showing ${rows1.length} Classes
@@ -522,15 +591,15 @@ function renderStudentReportTables() {
         <table class="w-full text-left border-collapse text-xs min-w-[1100px]">
           <thead>
             <tr class="bg-emerald-950/40 text-emerald-300 font-extrabold uppercase border-b border-emerald-500/30">
-              ${(table1?.headers || []).map((h, i) => `<th class="py-3 px-3 ${i >= 3 ? 'text-right' : 'text-left'}">${h || ''}</th>`).join('')}
+              ${(table1?.headers || []).map((h, i) => `<th class="py-3 px-3 ${i >= 3 ? 'text-right' : 'text-left'}">${escapeHtml(h || '')}</th>`).join('')}
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-800/40 text-slate-200">
             ${rows1.map(r => `
               <tr class="hover:bg-emerald-500/5 transition">
                 <td class="py-2.5 px-3 text-center font-bold text-slate-400">${r[0] || ''}</td>
-                <td class="py-2.5 px-3 font-semibold text-slate-300">${r[1] || ''}</td>
-                <td class="py-2.5 px-3 font-extrabold text-white">${r[2] || ''}</td>
+                <td class="py-2.5 px-3 font-semibold text-slate-300">${escapeHtml(r[1] || '')}</td>
+                <td class="py-2.5 px-3 font-extrabold text-white">${escapeHtml(r[2] || '')}</td>
                 <td class="py-2.5 px-3 text-right font-mono font-bold text-emerald-400">${formatNumWithCommas(r[3])}</td>
                 <td class="py-2.5 px-3 text-right font-mono font-bold text-teal-300">${formatNumWithCommas(r[4])}</td>
                 <td class="py-2.5 px-3 text-right font-mono font-bold text-teal-300">${formatNumWithCommas(r[5])}</td>
@@ -544,7 +613,7 @@ function renderStudentReportTables() {
           ${table1?.total && table1.total.length > 0 ? `
             <tfoot>
               <tr class="bg-emerald-500/10 font-black text-emerald-300 border-t-2 border-emerald-500/40">
-                <td colspan="3" class="py-3 px-3 uppercase text-xs tracking-wider">${table1.total[0] || 'Total'}</td>
+                <td colspan="3" class="py-3 px-3 uppercase text-xs tracking-wider">${escapeHtml(table1.total[0] || 'Total')}</td>
                 <td class="py-3 px-3 text-right font-mono text-emerald-300">${formatNumWithCommas(table1.total[3])}</td>
                 <td class="py-3 px-3 text-right font-mono">${formatNumWithCommas(table1.total[4])}</td>
                 <td class="py-3 px-3 text-right font-mono">${formatNumWithCommas(table1.total[5])}</td>
@@ -567,16 +636,25 @@ function onSearchInputReportStudent() {
   renderStudentReportTables();
 }
 
+/**
+ * 💡 CSV Exporter for Student Demographics (Formula Injection Protected via safeCsvCell)
+ */
 function exportToCSVReportStudent() {
   if (!gStudentReportRawData) return safeShowToast('ထုတ်ယူရန် ကျောင်းသား လူဦးရေ အချက်အလက် မရှိပါ။', 'warning');
 
   const { table1 } = gStudentReportRawData;
   let csvRows = [];
 
-  csvRows.push([`"${table1?.title || 'Student Demographics Report'}"`]);
-  if (table1?.headers) csvRows.push(table1.headers.map(h => `"${h || ''}"`));
-  if (table1?.data) table1.data.forEach(r => csvRows.push(r.map(c => `"${c || ''}"`)));
-  if (table1?.total) csvRows.push(table1.total.map(c => `"${c || ''}"`));
+  csvRows.push([safeCsvCell(table1?.title || 'Student Demographics Report')]);
+  if (table1?.headers) {
+    csvRows.push(table1.headers.map(h => safeCsvCell(h || '')));
+  }
+  if (table1?.data) {
+    table1.data.forEach(r => csvRows.push(r.map(c => safeCsvCell(c || ''))));
+  }
+  if (table1?.total) {
+    csvRows.push(table1.total.map(c => safeCsvCell(c || '')));
+  }
 
   const csvContent = "\uFEFF" + csvRows.map(e => e.join(",")).join("\n");
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -647,13 +725,13 @@ function renderStaffFundReportData(list) {
   tbody.innerHTML = filtered.map((r, i) => `
     <tr class="hover:bg-slate-800/30 transition">
       <td class="py-2.5 px-2 text-center font-bold text-slate-400">${r.no || (i + 1)}</td>
-      <td class="py-2.5 px-2 text-center font-mono">${r.fundDate || '-'}</td>
-      <td class="py-2.5 px-2 font-mono font-bold text-indigo-400">${cleanIntegerStr(r.staffId)}</td>
-      <td class="py-2.5 px-2 font-extrabold text-white">${r.name || '-'}</td>
+      <td class="py-2.5 px-2 text-center font-mono">${escapeHtml(r.fundDate || '-')}</td>
+      <td class="py-2.5 px-2 font-mono font-bold text-indigo-400">${escapeHtml(cleanIntegerStr(r.staffId))}</td>
+      <td class="py-2.5 px-2 font-extrabold text-white">${escapeHtml(r.name || '-')}</td>
       <td class="py-2.5 px-2 text-right font-mono font-bold text-emerald-400">${formatNumWithCommas(r.bonusBalance)}</td>
       <td class="py-2.5 px-2 text-right font-mono font-bold text-teal-400">${formatNumWithCommas(r.fundBalance)}</td>
       <td class="py-2.5 px-2 text-right font-mono font-black text-indigo-300 bg-indigo-500/5 pr-4">${formatNumWithCommas(r.totalBalances)}</td>
-      <td class="py-2.5 px-2 text-center font-bold text-xs"><span class="px-2 py-0.5 rounded ${r.status === 'Active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}">${r.status || 'Active'}</span></td>
+      <td class="py-2.5 px-2 text-center font-bold text-xs"><span class="px-2 py-0.5 rounded ${r.status === 'Active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}">${escapeHtml(r.status || 'Active')}</span></td>
     </tr>
   `).join('');
 }
@@ -666,6 +744,9 @@ function onSearchInputReportStaffFund() {
   }
 }
 
+/**
+ * 💡 CSV Exporter for Staff Fund Report (Formula Injection Protected via safeCsvCell)
+ */
 function exportToCSVReportStaffFund() {
   const list = gStaffFundRawData || [];
   if (!list || list.length === 0) {
@@ -674,8 +755,14 @@ function exportToCSVReportStaffFund() {
 
   let csv = "NO,FUND DATE,STAFF ID,STAFF NAME,BONUS BALANCE,FUND BALANCE,TOTAL BALANCES,STATUS\n";
   list.forEach((r, i) => {
-    let name = `"${(r.name || '').replace(/"/g, '""')}"`;
-    csv += `${r.no || i + 1},${r.fundDate || ''},${cleanIntegerStr(r.staffId)},${name},${r.bonusBalance || 0},${r.fundBalance || 0},${r.totalBalances || 0},${r.status || 'Active'}\n`;
+    csv += `${r.no || i + 1},` +
+           `${safeCsvCell(r.fundDate || '')},` +
+           `${safeCsvCell(cleanIntegerStr(r.staffId))},` +
+           `${safeCsvCell(r.name || '')},` +
+           `${r.bonusBalance || 0},` +
+           `${r.fundBalance || 0},` +
+           `${r.totalBalances || 0},` +
+           `${safeCsvCell(r.status || 'Active')}\n`;
   });
 
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
