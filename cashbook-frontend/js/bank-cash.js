@@ -1,7 +1,12 @@
 /**
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - BANK & CASH BOOK CONTROLLER
  * File: js/bank-cash.js  
- * 💡 Features: Strict Search Engine, Self-Transfer Prevention, Auto-Description Generator & Overwrite Bug Fixed
+ * 💡 Features: Strict Search Engine, Self-Transfer Prevention, Auto-Description Generator & Overwrite Bug Fixed,
+ *              🛡️ Universal CSV Formula Injection Sanitizer (safeCsvCell),
+ *              🔍 Full Database Real-Time Backend Search Engine (Cross-page search),
+ *              🎯 Bug #2 Fixed (Resilient Local escapeHtml / escapeJsAttr Callbacks)
+ * ==============================================================================
  */
 
 var bckPage = 1;
@@ -13,7 +18,7 @@ var searchTimeoutBck = null;
 var isBankCashSubmitting = false; // 💡 Double Submit Protection Flag
 
 /**
- * 💡 Safe Native DOM HTML Escaper
+ * 💡 Safe Native DOM HTML Escaper (Bug #2 Resilient Fallback)
  */
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
@@ -27,13 +32,39 @@ function escapeHtml(str) {
 
 /**
  * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
- * Escapes backslashes/quotes for the JS string literal, then HTML-escapes the
- * result so it can't break out of the surrounding double-quoted HTML attribute.
  */
 function escapeJsAttr(str) {
   if (str === null || str === undefined) return '';
+  if (typeof window.escapeJsAttr === 'function' && window.escapeJsAttr !== escapeJsAttr) {
+    return window.escapeJsAttr(str);
+  }
   var jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   return escapeHtml(jsEscaped);
+}
+
+/**
+ * 🛡️ Safe CSV Cell Helper (Local Fallback if api.js is not loaded yet)
+ */
+function safeCsvCell(val) {
+  if (typeof window.safeCsvCell === 'function') {
+    return window.safeCsvCell(val);
+  }
+  if (val === null || val === undefined) return '""';
+  if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
+
+  var str = String(val).trim();
+  if (str === '') return '""';
+
+  var cleanNumStr = str.replace(/,/g, '');
+  if (!isNaN(Number(cleanNumStr)) && cleanNumStr !== '') {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+
+  return `"${str.replace(/"/g, '""')}"`;
 }
 
 /**
@@ -49,7 +80,6 @@ function parseCleanNum(val) {
 
 /**
  * 💡 Strict Search Filter Function for Main Bank & Cash Books
- * Searches strictly by: Description, Category, Debit Amount, Credit Amount.
  */
 function filterBankCashKitData(list, searchVal, fromDate, toDate) {
   var safeList = Array.isArray(list) ? list : [];
@@ -64,8 +94,9 @@ function filterBankCashKitData(list, searchVal, fromDate, toDate) {
     var catMatch = String(row.category || '').toLowerCase().includes(q);
     var debitMatch = String(row.debit || '').includes(q);
     var creditMatch = String(row.credit || '').includes(q);
+    var vrMatch = String(row.vrNo || row.vr_no || '').toLowerCase().includes(q);
 
-    return descMatch || catMatch || debitMatch || creditMatch;
+    return descMatch || catMatch || debitMatch || creditMatch || vrMatch;
   });
 }
 
@@ -74,17 +105,19 @@ function clearDateFilterBCK() {
   var toEl = document.getElementById('bck-date-to');
   if (fromEl) fromEl.value = '';
   if (toEl) toEl.value = '';
-  renderTableBankCashKit();
+  bckPage = 1;
+  loadBankCashKitData(true, true);
 }
 
 /**
- * 💡 Debounced Search Input Handler
+ * 🔍 Debounced Search Input Handler (⚡ Triggers real Database Query across all records)
  */
 function onSearchInputBankCashKit() {
   if (searchTimeoutBck) clearTimeout(searchTimeoutBck);
   searchTimeoutBck = setTimeout(function() {
-    renderTableBankCashKit();
-  }, 100);
+    bckPage = 1;
+    loadBankCashKitData(true, true);
+  }, 250);
 }
 
 /**
@@ -220,7 +253,7 @@ function renderTableBankCashKit() {
             '<button onclick="editBankCashKitEntry(\'' + escapeJsAttr(row.uniqueId) + '\')" class="text-indigo-400 hover:text-indigo-300 transition ' + lockClass + '" title="' + lockTitle + '" ' + disabledAttr + '>' +
               '<i class="fa-solid fa-pen-to-square"></i>' +
             '</button>' +
-            '<button onclick="deleteBankCashKitEntry(\'' + escapeJsAttr(row.uniqueId) + '\')" class="text-rose-400 hover:text-rose-300 transition ' + lockClass + '" title="' + lockTitle + '" ' + disabledAttr + '>' +
+            '<button onclick="deleteBankCashKitEntry(\'' + escapeJsAttr(row.uniqueId) + '\')" class="text-rose-400 hover:text-rose-300 transition btn-delete ' + lockClass + '" title="' + lockTitle + '" ' + disabledAttr + '>' +
               '<i class="fa-solid fa-trash"></i>' +
             '</button>' +
           '</div>' +
@@ -365,6 +398,8 @@ async function saveBankCashKitForm(e) {
 
     if (res && res.success) {
       if (typeof showToast === 'function') showToast("SUCCESS", "စာရင်း သိမ်းဆည်းမှု အောင်မြင်ပါသည်။");
+      // ⚡ Wipe in-memory cache to guarantee real-time cross-book sync
+      if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
       await loadBankCashKitData(true, true);
     } else {
       throw new Error(res?.message || "သိမ်းဆည်းမှု မအောင်မြင်ပါ။");
@@ -434,6 +469,7 @@ async function deleteBankCashKitEntry(uniqueId) {
 
     if (res && res.success) {
       if (typeof showToast === 'function') showToast("SUCCESS", "စာရင်း ဖျက်သိမ်းခြင်း အောင်မြင်ပါသည်။");
+      if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
       await loadBankCashKitData(true, true);
     } else {
       throw new Error(res?.message || "ဖျက်သိမ်းမှု မအောင်မြင်ပါ။");
@@ -470,6 +506,9 @@ function updatePaginationUIBankCashKit() {
   if (nextBtn) nextBtn.disabled = (bckPage * bckLimit >= bckTotalRows);
 }
 
+/**
+ * 💡 FULL CSV EXPORTER (Formula Injection Protected via safeCsvCell + UTF-8 BOM)
+ */
 function exportToCSVBankCashKit() {
   if (!bckActiveData || bckActiveData.length === 0) {
     if (typeof showToast === 'function') showToast("ERROR", "ထုတ်ယူရန် မည်သည့် စာရင်းမျှ မရှိပါ။");
@@ -478,8 +517,19 @@ function exportToCSVBankCashKit() {
 
   var csv = "NO,DATE,CATEGORY,DESCRIPTION,METHOD,DEBIT,CREDIT,BALANCES,TRANSFER,VR NO,MY,FY,UNIQUEID\n";
   bckActiveData.forEach(function(r) {
-    var desc = '"' + (r.description || '').replace(/"/g, '""') + '"';
-    csv += (r.no || '') + ',' + (r.date || '') + ',' + (r.category || '') + ',' + desc + ',' + (r.method || '') + ',' + (r.debit || 0) + ',' + (r.credit || 0) + ',' + (r.balances || 0) + ',' + (r.transfer || '') + ',' + (r.vrNo || '') + ',' + (r.my || '') + ',' + (r.fy || '') + ',' + (r.uniqueId || '') + '\n';
+    csv += (r.no || '') + ',' +
+           safeCsvCell(r.date || '') + ',' +
+           safeCsvCell(r.category || '') + ',' +
+           safeCsvCell(r.description || '') + ',' +
+           safeCsvCell(r.method || '') + ',' +
+           (r.debit || 0) + ',' +
+           (r.credit || 0) + ',' +
+           (r.balances || 0) + ',' +
+           safeCsvCell(r.transfer || '') + ',' +
+           safeCsvCell(r.vrNo || '') + ',' +
+           safeCsvCell(r.my || '') + ',' +
+           safeCsvCell(r.fy || '') + ',' +
+           safeCsvCell(r.uniqueId || '') + '\n';
   });
 
   var blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
