@@ -358,13 +358,14 @@ async function onStudentIdOrFYChangeIncome() {
 async function onAccountNameOrCategoryChangeIncome() {
   var fyVal = document.getElementById('inc-fy')?.value || '2026-2027';
   var cleanFy = String(fyVal).trim().replace(/^FY\s*/i, '');
-  var accountName = document.getElementById('inc-account')?.value || 'Registration';
+  var accountName = document.getElementById('inc-account')?.value || document.getElementById('inc-account-name')?.value || 'Registration';
   var classVal = String(document.getElementById('inc-class')?.value || '').trim();
   var categoryVal = String(document.getElementById('inc-category')?.value || '').trim();
   var promoVal = String(document.getElementById('inc-promo')?.value || 'Original price').trim();
 
   var autAmtEl = document.getElementById('inc-autamount') || document.getElementById('inc-aut-amount');
-  var creditEl = document.getElementById('inc-credit');
+  var creditEl = document.getElementById('inc-credit') || document.getElementById('income-credit');
+  var debitEl = document.getElementById('inc-debit') || document.getElementById('income-debit');
 
   if (!autAmtEl) return;
 
@@ -428,12 +429,23 @@ async function onAccountNameOrCategoryChangeIncome() {
         calculatedFee = Number(promoKeyMap[promoVal] !== undefined ? promoKeyMap[promoVal] : (match.originalPrice || match.original_price || 0));
       }
 
+      // 1. Standard AUT Amount ထည့်သွင်းခြင်း
       autAmtEl.value = calculatedFee;
 
-      // 💡 Auto-fill Credit amount if currently empty or 0
-      if (creditEl && (parseFloat(creditEl.value || 0) === 0 || creditEl.value === '')) {
-        creditEl.value = calculatedFee;
+      // 💡 2. FIX: Credit (ပေးချေငွေ) အကွက်ထဲသို့ တန်ဖိုး တိုက်ရိုက် တန်းထည့်ပေးမည်
+      if (creditEl) {
+        creditEl.value = calculatedFee; // 👈 ၁၀ သိန်း (1000000) ချက်ချင်း တန်းဝင်သွားမည်
       }
+
+      if (debitEl) {
+        debitEl.value = 0;
+      }
+
+      // 3. Split Payment ခွဲငွေပါ အလိုအလျောက် ညှိပေးခြင်း
+      if (typeof updateSplitAmountsIncome === 'function') {
+        updateSplitAmountsIncome();
+      }
+
       return;
     }
   }
