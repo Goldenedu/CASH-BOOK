@@ -1,8 +1,8 @@
 /**
  * GOLDEN ERP SYSTEM - MAIN INCOME BOOK MODULE
  * File: js/income.js 
- * 💡 Features: Precision FY-Scoped Student Lookup, Dynamic Promotion Matrix AUT Calculator (FY+Class+Category+Promo),
- *              Live Credit Auto-Fill on Account/Category/Promo Change, Split Payment & Universal Invoice Printer
+ * 💡 Features: Dynamic Universal FY Generator (No Hardcoded 2627), 3-Tier Promotion Matrix AUT Calculator,
+ *              100% Guaranteed Synchronized Credit & AUT Reset, Split Payment & Universal Invoice Printer
  */
 
 var incomePage = 1;
@@ -58,17 +58,42 @@ function parseCleanIntId(val) {
 }
 
 /**
- * 💡 System-Wide FY Short Code Generator (Format: 2026-2027 -> 2627)
+ * 💡 1. Universal Dynamic Academic Year Generator (e.g. "2026-2027", "2027-2028")
+ */
+function getCurrentAcademicYear(dateInput) {
+  var d = dateInput ? new Date(dateInput) : new Date();
+  var validDate = isNaN(d.getTime()) ? new Date() : d;
+  var y = validDate.getFullYear();
+
+  // ဇန်နဝါရီ၊ ဖေဖော်ဝါရီ၊ မတ်လ (လပိုင်း ၀, ၁, ၂) ဖြစ်ပါက ယခင်နှစ် FY ထဲတွင် ရှိနေဆဲဖြစ်သည်
+  if (validDate.getMonth() < 3) {
+    y -= 1;
+  }
+  return `${y}-${y + 1}`;
+}
+
+/**
+ * 💡 2. System-Wide Dynamic FY Short Code Generator (100% Future-Proof)
+ * Format: "2026-2027" -> "2627", "2027-2028" -> "2728", "2028-2029" -> "2829"
  */
 function getFyShortCode(fyStr) {
-  if (!fyStr) return '2627';
-  var parts = String(fyStr).split(/[-/]/);
-  if (parts.length >= 2) {
-    var y1 = parts[0].trim().slice(-2);
-    var y2 = parts[1].trim().slice(-2);
-    return y1 + y2;
+  if (fyStr) {
+    var clean = String(fyStr).replace(/^FY\s*/i, '').trim();
+    var parts = clean.split(/[-/]/);
+    if (parts.length >= 2 && parts[0].trim() && parts[1].trim()) {
+      var y1 = parts[0].trim().slice(-2);
+      var y2 = parts[1].trim().slice(-2);
+      return y1 + y2;
+    }
+    if (/^\d{4}$/.test(clean)) {
+      return clean;
+    }
   }
-  return '2627';
+
+  // 💡 Dynamic Fallback: အချက်အလက်မပါပါက လက်ရှိနှစ်အလိုက် အလိုအလျောက် တွက်ထုတ်မည် (Hardcode မဟုတ်တော့ပါ)
+  var currentFy = getCurrentAcademicYear();
+  var p = currentFy.split('-');
+  return p[0].slice(-2) + p[1].slice(-2);
 }
 
 /**
@@ -267,7 +292,7 @@ function renderTableIncome() {
  * 💡 FY-Scoped Student Lookup & Live Rate Calculation
  */
 async function onStudentIdOrFYChangeIncome() {
-  var fyVal = document.getElementById('inc-fy')?.value || '2026-2027';
+  var fyVal = document.getElementById('inc-fy')?.value || getCurrentAcademicYear();
   var idVal = document.getElementById('inc-id-search')?.value.trim();
 
   var fyidShow = document.getElementById('inc-fyid-show');
@@ -351,7 +376,7 @@ function resetIncomeAmounts(amount = 0) {
  * 💡 Precision Promotion Matrix Rate Auto-Calculation & 100% Synchronized Credit Engine
  */
 async function onAccountNameOrCategoryChangeIncome() {
-  var fyVal = document.getElementById('inc-fy')?.value || '2026-2027';
+  var fyVal = document.getElementById('inc-fy')?.value || getCurrentAcademicYear();
   var cleanFy = String(fyVal).trim().replace(/^FY\s*/i, '');
 
   var accEl = document.getElementById('inc-account-name') || document.getElementById('inc-account');
@@ -365,11 +390,10 @@ async function onAccountNameOrCategoryChangeIncome() {
   var creditEl = document.getElementById('inc-credit') || document.getElementById('income-credit');
   var debitEl = document.getElementById('inc-debit') || document.getElementById('income-debit');
 
-  // 💡 1. FIX: Registration နှင့် Services မဟုတ်သော အခြားခေါင်းစဉ်များ (Ferry, Night Study, Others) သို့ ပြောင်းပါက
-  // Standard AUT Amount ရော Credit (ပေးချေငွေ) ပါ အရင်တန်ဖိုးဟောင်း မကျန်စေဘဲ 0 အဖြစ် တပြိုင်နက်တည်း ရှင်းထုတ်ပေးမည်
+  // 💡 1. Registration နှင့် Services မဟုတ်ပါက (Ferry, Night Study, Others) စာရင်းဟောင်းမကျန်စေဘဲ 0 အဖြစ် တူညီစွာ ထားမည်
   if (accountName !== "Registration" && accountName !== "Services") {
     if (autAmtEl) autAmtEl.value = 0;
-    if (creditEl) creditEl.value = 0; // 👈 ၇ သောင်း အဟောင်း မကျန်တော့ဘဲ 0 ဖြစ်သွားမည်
+    if (creditEl) creditEl.value = 0; // 👈 ၇ သောင်း အဟောင်းမကျန်စေဘဲ 0 ဖြစ်သွားမည်
     if (debitEl) debitEl.value = 0;
     if (typeof updateSplitAmountsIncome === 'function') updateSplitAmountsIncome();
     return;
@@ -393,7 +417,7 @@ async function onAccountNameOrCategoryChangeIncome() {
     var cleanClass = classVal.toLowerCase().replace(/\s+/g, '');
     var cleanCat = categoryVal.toLowerCase().replace(/\s+/g, '');
 
-    // 💡 1. Strict Match: Match by FY + Class + Category
+    // 💡 1. Strict Match: Match by FY, Class AND Category
     var match = promoMatrixCache.find(function(r) {
       var rFy = String(r.fy || '').trim().replace(/^FY\s*/i, '');
       var rClass = String(r.class || '').trim().toLowerCase().replace(/\s+/g, '');
@@ -593,7 +617,7 @@ async function saveIncomeForm(e) {
     id: parseInt(document.getElementById('inc-id-search')?.value, 10) || 0,
     date: document.getElementById('inc-date')?.value || "",
     effDate: document.getElementById('inc-effdate')?.value || "",
-    fy: document.getElementById('inc-fy')?.value || "",
+    fy: document.getElementById('inc-fy')?.value || getCurrentAcademicYear(),
     fyid: fyidShowVal,
     fyidName: document.getElementById('inc-fyidname-show')?.value || "",
     class: document.getElementById('inc-class')?.value || "",
@@ -708,7 +732,7 @@ async function deleteIncomeEntry(uniqueId) {
   } catch (err) {
     if (typeof showToast === 'function') showToast("ERROR", "ဖျက်သိမ်းမှု အမှား: " + err.message);
   } finally {
-    if (!typeof toggleLoading === 'function') toggleLoading(false);
+    if (typeof toggleLoading === 'function') toggleLoading(false);
   }
 }
 
@@ -854,3 +878,5 @@ window.deleteIncomeEntry = deleteIncomeEntry;
 window.changePageIncome = changePageIncome;
 window.exportToCSVIncome = exportToCSVIncome;
 window.printInvoice = printInvoice;
+window.getCurrentAcademicYear = getCurrentAcademicYear;
+window.getFyShortCode = getFyShortCode;
