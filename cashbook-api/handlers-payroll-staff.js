@@ -1,10 +1,14 @@
 /**
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - HR PAYROLL & STAFF D1 SQL HANDLER MODULE
  * File: handlers-payroll-staff.js 
  * 💡 Features: Resigned Date Auto-Inactive Engine (Status Calculation & Active Force Stats),
  *              PII & Salary Data Protection (Role-Based Redaction including uniqueid),
  *              Privilege Escalation Defense (Server-Generated UUIDs for new records),
- *              Fund Date Calculation (Join Date + 3 Years) & Idempotent Upsert Engine
+ *              Fund Date Calculation (Join Date + 3 Years) & Idempotent Upsert Engine,
+ *              ⚡ O(1) D1 Write-Optimized Window Function Recalculator (Zero D1 Quota Waste),
+ *              🎯 Dynamic Date-derived FY Auto-Detection & Migration Safe Staff Balance Updates
+ * ==============================================================================
  */
 
 /**
@@ -34,49 +38,60 @@ function calculateFundDate(joinDateStr) {
 }
 
 /**
- * 💡 Cloudflare D1 Batch Running Balance & Integer NO Recalculation Engine for Payroll
+ * ⚡ FIX PERF #1: O(1) Single-Query Window Function Recalculation Engine for Payroll
+ * JS loops နှင့် batch updates (100 rows/batch) များကို ဖယ်ရှားပြီး
+ * SQLite Window Function ဖြင့် ၁ ကြိမ်တည်း Update လုပ်သည်။
  */
-async function recalculateLedgerBalances(db, tableName) {
+async function recalculateLedgerBalances(db, tableName, targetFy = null) {
   if (!tableName) return;
   try {
-    const fysRes = await db.prepare(`SELECT DISTINCT fy FROM ${tableName}`).all();
-    const rawFys = (fysRes.results || []).map(r => normalizeFyStr(r.fy)).filter(Boolean);
-    const fys = Array.from(new Set(rawFys));
+    if (targetFy) {
+      // 🎯 သီးသန့် FY တစ်ခုတည်းကိုသာ ထိရောက်စွာ Update လုပ်ခြင်း
+      const normFy = normalizeFyStr(targetFy);
+      const cleanFy = normFy.replace(/^FY\s*/i, '');
 
-    if (fys.length === 0) {
-      fys.push('FY 2026-2027');
-    }
-
-    const statements = [];
-
-    for (const fyVal of fys) {
-      const rows = await db.prepare(
-        `SELECT id, debit, credit FROM ${tableName} WHERE fy = ? OR fy = ? ORDER BY date ASC, id ASC`
-      ).bind(fyVal, fyVal.replace(/^FY\s*/i, '')).all();
-
-      const list = rows.results || [];
-      let currentBal = 0;
-      let seqNo = 1;
-
-      for (const row of list) {
-        const debit = parseFloat(row.debit || 0);
-        const credit = parseFloat(row.credit || 0);
-        currentBal = currentBal + debit - credit;
-
-        statements.push(
-          db.prepare(`UPDATE ${tableName} SET balances = ?, no = ?, fy = ? WHERE id = ?`).bind(currentBal, seqNo, fyVal, row.id)
-        );
-        seqNo++;
-      }
-    }
-
-    const chunkSize = 100;
-    for (let i = 0; i < statements.length; i += chunkSize) {
-      const chunk = statements.slice(i, i + chunkSize);
-      await db.batch(chunk);
+      await db.prepare(`
+        WITH calculated AS (
+          SELECT id,
+                 ROW_NUMBER() OVER (
+                   ORDER BY date ASC, id ASC
+                 ) as calc_no,
+                 SUM(debit - credit) OVER (
+                   ORDER BY date ASC, id ASC 
+                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                 ) as calc_bal
+          FROM ${tableName}
+          WHERE fy = ? OR fy = ?
+        )
+        UPDATE ${tableName} 
+        SET no = (SELECT calc_no FROM calculated WHERE calculated.id = ${tableName}.id),
+            balances = (SELECT calc_bal FROM calculated WHERE calculated.id = ${tableName}.id)
+        WHERE id IN (SELECT id FROM calculated);
+      `).bind(normFy, cleanFy).run();
+    } else {
+      // 🎯 FY သီးသန့်မပါပါက FY အားလုံးကို PARTITION BY fy ဖြင့် Query ၁ ကြိမ်တည်း တွက်ချက်ခြင်း
+      await db.prepare(`
+        WITH calculated AS (
+          SELECT id,
+                 ROW_NUMBER() OVER (
+                   PARTITION BY fy
+                   ORDER BY date ASC, id ASC
+                 ) as calc_no,
+                 SUM(debit - credit) OVER (
+                   PARTITION BY fy
+                   ORDER BY date ASC, id ASC 
+                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                 ) as calc_bal
+          FROM ${tableName}
+        )
+        UPDATE ${tableName} 
+        SET no = (SELECT calc_no FROM calculated WHERE calculated.id = ${tableName}.id),
+            balances = (SELECT calc_bal FROM calculated WHERE calculated.id = ${tableName}.id)
+        WHERE id IN (SELECT id FROM calculated);
+      `).run();
     }
   } catch (e) {
-    console.warn(`Running Balance & NO Recalculation Warning for ${tableName}:`, e);
+    console.warn(`Running Balance & NO Recalculation Warning for ${tableName}:`, e.message);
   }
 }
 
@@ -164,8 +179,8 @@ export async function getStaffData(db, body, userSession) {
         totalNetAmt += rowNet;
 
         const gender = (item.gender || 'Male').toLowerCase();
-        if (gender === 'male' || gender === 'ကျား') maleCount++;
-        else if (gender === 'female' || gender === 'မ') femaleCount++;
+        if (gender === 'male' || gender === 'ကျား' || gender.startsWith('mal')) maleCount++;
+        else if (gender === 'female' || gender === 'မ' || gender.startsWith('fem')) femaleCount++;
       }
 
       // 🛡️ Redact sensitive financial, personal & ID fields for unauthorized roles (Staff, Viewer, Cashier)
@@ -414,7 +429,7 @@ export async function deleteStaffEntry(db, userSession, body) {
 }
 
 /**
- * 💡 Save HR Payroll Entry
+ * 💡 Save HR Payroll Entry (Date-derived Dynamic FY & Fast Recalculation)
  */
 export async function saveHrPayrollForm(db, userSession, body) {
   try {
@@ -434,7 +449,11 @@ export async function saveHrPayrollForm(db, userSession, body) {
     const fallbackMY = `${months[now.getMonth()]}-${String(now.getFullYear()).slice(-2)}`;
     const myVal = !isNaN(dObj.getTime()) ? `${months[dObj.getMonth()]}-${String(dObj.getFullYear()).slice(-2)}` : fallbackMY;
 
-    const fy = normalizeFyStr(body.fy || 'FY 2026-2027');
+    // 🎯 Transaction Date အလိုက် Dynamic FY ကို အလိုအလျောက် တွက်ချက်ခြင်း
+    let fyYear = dObj.getFullYear();
+    if (dObj.getMonth() < 3) fyYear -= 1;
+    const calculatedFy = `FY ${fyYear}-${fyYear + 1}`;
+    const fy = normalizeFyStr(body.fy || calculatedFy);
 
     const vrNoVal = body.vrNo || await generateVoucherNo(db, 'payroll', 'SAL', dateStr);
     const newNo = (isMigration && body.no) ? parseInt(body.no, 10) : await generateFyNo(db, 'payroll', fy);
@@ -459,11 +478,13 @@ export async function saveHrPayrollForm(db, userSession, body) {
       'HR Payroll Exp Book', userSession?.name || 'Admin', uniqueid
     ).run();
 
-    await recalculateLedgerBalances(db, 'payroll');
+    // ⚡ သက်ဆိုင်ရာ FY တစ်ခုတည်းကိုသာ O(1) Window Function ဖြင့် Recalculate လုပ်သည်
+    await recalculateLedgerBalances(db, 'payroll', fy);
 
-    if (staffIdStr) {
+    // 🛡️ Migration မဟုတ်သော Live အခါမှသာ Staff Balance ကို update ပြုလုပ်မည် (Accruals ၂ ထပ်မဖြစ်စေရန်)
+    if (!isMigration && staffIdStr) {
       const targetStaffId = parseInt(staffIdStr, 10);
-      const staffRow = await db.prepare("SELECT * FROM staff_fulltime WHERE staff_id = ? OR id = ?").bind(targetStaffId, targetStaffId).first();
+      const staffRow = await db.prepare("SELECT * FROM staff_fulltime WHERE staff_id = ? OR id = ? LIMIT 1").bind(targetStaffId, targetStaffId).first();
 
       if (staffRow) {
         if (category === 'Full Time Salary') {
@@ -526,7 +547,7 @@ export async function getPayrollSettings(db, body) {
 }
 
 /**
- * 💡 Update Salary Grade Matrix Settings (Safe Upsert)
+ * 💡 Update Salary Grade Matrix Settings (Safe Upsert with Grade L support)
  */
 export async function updatePayrollSettings(db, userSession, body) {
   try {
