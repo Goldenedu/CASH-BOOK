@@ -1,8 +1,14 @@
 /**
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - CASHIER CASH BOOK MODULE
  * File: js/cashier.js 
  * 💡 Features: Full Dataset Loader (2000 rows limit), Accurate Total Entries Card (705+ rows),
- *              6 Sub-Books Routing, 17/19-Column Dynamic Schema & Cross-Module Invoice Printer
+ *              6 Sub-Books Routing, 17/19-Column Dynamic Schema & Cross-Module Invoice Printer,
+ *              🛡️ Universal CSV Formula Injection Sanitizer (safeCsvCell),
+ *              🎯 Context-Aware CSV Exporter (Today Income vs Cashier Sub-Books),
+ *              🔢 Comma-Safe Numeric Parser & Double-Submit Lock Engine,
+ *              🎯 Bug #2 Fixed (Resilient Local escapeHtml / escapeJsAttr Callbacks)
+ * ==============================================================================
  */
 
 var currentCashierSubBook = 'CABank'; // 'CABank' | 'CACash' | 'CAOffice' | 'CAKitchen' | 'CAPayroll' | 'todayIncome'
@@ -15,7 +21,7 @@ var isCashierSubmitting = false;
 var currentCashierTotalRows = 0; // 💡 Accurate Total Rows Tracker
 
 /**
- * 💡 Safe Native DOM HTML Escaper
+ * 💡 Safe Native DOM HTML Escaper (Bug #2 Resilient Fallback)
  */
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
@@ -29,13 +35,39 @@ function escapeHtml(str) {
 
 /**
  * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
- * Escapes backslashes/quotes for the JS string literal, then HTML-escapes the
- * result so it can't break out of the surrounding double-quoted HTML attribute.
  */
 function escapeJsAttr(str) {
   if (str === null || str === undefined) return '';
+  if (typeof window.escapeJsAttr === 'function' && window.escapeJsAttr !== escapeJsAttr) {
+    return window.escapeJsAttr(str);
+  }
   var jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   return escapeHtml(jsEscaped);
+}
+
+/**
+ * 🛡️ Safe CSV Cell Helper (Local Fallback if api.js is not loaded yet)
+ */
+function safeCsvCell(val) {
+  if (typeof window.safeCsvCell === 'function') {
+    return window.safeCsvCell(val);
+  }
+  if (val === null || val === undefined) return '""';
+  if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
+
+  var str = String(val).trim();
+  if (str === '') return '""';
+
+  var cleanNumStr = str.replace(/,/g, '');
+  if (!isNaN(Number(cleanNumStr)) && cleanNumStr !== '') {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+
+  return `"${str.replace(/"/g, '""')}"`;
 }
 
 /**
@@ -111,7 +143,7 @@ async function loadCashierData(useCache) {
       toggleLoading(true);
     }
 
-    // 💡 FIX: Fetch up to 2000 rows so all 705+ records load completely
+    // 💡 Fetch up to 2000 rows so all 705+ records load completely
     const response = await callApi('getCashierData', {
       bookName: currentCashierSubBook,
       page: 1,
@@ -184,7 +216,6 @@ function renderStatsCashier(stats, totalRowsCount) {
   if (elExp) elExp.textContent = `${Number(stats.totalExpense || 0).toLocaleString('en-US')} MMK`;
   if (elBal) elBal.textContent = `${Number(stats.balance || 0).toLocaleString('en-US')} MMK`;
   
-  // 💡 FIX: Accurately display actual total rows from database
   if (elCount) elCount.textContent = (totalRowsCount || currentCashierTotalRows || allCashierData.length).toLocaleString('en-US');
 }
 
@@ -205,7 +236,8 @@ function filterCashierData(list, searchVal, fromDate, toDate) {
       var nameMatch = String(row.fyidName || row.name || '').toLowerCase().includes(q);
       var fyidMatch = String(row.fyid || '').toLowerCase().includes(q);
       var idMatch = String(row.id || '').toLowerCase().includes(q);
-      return nameMatch || fyidMatch || idMatch;
+      var accMatch = String(row.accountName || '').toLowerCase().includes(q);
+      return nameMatch || fyidMatch || idMatch || accMatch;
     }
 
     var descMatch = String(row.description || '').toLowerCase().includes(q);
@@ -213,8 +245,9 @@ function filterCashierData(list, searchVal, fromDate, toDate) {
     var respMatch = String(row.respPerson || '').toLowerCase().includes(q);
     var debitMatch = String(row.debit || '').includes(q);
     var creditMatch = String(row.credit || '').includes(q);
+    var vrMatch = String(row.vrNo || row.vr_no || '').toLowerCase().includes(q);
 
-    return descMatch || catMatch || respMatch || debitMatch || creditMatch;
+    return descMatch || catMatch || respMatch || debitMatch || creditMatch || vrMatch;
   });
 }
 
@@ -511,8 +544,8 @@ async function saveCashierForm(e) {
     category: document.getElementById('ca-category')?.value || 'Income',
     method: document.getElementById('ca-method')?.value || 'Cash',
     transfer: document.getElementById('ca-transfer')?.value || '',
-    debit: Number(document.getElementById('ca-debit')?.value || 0),
-    credit: Number(document.getElementById('ca-credit')?.value || 0),
+    debit: parseCleanNum(document.getElementById('ca-debit')?.value || 0),
+    credit: parseCleanNum(document.getElementById('ca-credit')?.value || 0),
     description: document.getElementById('ca-description')?.value || '',
     createdBy: (window.AppState ? window.AppState.currentUser : '') || "System"
   };
@@ -526,7 +559,7 @@ async function saveCashierForm(e) {
 
     if (response && response.success) {
       if (typeof showToast === 'function') showToast('SUCCESS', 'Cashier စာရင်း အချက်အလက်များ အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။');
-      if (typeof clearAllApiCache === 'function') clearAllApiCache();
+      if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
       loadCashierData(false);
     } else {
       if (typeof showToast === 'function') showToast('ERROR', response?.message || 'သိမ်းဆည်းမှု မအောင်မြင်ပါ။');
@@ -588,7 +621,7 @@ async function deleteCashierEntry(uniqueId) {
 
     if (response && response.success) {
       if (typeof showToast === 'function') showToast('SUCCESS', 'Cashier စာရင်းအား အောင်မြင်စွာ ဖျက်သိမ်းပြီးပါပြီ။');
-      if (typeof clearAllApiCache === 'function') clearAllApiCache();
+      if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
       loadCashierData(false);
     } else {
       if (typeof showToast === 'function') showToast('ERROR', response?.message || 'ဖျက်သိမ်းမှု မအောင်မြင်ပါ။');
@@ -600,20 +633,63 @@ async function deleteCashierEntry(uniqueId) {
   }
 }
 
+/**
+ * 💡 CONTEXT-AWARE CSV EXPORTER (Formula Injection Protected via safeCsvCell + UTF-8 BOM)
+ */
 function exportToCSVCashier() {
   if (!allCashierData || allCashierData.length === 0) {
     if (typeof showToast === 'function') showToast("ERROR", "ထုတ်ယူရန် မည်သည့် စာရင်းမျှ မရှိပါ။");
     return;
   }
 
-  let csv = "NO,DATE,RESPONSIBILITY PERSON,CATEGORY,DESCRIPTION,METHOD,DEBIT,CREDIT,BALANCES,TRANSFER,VR NO,MY,FY,BOOK NAME,CREATED BY,CREATED AT,UNIQUEID\n";
-  allCashierData.forEach(r => {
-    let desc = `"${(r.description || '').replace(/"/g, '""')}"`;
-    let resp = `"${(r.respPerson || '').replace(/"/g, '""')}"`;
-    let cat = `"${(r.category || '').replace(/"/g, '""')}"`;
+  let csv = "";
 
-    csv += `${r.no || ''},${r.date || ''},${resp},${cat},${desc},${r.method || ''},${r.debit || 0},${r.credit || 0},${r.balances || 0},${r.transfer || ''},${r.vrNo || ''},${r.my || ''},${r.fy || ''},${r.bookName || ''},${r.createdBy || ''},${r.createdAt || ''},${r.uniqueId || ''}\n`;
-  });
+  if (currentCashierSubBook === 'todayIncome') {
+    // 💡 18 Columns for Today's Income Receipt Feed
+    csv = "NO,EFFECT DATE,DATE,FY,ID,FYID,FYID NAME,CLASS,CATEGORY,ACCOUNT NAME,METHOD,DEBIT,CREDIT,AUT AMOUNT,PROMO,MY,VR NO,REMARK\n";
+    allCashierData.forEach((r, idx) => {
+      csv += `${r.no || (idx + 1)},` +
+             `${safeCsvCell(r.effDate || r.date || '')},` +
+             `${safeCsvCell(r.date || '')},` +
+             `${safeCsvCell(r.fy || '')},` +
+             `${safeCsvCell(r.id || '')},` +
+             `${safeCsvCell(r.fyid || '')},` +
+             `${safeCsvCell(r.fyidName || '')},` +
+             `${safeCsvCell(r.class || '')},` +
+             `${safeCsvCell(r.category || '')},` +
+             `${safeCsvCell(r.accountName || '')},` +
+             `${safeCsvCell(r.method || '')},` +
+             `${r.debit || 0},` +
+             `${r.credit || 0},` +
+             `${r.autAmount || 0},` +
+             `${safeCsvCell(r.promo || '')},` +
+             `${safeCsvCell(r.my || '')},` +
+             `${safeCsvCell(r.vrNo || '')},` +
+             `${safeCsvCell(r.remark || '')}\n`;
+    });
+  } else {
+    // 💡 17 Columns for Cashier Sub-Ledgers (CABank, CACash, CAOffice, etc.)
+    csv = "NO,DATE,RESPONSIBILITY PERSON,CATEGORY,DESCRIPTION,METHOD,DEBIT,CREDIT,BALANCES,TRANSFER,VR NO,MY,FY,BOOK NAME,CREATED BY,CREATED AT,UNIQUEID\n";
+    allCashierData.forEach((r, idx) => {
+      csv += `${r.no || (idx + 1)},` +
+             `${safeCsvCell(r.date || '')},` +
+             `${safeCsvCell(r.respPerson || '')},` +
+             `${safeCsvCell(r.category || '')},` +
+             `${safeCsvCell(r.description || '')},` +
+             `${safeCsvCell(r.method || '')},` +
+             `${r.debit || 0},` +
+             `${r.credit || 0},` +
+             `${r.balances || 0},` +
+             `${safeCsvCell(r.transfer || '')},` +
+             `${safeCsvCell(r.vrNo || '')},` +
+             `${safeCsvCell(r.my || '')},` +
+             `${safeCsvCell(r.fy || '')},` +
+             `${safeCsvCell(r.bookName || '')},` +
+             `${safeCsvCell(r.createdBy || '')},` +
+             `${safeCsvCell(r.createdAt || '')},` +
+             `${safeCsvCell(r.uniqueId || '')}\n`;
+    });
+  }
 
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement("a");
