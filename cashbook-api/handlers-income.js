@@ -1,7 +1,8 @@
 /**
  * GOLDEN ERP SYSTEM - MAIN INCOME BOOK HANDLER (CLOUDFLARE D1)
  * File: handlers-income.js
- * 💡 Features: Universal Dynamic FY Generator (No Hardcoded 2627), Crash-Proof SELECT * Lock Check,
+ * 💡 Features: Quota-Optimized Precision Writes (Prevents 100k Limit Exhaustion),
+ *              Universal Dynamic FY Generator (No Hardcoded 2627), Crash-Proof SELECT * Lock Check,
  *              Server-Side Auto-Lock Enforcement (Zero Client Bypass),
  *              Privilege Escalation Defense (Server-Generated UUIDs for New Records),
  *              Idempotent Upsert for Cashier & Daily Rollups (INSERT OR REPLACE),
@@ -256,15 +257,16 @@ async function postCashierIndividualLine(db, targetMethod, amount, body, entryDa
   await db.prepare(`
     INSERT OR REPLACE INTO ${caTable} (
       no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
-    caNo, entryDate, 'Student Income', caDesc, targetMethod, amount, 0, 0, '',
+    caNo, entryDate, 'Student Income', caDesc, targetMethod, amount, 0, '',
     caVrNo, my, normFy, 'Main Income Book', createdBy, new Date().toISOString(), caUid
   ).run();
-
-  await recalculateLedgerBalances(db, caTable);
 }
 
+/**
+ * 💡 Daily Income Rollup (Single Precision Upsert - No 12,000-Row Loop)
+ */
 async function upsertDailyIncomeRollup(db, tableName, entryDate, fy, netAmount, count, createdBy) {
   const normFy = normalizeFyStr(fy);
   const isBank = tableName === 'bank';
@@ -274,7 +276,6 @@ async function upsertDailyIncomeRollup(db, tableName, entryDate, fy, netAmount, 
 
   if (!count || count <= 0 || !netAmount || netAmount <= 0) {
     await db.prepare(`DELETE FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).run();
-    await recalculateLedgerBalances(db, tableName);
     return;
   }
 
@@ -300,14 +301,12 @@ async function upsertDailyIncomeRollup(db, tableName, entryDate, fy, netAmount, 
     await db.prepare(`
       INSERT OR REPLACE INTO ${tableName} (
         no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
-      no, entryDate, 'Student Income', desc, methodLabel, debit, credit, 0, '',
+      no, entryDate, 'Student Income', desc, methodLabel, debit, credit, '',
       vrNo, my, normFy, 'Main Income Book', createdBy, new Date().toISOString(), uniqueid
     ).run();
   }
-
-  await recalculateLedgerBalances(db, tableName);
 }
 
 async function syncDailyIncomeRollupForDate(db, entryDate, fy, createdBy) {
@@ -364,9 +363,9 @@ async function postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdB
     await db.prepare(`
       INSERT OR REPLACE INTO ${refundTable} (
         no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
-      mainNo, entryDate, 'Student Refund', refundDesc, body.method || 'Cash', 0, debit, 0, '',
+      mainNo, entryDate, 'Student Refund', refundDesc, body.method || 'Cash', 0, debit, '',
       mainVrNo, my, normFy, 'Main Income Book', createdBy, new Date().toISOString(), mainRefUid
     ).run();
 
@@ -379,14 +378,11 @@ async function postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdB
     await db.prepare(`
       INSERT OR REPLACE INTO ${caTable} (
         no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
-      caNo, entryDate, 'Student Refund', refundDesc, body.method || 'Cash', 0, debit, 0, '',
+      caNo, entryDate, 'Student Refund', refundDesc, body.method || 'Cash', 0, debit, '',
       caVrNo, my, normFy, 'Main Income Book', createdBy, new Date().toISOString(), caRefUid
     ).run();
-
-    await recalculateLedgerBalances(db, refundTable);
-    await recalculateLedgerBalances(db, caTable);
   }
 
   await syncDailyIncomeRollupForDate(db, entryDate, normFy, createdBy);
@@ -495,7 +491,7 @@ export async function saveIncomeEntry(db, session, body) {
 }
 
 /**
- * 💡 Internal upsert core
+ * 💡 Internal upsert core (Optimized Precision Writes)
  */
 async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration) {
   try {
@@ -584,8 +580,7 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration) {
       };
     }
 
-    // 💡 LIVE OPERATIONAL MODE
-    await recalculateLedgerBalances(db, 'income');
+    // 💡 LIVE OPERATIONAL MODE (Precision Write Only)
     await postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdBy, uniqueid);
 
     return {
@@ -603,7 +598,7 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration) {
 }
 
 /**
- * 💡 Update Income Entry (Crash-Proof SELECT * Query)
+ * 💡 Update Income Entry (Precision 3-4 Writes - Zero 12,000-Row Loops)
  */
 export async function updateIncomeEntry(db, session, body) {
   try {
@@ -612,7 +607,7 @@ export async function updateIncomeEntry(db, session, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    // 🔒 1. CRASH-PROOF SERVER-SIDE LOCK ENFORCEMENT (SELECT * avoids "no such column: is_locked" error)
+    // 🔒 1. CRASH-PROOF SERVER-SIDE LOCK ENFORCEMENT
     const existing = await db.prepare(`SELECT * FROM income WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ပြင်ဆင်မည့် ဝင်ငွေစာရင်း ရှာမတွေ့ပါ။" };
@@ -656,7 +651,7 @@ export async function updateIncomeEntry(db, session, body) {
 }
 
 /**
- * 💡 Delete Income Entry (Crash-Proof SELECT * Query)
+ * 💡 Delete Income Entry (Precision 2-3 Writes)
  */
 export async function deleteIncomeEntry(db, session, body) {
   try {
@@ -665,7 +660,6 @@ export async function deleteIncomeEntry(db, session, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    // 🔒 1. CRASH-PROOF SERVER-SIDE LOCK ENFORCEMENT (SELECT * avoids "no such column: is_locked" error)
     const existing = await db.prepare(`SELECT * FROM income WHERE uniqueid = ?`).bind(uniqueid).first();
     if (existing) {
       const uid = String(existing.uniqueid || '');
@@ -687,7 +681,6 @@ export async function deleteIncomeEntry(db, session, body) {
     const fy = existing?.fy || null;
 
     await cleanLinkedIncomeEntries(db, uniqueid);
-    await recalculateLedgerBalances(db, 'income');
 
     if (entryDate) {
       await syncDailyIncomeRollupForDate(db, entryDate, fy, session?.name || 'Admin');
