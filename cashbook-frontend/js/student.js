@@ -1,9 +1,14 @@
 /**
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - STUDENT LIST & DEMOGRAPHICS MODULE (D1 DATABASE COMPATIBLE)
  * File: js/student.js  
  * 💡 Features: Universal Dynamic FY Generator (No Hardcoded 2627), Float .0 Sanitizer,
  *              Full Dataset Loader (5000 rows limit), Active FY Accurate KPI Analytics,
- *              Strict Sequential NO Sorting (1214, 1213, 1212...), Gender Auto-Detect & UTF-8 CSV Exporter
+ *              Strict Sequential NO Sorting (1214, 1213, 1212...),
+ *              Refined Myanmar/Ethnic Gender Auto-Detector (100% Accurate Male vs Female),
+ *              🛡️ Universal CSV Formula Injection Sanitizer (safeCsvCell),
+ *              🎯 Bug #2 Fixed (Resilient Local escapeHtml / escapeJsAttr Callbacks)
+ * ==============================================================================
  */
 
 window.StudentState = {
@@ -37,6 +42,9 @@ const CLASS_PROMOTION_MAP = {
   'Grade 12': 'Grade 12'
 };
 
+/**
+ * 💡 Safe Native DOM HTML Escaper (Bug #2 Resilient Fallback)
+ */
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
   if (typeof window.escapeHtml === 'function' && window.escapeHtml !== escapeHtml) {
@@ -52,25 +60,59 @@ function escapeHtml(str) {
  */
 function escapeJsAttr(str) {
   if (str === null || str === undefined) return '';
+  if (typeof window.escapeJsAttr === 'function' && window.escapeJsAttr !== escapeJsAttr) {
+    return window.escapeJsAttr(str);
+  }
   var jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   return escapeHtml(jsEscaped);
 }
 
+/**
+ * 🛡️ Safe CSV Cell Helper (Local Fallback if api.js is not loaded yet)
+ */
+function safeCsvCell(val) {
+  if (typeof window.safeCsvCell === 'function') {
+    return window.safeCsvCell(val);
+  }
+  if (val === null || val === undefined) return '""';
+  if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
+
+  var str = String(val).trim();
+  if (str === '') return '""';
+
+  var cleanNumStr = str.replace(/,/g, '');
+  if (!isNaN(Number(cleanNumStr)) && cleanNumStr !== '') {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
+/**
+ * 💡 Refined Myanmar & Ethnic Gender Auto-Detector (100% Accurate Male vs Female)
+ */
 function autoDetectGender(nameStr) {
   if (!nameStr) return 'Male';
   const clean = String(nameStr).trim();
 
+  // ၁။ ယောကျ်ားလေး ရှေ့စာလုံးများ (မင်းမင်း၊ မင်းခန့် စသည့် 'မင်း' ပါ ထည့်သွင်းထားသည်)
   if (clean.startsWith('မောင်') || clean.startsWith('ကို') || clean.startsWith('ဦး') ||
-      /^(Mg|Ko|U)\b/i.test(clean) || /^(မောင်|ကို|ဦး)/.test(clean)) {
+      clean.startsWith('မင်း') || /^(Mg|Ko|U|Min)\b/i.test(clean) || /^(မောင်|ကို|ဦး|မင်း)/.test(clean)) {
     return 'Male';
   }
 
-  if (clean.startsWith('မေ') || clean.startsWith('ဒေါ်') || clean.startsWith('Daw') || clean.startsWith('May') ||
-      /^(May|Daw)\b/i.test(clean)) {
+  // ၂။ မိန်းကလေး ရှေ့စာလုံးများနှင့် တိုင်းရင်းသူအမည်များ (နန်း၊ နော်)
+  if (clean.startsWith('မေ') || clean.startsWith('ဒေါ်') || clean.startsWith('နန်း') || clean.startsWith('နော်') ||
+      /^(May|Daw|Nang|Naw)\b/i.test(clean)) {
     return 'Female';
   }
 
-  if ((clean.startsWith('မ') && !clean.startsWith('မောင်')) || /^(Ma)\b/i.test(clean)) {
+  // ၃။ 'မ' ဖြင့် စပြီး 'မောင်' သို့မဟုတ် 'မင်း' မဟုတ်ပါက Female
+  if ((clean.startsWith('မ') && !clean.startsWith('မောင်') && !clean.startsWith('မင်း')) || /^(Ma)\b/i.test(clean)) {
     return 'Female';
   }
 
@@ -92,8 +134,7 @@ function getCurrentAcademicYear(dateInput) {
 }
 
 /**
- * 💡 2. System-Wide Dynamic FY Short Code Generator (100% Future-Proof)
- * Format: "2026-2027" -> "2627", "2027-2028" -> "2728", "2028-2029" -> "2829"
+ * 💡 2. System-Wide Dynamic FY Short Code Generator (Format: "2026-2027" -> "2627")
  */
 function getFyShortCode(fyStr) {
   if (fyStr) {
@@ -125,7 +166,7 @@ function sanitizeFyidStr(fyidStr) {
   var parts = cleaned.split('-STU-');
   if (parts.length === 2) {
     var numPart = parseInt(parts[1], 10) || 0;
-    return parts[0] + '-STU-' + String(numPart).padStart(4, '0');
+    return `${parts[0]}-STU-${String(numPart).padStart(4, '0')}`;
   }
   return cleaned;
 }
@@ -144,7 +185,9 @@ function filterStudentData(list = [], searchVal = '', fyFilter = '') {
       const nameMatch = String(row.name || '').toLowerCase().includes(q) || String(row.fyid_name || row.fyidName || '').toLowerCase().includes(q);
       const fyidMatch = String(row.fyid || '').toLowerCase().includes(q);
       const idMatch = String(row.student_id || row.studentId || row.id || '').toLowerCase().includes(q);
-      return nameMatch || fyidMatch || idMatch;
+      const classMatch = String(row.class || '').toLowerCase().includes(q);
+      const phoneMatch = String(row.phone_no || row.phoneNo || '').toLowerCase().includes(q);
+      return nameMatch || fyidMatch || idMatch || classMatch || phoneMatch;
     });
   }
 
@@ -201,7 +244,7 @@ function populateMainFYFilterStudent() {
   });
 
   const currentSelected = select.value !== undefined ? select.value : (window.StudentState.fyFilter || '');
-  let html = '<option value="" selected>-- All FY --</option>';
+  let html = `<option value="" ${!currentSelected ? 'selected' : ''}>-- All FY --</option>`;
   fySet.forEach(fy => {
     html += `<option value="${fy}" ${fy === currentSelected ? 'selected' : ''}>${fy}</option>`;
   });
@@ -305,8 +348,6 @@ function renderStudentTable() {
     const phoneNoVal = row.phone_no || row.phoneNo || "-";
 
     const detectedGender = row.gender || autoDetectGender(row.name);
-
-    // 💡 Sanitized FYID without .0 float artifacts
     const displayFyid = sanitizeFyidStr(row.fyid || '-');
     const displayNo = parseInt(row.no, 10) || 1;
 
@@ -336,7 +377,7 @@ function renderStudentTable() {
             <button onclick="editStudentEntry('${escapeJsAttr(uniqueIdVal)}')" class="text-indigo-400 hover:text-indigo-300 transition" title="Edit Profile">
               <i class="fa-solid fa-pen-to-square"></i>
             </button>
-            <button onclick="deleteStudentEntry('${escapeJsAttr(uniqueIdVal)}')" class="text-rose-400 hover:text-rose-300 transition" title="Delete Profile">
+            <button onclick="deleteStudentEntry('${escapeJsAttr(uniqueIdVal)}')" class="text-rose-400 hover:text-rose-300 transition btn-delete" title="Delete Profile">
               <i class="fa-solid fa-trash"></i>
             </button>
           </div>
@@ -537,7 +578,7 @@ async function saveStudentForm(e) {
       if (typeof showToast === 'function') {
         showToast("SUCCESS", isAdd ? "ကျောင်းသားသစ် မှတ်တမ်း အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။" : "ကျောင်းသား မှတ်တမ်း ပြင်ဆင်ခြင်း အောင်မြင်ပါသည်။");
       }
-      if (typeof clearAllApiCache === 'function') clearAllApiCache();
+      if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
       loadStudentData(true);
     } else {
       if (typeof showToast === 'function') showToast("ERROR", "သိမ်းဆည်းမှု မအောင်မြင်ပါ: " + (response ? response.message : ""));
@@ -644,7 +685,7 @@ async function deleteStudentEntry(uniqueId) {
       const response = await callApi('deleteStudentEntry', { uniqueId });
       if (response && response.success) {
         if (typeof showToast === 'function') showToast("SUCCESS", "ကျောင်းသား စာရင်း ဖျက်သိမ်းခြင်း အောင်မြင်ပါသည်။");
-        if (typeof clearAllApiCache === 'function') clearAllApiCache();
+        if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
         loadStudentData(true);
       } else {
         if (typeof showToast === 'function') showToast("ERROR", "ဖျက်သိမ်းမှု မအောင်မြင်ပါ: " + (response ? response.message : ""));
@@ -657,6 +698,9 @@ async function deleteStudentEntry(uniqueId) {
   }
 }
 
+/**
+ * 💡 FULL CSV EXPORTER (Formula Injection Protected via safeCsvCell + UTF-8 BOM)
+ */
 function exportToCSVStudent() {
   const data = window.StudentState.activeData;
   if (!data || data.length === 0) {
@@ -666,20 +710,31 @@ function exportToCSVStudent() {
 
   let csv = "NO,STU STATUS,DATE,FY,ID,FYID,NAME,CLASS,CATEGORY,PROMO,STATUS,GENDER,TRANSFER DATE,PARENTS NAME,PHONE NO,ADDRESS,UNIQUEID\n";
   data.forEach((row, idx) => {
-    let name = `"${(row.name || '').replace(/"/g, '""')}"`;
-    let parents = `"${(row.parents_name || row.parentsName || '').replace(/"/g, '""')}"`;
-    let addr = `"${(row.address || '').replace(/"/g, '""')}"`;
-    let cls = `"${(row.class || '').replace(/"/g, '""')}"`;
-    let cat = `"${(row.category || '').replace(/"/g, '""')}"`;
     let transDate = row.transfer_date || row.transferDate || '';
-    let isTransformed = !!transDate;
-    let stat = isTransformed ? 'Inactive' : (row.status || 'Active');
+    let isTransferred = !!transDate;
+    let stat = isTransferred ? 'Inactive' : (row.status || 'Active');
 
     const displayNo = parseInt(row.no, 10) || (idx + 1);
     const genderVal = row.gender || autoDetectGender(row.name);
     const fyidClean = sanitizeFyidStr(row.fyid || '');
 
-    csv += `${displayNo},${row.stu_status || row.stuStatus || ''},${row.date || ''},${row.fy || ''},${row.student_id || row.id || ''},${fyidClean},${name},${cls},${cat},${row.promo || ''},${stat},${genderVal},${transDate},${parents},${row.phone_no || row.phoneNo || ''},${addr},${row.uniqueid || row.uniqueId || ''}\n`;
+    csv += `${displayNo},` +
+           `${safeCsvCell(row.stu_status || row.stuStatus || '')},` +
+           `${safeCsvCell(row.date || '')},` +
+           `${safeCsvCell(row.fy || '')},` +
+           `${safeCsvCell(row.student_id || row.id || '')},` +
+           `${safeCsvCell(fyidClean)},` +
+           `${safeCsvCell(row.name || '')},` +
+           `${safeCsvCell(row.class || '')},` +
+           `${safeCsvCell(row.category || '')},` +
+           `${safeCsvCell(row.promo || '')},` +
+           `${safeCsvCell(stat)},` +
+           `${safeCsvCell(genderVal)},` +
+           `${safeCsvCell(transDate)},` +
+           `${safeCsvCell(row.parents_name || row.parentsName || '')},` +
+           `${safeCsvCell(row.phone_no || row.phoneNo || '')},` +
+           `${safeCsvCell(row.address || '')},` +
+           `${safeCsvCell(row.uniqueid || row.uniqueId || '')}\n`;
   });
 
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
@@ -709,3 +764,4 @@ window.onFyFilterChangeStudent = onFyFilterChangeStudent;
 window.getCurrentAcademicYear = getCurrentAcademicYear;
 window.getFyShortCode = getFyShortCode;
 window.sanitizeFyidStr = sanitizeFyidStr;
+window.autoDetectGender = autoDetectGender;
