@@ -1,7 +1,7 @@
 /**
  * GOLDEN ERP SYSTEM - STUDENT MONEY LEDGER & WALLET MODULE
  * File: js/student-money.js
- * 💡 Features: Dual Sub-Tab Switcher (1. Transaction History | 2. Student Wallet Balances),
+ * 💡 Features: Universal Dynamic FY Generator (No Hardcoded 2627), Dual Sub-Tab Switcher (History | Wallet Summary),
  *              1 Student = 1 Row Summary, Live Student Statement Timeline Modal,
  *              Crash-Proof Name & ID Extraction in Form Payload (400 Bad Request Fixed),
  *              FY-Scoped Student Auto-Lookup, Live Balance Indicator & Multi-CSV Exporter
@@ -41,15 +41,46 @@ function parseCleanNum(val) {
   return isNaN(num) ? 0 : num;
 }
 
-function getFyShortCode(fyStr) {
-  if (!fyStr) return '2627';
-  var parts = String(fyStr).split(/[-/]/);
-  if (parts.length >= 2) {
-    return `${parts[0].trim().slice(-2)}${parts[1].trim().slice(-2)}`;
+/**
+ * 💡 1. Universal Dynamic Academic Year Generator (e.g. "2026-2027", "2027-2028")
+ */
+function getCurrentAcademicYear(dateInput) {
+  var d = dateInput ? new Date(dateInput) : new Date();
+  var validDate = isNaN(d.getTime()) ? new Date() : d;
+  var y = validDate.getFullYear();
+
+  if (validDate.getMonth() < 3) {
+    y -= 1;
   }
-  return '2627';
+  return `${y}-${y + 1}`;
 }
 
+/**
+ * 💡 2. System-Wide Dynamic FY Short Code Generator (100% Future-Proof)
+ * Format: "2026-2027" -> "2627", "2027-2028" -> "2728", "2028-2029" -> "2829"
+ */
+function getFyShortCode(fyStr) {
+  if (fyStr) {
+    var clean = String(fyStr).replace(/^FY\s*/i, '').trim();
+    var parts = clean.split(/[-/]/);
+    if (parts.length >= 2 && parts[0].trim() && parts[1].trim()) {
+      var y1 = parts[0].trim().slice(-2);
+      var y2 = parts[1].trim().slice(-2);
+      return y1 + y2;
+    }
+    if (/^\d{4}$/.test(clean)) {
+      return clean;
+    }
+  }
+
+  var currentFy = getCurrentAcademicYear();
+  var p = currentFy.split('-');
+  return p[0].slice(-2) + p[1].slice(-2);
+}
+
+/**
+ * 💡 FYID Float .0 Sanitizer
+ */
 function sanitizeFyidStr(fyidStr) {
   var s = String(fyidStr || '').trim();
   if (!s) return s;
@@ -263,12 +294,14 @@ function renderStudentMoneyHistoryTable() {
     const creditStr = row.credit > 0 ? Number(row.credit).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-';
     const balStr = Number(row.balances || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
+    const cleanFyid = sanitizeFyidStr(row.fyid);
+
     tr.innerHTML = `
       <td class="text-center font-mono font-semibold text-slate-400 py-3 px-2">${displayNo}</td>
       <td class="font-mono text-xs py-3 px-2">${escapeHtml(row.date)}</td>
       <td class="font-mono font-bold text-indigo-300 py-3 px-2">${escapeHtml(row.fy)}</td>
       <td class="font-mono font-bold py-3 px-2">${escapeHtml(row.studentId)}</td>
-      <td class="font-mono font-bold text-indigo-400 py-3 px-2">${escapeHtml(row.fyid)}</td>
+      <td class="font-mono font-bold text-indigo-400 py-3 px-2">${escapeHtml(cleanFyid)}</td>
       <td class="font-bold text-slate-100 py-3 px-2">${escapeHtml(row.fyidName)}</td>
       <td class="py-3 px-2">${escapeHtml(row.class)}</td>
       <td class="font-semibold py-3 px-2">${escapeHtml(row.method)}</td>
@@ -345,10 +378,12 @@ function renderStudentMoneySummaryTable() {
       ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Active Balance</span>'
       : (bal < 0 ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Overdrawn (အနုတ်)</span>' : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700/50">Zero (လက်ကျန်မရှိ)</span>');
 
+    const cleanFyid = sanitizeFyidStr(row.fyid);
+
     tr.innerHTML = `
       <td class="text-center font-mono font-semibold text-slate-400 py-3 px-2">${idx + 1}</td>
       <td class="font-mono font-bold text-indigo-300 py-3 px-2">${row.studentId}</td>
-      <td class="font-mono font-bold py-3 px-2 text-slate-300">${escapeHtml(row.fyid)}</td>
+      <td class="font-mono font-bold py-3 px-2 text-slate-300">${escapeHtml(cleanFyid)}</td>
       <td class="font-bold text-white py-3 px-2">${escapeHtml(row.fyidName)}</td>
       <td class="py-3 px-2">${escapeHtml(row.class)}</td>
       <td class="text-right font-mono font-bold text-emerald-400 py-3 px-2">${Number(row.totalDeposit || 0).toLocaleString()} MMK</td>
@@ -449,7 +484,7 @@ function closeStudentStatementModal() {
  * 💡 Student Lookup & Live Remaining Balance in Entry Form
  */
 async function onStudentIdOrFYChangeMoney() {
-  const fyVal = document.getElementById('stm-fy')?.value || '2026-2027';
+  const fyVal = document.getElementById('stm-fy')?.value || getCurrentAcademicYear();
   const idVal = document.getElementById('stm-id-search')?.value.trim();
 
   const fyidShow = document.getElementById('stm-fyid-show');
@@ -548,11 +583,17 @@ function populateFYDropdownMoney() {
   const select = document.getElementById('stm-fy');
   if (!select) return;
 
-  const year = new Date().getFullYear();
+  const currentFY = getCurrentAcademicYear();
+  const startYear = parseInt(currentFY.split('-')[0], 10);
+
+  const prevFY = `${startYear - 1}-${startYear}`;
+  const nextFY = `${startYear + 1}-${startYear + 2}`;
+  const currentVal = select.value || currentFY;
+
   select.innerHTML = `
-    <option value="${year - 1}-${year}">${year - 1}-${year}</option>
-    <option value="${year}-${year + 1}" selected>${year}-${year + 1}</option>
-    <option value="${year + 1}-${year + 2}">${year + 1}-${year + 2}</option>
+    <option value="${prevFY}" ${prevFY === currentVal ? 'selected' : ''}>${prevFY}</option>
+    <option value="${currentFY}" ${currentFY === currentVal ? 'selected' : ''}>${currentFY}</option>
+    <option value="${nextFY}" ${nextFY === currentVal ? 'selected' : ''}>${nextFY}</option>
   `;
 }
 
@@ -590,7 +631,7 @@ async function saveStudentMoneyForm(e) {
     fyid: fyidShowVal,
     fyidName: fyidNameVal,
     class: document.getElementById('stm-class')?.value || '',
-    fy: document.getElementById('stm-fy')?.value || '2026-2027',
+    fy: document.getElementById('stm-fy')?.value || getCurrentAcademicYear(),
     date: document.getElementById('stm-date')?.value || new Date().toISOString().slice(0, 10),
     method: document.getElementById('stm-method')?.value || 'Cash',
     debit: parseFloat(document.getElementById('stm-debit')?.value || 0),
@@ -680,7 +721,8 @@ function exportToCSVStudentMoney() {
   }
   let csv = "NO,DATE,FY,ID,FYID,NAME,CLASS,METHOD,DEBIT,CREDIT,BALANCES,REMARK\n";
   gStudentMoneyHistoryData.forEach(r => {
-    csv += `${r.no},${r.date},${r.fy},${r.studentId},${r.fyid},"${r.fyidName}",${r.class},${r.method},${r.debit},${r.credit},${r.balances},"${r.remark || ''}"\n`;
+    const cleanFyid = sanitizeFyidStr(r.fyid);
+    csv += `${r.no},${r.date},${r.fy},${r.studentId},${cleanFyid},"${r.fyidName}",${r.class},${r.method},${r.debit},${r.credit},${r.balances},"${r.remark || ''}"\n`;
   });
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
   const url = window.URL.createObjectURL(blob);
@@ -697,7 +739,8 @@ function exportStudentMoneySummaryToCSV() {
   }
   let csv = "NO,STUDENT_ID,FYID,NAME,CLASS,TOTAL_DEPOSITED,TOTAL_WITHDRAWN,WALLET_BALANCE,TOTAL_TRANSACTIONS,LAST_DATE\n";
   gStudentMoneySummaryData.forEach(r => {
-    csv += `${r.no},${r.studentId},${r.fyid},"${r.fyidName}",${r.class},${r.totalDeposit},${r.totalWithdraw},${r.netBalance},${r.transactionCount},${r.lastDate}\n`;
+    const cleanFyid = sanitizeFyidStr(r.fyid);
+    csv += `${r.no},${r.studentId},${cleanFyid},"${r.fyidName}",${r.class},${r.totalDeposit},${r.totalWithdraw},${r.netBalance},${r.transactionCount},${r.lastDate}\n`;
   });
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
   const url = window.URL.createObjectURL(blob);
@@ -725,3 +768,6 @@ window.onSearchInputStudentMoney = onSearchInputStudentMoney;
 window.onSearchInputStudentMoneySummary = onSearchInputStudentMoneySummary;
 window.clearDateFilterStudentMoney = clearDateFilterStudentMoney;
 window.changePageStudentMoney = changePageStudentMoney;
+window.getCurrentAcademicYear = getCurrentAcademicYear;
+window.getFyShortCode = getFyShortCode;
+window.sanitizeFyidStr = sanitizeFyidStr;
