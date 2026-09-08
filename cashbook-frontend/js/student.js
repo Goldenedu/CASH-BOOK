@@ -1,8 +1,9 @@
 /**
  * GOLDEN ERP SYSTEM - STUDENT LIST & DEMOGRAPHICS MODULE (D1 DATABASE COMPATIBLE)
  * File: js/student.js  
- * 💡 Features: Full Dataset Loader (5000 rows limit), Active FY Accurate KPI Analytics,
- *              Strict Sequential NO Sorting (1214, 1213, 1212...), Gender Auto-Detect & Clean Display
+ * 💡 Features: Universal Dynamic FY Generator (No Hardcoded 2627), Float .0 Sanitizer,
+ *              Full Dataset Loader (5000 rows limit), Active FY Accurate KPI Analytics,
+ *              Strict Sequential NO Sorting (1214, 1213, 1212...), Gender Auto-Detect & UTF-8 CSV Exporter
  */
 
 window.StudentState = {
@@ -48,8 +49,6 @@ function escapeHtml(str) {
 
 /**
  * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
- * Escapes backslashes/quotes for the JS string literal, then HTML-escapes the
- * result so it can't break out of the surrounding double-quoted HTML attribute.
  */
 function escapeJsAttr(str) {
   if (str === null || str === undefined) return '';
@@ -78,15 +77,57 @@ function autoDetectGender(nameStr) {
   return 'Male';
 }
 
-function getFyShortCode(fyStr) {
-  if (!fyStr) return '2627';
-  const parts = String(fyStr).split(/[-/]/);
-  if (parts.length >= 2) {
-    const y1 = parts[0].trim().slice(-2);
-    const y2 = parts[1].trim().slice(-2);
-    return `${y1}${y2}`;
+/**
+ * 💡 1. Universal Dynamic Academic Year Generator (e.g. "2026-2027", "2027-2028")
+ */
+function getCurrentAcademicYear(dateInput) {
+  var d = dateInput ? new Date(dateInput) : new Date();
+  var validDate = isNaN(d.getTime()) ? new Date() : d;
+  var y = validDate.getFullYear();
+
+  if (validDate.getMonth() < 3) {
+    y -= 1;
   }
-  return '2627';
+  return `${y}-${y + 1}`;
+}
+
+/**
+ * 💡 2. System-Wide Dynamic FY Short Code Generator (100% Future-Proof)
+ * Format: "2026-2027" -> "2627", "2027-2028" -> "2728", "2028-2029" -> "2829"
+ */
+function getFyShortCode(fyStr) {
+  if (fyStr) {
+    var clean = String(fyStr).replace(/^FY\s*/i, '').trim();
+    var parts = clean.split(/[-/]/);
+    if (parts.length >= 2 && parts[0].trim() && parts[1].trim()) {
+      var y1 = parts[0].trim().slice(-2);
+      var y2 = parts[1].trim().slice(-2);
+      return y1 + y2;
+    }
+    if (/^\d{4}$/.test(clean)) {
+      return clean;
+    }
+  }
+
+  var currentFy = getCurrentAcademicYear();
+  var p = currentFy.split('-');
+  return p[0].slice(-2) + p[1].slice(-2);
+}
+
+/**
+ * 💡 FYID Float .0 Sanitizer
+ */
+function sanitizeFyidStr(fyidStr) {
+  var s = String(fyidStr || '').trim();
+  if (!s) return s;
+  if (s.indexOf('.0') === -1) return s;
+  var cleaned = s.replace(/\.0/g, '');
+  var parts = cleaned.split('-STU-');
+  if (parts.length === 2) {
+    var numPart = parseInt(parts[1], 10) || 0;
+    return parts[0] + '-STU-' + String(numPart).padStart(4, '0');
+  }
+  return cleaned;
 }
 
 function filterStudentData(list = [], searchVal = '', fyFilter = '') {
@@ -107,7 +148,7 @@ function filterStudentData(list = [], searchVal = '', fyFilter = '') {
     });
   }
 
-  // 💡 FIX: Strict NO Sequential Sorting (အမြဲတမ်း NO အကြီးဆုံးမှ အငယ်သို့ အစဉ်လိုက် စီပေးခြင်း)
+  // 💡 Strict NO Sequential Sorting (အမြဲတမ်း NO အကြီးဆုံးမှ အငယ်သို့ အစဉ်လိုက် စီပေးခြင်း)
   filtered.sort((a, b) => {
     const noA = parseInt(a.no, 10) || 0;
     const noB = parseInt(b.no, 10) || 0;
@@ -153,7 +194,7 @@ function populateMainFYFilterStudent() {
 
   const rawData = window.StudentState.activeData || [];
   const fySet = new Set();
-  fySet.add('2026-2027');
+  fySet.add(getCurrentAcademicYear());
 
   rawData.forEach(r => {
     if (r.fy) fySet.add(String(r.fy).trim().replace(/^FY\s*/i, ''));
@@ -265,16 +306,8 @@ function renderStudentTable() {
 
     const detectedGender = row.gender || autoDetectGender(row.name);
 
-    let displayFyid = row.fyid || '-';
-    if (displayFyid.includes('.0')) {
-      displayFyid = displayFyid.replace(/\.0/g, '');
-      const parts = displayFyid.split('-STU-');
-      if (parts.length === 2) {
-        const numPart = parseInt(parts[1], 10) || 1;
-        displayFyid = `${parts[0]}-STU-${String(numPart).padStart(4, '0')}`;
-      }
-    }
-
+    // 💡 Sanitized FYID without .0 float artifacts
+    const displayFyid = sanitizeFyidStr(row.fyid || '-');
     const displayNo = parseInt(row.no, 10) || 1;
 
     return `
@@ -357,19 +390,18 @@ function populateDynamicFYDropdownStudent(selectId) {
   const select = document.getElementById(selectId);
   if (!select) return;
 
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-  let currentStartYear = (month < 4) ? year - 1 : year;
+  const currentFY = getCurrentAcademicYear();
+  const startYear = parseInt(currentFY.split('-')[0], 10);
 
-  const currentFY = `${currentStartYear}-${currentStartYear + 1}`;
-  const prevFY = `${currentStartYear - 1}-${currentStartYear}`;
-  const nextFY = `${currentStartYear + 1}-${currentStartYear + 2}`;
+  const prevFY = `${startYear - 1}-${startYear}`;
+  const nextFY = `${startYear + 1}-${startYear + 2}`;
+
+  const currentVal = select.value || currentFY;
 
   select.innerHTML = `
-    <option value="${prevFY}">${prevFY}</option>
-    <option value="${currentFY}" selected>${currentFY}</option>
-    <option value="${nextFY}">${nextFY}</option>
+    <option value="${prevFY}" ${prevFY === currentVal ? 'selected' : ''}>${prevFY}</option>
+    <option value="${currentFY}" ${currentFY === currentVal ? 'selected' : ''}>${currentFY}</option>
+    <option value="${nextFY}" ${nextFY === currentVal ? 'selected' : ''}>${nextFY}</option>
   `;
 }
 
@@ -465,7 +497,7 @@ async function saveStudentForm(e) {
   const transferDateVal = document.getElementById('stu-transferdate')?.value || "";
   const calculatedStatus = transferDateVal ? "Inactive" : "Active";
 
-  const fyVal = document.getElementById('stu-fy')?.value || "2026-2027";
+  const fyVal = document.getElementById('stu-fy')?.value || getCurrentAcademicYear();
   const nameVal = document.getElementById('stu-name')?.value || "";
 
   const detectedGender = autoDetectGender(nameVal);
@@ -645,8 +677,9 @@ function exportToCSVStudent() {
 
     const displayNo = parseInt(row.no, 10) || (idx + 1);
     const genderVal = row.gender || autoDetectGender(row.name);
+    const fyidClean = sanitizeFyidStr(row.fyid || '');
 
-    csv += `${displayNo},${row.stu_status || row.stuStatus || ''},${row.date || ''},${row.fy || ''},${row.student_id || row.id || ''},${row.fyid || ''},${name},${cls},${cat},${row.promo || ''},${stat},${genderVal},${transDate},${parents},${row.phone_no || row.phoneNo || ''},${addr},${row.uniqueid || row.uniqueId || ''}\n`;
+    csv += `${displayNo},${row.stu_status || row.stuStatus || ''},${row.date || ''},${row.fy || ''},${row.student_id || row.id || ''},${fyidClean},${name},${cls},${cat},${row.promo || ''},${stat},${genderVal},${transDate},${parents},${row.phone_no || row.phoneNo || ''},${addr},${row.uniqueid || row.uniqueId || ''}\n`;
   });
 
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
@@ -673,3 +706,6 @@ window.changePageStudent = changePageStudent;
 window.onStudentStatusChange = onStudentStatusChange;
 window.onOldStudentIdLookup = onOldStudentIdLookup;
 window.onFyFilterChangeStudent = onFyFilterChangeStudent;
+window.getCurrentAcademicYear = getCurrentAcademicYear;
+window.getFyShortCode = getFyShortCode;
+window.sanitizeFyidStr = sanitizeFyidStr;
