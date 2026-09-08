@@ -348,13 +348,12 @@ function resetIncomeAmounts(amount = 0) {
 }
 
 /**
- * 💡 Precision Promotion Matrix Rate Auto-Calculation & 100% Guaranteed Credit Sync Engine
+ * 💡 Precision Promotion Matrix Rate Auto-Calculation & 100% Synchronized Credit Engine
  */
 async function onAccountNameOrCategoryChangeIncome() {
   var fyVal = document.getElementById('inc-fy')?.value || '2026-2027';
   var cleanFy = String(fyVal).trim().replace(/^FY\s*/i, '');
 
-  // 💡 Supports both inc-account and inc-account-name IDs
   var accEl = document.getElementById('inc-account-name') || document.getElementById('inc-account');
   var accountName = accEl ? accEl.value : 'Registration';
 
@@ -366,10 +365,13 @@ async function onAccountNameOrCategoryChangeIncome() {
   var creditEl = document.getElementById('inc-credit') || document.getElementById('income-credit');
   var debitEl = document.getElementById('inc-debit') || document.getElementById('income-debit');
 
-  // Registration နှင့် Services မဟုတ်ပါက ၂ ခုစလုံးကို 0 အဖြစ် တူညီစွာ ထားမည်
+  // 💡 1. FIX: Registration နှင့် Services မဟုတ်သော အခြားခေါင်းစဉ်များ (Ferry, Night Study, Others) သို့ ပြောင်းပါက
+  // Standard AUT Amount ရော Credit (ပေးချေငွေ) ပါ အရင်တန်ဖိုးဟောင်း မကျန်စေဘဲ 0 အဖြစ် တပြိုင်နက်တည်း ရှင်းထုတ်ပေးမည်
   if (accountName !== "Registration" && accountName !== "Services") {
     if (autAmtEl) autAmtEl.value = 0;
-    if (creditEl) creditEl.value = 0;
+    if (creditEl) creditEl.value = 0; // 👈 ၇ သောင်း အဟောင်း မကျန်တော့ဘဲ 0 ဖြစ်သွားမည်
+    if (debitEl) debitEl.value = 0;
+    if (typeof updateSplitAmountsIncome === 'function') updateSplitAmountsIncome();
     return;
   }
 
@@ -391,7 +393,7 @@ async function onAccountNameOrCategoryChangeIncome() {
     var cleanClass = classVal.toLowerCase().replace(/\s+/g, '');
     var cleanCat = categoryVal.toLowerCase().replace(/\s+/g, '');
 
-    // 💡 1. Strict Match: Match by FY, Class AND Category (Case-Insensitive & Space-Agnostic)
+    // 💡 1. Strict Match: Match by FY + Class + Category
     var match = promoMatrixCache.find(function(r) {
       var rFy = String(r.fy || '').trim().replace(/^FY\s*/i, '');
       var rClass = String(r.class || '').trim().toLowerCase().replace(/\s+/g, '');
@@ -413,7 +415,7 @@ async function onAccountNameOrCategoryChangeIncome() {
       });
     }
 
-    // 💡 3. Fallback for "Others" / Custom Categories: Match by Class alone!
+    // 💡 3. Fallback for "Others" / Custom categories: Match Class alone
     if (!match) {
       match = promoMatrixCache.find(function(r) {
         var rClass = String(r.class || '').trim().toLowerCase().replace(/\s+/g, '');
@@ -426,7 +428,7 @@ async function onAccountNameOrCategoryChangeIncome() {
         calculatedFee = Number(match.registration ?? match.Registration ?? 0);
       } else if (accountName === "Services") {
         var pClean = promoVal.toLowerCase().replace(/[^a-z0-9]/g, '');
-        
+
         if (pClean.includes('proa')) calculatedFee = Number(match.proA ?? match.pro_a ?? 0);
         else if (pClean.includes('prob')) calculatedFee = Number(match.proB ?? match.pro_b ?? 0);
         else if (pClean.includes('proc')) calculatedFee = Number(match.proC ?? match.pro_c ?? 0);
@@ -439,12 +441,11 @@ async function onAccountNameOrCategoryChangeIncome() {
     }
   }
 
-  // 💡 4. 100% SYNCHRONIZED UPDATE (Standard AUT Amount နှင့် Credit အမြဲတမ်း တထပ်တည်း ဖြစ်စေမည်)
+  // 💡 4. 100% SYNCHRONIZED UPDATE: Always set both fields to the exact same calculated fee
   if (autAmtEl) autAmtEl.value = calculatedFee;
   if (creditEl) creditEl.value = calculatedFee;
   if (debitEl) debitEl.value = 0;
 
-  // 💡 5. Update Split Payment Breakdown if split is checked
   if (typeof updateSplitAmountsIncome === 'function') {
     updateSplitAmountsIncome();
   }
