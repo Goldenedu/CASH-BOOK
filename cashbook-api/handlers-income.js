@@ -1,7 +1,7 @@
 /**
  * GOLDEN ERP SYSTEM - MAIN INCOME BOOK HANDLER (CLOUDFLARE D1)
  * File: handlers-income.js
- * 💡 Features: Crash-Proof SELECT * Lock Check (No "no such column: is_locked" errors),
+ * 💡 Features: Universal Dynamic FY Generator (No Hardcoded 2627), Crash-Proof SELECT * Lock Check,
  *              Server-Side Auto-Lock Enforcement (Zero Client Bypass),
  *              Privilege Escalation Defense (Server-Generated UUIDs for New Records),
  *              Idempotent Upsert for Cashier & Daily Rollups (INSERT OR REPLACE),
@@ -15,26 +15,57 @@ function parseCleanIntId(val) {
   return isNaN(n) ? 0 : n;
 }
 
+/**
+ * 💡 1. Universal Dynamic Academic Year Generator (e.g. "2026-2027", "2027-2028")
+ */
+function getCurrentAcademicYear(dateInput) {
+  const d = dateInput ? new Date(dateInput) : new Date();
+  const validDate = isNaN(d.getTime()) ? new Date() : d;
+  let y = validDate.getFullYear();
+
+  if (validDate.getMonth() < 3) {
+    y -= 1;
+  }
+  return `${y}-${y + 1}`;
+}
+
+/**
+ * 💡 2. Dynamic FY String Normalizer (Ensures "FY YYYY-YYYY" format)
+ */
 function normalizeFyStr(fy) {
-  if (!fy) return 'FY 2026-2027';
-  let s = String(fy).trim();
+  let s = fy ? String(fy).trim() : `FY ${getCurrentAcademicYear()}`;
+  if (!s) s = `FY ${getCurrentAcademicYear()}`;
   if (!s.toUpperCase().startsWith('FY ')) {
     s = 'FY ' + s;
   }
   return s;
 }
 
+/**
+ * 💡 3. System-Wide Dynamic FY Short Code Generator (Format: "2026-2027" -> "2627")
+ */
 function getFyShortCode(fyStr) {
-  if (!fyStr) return '2627';
-  const parts = String(fyStr).replace(/^FY\s*/i, '').split(/[-/]/);
-  if (parts.length >= 2) {
-    const y1 = parts[0].trim().slice(-2);
-    const y2 = parts[1].trim().slice(-2);
-    return `${y1}${y2}`;
+  if (fyStr) {
+    const clean = String(fyStr).replace(/^FY\s*/i, '').trim();
+    const parts = clean.split(/[-/]/);
+    if (parts.length >= 2 && parts[0].trim() && parts[1].trim()) {
+      const y1 = parts[0].trim().slice(-2);
+      const y2 = parts[1].trim().slice(-2);
+      return y1 + y2;
+    }
+    if (/^\d{4}$/.test(clean)) {
+      return clean;
+    }
   }
-  return '2627';
+
+  const currentFy = getCurrentAcademicYear();
+  const p = currentFy.split('-');
+  return p[0].slice(-2) + p[1].slice(-2);
 }
 
+/**
+ * 💡 FYID Float .0 Sanitizer
+ */
 function sanitizeFyidStr(fyidStr) {
   const s = String(fyidStr || '').trim();
   if (!s) return s;
@@ -97,7 +128,7 @@ async function recalculateLedgerBalances(db, tableName) {
     const fys = Array.from(new Set(rawFys));
 
     if (fys.length === 0) {
-      fys.push('FY 2026-2027');
+      fys.push(`FY ${getCurrentAcademicYear()}`);
     }
 
     const statements = [];
@@ -368,7 +399,7 @@ export async function getIncomeData(db, body) {
     const limit = parseInt(body.limit || 50, 10);
     const offset = (page - 1) * limit;
 
-    const activeFy = normalizeFyStr(body.fy || "FY 2026-2027");
+    const activeFy = normalizeFyStr(body.fy || `FY ${getCurrentAcademicYear()}`);
 
     const statsResult = await db.prepare(`
       SELECT 
