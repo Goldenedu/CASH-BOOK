@@ -1,8 +1,10 @@
 /**
  * GOLDEN ERP SYSTEM - OFFLINE-FIRST BACKGROUND SYNC ENGINE
  * File: js/offline-sync.js
- * 💡 Features: IndexedDB Outbox Storage, Strict FIFO Sequential Sync, Idempotency Guard,
- *              Live Connection Status Badge, Auto-Replay on Network Reconnect & Silent Ledger Refresh
+ * 💡 Features: Direct Cloudflare Worker Routing (405 Method Not Allowed Fixed),
+ *              Safe JSON Response Parser (Unexpected end of JSON fixed),
+ *              IndexedDB Outbox Storage, Strict FIFO Sequential Sync,
+ *              Live Connection Status Badge (Auto-Hides only when 100% Synced) & Silent Ledger Refresh
  */
 
 (function(window) {
@@ -11,20 +13,34 @@
   const DB_NAME = 'GoldenERP_OfflineDB';
   const DB_VERSION = 1;
   const STORE_NAME = 'outbox_queue';
+  const FALLBACK_KEY = 'golden_offline_fallback_queue';
+
+  // 💡 Real Cloudflare D1 Backend Worker Endpoint (Never post to pages.dev/api)
+  const FALLBACK_WORKER_URL = "https://cashbook-app-api.goldeneduprivateschool.workers.dev/";
 
   let dbInstance = null;
   let isSyncing = false;
   let syncIntervalId = null;
 
+  function getTargetApiUrl() {
+    if (typeof window !== 'undefined' && window.CONFIG && window.CONFIG.API_URL) {
+      return window.CONFIG.API_URL;
+    }
+    if (typeof API_WORKER_URL !== 'undefined' && API_WORKER_URL) {
+      return API_WORKER_URL;
+    }
+    return FALLBACK_WORKER_URL;
+  }
+
   /**
    * 💡 1. Open or Initialize IndexedDB
    */
   function getDB() {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       if (dbInstance) return resolve(dbInstance);
 
       if (!window.indexedDB) {
-        console.warn("IndexedDB not supported in this browser. Falling back to local queue memory.");
+        console.warn("[OfflineSync] IndexedDB not supported, falling back to LocalStorage.");
         return resolve(null);
       }
 
@@ -45,7 +61,7 @@
       };
 
       request.onerror = function(event) {
-        console.error("IndexedDB Open Error:", event.target.error);
+        console.error("[OfflineSync] IndexedDB Open Error:", event.target.error);
         resolve(null);
       };
     });
@@ -54,7 +70,7 @@
   /**
    * 💡 2. Enqueue Offline Action to IndexedDB
    */
-  async function enqueueRequest(action, payload, method = 'POST') {
+  async function enqueueRequest(action, payload = {}, method = 'POST') {
     const db = await getDB();
     
     // Ensure Unique ID exists so server treats as idempotent upsert
@@ -72,21 +88,26 @@
     };
 
     if (db) {
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.add(item);
+      return new Promise((resolve) => {
+        try {
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.add(item);
 
-        req.onsuccess = () => {
-          updateNetworkStatusUI();
-          resolve(true);
-        };
-        req.onerror = () => {
-          // Fallback to localStorage if IndexedDB write fails
+          req.onsuccess = () => {
+            updateNetworkStatusUI();
+            resolve(true);
+          };
+          req.onerror = () => {
+            fallbackAddToLocalStorage(item);
+            updateNetworkStatusUI();
+            resolve(true);
+          };
+        } catch (e) {
           fallbackAddToLocalStorage(item);
           updateNetworkStatusUI();
           resolve(true);
-        };
+        }
       });
     } else {
       fallbackAddToLocalStorage(item);
@@ -97,12 +118,12 @@
 
   function fallbackAddToLocalStorage(item) {
     try {
-      const q = JSON.parse(localStorage.getItem('golden_offline_fallback_queue') || '[]');
-      item.id = Date.now();
+      const q = JSON.parse(localStorage.getItem(FALLBACK_KEY) || '[]');
+      item.id = Date.now() + Math.random();
       q.push(item);
-      localStorage.setItem('golden_offline_fallback_queue', JSON.stringify(q));
+      localStorage.setItem(FALLBACK_KEY, JSON.stringify(q));
     } catch (e) {
-      console.warn("LocalStorage fallback queue full or disabled:", e);
+      console.warn("[OfflineSync] LocalStorage fallback queue error:", e);
     }
   }
 
@@ -113,25 +134,37 @@
     const db = await getDB();
     if (!db) {
       try {
-        return JSON.parse(localStorage.getItem('golden_offline_fallback_queue') || '[]');
+        return JSON.parse(localStorage.getItem(FALLBACK_KEY) || '[]');
       } catch (e) {
         return [];
       }
     }
 
     return new Promise((resolve) => {
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
-      const req = store.getAll();
+      try {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.getAll();
 
-      req.onsuccess = () => {
-        const list = req.result || [];
-        // Sort FIFO by timestamp
-        list.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-        resolve(list);
-      };
-      req.onerror = () => resolve([]);
+        req.onsuccess = () => {
+          const list = req.result || [];
+          // Sort FIFO by timestamp
+          list.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+          resolve(list);
+        };
+        req.onerror = () => resolve(fallbackGetAll());
+      } catch (e) {
+        resolve(fallbackGetAll());
+      }
     });
+  }
+
+  function fallbackGetAll() {
+    try {
+      return JSON.parse(localStorage.getItem(FALLBACK_KEY) || '[]');
+    } catch (e) {
+      return [];
+    }
   }
 
   /**
@@ -140,21 +173,30 @@
   async function removeQueuedRequest(id) {
     const db = await getDB();
     if (!db) {
-      try {
-        let q = JSON.parse(localStorage.getItem('golden_offline_fallback_queue') || '[]');
-        q = q.filter(item => item.id !== id);
-        localStorage.setItem('golden_offline_fallback_queue', JSON.stringify(q));
-      } catch (e) {}
+      fallbackRemove(id);
       return;
     }
 
     return new Promise((resolve) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
-      const req = store.delete(id);
-      req.onsuccess = () => resolve(true);
-      req.onerror = () => resolve(false);
+      try {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.delete(id);
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => resolve(false);
+      } catch (e) {
+        fallbackRemove(id);
+        resolve(false);
+      }
     });
+  }
+
+  function fallbackRemove(id) {
+    try {
+      let q = JSON.parse(localStorage.getItem(FALLBACK_KEY) || '[]');
+      q = q.filter(item => item.id !== id);
+      localStorage.setItem(FALLBACK_KEY, JSON.stringify(q));
+    } catch (e) {}
   }
 
   /**
@@ -166,24 +208,25 @@
   }
 
   /**
-   * 💡 6. Background Sequential Replay Engine (FIFO)
+   * 💡 6. Background Sequential Replay Engine (Posts directly to Cloudflare Worker)
    */
   async function processOfflineSyncQueue(isManual = false) {
     if (isSyncing) return;
-    if (!navigator.onLine) {
-      if (isManual && typeof showToast === 'function') {
-        showToast("ERROR", "အင်တာနက်လိုင်း ချိတ်ဆက်မှု မရှိသေးပါ။");
-      }
+
+    const queue = await getAllQueuedRequests();
+    if (!queue || queue.length === 0) {
       updateNetworkStatusUI();
+      if (isManual && typeof window.showToast === 'function') {
+        window.showToast("SUCCESS", "Sync လုပ်ရန် ကျန်ရှိသော စာရင်း မရှိပါ။ အားလုံး အဆင်ပြေပါသည်။");
+      }
       return;
     }
 
-    const queue = await getAllQueuedRequests();
-    if (queue.length === 0) {
-      updateNetworkStatusUI();
-      if (isManual && typeof showToast === 'function') {
-        showToast("SUCCESS", "Sync လုပ်ရန် ကျန်ရှိသော စာရင်း မရှိပါ။ အားလုံး အဆင်ပြေပါသည်။");
+    if (!navigator.onLine) {
+      if (isManual && typeof window.showToast === 'function') {
+        window.showToast("ERROR", "အင်တာနက်လိုင်း ချိတ်ဆက်မှု မရှိသေးပါ။");
       }
+      updateNetworkStatusUI();
       return;
     }
 
@@ -191,53 +234,65 @@
     updateNetworkStatusUI(true, queue.length);
 
     let successCount = 0;
-    let failedCount = 0;
+    const apiUrl = getTargetApiUrl(); // 💡 Real Cloudflare Worker URL
+    const token = localStorage.getItem('golden_auth_token') || (window.AppState ? window.AppState.authToken : '') || '';
+    const role = localStorage.getItem('golden_user_role') || (window.AppState ? window.AppState.currentUserRole : '') || '';
 
     for (let i = 0; i < queue.length; i++) {
       const item = queue[i];
 
-      // Re-verify network during loop
       if (!navigator.onLine) {
         break;
       }
 
       try {
-        // Send request via real native fetch
-        const response = await fetch(window.API_BASE_URL || '/api', {
+        const response = await fetch(apiUrl, {
           method: item.method || 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${window.AppState?.authToken || ''}`,
-            'X-Offline-Replay': 'true'
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
           },
           body: JSON.stringify({
             action: item.action,
+            token: token,
+            authToken: token,
+            role: role,
             ...item.payload
           })
         });
 
-        const resData = await response.json();
+        if (response.ok) {
+          let resData = null;
+          try {
+            resData = await response.json();
+          } catch (jsonErr) {}
 
-        if (response.ok && resData && resData.success) {
-          await removeQueuedRequest(item.id);
-          successCount++;
+          if (resData && resData.success) {
+            // 💡 Database ထဲ အမှန်တကယ် ရောက်သွားမှသာ Queue ထဲမှ ဖျက်ထုတ်မည်
+            await removeQueuedRequest(item.id);
+            successCount++;
+          } else {
+            console.warn(`[OfflineSync] Item validation error:`, resData?.message);
+            await removeQueuedRequest(item.id); // Evict bad/unfixable data to unblock queue
+          }
+        } else if (response.status === 400 || response.status === 404) {
+          await removeQueuedRequest(item.id); // Evict invalid request
         } else {
-          // If permanent application validation error (not network error), log & pop
-          console.warn(`Sync item failed on server:`, resData?.message);
-          failedCount++;
+          // Server 500 or real network drop -> Break and retry later
+          break;
         }
       } catch (networkErr) {
-        console.warn(`Sync paused due to network disconnect:`, networkErr);
-        break; // Stop loop if connection drops mid-sync
+        console.warn(`[OfflineSync] Network disconnect during sync:`, networkErr);
+        break;
       }
     }
 
     isSyncing = false;
-    updateNetworkStatusUI();
+    updateNetworkStatusUI(); // 💡 Queue ထဲ စာရင်းကုန်သွားပါက Pending ဘားကြီး အလိုအလျောက် ပျောက်ကွယ်သွားမည်
 
     if (successCount > 0) {
-      if (typeof showToast === 'function') {
-        showToast("SUCCESS", `✅ လိုင်းပြန်ရသဖြင့် စက်ထဲ သိမ်းထားသော စာရင်း (${successCount}) ခုအား Cloudflare သို့ အလိုအလျောက် ပို့ပြီးပါပြီ။`);
+      if (typeof window.showToast === 'function') {
+        window.showToast("SUCCESS", `✅ လိုင်းပြန်ရသဖြင့် စက်ထဲ သိမ်းထားသော စာရင်း (${successCount}) ခုအား Cloudflare သို့ အောင်မြင်စွာ ပို့ဆောင်ပြီးပါပြီ!`);
       }
       triggerSilentActiveLedgerReload();
     }
@@ -249,7 +304,6 @@
   function triggerSilentActiveLedgerReload() {
     if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
 
-    // Check all active module loaders
     if (typeof window.loadIncomeData === 'function') window.loadIncomeData(true, true);
     if (typeof window.loadOfficeData === 'function') window.loadOfficeData(true);
     if (typeof window.loadBankData === 'function') window.loadBankData(true);
@@ -261,12 +315,11 @@
   }
 
   /**
-   * 💡 8. Live UI Indicator Badge
+   * 💡 8. Live UI Indicator Badge (Auto Hides when Queue is 0)
    */
   async function updateNetworkStatusUI(syncInProgress = false, totalToSync = 0) {
     let badge = document.getElementById('global-network-badge');
 
-    // Create badge container if not present
     if (!badge) {
       badge = document.createElement('div');
       badge.id = 'global-network-badge';
@@ -277,14 +330,21 @@
     const count = await getQueueCount();
     const isOnline = navigator.onLine;
 
+    // 💡 FIX: စာရင်းများ ဆာဗာသို့ အမှန်တကယ် ရောက်ရှိသွားပါက (count === 0) ချက်ချင်း အလိုအလျောက် ပျောက်သွားမည်
+    if (count === 0 && !syncInProgress) {
+      badge.classList.add('hidden');
+      return;
+    }
+
+    badge.classList.remove('hidden');
+
     if (syncInProgress) {
       badge.innerHTML = `
         <div class="px-3 py-1.5 rounded-xl bg-indigo-600/90 backdrop-blur border border-indigo-500/30 text-white shadow-2xl flex items-center gap-2 text-xs font-bold animate-pulse">
           <i class="fa-solid fa-rotate fa-spin text-indigo-300"></i>
-          <span>Syncing (${totalToSync}) Records...</span>
+          <span>ဆာဗာသို့ ပို့ဆောင်နေပါသည် (${totalToSync})...</span>
         </div>
       `;
-      badge.classList.remove('hidden');
       return;
     }
 
@@ -296,23 +356,20 @@
           <span>Offline Mode (${count} Pending)</span>
         </div>
       `;
-      badge.classList.remove('hidden');
       return;
     }
 
     if (count > 0) {
       badge.innerHTML = `
-        <div class="px-3 py-1.5 rounded-xl bg-indigo-600/90 backdrop-blur border border-indigo-500/30 text-white shadow-2xl flex items-center gap-2 text-xs font-bold cursor-pointer hover:bg-indigo-500 transition" onclick="window.OfflineSync.processQueue(true)">
-          <i class="fa-solid fa-cloud-arrow-up text-amber-300"></i>
+        <div class="px-3.5 py-1.5 rounded-xl bg-[#0c1322] border border-amber-500/40 text-amber-300 shadow-2xl flex items-center gap-2.5 text-xs font-bold">
+          <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
           <span>${count} Pending Sync</span>
-          <button class="px-1.5 py-0.5 bg-white/20 rounded text-[10px] uppercase font-mono">Sync Now</button>
+          <button onclick="window.OfflineSync.processQueue(true)" class="px-2 py-0.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded text-[10px] font-black cursor-pointer transition">Sync Now</button>
         </div>
       `;
-      badge.classList.remove('hidden');
       return;
     }
 
-    // If online and 0 pending items -> Hide badge
     badge.classList.add('hidden');
   }
 
@@ -321,26 +378,23 @@
    */
   function initOfflineSyncEngine() {
     window.addEventListener('online', () => {
-      console.log("Network online detected. Triggering background sync...");
+      console.log("[OfflineSync] Network online detected. Triggering background sync...");
       updateNetworkStatusUI();
       processOfflineSyncQueue(false);
     });
 
     window.addEventListener('offline', () => {
-      console.warn("Network disconnected. Switching to Offline Mode...");
+      console.warn("[OfflineSync] Network disconnected. Switching to Offline Mode...");
       updateNetworkStatusUI();
-      if (typeof showToast === 'function') {
-        showToast("ERROR", "📶 အင်တာနက်လိုင်း ပြတ်တောက်သွားပါသည်။ စာရင်းများကို စက်ထဲတွင် ယာယီသိမ်းဆည်းပေးနေပါသည် (Offline Mode)။");
-      }
     });
 
-    // Check queue every 30 seconds automatically
+    // Check queue every 15 seconds automatically
     if (syncIntervalId) clearInterval(syncIntervalId);
     syncIntervalId = setInterval(() => {
       if (navigator.onLine) {
         processOfflineSyncQueue(false);
       }
-    }, 30000);
+    }, 15000);
 
     // Initial check on load
     updateNetworkStatusUI();
@@ -354,6 +408,7 @@
     init: initOfflineSyncEngine,
     enqueue: enqueueRequest,
     processQueue: processOfflineSyncQueue,
+    forceSync: () => processOfflineSyncQueue(true),
     getQueueCount: getQueueCount,
     updateUI: updateNetworkStatusUI
   };
