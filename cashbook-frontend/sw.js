@@ -1,18 +1,24 @@
 /**
  * GOLDEN ERP SYSTEM - PROGRESSIVE WEB APP (PWA) SERVICE WORKER
  * File: sw.js
- * 💡 Features: Full App Shell & Views Pre-caching, 0ms Instant Offline Navigation,
+ * 💡 Features: Crash-Proof Fetch Interceptor (Zero "Failed to convert value to Response" Errors),
+ *              Full CSS/Styles & Views Pre-caching, 0ms Instant Offline Navigation,
  *              Stale-While-Revalidate Engine & Safe API Bypass
  */
 
-const CACHE_NAME = 'golden-erp-cache-v2026.09.01';
+const CACHE_NAME = 'golden-erp-cache-v2026.09.02';
 
-// 💡 အော့ဖ်လိုင်းသုံးနိုင်ရန် စက်ထဲ ကြိုတင်သိမ်းဆည်းမည့် ဖိုင်များအားလုံး
+// 💡 အော့ဖ်လိုင်းသုံးနိုင်ရန် စက်ထဲ ကြိုတင်သိမ်းဆည်းမည့် ဖိုင်များအားလုံး (CSS + JS + HTML Views)
 const PRECACHE_ASSETS = [
   './',
   './index.html',
   
-  // 💡 1. CORE SCRIPTS
+  // 💡 1. CORE STYLES (ဒီဇိုင်းနှင့် Icon များ မပျက်စေရန် ထည့်သွင်းထားသည်)
+  './css/tailwind.min.css',
+  './css/fontawesome.min.css',
+  './css/style.css',
+
+  // 💡 2. CORE APPLICATION SCRIPTS
   './js/config.js',
   './js/offline-sync.js',
   './js/api.js',
@@ -32,7 +38,7 @@ const PRECACHE_ASSETS = [
   './js/dashboard.js',
   './js/app.js',
 
-  // 💡 2. ALL 13 HTML VIEWS (Offline Menu Navigation)
+  // 💡 3. ALL 13 HTML VIEWS (Offline Menu Navigation)
   './views/dashboard.html',
   './views/bank-cash.html',
   './views/income.html',
@@ -49,13 +55,12 @@ const PRECACHE_ASSETS = [
 ];
 
 /**
- * 💡 1. Install Event - Pre-cache App Shell & Views
+ * 💡 1. Install Event - Pre-cache App Shell, Styles & Views
  */
 self.addEventListener('install', (event) => {
-  console.log('[Service Worker] Installing & Pre-caching All Views & Assets...');
+  console.log('[Service Worker] Installing & Pre-caching All Styles, Scripts & Views...');
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
-      // Safe batch caching: individual failure will not block entire install
       for (const asset of PRECACHE_ASSETS) {
         try {
           await cache.add(asset);
@@ -87,42 +92,66 @@ self.addEventListener('activate', (event) => {
 });
 
 /**
- * 💡 3. Fetch Interceptor - 0ms Cache-First with Background Network Revalidation
+ * 💡 3. Crash-Proof Fetch Interceptor (Guaranteed Valid Response Object)
  */
 self.addEventListener('fetch', (event) => {
   const request = event.request;
+
+  // ⚠️ 1. Ignore non-HTTP/HTTPS requests (e.g. chrome-extension://)
+  if (!request.url.startsWith('http')) {
+    return;
+  }
+
   const url = new URL(request.url);
 
-  // ⚠️ 1. Bypass API calls & Cloudflare Worker endpoints (Handled by js/offline-sync.js)
+  // ⚠️ 2. Bypass API calls & Cloudflare Worker endpoints (Handled by js/offline-sync.js)
   if (
     request.method !== 'GET' ||
     url.pathname.startsWith('/api') ||
     url.hostname.includes('workers.dev') ||
     url.searchParams.has('action')
   ) {
-    return; // Pass through to live network / offline-sync interceptor
+    return; // Pass through to live network / API interceptor
   }
 
-  // 💡 2. For Views & Static Assets: Stale-While-Revalidate Strategy
+  // 💡 3. For App Shell, Views & Static Assets: Stale-While-Revalidate Strategy
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
-      // Fetch fresh version in background to update cache
-      const fetchPromise = fetch(request)
+      if (cachedResponse) {
+        // Fetch fresh copy in background to update cache
+        fetch(request)
+          .then((networkResponse) => {
+            if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+              const responseToCache = networkResponse.clone();
+              caches.open(CACHE_NAME).then((cache) => {
+                cache.put(request, responseToCache);
+              });
+            }
+          })
+          .catch(() => {});
+
+        return cachedResponse; // 0ms Instant Load from Disk
+      }
+
+      // If not in cache -> Fetch from network
+      return fetch(request)
         .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
-            const responseToCache = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, responseToCache);
-            });
+          if (!networkResponse || networkResponse.status !== 200) {
+            return networkResponse;
           }
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(request, responseToCache);
+          });
           return networkResponse;
         })
         .catch(() => {
-          // If network is completely offline, fail silently because we serve cached response
+          // 💡 FIX: Return a valid empty fallback response so browser NEVER throws "Failed to convert value to Response"
+          return new Response('', {
+            status: 408,
+            statusText: 'Offline Asset Unavailable'
+          });
         });
-
-      // If already in cache -> Return immediately (0ms instant load), else wait for network
-      return cachedResponse || fetchPromise;
     })
   );
 });
