@@ -366,8 +366,10 @@ async function onAccountNameOrCategoryChangeIncome() {
   var creditEl = document.getElementById('inc-credit') || document.getElementById('income-credit');
   var debitEl = document.getElementById('inc-debit') || document.getElementById('income-debit');
 
+  // Registration နှင့် Services မဟုတ်ပါက ၂ ခုစလုံးကို 0 အဖြစ် တူညီစွာ ထားမည်
   if (accountName !== "Registration" && accountName !== "Services") {
     if (autAmtEl) autAmtEl.value = 0;
+    if (creditEl) creditEl.value = 0;
     return;
   }
 
@@ -383,16 +385,21 @@ async function onAccountNameOrCategoryChangeIncome() {
     }
   }
 
-  if (promoMatrixCache && Array.isArray(promoMatrixCache)) {
-    // 💡 1. Strict Match: Match by FY, Class AND Category (Case-Insensitive)
+  var calculatedFee = 0;
+
+  if (promoMatrixCache && Array.isArray(promoMatrixCache) && classVal) {
+    var cleanClass = classVal.toLowerCase().replace(/\s+/g, '');
+    var cleanCat = categoryVal.toLowerCase().replace(/\s+/g, '');
+
+    // 💡 1. Strict Match: Match by FY, Class AND Category (Case-Insensitive & Space-Agnostic)
     var match = promoMatrixCache.find(function(r) {
       var rFy = String(r.fy || '').trim().replace(/^FY\s*/i, '');
-      var rClass = String(r.class || '').trim().toLowerCase();
-      var rCat = String(r.category || '').trim().toLowerCase();
+      var rClass = String(r.class || '').trim().toLowerCase().replace(/\s+/g, '');
+      var rCat = String(r.category || '').trim().toLowerCase().replace(/\s+/g, '');
 
       var fyMatches = (!rFy || rFy === cleanFy);
-      var classMatches = (rClass === classVal.toLowerCase());
-      var catMatches = (rCat === categoryVal.toLowerCase());
+      var classMatches = (rClass === cleanClass);
+      var catMatches = (rCat === cleanCat);
 
       return classMatches && (catMatches || !categoryVal) && fyMatches;
     });
@@ -400,15 +407,21 @@ async function onAccountNameOrCategoryChangeIncome() {
     // 💡 2. Fallback Match without FY
     if (!match) {
       match = promoMatrixCache.find(function(r) {
-        var rClass = String(r.class || '').trim().toLowerCase();
-        var rCat = String(r.category || '').trim().toLowerCase();
-        return (rClass === classVal.toLowerCase()) && (rCat === categoryVal.toLowerCase());
+        var rClass = String(r.class || '').trim().toLowerCase().replace(/\s+/g, '');
+        var rCat = String(r.category || '').trim().toLowerCase().replace(/\s+/g, '');
+        return (rClass === cleanClass) && (rCat === cleanCat);
+      });
+    }
+
+    // 💡 3. Fallback for "Others" / Custom Categories: Match by Class alone!
+    if (!match) {
+      match = promoMatrixCache.find(function(r) {
+        var rClass = String(r.class || '').trim().toLowerCase().replace(/\s+/g, '');
+        return (rClass === cleanClass);
       });
     }
 
     if (match) {
-      var calculatedFee = 0;
-
       if (accountName === "Registration") {
         calculatedFee = Number(match.registration ?? match.Registration ?? 0);
       } else if (accountName === "Services") {
@@ -423,31 +436,18 @@ async function onAccountNameOrCategoryChangeIncome() {
         else if (pClean.includes('full')) calculatedFee = Number(match.fullScholar ?? match.full_scholar ?? 0);
         else calculatedFee = Number(match.originalPrice ?? match.original_price ?? 0);
       }
-
-      // 💡 1. Set Standard AUT Amount
-      if (autAmtEl) {
-        autAmtEl.value = calculatedFee;
-      }
-
-      // 💡 2. 100% GUARANTEED CREDIT SYNC (Overwrites Credit field with calculated rate)
-      if (creditEl) {
-        creditEl.value = calculatedFee;
-      }
-
-      if (debitEl) {
-        debitEl.value = 0;
-      }
-
-      // 💡 3. Update Split Payment Breakdown if split is checked
-      if (typeof updateSplitAmountsIncome === 'function') {
-        updateSplitAmountsIncome();
-      }
-
-      return;
     }
   }
 
-  if (autAmtEl) autAmtEl.value = 0;
+  // 💡 4. 100% SYNCHRONIZED UPDATE (Standard AUT Amount နှင့် Credit အမြဲတမ်း တထပ်တည်း ဖြစ်စေမည်)
+  if (autAmtEl) autAmtEl.value = calculatedFee;
+  if (creditEl) creditEl.value = calculatedFee;
+  if (debitEl) debitEl.value = 0;
+
+  // 💡 5. Update Split Payment Breakdown if split is checked
+  if (typeof updateSplitAmountsIncome === 'function') {
+    updateSplitAmountsIncome();
+  }
 }
 
 /**
