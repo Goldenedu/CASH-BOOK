@@ -1,8 +1,12 @@
 /** 
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - CENTRAL API BRIDGE & OFFLINE INTERCEPTOR (D1 DATABASE EDITION)
  * File: js/api.js 
  * 💡 Features: Offline-First Network Interceptor, Background Outbox Auto-Routing,
- *              D1 Database Compatible API Bridge & SWR In-Memory Caching Engine
+ *              D1 Database Compatible API Bridge & SWR In-Memory Caching Engine,
+ *              🛡️ Universal CSV Formula Injection Sanitizer (window.safeCsvCell),
+ *              🎯 Bug #2 Fixed (Centralized Resilient escapeHtml & escapeJsAttr)
+ * ==============================================================================
  */
 
 // 💡 Corrected Worker URL matching Cloudflare Service Name (cashbook-app-api)
@@ -21,9 +25,65 @@ window.AppState = window.AppState || {
 // 💡 Global In-Memory Cache Store for 0ms Instant Navigation
 window.gDataCache = window.gDataCache || {};
 
+// ==============================================================================
+// 💡 BUG #2 FIX & GLOBAL SANITIZATION UTILITIES (Available immediately on load)
+// ==============================================================================
+
 /**
- * 💡 Cache Helper Functions with localStorage Persistence
+ * 💡 Central Safe Native DOM HTML Escaper
+ * Pre-defined early to eliminate script load order dependencies across modules.
  */
+window.escapeHtml = function(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
+
+/**
+ * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
+ * Prevents quote breaking and XSS vulnerabilities in DOM tables.
+ */
+window.escapeJsAttr = function(str) {
+  if (str === null || str === undefined) return "";
+  const jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return window.escapeHtml(jsEscaped);
+};
+
+/**
+ * 🛡️ UNIVERSAL SAFE CSV CELL GENERATOR (Prevents Excel/Sheets Formula Injection)
+ * Text အကွက်များတွင် (=, +, -, @, \t, \r) ဖြင့် စတင်သော Formula execution များကို
+ * ရှေ့မှ Single Quote (') ခံပေးပြီး Quote များကို Double Quote ခတ်ကာ လုံခြုံစွာ ထုတ်ပေးသည်။
+ * ဂဏန်းအစစ်များ (-1000, 1500.50) ကို Text အဖြစ် မပြောင်းလဲစေဘဲ နဂိုအတိုင်း ထိန်းသိမ်းသည်။
+ */
+window.safeCsvCell = function(val) {
+  if (val === null || val === undefined) return '""';
+  if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
+
+  let str = String(val).trim();
+  if (str === '') return '""';
+
+  // Pure Number (ကော်မာပါသော "1,000" သို့မဟုတ် အနုတ်ဂဏန်း "-500.25") ဖြစ်ပါက formula injection မဟုတ်ပါ
+  const cleanNumStr = str.replace(/,/g, '');
+  if (!isNaN(Number(cleanNumStr)) && cleanNumStr !== '') {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+
+  // Formula trigger character များ (=, +, -, @, \t, \r) ဖြင့် စတင်နေပါက Leading Single Quote ထည့်သွင်းခြင်း
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+
+  return `"${str.replace(/"/g, '""')}"`;
+};
+
+// ==============================================================================
+// 💡 CACHE HELPER FUNCTIONS (localStorage Persistence)
+// ==============================================================================
+
 window.getApiCache = function(cacheKey) {
   if (window.gDataCache[cacheKey]) {
     return window.gDataCache[cacheKey];
@@ -101,9 +161,10 @@ window.invalidateApiCache = function(actionPrefix = '') {
   }
 };
 
-/**
- * 💡 Error Logging System
- */
+// ==============================================================================
+// 💡 ERROR LOGGING SYSTEM
+// ==============================================================================
+
 window.ErrorLogger = {
   maxLogs: 50,
   
@@ -171,23 +232,32 @@ window.toggleLoading = function(show) {
   }
 };
 
-/**
- * 💡 Central D1-Compatible API Fetch Engine with Offline-First Interceptor
- */
+// ==============================================================================
+// 💡 CENTRAL D1-COMPATIBLE API FETCH ENGINE WITH OFFLINE-FIRST INTERCEPTOR
+// ==============================================================================
+
 window.callApi = async function(action, payload = {}, method = 'POST') {
   let serverPayload = {};
   let url = API_WORKER_URL;
 
   const isReadAction = action.startsWith('get') || action.startsWith('check');
-  const isWriteAction = action.startsWith('save') || action.startsWith('update') || action.startsWith('delete') || action.startsWith('trigger') || action.startsWith('backup') || action.startsWith('export') || action.startsWith('send');
-  const forceRefresh = payload.forceRefresh === true;
+  // ⚡ Updated: Added 'recalculate' to ensure cache is wiped on manual balance sync
+  const isWriteAction = action.startsWith('save') || 
+                        action.startsWith('update') || 
+                        action.startsWith('delete') || 
+                        action.startsWith('trigger') || 
+                        action.startsWith('backup') || 
+                        action.startsWith('export') || 
+                        action.startsWith('send') ||
+                        action.startsWith('recalculate');
 
+  const forceRefresh = payload.forceRefresh === true;
   const { forceRefresh: _, ...extractedPayload } = payload;
-  serverPayload = extractedPayload; // Safely assigned in outer scope
+  serverPayload = extractedPayload;
 
   const cacheKey = `${action}_${JSON.stringify(serverPayload)}`;
 
-  // 1. FAST OFFLINE CHECK FOR WRITES: If strictly offline, enqueue immediately without waiting for timeout
+  // 1. FAST OFFLINE CHECK FOR WRITES: If strictly offline, enqueue immediately without timeout
   if (isWriteAction && !navigator.onLine && window.OfflineSync) {
     console.warn(`[OfflineSync] Offline detected. Enqueueing ${action} immediately...`);
     await window.OfflineSync.enqueue(action, serverPayload, method);
@@ -362,8 +432,8 @@ window.prefetchCoreModules = function() {
 
   setTimeout(() => {
     window.callApi('getDashboardData', {}).catch(() => {});
-    window.callApi('getBankCashData', { bookName: 'Bank Book', page: 1, limit: 30, searchVal: '' }).catch(() => {});
-    window.callApi('getBankCashData', { bookName: 'Cash Book', page: 1, limit: 30, searchVal: '' }).catch(() => {});
+    window.callApi('getBankCashData', { bookName: 'Main Bank Book', page: 1, limit: 30, searchVal: '' }).catch(() => {});
+    window.callApi('getBankCashData', { bookName: 'Main Cash Book', page: 1, limit: 30, searchVal: '' }).catch(() => {});
     window.callApi('getIncomeData', { page: 1, limit: 50, searchVal: '' }).catch(() => {});
     window.callApi('getExpenseData', { bookName: 'Office Exp Book', page: 1, limit: 30, searchVal: '' }).catch(() => {});
     window.callApi('getExpenseData', { bookName: 'Kitchen Exp Book', page: 1, limit: 30, searchVal: '' }).catch(() => {});
@@ -373,7 +443,7 @@ window.prefetchCoreModules = function() {
     window.callApi('getTodayIncomeForCashier', {}).catch(() => {});
     window.callApi('getStudentData', { page: 1, limit: 50 }).catch(() => {});
     window.callApi('getStudentMoneyData', { page: 1, limit: 50 }).catch(() => {});
-    window.callApi('getStaffData', { category: 'FullTime', page: 1, limit: 30, searchVal: '' }).catch(() => {});
+    window.callApi('getStaffData', { category: 'Full Time', page: 1, limit: 30, searchVal: '' }).catch(() => {});
     window.callApi('getUniformData', { page: 1, limit: 1000 }).catch(() => {});
     window.callApi('getPromotionData', {}).catch(() => {});
     window.callApi('getSettingsData', {}).catch(() => {});
@@ -407,11 +477,6 @@ window.showToast = function(type, message) {
     toast.classList.add('translate-y-5', 'opacity-0');
     setTimeout(() => { toast.remove(); }, 300);
   }, 4000);
-};
-
-window.escapeHtml = function(str) {
-  if (!str) return "";
-  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 };
 
 window.cleanNumber = function(val) {
