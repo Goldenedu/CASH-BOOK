@@ -1,4 +1,5 @@
 /**
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - MAIN INCOME BOOK HANDLER (CLOUDFLARE D1)
  * File: handlers-income.js
  * 💡 Features: Quota-Optimized Precision Writes (Prevents 100k Limit Exhaustion),
@@ -6,7 +7,11 @@
  *              Server-Side Auto-Lock Enforcement (Zero Client Bypass),
  *              Privilege Escalation Defense (Server-Generated UUIDs for New Records),
  *              Idempotent Upsert for Cashier & Daily Rollups (INSERT OR REPLACE),
- *              Split Payment Support, Precision FY-Scoped Student Lookup & Auto-Posting Engine
+ *              Split Payment Support, Precision FY-Scoped Student Lookup & Auto-Posting Engine,
+ *              ⚡ Fast 5-Query Batch Cleaning (90% DB Round-trip Reduction),
+ *              ⚡ O(1) Window Function Recalculation for Cash/Bank/Cashier Sync,
+ *              🎯 Full 17-Column Schema Alignment with Responsibility Person
+ * ==============================================================================
  */
 
 function parseCleanIntId(val) {
@@ -121,45 +126,58 @@ function buildStudentDetailedDesc(body, prefix) {
   return prefix ? `[${prefix}] ${fullDesc}` : fullDesc;
 }
 
-async function recalculateLedgerBalances(db, tableName) {
+/**
+ * ⚡ FIX PERF #1: O(1) Single-Query Window Function Recalculation Engine
+ * Linked Books (Cash/Bank/Cashier) များတွင် Balances ပြန်ညှိရာတွင် Write Quota မကုန်စေရန် ပြင်ဆင်ထားသည်
+ */
+async function recalculateLedgerBalances(db, tableName, targetFy = null) {
   if (!tableName) return;
   try {
-    const fysRes = await db.prepare(`SELECT DISTINCT fy FROM ${tableName}`).all();
-    const rawFys = (fysRes.results || []).map(r => normalizeFyStr(r.fy)).filter(Boolean);
-    const fys = Array.from(new Set(rawFys));
+    if (targetFy) {
+      const normFy = normalizeFyStr(targetFy);
+      const cleanFy = normFy.replace(/^FY\s*/i, '');
 
-    if (fys.length === 0) {
-      fys.push(`FY ${getCurrentAcademicYear()}`);
-    }
-
-    const statements = [];
-
-    for (const fyVal of fys) {
-      const rows = await db.prepare(
-        `SELECT id, debit, credit FROM ${tableName} WHERE fy = ? OR fy = ? ORDER BY date ASC, id ASC`
-      ).bind(fyVal, fyVal.replace(/^FY\s*/i, '')).all();
-
-      const list = rows.results || [];
-      let currentBal = 0;
-      let seqNo = 1;
-
-      for (const row of list) {
-        const debit = parseFloat(row.debit || 0);
-        const credit = parseFloat(row.credit || 0);
-        currentBal = currentBal + debit - credit;
-
-        statements.push(
-          db.prepare(`UPDATE ${tableName} SET balances = ?, no = ?, fy = ? WHERE id = ?`).bind(currentBal, seqNo, fyVal, row.id)
-        );
-        seqNo++;
-      }
-    }
-
-    for (let i = 0; i < statements.length; i += 100) {
-      await db.batch(statements.slice(i, i + 100));
+      await db.prepare(`
+        WITH calculated AS (
+          SELECT id,
+                 ROW_NUMBER() OVER (
+                   ORDER BY date ASC, id ASC
+                 ) as calc_no,
+                 SUM(debit - credit) OVER (
+                   ORDER BY date ASC, id ASC 
+                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                 ) as calc_bal
+          FROM ${tableName}
+          WHERE fy = ? OR fy = ?
+        )
+        UPDATE ${tableName} 
+        SET no = (SELECT calc_no FROM calculated WHERE calculated.id = ${tableName}.id),
+            balances = (SELECT calc_bal FROM calculated WHERE calculated.id = ${tableName}.id)
+        WHERE id IN (SELECT id FROM calculated);
+      `).bind(normFy, cleanFy).run();
+    } else {
+      await db.prepare(`
+        WITH calculated AS (
+          SELECT id,
+                 ROW_NUMBER() OVER (
+                   PARTITION BY fy
+                   ORDER BY date ASC, id ASC
+                 ) as calc_no,
+                 SUM(debit - credit) OVER (
+                   PARTITION BY fy
+                   ORDER BY date ASC, id ASC 
+                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                 ) as calc_bal
+          FROM ${tableName}
+        )
+        UPDATE ${tableName} 
+        SET no = (SELECT calc_no FROM calculated WHERE calculated.id = ${tableName}.id),
+            balances = (SELECT calc_bal FROM calculated WHERE calculated.id = ${tableName}.id)
+        WHERE id IN (SELECT id FROM calculated);
+      `).run();
     }
   } catch (e) {
-    console.warn(`Running Balance & NO Recalculation Warning for ${tableName}:`, e);
+    console.warn(`Running Balance Recalculation Warning for ${tableName}:`, e.message);
   }
 }
 
@@ -210,7 +228,7 @@ async function insertIncomeRecord(db, p, isMigration = false) {
 }
 
 /**
- * 💡 Clean Linked Auto Entries
+ * ⚡ FIX: 90% DB Round-trip Reduction (Replaces 55 queries with 5 batch queries)
  */
 async function cleanLinkedIncomeEntries(db, uniqueid) {
   if (!uniqueid) return;
@@ -228,18 +246,17 @@ async function cleanLinkedIncomeEntries(db, uniqueid) {
     `INCCASHIER_REFUND_${uniqueid}`
   ];
 
+  const placeholders = uids.map(() => '?').join(', ');
   const tables = ['income', 'cash', 'bank', 'ca_cash', 'ca_bank'];
   for (const tbl of tables) {
-    for (const uid of uids) {
-      try {
-        await db.prepare(`DELETE FROM ${tbl} WHERE uniqueid = ?`).bind(uid).run();
-      } catch (e) {}
-    }
+    try {
+      await db.prepare(`DELETE FROM ${tbl} WHERE uniqueid IN (${placeholders})`).bind(...uids).run();
+    } catch (e) {}
   }
 }
 
 /**
- * 💡 Post Line-by-Line Student Entry to Cashier Sub-Ledger (Idempotent INSERT OR REPLACE)
+ * 💡 Post Line-by-Line Student Entry to Cashier Sub-Ledger (17-Column Schema Alignment)
  */
 async function postCashierIndividualLine(db, targetMethod, amount, body, entryDate, my, fy, createdBy, uidSuffix) {
   if (amount <= 0) return;
@@ -254,18 +271,22 @@ async function postCashierIndividualLine(db, targetMethod, amount, body, entryDa
   const caUid = `INCCASHIER_${uidSuffix}`;
   const caDesc = buildStudentDetailedDesc(body, null);
 
+  // 🎯 17-Column Schema Alignment with responsibility_person
   await db.prepare(`
     INSERT OR REPLACE INTO ${caTable} (
-      no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
+      no, date, responsibility_person, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
+    ) VALUES (?, ?, ?, 'Student Income', ?, ?, ?, 0, 0, '', ?, ?, ?, 'Main Income Book', ?, new Date().toISOString(), ?)
   `).bind(
-    caNo, entryDate, 'Student Income', caDesc, targetMethod, amount, 0, '',
-    caVrNo, my, normFy, 'Main Income Book', createdBy, new Date().toISOString(), caUid
+    caNo, entryDate, createdBy || 'Cashier', caDesc, targetMethod, amount,
+    caVrNo, my, normFy, createdBy || 'Cashier', caUid
   ).run();
+
+  // ⚡ Sync Cashier running balances in real-time
+  await recalculateLedgerBalances(db, caTable, normFy);
 }
 
 /**
- * 💡 Daily Income Rollup (Single Precision Upsert - No 12,000-Row Loop)
+ * 💡 Daily Income Rollup (Single Precision Upsert with Auto-Balance Recalculation)
  */
 async function upsertDailyIncomeRollup(db, tableName, entryDate, fy, netAmount, count, createdBy) {
   const normFy = normalizeFyStr(fy);
@@ -276,6 +297,7 @@ async function upsertDailyIncomeRollup(db, tableName, entryDate, fy, netAmount, 
 
   if (!count || count <= 0 || !netAmount || netAmount <= 0) {
     await db.prepare(`DELETE FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).run();
+    await recalculateLedgerBalances(db, tableName, normFy);
     return;
   }
 
@@ -301,12 +323,15 @@ async function upsertDailyIncomeRollup(db, tableName, entryDate, fy, netAmount, 
     await db.prepare(`
       INSERT OR REPLACE INTO ${tableName} (
         no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, '', ?, ?, ?, 'Main Income Book', ?, new Date().toISOString(), ?)
     `).bind(
-      no, entryDate, 'Student Income', desc, methodLabel, debit, credit, '',
-      vrNo, my, normFy, 'Main Income Book', createdBy, new Date().toISOString(), uniqueid
+      no, entryDate, 'Student Income', desc, methodLabel, debit, credit,
+      vrNo, my, normFy, createdBy, uniqueid
     ).run();
   }
+
+  // ⚡ Sync Cash / Bank running balances in real-time
+  await recalculateLedgerBalances(db, tableName, normFy);
 }
 
 async function syncDailyIncomeRollupForDate(db, entryDate, fy, createdBy) {
@@ -363,11 +388,13 @@ async function postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdB
     await db.prepare(`
       INSERT OR REPLACE INTO ${refundTable} (
         no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, 'Student Refund', ?, ?, 0, ?, 0, '', ?, ?, ?, 'Main Income Book', ?, new Date().toISOString(), ?)
     `).bind(
-      mainNo, entryDate, 'Student Refund', refundDesc, body.method || 'Cash', 0, debit, '',
-      mainVrNo, my, normFy, 'Main Income Book', createdBy, new Date().toISOString(), mainRefUid
+      mainNo, entryDate, refundDesc, body.method || 'Cash', debit,
+      mainVrNo, my, normFy, createdBy, mainRefUid
     ).run();
+
+    await recalculateLedgerBalances(db, refundTable, normFy);
 
     const caTable = (method === 'bank') ? 'ca_bank' : 'ca_cash';
     const caPrefix = (method === 'bank') ? 'CAB' : 'CAC';
@@ -377,17 +404,22 @@ async function postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdB
 
     await db.prepare(`
       INSERT OR REPLACE INTO ${caTable} (
-        no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
+        no, date, responsibility_person, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
+      ) VALUES (?, ?, ?, 'Student Refund', ?, ?, 0, ?, 0, '', ?, ?, ?, 'Main Income Book', ?, new Date().toISOString(), ?)
     `).bind(
-      caNo, entryDate, 'Student Refund', refundDesc, body.method || 'Cash', 0, debit, '',
-      caVrNo, my, normFy, 'Main Income Book', createdBy, new Date().toISOString(), caRefUid
+      caNo, entryDate, createdBy || 'Cashier', refundDesc, body.method || 'Cash', debit,
+      caVrNo, my, normFy, createdBy, caRefUid
     ).run();
+
+    await recalculateLedgerBalances(db, caTable, normFy);
   }
 
   await syncDailyIncomeRollupForDate(db, entryDate, normFy, createdBy);
 }
 
+/**
+ * 💡 Get Income Data (Strict Search across Class, Category, Account, Remark, VrNo)
+ */
 export async function getIncomeData(db, body) {
   try {
     const searchVal = String(body.searchVal || "").trim();
@@ -397,13 +429,24 @@ export async function getIncomeData(db, body) {
 
     const activeFy = normalizeFyStr(body.fy || `FY ${getCurrentAcademicYear()}`);
 
-    const statsResult = await db.prepare(`
-      SELECT 
-        COALESCE(SUM(credit), 0) as totalIncome,
-        COALESCE(SUM(debit), 0) as totalExpense
-      FROM income
-      WHERE fy = ? OR fy = ?
-    `).bind(activeFy, activeFy.replace(/^FY\s*/i, '')).first() || { totalIncome: 0, totalExpense: 0 };
+    let statsResult;
+    if (body.fy && body.fy !== 'all') {
+      statsResult = await db.prepare(`
+        SELECT 
+          COALESCE(SUM(credit), 0) as totalIncome,
+          COALESCE(SUM(debit), 0) as totalExpense
+        FROM income
+        WHERE fy = ? OR fy = ?
+      `).bind(activeFy, activeFy.replace(/^FY\s*/i, '')).first();
+    } else {
+      statsResult = await db.prepare(`
+        SELECT 
+          COALESCE(SUM(credit), 0) as totalIncome,
+          COALESCE(SUM(debit), 0) as totalExpense
+        FROM income
+      `).first();
+    }
+    statsResult = statsResult || { totalIncome: 0, totalExpense: 0 };
 
     let totalIncome = parseFloat(statsResult.totalIncome || 0);
     let totalExpense = parseFloat(statsResult.totalExpense || 0);
@@ -412,10 +455,15 @@ export async function getIncomeData(db, body) {
     let whereClauses = [];
     let params = [];
 
+    if (body.fy && body.fy !== 'all') {
+      whereClauses.push(`(fy = ? OR fy = ?)`);
+      params.push(activeFy, activeFy.replace(/^FY\s*/i, ''));
+    }
+
     if (searchVal) {
-      whereClauses.push(`(fyid_name LIKE ? OR fyid LIKE ? OR CAST(student_id AS TEXT) LIKE ?)`);
+      whereClauses.push(`(fyid_name LIKE ? OR fyid LIKE ? OR CAST(student_id AS TEXT) LIKE ? OR account_name LIKE ? OR category LIKE ? OR class LIKE ? OR vr_no LIKE ? OR remark LIKE ?)`);
       const p = `%${searchVal}%`;
-      params.push(p, p, p);
+      params.push(p, p, p, p, p, p, p, p);
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
