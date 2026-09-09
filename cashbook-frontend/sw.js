@@ -1,19 +1,19 @@
 /**
  * GOLDEN ERP SYSTEM - PROGRESSIVE WEB APP (PWA) SERVICE WORKER
  * File: sw.js
- * 💡 Features: Crash-Proof Fetch Interceptor (Zero "Failed to convert value to Response" Errors),
+ * 💡 Features: Crash-Proof Fetch Interceptor, View Route Reconciliation (Phase 4.3),
  *              Full CSS/Styles & Views Pre-caching, 0ms Instant Offline Navigation,
  *              Stale-While-Revalidate Engine & Safe API Bypass
  */
 
-const CACHE_NAME = 'golden-erp-cache-v2026.09.02';
+const CACHE_NAME = 'golden-erp-cache-v2026.09.03';
 
 // 💡 အော့ဖ်လိုင်းသုံးနိုင်ရန် စက်ထဲ ကြိုတင်သိမ်းဆည်းမည့် ဖိုင်များအားလုံး (CSS + JS + HTML Views)
 const PRECACHE_ASSETS = [
   './',
   './index.html',
   
-  // 💡 1. CORE STYLES (ဒီဇိုင်းနှင့် Icon များ မပျက်စေရန် ထည့်သွင်းထားသည်)
+  // 💡 1. CORE STYLES
   './css/tailwind.min.css',
   './css/fontawesome.min.css',
   './css/style.css',
@@ -38,7 +38,7 @@ const PRECACHE_ASSETS = [
   './js/dashboard.js',
   './js/app.js',
 
-  // 💡 3. ALL 13 HTML VIEWS (Offline Menu Navigation)
+  // 💡 3. ALL 13 RECONCILED HTML VIEWS (Offline SPA View Routes)
   './views/dashboard.html',
   './views/bank-cash.html',
   './views/income.html',
@@ -92,66 +92,91 @@ self.addEventListener('activate', (event) => {
 });
 
 /**
- * 💡 3. Crash-Proof Fetch Interceptor (Guaranteed Valid Response Object)
+ * 💡 Helper: URL Path Normalizer & Route Reconciler
+ * SPA view request တွေဖြစ်တဲ့ /views/income.html သို့မဟုတ် views/income.html?v=... တွေကို
+ * Cache ထဲက standard key နဲ့ ချိန်ညှိပေးခြင်း
+ */
+function normalizeRequest(request) {
+  const url = new URL(request.url);
+  // View dynamic query hash တွေကို ဖြုတ်ထုတ်ပြီး clean path ရယူခြင်း
+  if (url.pathname.includes('/views/')) {
+    const viewMatch = url.pathname.match(/views\/[a-zA-Z0-9\-_]+\.html/);
+    if (viewMatch) {
+      return new Request(`./${viewMatch[0]}`);
+    }
+  }
+  return request;
+}
+
+/**
+ * 💡 3. Crash-Proof Fetch Interceptor & Route Reconciler
  */
 self.addEventListener('fetch', (event) => {
   const request = event.request;
 
-  // ⚠️ 1. Ignore non-HTTP/HTTPS requests (e.g. chrome-extension://)
+  // ⚠️ 1. Ignore non-HTTP/HTTPS requests
   if (!request.url.startsWith('http')) {
     return;
   }
 
   const url = new URL(request.url);
 
-  // ⚠️ 2. Bypass API calls & Cloudflare Worker endpoints (Handled by js/offline-sync.js)
+  // ⚠️ 2. Bypass API calls & Cloudflare Worker endpoints
   if (
     request.method !== 'GET' ||
     url.pathname.startsWith('/api') ||
     url.hostname.includes('workers.dev') ||
     url.searchParams.has('action')
   ) {
-    return; // Pass through to live network / API interceptor
+    return;
   }
 
-  // 💡 3. For App Shell, Views & Static Assets: Stale-While-Revalidate Strategy
+  // 💡 3. Stale-While-Revalidate with Route Reconciliation
   event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // Fetch fresh copy in background to update cache
-        fetch(request)
-          .then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
-              const responseToCache = networkResponse.clone();
-              caches.open(CACHE_NAME).then((cache) => {
-                cache.put(request, responseToCache);
-              });
-            }
-          })
-          .catch(() => {});
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      const normalizedReq = normalizeRequest(request);
 
-        return cachedResponse; // 0ms Instant Load from Disk
+      // Cache ထဲတွင် ignoreSearch အသုံးပြုပြီး အရင်ရှာပါ
+      let cachedResponse = await cache.match(normalizedReq, { ignoreSearch: true });
+      if (!cachedResponse && normalizedReq !== request) {
+        cachedResponse = await cache.match(request, { ignoreSearch: true });
       }
 
-      // If not in cache -> Fetch from network
-      return fetch(request)
+      // Background revalidation logic
+      const fetchPromise = fetch(request)
         .then((networkResponse) => {
-          if (!networkResponse || networkResponse.status !== 200) {
-            return networkResponse;
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            cache.put(normalizedReq, responseToCache);
           }
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, responseToCache);
-          });
           return networkResponse;
         })
-        .catch(() => {
-          // 💡 FIX: Return a valid empty fallback response so browser NEVER throws "Failed to convert value to Response"
-          return new Response('', {
-            status: 408,
-            statusText: 'Offline Asset Unavailable'
-          });
-        });
-    })
+        .catch(() => null);
+
+      // Cache တွေ့ပါက တန်း return ပြန်ပြီး background fetch အလုပ်လုပ်စေခြင်း
+      if (cachedResponse) {
+        event.waitUntil(fetchPromise);
+        return cachedResponse;
+      }
+
+      // Cache မရှိပါက Network မှ တောင်းယူခြင်း
+      const networkResponse = await fetchPromise;
+      if (networkResponse) {
+        return networkResponse;
+      }
+
+      // Navigation / SPA page load ဖြစ်ပါက offline app-shell (index.html) သို့ fallback ပေးခြင်း
+      if (request.mode === 'navigate') {
+        const indexFallback = await cache.match('./index.html');
+        if (indexFallback) return indexFallback;
+      }
+
+      // Fallback empty response
+      return new Response('', {
+        status: 408,
+        statusText: 'Offline Asset Unavailable'
+      });
+    })()
   );
 });
