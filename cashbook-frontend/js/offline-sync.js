@@ -1,10 +1,14 @@
 /**
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - OFFLINE-FIRST BACKGROUND SYNC ENGINE
- * File: js/offline-sync.js
+ * File: js/offline-sync.js (Location: cashbook-frontend/js/offline-sync.js)
  * 💡 Features: Direct Cloudflare Worker Routing (405 Method Not Allowed Fixed),
+ *              🛡️ 401/400/404 Auto-Eviction (Prevents Infinite Blocking Queues),
  *              Safe JSON Response Parser (Unexpected end of JSON fixed),
  *              IndexedDB Outbox Storage, Strict FIFO Sequential Sync,
- *              Live Connection Status Badge (Auto-Hides only when 100% Synced) & Silent Ledger Refresh
+ *              Live Connection Status Badge (Auto-Hides only when 100% Synced) & 
+ *              Silent Ledger Refresh with Correct API Method Hooks
+ * ==============================================================================
  */
 
 (function(window) {
@@ -215,7 +219,10 @@
 
     const queue = await getAllQueuedRequests();
     if (!queue || queue.length === 0) {
-      updateNetworkStatusUI();
+      // Force hide badge if queue is empty
+      const badge = document.getElementById('global-network-badge');
+      if (badge) badge.classList.add('hidden');
+
       if (isManual && typeof window.showToast === 'function') {
         window.showToast("SUCCESS", "Sync လုပ်ရန် ကျန်ရှိသော စာရင်း မရှိပါ။ အားလုံး အဆင်ပြေပါသည်။");
       }
@@ -242,7 +249,7 @@
       const item = queue[i];
 
       if (!navigator.onLine) {
-        break;
+        break; // Stop syncing if network drops
       }
 
       try {
@@ -273,11 +280,16 @@
             successCount++;
           } else {
             console.warn(`[OfflineSync] Item validation error:`, resData?.message);
-            await removeQueuedRequest(item.id); // Evict bad/unfixable data to unblock queue
+            // Validation error (e.g. empty fields) -> Evict to prevent infinite blocking
+            await removeQueuedRequest(item.id); 
           }
-        } else if (response.status === 400 || response.status === 404) {
-          await removeQueuedRequest(item.id); // Evict invalid request
-        } else {
+        } 
+        // ⚡ FIX: 401 Unauthorized / Session Expired တွင်လည်း မဖြစ်မနေ Queue ဖျက်ပေးရမည် (Infinite Loop ကာကွယ်ရန်)
+        else if (response.status === 400 || response.status === 401 || response.status === 403 || response.status === 404) {
+          console.warn(`[OfflineSync] HTTP ${response.status} Error. Evicting unresolvable payload.`);
+          await removeQueuedRequest(item.id); 
+        } 
+        else {
           // Server 500 or real network drop -> Break and retry later
           break;
         }
@@ -288,7 +300,15 @@
     }
 
     isSyncing = false;
-    updateNetworkStatusUI(); // 💡 Queue ထဲ စာရင်းကုန်သွားပါက Pending ဘားကြီး အလိုအလျောက် ပျောက်ကွယ်သွားမည်
+    
+    // Auto UI refresh
+    const newCount = await getQueueCount();
+    if (newCount === 0) {
+      const badge = document.getElementById('global-network-badge');
+      if (badge) badge.classList.add('hidden');
+    } else {
+      updateNetworkStatusUI(); 
+    }
 
     if (successCount > 0) {
       if (typeof window.showToast === 'function') {
@@ -304,14 +324,15 @@
   function triggerSilentActiveLedgerReload() {
     if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
 
+    // ⚡ FIX: Use proper existing globally exposed function names
     if (typeof window.loadIncomeData === 'function') window.loadIncomeData(true, true);
-    if (typeof window.loadOfficeData === 'function') window.loadOfficeData(true);
-    if (typeof window.loadBankData === 'function') window.loadBankData(true);
-    if (typeof window.loadCashData === 'function') window.loadCashData(true);
-    if (typeof window.loadPayrollData === 'function') window.loadPayrollData(true);
-    if (typeof window.loadStudentData === 'function') window.loadStudentData(false);
+    if (typeof window.loadOfficeData === 'function') window.loadOfficeData(true, true);
+    if (typeof window.loadBankCashKitData === 'function') window.loadBankCashKitData(true, true);
+    if (typeof window.loadHrPayrollData === 'function') window.loadHrPayrollData(true);
+    if (typeof window.loadCashierData === 'function') window.loadCashierData(true);
+    if (typeof window.loadStudentData === 'function') window.loadStudentData(true);
     if (typeof window.loadStudentMoneyData === 'function') window.loadStudentMoneyData(true);
-    if (typeof window.loadDashboardData === 'function') window.loadDashboardData(true);
+    if (typeof window.loadDashboardData === 'function') window.loadDashboardData(true, true);
   }
 
   /**
