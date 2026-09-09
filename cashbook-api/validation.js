@@ -1,11 +1,16 @@
 /** 
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - INPUT VALIDATION & SANITIZATION ENGINE 
- * File: validation.js (or validators/validation.js)     
- * 💡 Serverless Input Validation, Formula Injection Sanitizer & Formal Error Handling Engine
- * 🛠️ SECURED: Pure Number Exemption, Base64/Token File Corruption Protection & Comma-Safe Amount Parser
+ * File: validation.js (Location: cashbook-api/validation.js)     
+ * 💡 Features: 🛡️ Strict Prototype Pollution Immunity & Recursion Depth Guard,
+ *              🎯 Real Calendar Date Validation (Zero 2026-02-31 JS Rollover Bug),
+ *              Accounting Parentheses (1000) & Comma-Separated Number Support,
+ *              Smarter Formula Injection Defense (Preserves Phone +95 & Bullet - Text),
+ *              Active Ledger, Inventory, Student & Payroll Payload Verification
+ * ==============================================================================
  */
 
-// 🛡️ Fields exempt from formula injection sanitization (prevents corrupting binary Base64, tokens & passwords)
+// 🛡️ Fields exempt from formula injection sanitization
 const EXEMPT_FORMULA_FIELDS = new Set([
   'excelBase64',
   'token',
@@ -14,16 +19,14 @@ const EXEMPT_FORMULA_FIELDS = new Set([
   'password_hash',
   'uniqueId',
   'uniqueid',
-  'csvText'
+  'csvText',
+  'action'
 ]);
 
 /**
- * 💡 SANITIZE FORMULA INJECTION ATTACKS FOR GOOGLE SHEETS & EXCEL EXPORTS
+ * 💡 SANITIZE FORMULA INJECTION ATTACKS FOR SPREADSHEET EXPORTS
  * Escapes special leading characters (=, +, -, @, \t, \r) to prevent formula execution exploits.
- * Exempts pure numbers (e.g. "-1000", "+50", "125.50") so numeric amounts are not converted to text strings.
- * 
- * @param {string} str 
- * @returns {string}
+ * Preserves pure numbers, accounting formats e.g. (1,000), phone numbers (+95...), and bullet points.
  */
 export function sanitizeFormulaInput(str) {
   if (typeof str !== 'string') return str;
@@ -31,13 +34,31 @@ export function sanitizeFormulaInput(str) {
 
   if (!trimmed) return str;
 
-  // 🛡️ 1. Pure numbers (e.g., "-1000", "+50", "125.50", "-1,500.00") are NOT formula injections
-  const cleanNumStr = trimmed.replace(/,/g, '');
-  if (!isNaN(Number(cleanNumStr))) {
+  // 🛡️ 1. Pure numbers & Accounting Parentheses (e.g., "-1000", "+50", "125.50", "(1,500.00)")
+  let cleanNumStr = trimmed.replace(/,/g, '');
+  if (cleanNumStr.startsWith('(') && cleanNumStr.endsWith(')')) {
+    cleanNumStr = '-' + cleanNumStr.slice(1, -1).trim();
+  }
+  if (!isNaN(Number(cleanNumStr)) && Number.isFinite(Number(cleanNumStr))) {
     return str;
   }
 
-  // 🛡️ 2. Escape formula execution triggers with a leading single-quote
+  // 🛡️ 2. Phone numbers with country codes (e.g. "+95 9 12345678", "+1-800-...")
+  if (/^\+[\d\s\-()]{6,25}$/.test(trimmed)) {
+    return str;
+  }
+
+  // 🛡️ 3. Legitimate text bullet points (e.g. "- Office stationery", "+ Extra bonus")
+  if (/^[\-\+]\s+[^\=\+\-\@]/.test(trimmed)) {
+    return str;
+  }
+
+  // 🛡️ 4. Prevent double single-quote escaping if already escaped
+  if (trimmed.startsWith("'")) {
+    return str;
+  }
+
+  // 🛡️ 5. Escape formula execution triggers with a leading single-quote
   if (/^[=+\-@\t\r]/.test(trimmed)) {
     return `'${trimmed}`;
   }
@@ -45,15 +66,19 @@ export function sanitizeFormulaInput(str) {
 }
 
 /**
- * 💡 RECURSIVELY SANITIZE ALL STRING FIELDS IN AN OBJECT (With Binary/Token Protection)
- * 
- * @param {object} obj 
- * @returns {object}
+ * 💡 RECURSIVELY SANITIZE ALL STRING FIELDS IN AN OBJECT
+ * Includes Prototype Pollution Defense & Maximum Depth Guard (Depth <= 6)
  */
-export function sanitizeObjectFormulas(obj) {
-  if (!obj || typeof obj !== 'object') return obj;
+export function sanitizeObjectFormulas(obj, depth = 0) {
+  if (!obj || typeof obj !== 'object' || depth > 6) return obj;
 
   for (const key of Object.keys(obj)) {
+    // 🔒 Prototype Pollution Defense
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+      delete obj[key];
+      continue;
+    }
+
     // Skip binary payloads, Base64 files, tokens, and passwords
     if (EXEMPT_FORMULA_FIELDS.has(key)) {
       continue;
@@ -62,25 +87,21 @@ export function sanitizeObjectFormulas(obj) {
     if (typeof obj[key] === 'string') {
       obj[key] = sanitizeFormulaInput(obj[key]);
     } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-      sanitizeObjectFormulas(obj[key]);
+      sanitizeObjectFormulas(obj[key], depth + 1);
     }
   }
   return obj;
 }
 
 /**
- * 💡 Validate ISO Date Format (YYYY-MM-DD)
- * 
- * @param {string} dateStr 
- * @param {string} fieldName 
- * @returns {object} { valid: boolean, message?: string }
+ * 💡 Strict Real-Calendar Date Validation (YYYY-MM-DD)
+ * 🎯 FIX: Prevents JavaScript date rollover (e.g., Feb 31 becoming March 3)
  */
 export function validateDateStr(dateStr, fieldName = "Date") {
   if (!dateStr || typeof dateStr !== "string") {
     return { valid: false, message: `${fieldName} ဖြည့်သွင်းရန် လိုအပ်ပါသည်။` };
   }
 
-  // Handles ISO DateTime strings (e.g., "2026-07-31T00:00:00.000Z" -> "2026-07-31")
   const cleanDateStr = dateStr.trim().split('T')[0];
 
   const regex = /^\d{4}-\d{2}-\d{2}$/;
@@ -88,32 +109,44 @@ export function validateDateStr(dateStr, fieldName = "Date") {
     return { valid: false, message: `${fieldName} ၏ ပုံစံမှာ YYYY-MM-DD ဖြစ်ရပါမည်။ (ဥပမာ - 2026-07-26)` };
   }
 
-  const d = new Date(cleanDateStr);
-  if (isNaN(d.getTime())) {
-    return { valid: false, message: `မမှန်ကန်သော ${fieldName} ဖြစ်နေပါသည်။` };
+  const parts = cleanDateStr.split('-');
+  const y = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10) - 1; // 0-based month
+  const d = parseInt(parts[2], 10);
+
+  const dateObj = new Date(Date.UTC(y, m, d));
+
+  // 🎯 STRICT CALENDAR CHECK: Check if rollover occurred
+  if (
+    isNaN(dateObj.getTime()) ||
+    dateObj.getUTCFullYear() !== y ||
+    dateObj.getUTCMonth() !== m ||
+    dateObj.getUTCDate() !== d
+  ) {
+    return { valid: false, message: `မမှန်ကန်သော ပြက္ခဒိန်ရက်စွဲ (${cleanDateStr}) ဖြစ်နေပါသည်။` };
   }
 
-  return { valid: true };
+  return { valid: true, cleanDate: cleanDateStr };
 }
 
 /**
- * 💡 Validate Currency / Numeric Amount (Comma-Safe)
- * 
- * @param {any} val 
- * @param {string} fieldName 
- * @param {boolean} allowNegative 
- * @returns {object} { valid: boolean, value?: number, message?: string }
+ * 💡 Validate Currency / Numeric Amount (Comma-Safe & Accounting Parentheses Support)
  */
 export function validateAmount(val, fieldName = "Amount", allowNegative = false) {
   if (val === undefined || val === null || val === "") {
     return { valid: true, value: 0 };
   }
 
-  // Strip comma separators if present
-  const cleanStr = String(val).replace(/,/g, '').trim();
+  let cleanStr = String(val).trim().replace(/,/g, '');
+
+  // 🎯 ACCOUNTING FORMAT SUPPORT: (1000) -> -1000
+  if (cleanStr.startsWith('(') && cleanStr.endsWith(')')) {
+    cleanStr = '-' + cleanStr.slice(1, -1).trim();
+  }
+
   const num = Number(cleanStr);
 
-  if (isNaN(num)) {
+  if (!Number.isFinite(num)) {
     return { valid: false, message: `${fieldName} တွင် ဂဏန်းသန့်သန့်သာ ရေးသွင်းရပါမည်။` };
   }
 
@@ -126,12 +159,6 @@ export function validateAmount(val, fieldName = "Amount", allowNegative = false)
 
 /**
  * 💡 Validate Required Text Input with Length & Formula Injection Sanitization
- * 
- * @param {string} str 
- * @param {string} fieldName 
- * @param {number} minLen 
- * @param {number} maxLen 
- * @returns {object} { valid: boolean, cleanValue?: string, message?: string }
  */
 export function validateRequiredText(str, fieldName = "Field", minLen = 1, maxLen = 500) {
   const cleanStr = String(str || "").trim();
@@ -149,7 +176,7 @@ export function validateRequiredText(str, fieldName = "Field", minLen = 1, maxLe
 }
 
 /**
- * 💡 Validate Ledger Entry Body Payload (Bank, Cash, Office, Kitchen, HR)
+ * 💡 Validate Ledger Entry Body Payload (Bank, Cash, Office, Kitchen, Cashier)
  */
 export function validateLedgerPayload(body = {}) {
   const dateCheck = validateDateStr(body.date, "Transaction Date (ရက်စွဲ)");
@@ -158,11 +185,17 @@ export function validateLedgerPayload(body = {}) {
   const descCheck = validateRequiredText(body.description, "Description (အကြောင်းအရာ)", 1, 1000);
   if (!descCheck.valid) return descCheck;
 
-  const debitCheck = validateAmount(body.debit, "Debit Amount (ဝင်ငွေ)", true);
+  const debitCheck = validateAmount(body.debit, "Debit Amount (ဝင်ငွေ)", false);
   if (!debitCheck.valid) return debitCheck;
 
-  const creditCheck = validateAmount(body.credit, "Credit Amount (ထွက်ငွေ)", true);
+  const creditCheck = validateAmount(body.credit, "Credit Amount (ထွက်ငွေ)", false);
   if (!creditCheck.valid) return creditCheck;
+
+  // Liabilities support negative and (1000) format
+  if (body.liabilities !== undefined && body.liabilities !== null && body.liabilities !== "") {
+    const liabCheck = validateAmount(body.liabilities, "Liabilities (ပေးရန်ကျန်ငွေ)", true);
+    if (!liabCheck.valid) return liabCheck;
+  }
 
   return { valid: true };
 }
@@ -174,6 +207,16 @@ export function validateStudentPayload(body = {}) {
   const nameCheck = validateRequiredText(body.name, "Student Name (ကျောင်းသားအမည်)", 1, 150);
   if (!nameCheck.valid) return nameCheck;
 
+  if (body.date) {
+    const dateCheck = validateDateStr(body.date, "Registration Date (စာရင်းသွင်းရက်စွဲ)");
+    if (!dateCheck.valid) return dateCheck;
+  }
+
+  if (body.transferDate || body.transfer_date) {
+    const transCheck = validateDateStr(body.transferDate || body.transfer_date, "Transfer Date (နုတ်ထွက်ရက်စွဲ)");
+    if (!transCheck.valid) return transCheck;
+  }
+
   return { valid: true };
 }
 
@@ -184,70 +227,85 @@ export function validateStaffPayload(body = {}) {
   const nameCheck = validateRequiredText(body.name, "Staff Name (ဝန်ထမ်းအမည်)", 1, 150);
   if (!nameCheck.valid) return nameCheck;
 
+  if (body.joinDate || body.join_date) {
+    const joinCheck = validateDateStr(body.joinDate || body.join_date, "Join Date (စတင်ဝင်ရောက်သည့်ရက်)");
+    if (!joinCheck.valid) return joinCheck;
+  }
+
+  if (body.resignedDate || body.resigned_date) {
+    const resCheck = validateDateStr(body.resignedDate || body.resigned_date, "Resigned Date (နုတ်ထွက်ရက်)");
+    if (!resCheck.valid) return resCheck;
+  }
+
+  return { valid: true };
+}
+
+/**
+ * 💡 Validate Uniform Inventory Payload
+ */
+export function validateUniformPayload(body = {}) {
+  const nameCheck = validateRequiredText(body.productName || body.product_name, "Product Name (ပစ္စည်းအမည်)", 1, 150);
+  if (!nameCheck.valid) return nameCheck;
+
+  const stockCheck = validateAmount(body.openingStock ?? body.opening_stock, "Opening Stock (အဖွင့်လက်ကျန်)", false);
+  if (!stockCheck.valid) return stockCheck;
+
+  const priceCheck = validateAmount(body.unitPrice ?? body.unit_price, "Unit Price (ဝယ်ရင်းဈေး)", false);
+  if (!priceCheck.valid) return priceCheck;
+
   return { valid: true };
 }
 
 /**
  * 💡 UNIFIED SERVER-SIDE INPUT VALIDATOR & FORMULA INJECTION SANITIZER
  * Invoked directly by worker.js on all mutating POST/PUT/DELETE requests.
- * 
- * @param {object} body 
- * @returns {object} { success: boolean, message?: string }
  */
 export function validateLedgerInput(body = {}) {
   if (!body || typeof body !== 'object') {
     return { success: false, message: "Request Payload မမှန်ကန်ပါ။" };
   }
 
-  // 🛡️ 1. Sanitize string fields against Formula Injection (while protecting Base64 files & tokens)
+  // 🛡️ 1. Sanitize string fields against Formula Injection & Prototype Pollution
   sanitizeObjectFormulas(body);
 
   const action = String(body.action || "").trim();
 
-  // 🛡️ 2. Date Format Validation (if date field is present)
+  // 🛡️ 2. Comprehensive Ledger Mutations Validation (Bank, Cash, Office, Kitchen, Cashier)
+  const isLedgerMutation = /^(save|update)(BankCash|Expense|Cashier|Income|StudentMoney)Entry$/i.test(action);
+  if (isLedgerMutation) {
+    const ledgerCheck = validateLedgerPayload(body);
+    if (!ledgerCheck.valid) {
+      return { success: false, message: ledgerCheck.message };
+    }
+  }
+
+  // 🛡️ 3. Generic Date Validations if present
   if (body.date && String(body.date).trim() !== "") {
     const dateCheck = validateDateStr(body.date, "Date (ရက်စွဲ)");
-    if (!dateCheck.valid) {
-      return { success: false, message: dateCheck.message };
-    }
+    if (!dateCheck.valid) return { success: false, message: dateCheck.message };
   }
 
   if (body.effDate && String(body.effDate).trim() !== "") {
     const effDateCheck = validateDateStr(body.effDate, "Effect Date (ကျသင့်လရက်စွဲ)");
-    if (!effDateCheck.valid) {
-      return { success: false, message: effDateCheck.message };
-    }
-  }
-
-  // 🛡️ 3. Amount Validation (Debit / Credit)
-  if (body.debit !== undefined && body.debit !== null && body.debit !== "") {
-    const debitCheck = validateAmount(body.debit, "Debit Amount (ဝင်ငွေ)", true);
-    if (!debitCheck.valid) {
-      return { success: false, message: debitCheck.message };
-    }
-  }
-
-  if (body.credit !== undefined && body.credit !== null && body.credit !== "") {
-    const creditCheck = validateAmount(body.credit, "Credit Amount (ထွက်ငွေ)", true);
-    if (!creditCheck.valid) {
-      return { success: false, message: creditCheck.message };
-    }
+    if (!effDateCheck.valid) return { success: false, message: effDateCheck.message };
   }
 
   // 🛡️ 4. Student Payload Validation
-  if (action.includes("Student") && (action.startsWith("save") || action.startsWith("update"))) {
+  if (action.includes("Student") && (action.startsWith("save") || action.startsWith("update")) && !action.includes("Money")) {
     const stuCheck = validateStudentPayload(body);
-    if (!stuCheck.valid) {
-      return { success: false, message: stuCheck.message };
-    }
+    if (!stuCheck.valid) return { success: false, message: stuCheck.message };
   }
 
   // 🛡️ 5. Staff Payload Validation
   if (action.includes("Staff") && (action.startsWith("save") || action.startsWith("update"))) {
     const staffCheck = validateStaffPayload(body);
-    if (!staffCheck.valid) {
-      return { success: false, message: staffCheck.message };
-    }
+    if (!staffCheck.valid) return { success: false, message: staffCheck.message };
+  }
+
+  // 🛡️ 6. Uniform Inventory Payload Validation
+  if (action.includes("Uniform") && (action.startsWith("save") || action.startsWith("update"))) {
+    const uniCheck = validateUniformPayload(body);
+    if (!uniCheck.valid) return { success: false, message: uniCheck.message };
   }
 
   return { success: true };
