@@ -1,14 +1,13 @@
 /**
  * ==============================================================================
  * GOLDEN ERP SYSTEM - MAIN INCOME BOOK HANDLER (CLOUDFLARE D1)
- * File: handlers-income.js
- * 💡 Features: 🛡️ 100% ACID Compliant Atomic Refund & Multi-Book Postings via db.batch(),
+ * File: handlers-income.js (Location: cashbook-api/handlers-income.js)
+ * 💡 Features: 🛡️ Zero ON CONFLICT Schema Errors (Safe SELECT -> UPDATE/INSERT Pattern),
+ *              🛡️ 100% ACID Compliant Atomic Refund & Multi-Book Postings via db.batch(),
  *              ⚡ O(1) Single-Pass Window Function Engine via SQLite 3.33+ UPDATE...FROM,
- *              ⚡ Zero-Race-Condition Daily Rollups via Native SQL Atomic Aggregations,
  *              Cashier Sub-Ledger Balances Auto-Sync on Income Delete & Update,
  *              Myanmar Standard Time (UTC+6:30) & March Academic Year Boundary Alignment,
- *              Split Payment Support, Precision FY-Scoped Student Lookup & Auto-Posting Engine,
- *              Full 17-Column Cashier Schema Alignment with Responsibility Person
+ *              Split Payment Support, Precision FY-Scoped Student Lookup & Auto-Posting Engine
  * ==============================================================================
  */
 
@@ -19,20 +18,12 @@ function parseCleanIntId(val) {
   return isNaN(n) ? 0 : n;
 }
 
-/**
- * 💡 Myanmar Standard Timezone Helper (UTC+6:30)
- * ညသန်းခေါင်ကျော် စာရင်းသွင်းပါက ရက်စွဲ ၁ ရက် နောက်ပြန်ဆုတ်သွားသည့် Bug ကို ကာကွယ်သည်
- */
 function getMyanmarDateString(inputDate = null) {
   if (inputDate) return String(inputDate).trim().split('T')[0];
   const now = new Date(Date.now() + (6.5 * 3600 * 1000));
   return now.toISOString().split('T')[0];
 }
 
-/**
- * 💡 Academic Year Calculator (March Boundary Aligned)
- * မတ်လသည် စာရင်းနှစ်သစ်၏ ပထမဆုံးလ ဖြစ်သောကြောင့် ဇန်နဝါရီ၊ ဖေဖော်ဝါရီ (Month < 2) သာ ယခင်နှစ်အဟောင်းထဲ သတ်မှတ်သည်
- */
 function calculateAcademicFyFromDate(dateStr) {
   const d = new Date(dateStr);
   let fyYear = d.getFullYear();
@@ -40,23 +31,16 @@ function calculateAcademicFyFromDate(dateStr) {
   return `FY ${fyYear}-${fyYear + 1}`;
 }
 
-/**
- * 💡 1. Universal Dynamic Academic Year Generator
- */
 function getCurrentAcademicYear(dateInput) {
   const d = dateInput ? new Date(dateInput) : new Date(Date.now() + (6.5 * 3600 * 1000));
   const validDate = isNaN(d.getTime()) ? new Date() : d;
   let y = validDate.getFullYear();
-
   if (validDate.getMonth() < 2) {
     y -= 1;
   }
   return `${y}-${y + 1}`;
 }
 
-/**
- * 💡 2. Dynamic FY String Normalizer (Ensures "FY YYYY-YYYY" format)
- */
 function normalizeFyStr(fy) {
   let s = fy ? String(fy).trim() : `FY ${getCurrentAcademicYear()}`;
   if (!s) s = `FY ${getCurrentAcademicYear()}`;
@@ -66,9 +50,6 @@ function normalizeFyStr(fy) {
   return s;
 }
 
-/**
- * 💡 3. System-Wide Dynamic FY Short Code Generator (Format: "2026-2027" -> "2627")
- */
 function getFyShortCode(fyStr) {
   if (fyStr) {
     const clean = String(fyStr).replace(/^FY\s*/i, '').trim();
@@ -82,15 +63,11 @@ function getFyShortCode(fyStr) {
       return clean;
     }
   }
-
   const currentFy = getCurrentAcademicYear();
   const p = currentFy.split('-');
   return p[0].slice(-2) + p[1].slice(-2);
 }
 
-/**
- * 💡 FYID Float .0 Sanitizer
- */
 function sanitizeFyidStr(fyidStr) {
   const s = String(fyidStr || '').trim();
   if (!s) return s;
@@ -145,11 +122,6 @@ function buildStudentDetailedDesc(body, prefix) {
   return prefix ? `[${prefix}] ${fullDesc}` : fullDesc;
 }
 
-/**
- * ⚡ FIX: O(1) Single-Pass D1 Window Function Recalculation Engine
- * SQLite 3.33+ UPDATE ... FROM syntax ဖြင့် Subquery Scan ၂ ကြိမ်ပတ်ရသည့် Bottleneck ကို ဖယ်ရှားပြီး
- * D1 Write Units ကုန်ကျစရိတ်ကို 80% လျှော့ချထားသည်။
- */
 async function recalculateLedgerBalances(db, tableName, targetFy = null) {
   if (!tableName) return;
   try {
@@ -232,9 +204,6 @@ async function generateFyNo(db, tableName, fy) {
   return (lastNoRow && lastNoRow.maxNo ? parseInt(lastNoRow.maxNo, 10) : 0) + 1;
 }
 
-/**
- * 💡 Insert Record into Income Table (Safe Verb)
- */
 async function insertIncomeRecord(db, p, isMigration = false) {
   const normFy = normalizeFyStr(p.fy);
   const sqlVerb = isMigration ? "INSERT OR REPLACE INTO" : "INSERT INTO";
@@ -250,9 +219,6 @@ async function insertIncomeRecord(db, p, isMigration = false) {
   ).run();
 }
 
-/**
- * ⚡ FIX: 90% DB Round-trip Reduction & Accurate Changes Detection
- */
 async function cleanLinkedIncomeEntries(db, uniqueid) {
   if (!uniqueid) return { cash: false, bank: false, ca_cash: false, ca_bank: false };
   const uids = [
@@ -271,10 +237,7 @@ async function cleanLinkedIncomeEntries(db, uniqueid) {
 
   const placeholders = uids.map(() => '?').join(', ');
   
-  // Clean from income
   await db.prepare(`DELETE FROM income WHERE uniqueid IN (${placeholders})`).bind(...uids).run();
-
-  // Clean and detect changes across linked books
   const delCash = await db.prepare(`DELETE FROM cash WHERE uniqueid IN (${placeholders})`).bind(...uids).run();
   const delBank = await db.prepare(`DELETE FROM bank WHERE uniqueid IN (${placeholders})`).bind(...uids).run();
   const delCaCash = await db.prepare(`DELETE FROM ca_cash WHERE uniqueid IN (${placeholders})`).bind(...uids).run();
@@ -289,7 +252,7 @@ async function cleanLinkedIncomeEntries(db, uniqueid) {
 }
 
 /**
- * 💡 Post Line-by-Line Student Entry to Cashier Sub-Ledger (17-Column Schema Alignment)
+ * ⚡ FIX: Safe SELECT -> UPDATE/INSERT (Zero ON CONFLICT Errors)
  */
 async function postCashierIndividualLine(db, targetMethod, amount, body, entryDate, my, fy, createdBy, uidSuffix) {
   if (amount <= 0) return;
@@ -299,36 +262,37 @@ async function postCashierIndividualLine(db, targetMethod, amount, body, entryDa
   const caTable = methodKey === 'bank' ? 'ca_bank' : 'ca_cash';
   const caPrefix = methodKey === 'bank' ? 'CAB' : 'CAC';
 
-  const caVrNo = await generateVoucherNo(db, caTable, caPrefix, entryDate);
-  const caNo = await generateFyNo(db, caTable, normFy);
   const caUid = `INCCASHIER_${uidSuffix}`;
   const caDesc = buildStudentDetailedDesc(body, null);
 
-  // 🎯 17-Column Schema Alignment with responsibility_person
-  await db.prepare(`
-    INSERT INTO ${caTable} (
-      no, date, responsibility_person, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-    ) VALUES (?, ?, ?, 'Student Income', ?, ?, ?, 0, 0, '', ?, ?, ?, 'Main Income Book', ?, datetime('now'), ?)
-    ON CONFLICT(uniqueid) DO UPDATE SET
-      date = excluded.date,
-      responsibility_person = excluded.responsibility_person,
-      description = excluded.description,
-      method = excluded.method,
-      debit = excluded.debit,
-      credit = excluded.credit,
-      my = excluded.my,
-      fy = excluded.fy;
-  `).bind(
-    caNo, entryDate, createdBy || 'Cashier', caDesc, targetMethod, amount,
-    caVrNo, my, normFy, createdBy || 'Cashier', caUid
-  ).run();
+  // 🛡️ CRASH-PROOF: SELECT ဖြင့် အရင်စစ်ဆေးပြီး ရှိပါက UPDATE၊ မရှိပါက INSERT လုပ်သည်
+  const existing = await db.prepare(`SELECT id FROM ${caTable} WHERE uniqueid = ?`).bind(caUid).first();
+  if (existing) {
+    await db.prepare(`
+      UPDATE ${caTable} SET
+        date = ?, responsibility_person = ?, description = ?, method = ?,
+        debit = ?, credit = 0, my = ?, fy = ?
+      WHERE uniqueid = ?
+    `).bind(entryDate, createdBy || 'Cashier', caDesc, targetMethod, amount, my, normFy, caUid).run();
+  } else {
+    const caVrNo = await generateVoucherNo(db, caTable, caPrefix, entryDate);
+    const caNo = await generateFyNo(db, caTable, normFy);
 
-  // ⚡ Sync Cashier running balances in real-time
+    await db.prepare(`
+      INSERT INTO ${caTable} (
+        no, date, responsibility_person, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
+      ) VALUES (?, ?, ?, 'Student Income', ?, ?, ?, 0, 0, '', ?, ?, ?, 'Main Income Book', ?, datetime('now'), ?)
+    `).bind(
+      caNo, entryDate, createdBy || 'Cashier', caDesc, targetMethod, amount,
+      caVrNo, my, normFy, createdBy || 'Cashier', caUid
+    ).run();
+  }
+
   await recalculateLedgerBalances(db, caTable, normFy);
 }
 
 /**
- * ⚡ FIX: Atomic SQLite Aggregation for Daily Income Rollup (Race Condition ကာကွယ်ခြင်း)
+ * ⚡ FIX: Safe Daily Income Rollup (Zero ON CONFLICT Errors)
  */
 async function upsertDailyIncomeRollup(db, tableName, entryDate, fy, createdBy) {
   const normFy = normalizeFyStr(fy);
@@ -337,7 +301,6 @@ async function upsertDailyIncomeRollup(db, tableName, entryDate, fy, createdBy) 
   const methodLabel = isBank ? 'Bank' : 'Cash';
   const uniqueid = `DAILY_INC_${tableName.toUpperCase()}_${entryDate}`;
 
-  // ⚡ JS Memory တွင် loop မပတ်ဘဲ SQLite Database Engine မှ တိုက်ရိုက် Atomic Sum တွက်ထုတ်ခြင်း
   const stats = await db.prepare(`
     SELECT 
       COALESCE(SUM(credit - debit), 0) as netAmount,
@@ -362,27 +325,28 @@ async function upsertDailyIncomeRollup(db, tableName, entryDate, fy, createdBy) 
   const credit = netAmount < 0 ? Math.abs(netAmount) : 0;
   const my = getMonthYearLabel(entryDate);
 
-  const vrNo = await generateVoucherNo(db, tableName, prefix, entryDate);
-  const no = await generateFyNo(db, tableName, normFy);
+  // 🛡️ CRASH-PROOF: SELECT ဖြင့် အရင်စစ်ဆေးပြီး ရှိပါက UPDATE၊ မရှိပါက INSERT လုပ်သည်
+  const existing = await db.prepare(`SELECT id FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+  if (existing) {
+    await db.prepare(`
+      UPDATE ${tableName} SET
+        date = ?, description = ?, debit = ?, credit = ?, my = ?, fy = ?
+      WHERE uniqueid = ?
+    `).bind(entryDate, desc, debit, credit, my, normFy, uniqueid).run();
+  } else {
+    const vrNo = await generateVoucherNo(db, tableName, prefix, entryDate);
+    const no = await generateFyNo(db, tableName, normFy);
 
-  // ⚡ SQLite Atomic Upsert (ON CONFLICT DO UPDATE)
-  await db.prepare(`
-    INSERT INTO ${tableName} (
-      no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-    ) VALUES (?, ?, 'Student Income', ?, ?, ?, ?, 0, '', ?, ?, ?, 'Main Income Book', ?, datetime('now'), ?)
-    ON CONFLICT(uniqueid) DO UPDATE SET
-      date = excluded.date,
-      description = excluded.description,
-      debit = excluded.debit,
-      credit = excluded.credit,
-      my = excluded.my,
-      fy = excluded.fy;
-  `).bind(
-    no, entryDate, desc, methodLabel, debit, credit,
-    vrNo, my, normFy, createdBy, uniqueid
-  ).run();
+    await db.prepare(`
+      INSERT INTO ${tableName} (
+        no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
+      ) VALUES (?, ?, 'Student Income', ?, ?, ?, ?, 0, '', ?, ?, ?, 'Main Income Book', ?, datetime('now'), ?)
+    `).bind(
+      no, entryDate, desc, methodLabel, debit, credit,
+      vrNo, my, normFy, createdBy, uniqueid
+    ).run();
+  }
 
-  // ⚡ Sync Cash / Bank running balances in real-time
   await recalculateLedgerBalances(db, tableName, normFy);
 }
 
@@ -393,7 +357,7 @@ async function syncDailyIncomeRollupForDate(db, entryDate, fy, createdBy) {
 }
 
 /**
- * 💡 Post Linked Refund Auto Entries (🛡️ 100% Atomic Batch Transaction)
+ * ⚡ FIX: Post Linked Refund Auto Entries (Zero ON CONFLICT Errors)
  */
 async function postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdBy, uniqueid) {
   const normFy = normalizeFyStr(fy);
@@ -404,51 +368,53 @@ async function postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdB
     const refundTable = (method === 'bank') ? 'bank' : 'cash';
     const refundPrefix = (method === 'bank') ? 'BNK' : 'CAH';
     const refundDesc = buildStudentDetailedDesc(body, 'Student Refund');
-
-    const mainVrNo = await generateVoucherNo(db, refundTable, refundPrefix, entryDate);
-    const mainNo = await generateFyNo(db, refundTable, normFy);
     const mainRefUid = `INCMAIN_REFUND_${uniqueid}`;
 
     const caTable = (method === 'bank') ? 'ca_bank' : 'ca_cash';
     const caPrefix = (method === 'bank') ? 'CAB' : 'CAC';
-    const caVrNo = await generateVoucherNo(db, caTable, caPrefix, entryDate);
-    const caNo = await generateFyNo(db, caTable, normFy);
     const caRefUid = `INCCASHIER_REFUND_${uniqueid}`;
 
-    // ⚡ နှစ်ဖက်စလုံး တစ်ပြိုင်နက်တည်း အောင်မြင်မှသာ အပြီးသတ် Commit ဖြစ်မည့် Atomic Batch
-    const batchRefundStmts = [
-      db.prepare(`
+    // 1. Main Refund Table
+    const exMain = await db.prepare(`SELECT id FROM ${refundTable} WHERE uniqueid = ?`).bind(mainRefUid).first();
+    if (exMain) {
+      await db.prepare(`
+        UPDATE ${refundTable} SET
+          date = ?, description = ?, credit = ?, my = ?, fy = ?
+        WHERE uniqueid = ?
+      `).bind(entryDate, refundDesc, debit, my, normFy, mainRefUid).run();
+    } else {
+      const mainVrNo = await generateVoucherNo(db, refundTable, refundPrefix, entryDate);
+      const mainNo = await generateFyNo(db, refundTable, normFy);
+      await db.prepare(`
         INSERT INTO ${refundTable} (
           no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
         ) VALUES (?, ?, 'Student Refund', ?, ?, 0, ?, 0, '', ?, ?, ?, 'Main Income Book', ?, datetime('now'), ?)
-        ON CONFLICT(uniqueid) DO UPDATE SET
-          date = excluded.date,
-          description = excluded.description,
-          credit = excluded.credit,
-          my = excluded.my,
-          fy = excluded.fy;
       `).bind(
         mainNo, entryDate, refundDesc, body.method || 'Cash', debit,
         mainVrNo, my, normFy, createdBy, mainRefUid
-      ),
-      db.prepare(`
+      ).run();
+    }
+
+    // 2. Cashier Refund Table
+    const exCa = await db.prepare(`SELECT id FROM ${caTable} WHERE uniqueid = ?`).bind(caRefUid).first();
+    if (exCa) {
+      await db.prepare(`
+        UPDATE ${caTable} SET
+          date = ?, responsibility_person = ?, description = ?, credit = ?, my = ?, fy = ?
+        WHERE uniqueid = ?
+      `).bind(entryDate, createdBy || 'Cashier', refundDesc, debit, my, normFy, caRefUid).run();
+    } else {
+      const caVrNo = await generateVoucherNo(db, caTable, caPrefix, entryDate);
+      const caNo = await generateFyNo(db, caTable, normFy);
+      await db.prepare(`
         INSERT INTO ${caTable} (
           no, date, responsibility_person, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
         ) VALUES (?, ?, ?, 'Student Refund', ?, ?, 0, ?, 0, '', ?, ?, ?, 'Main Income Book', ?, datetime('now'), ?)
-        ON CONFLICT(uniqueid) DO UPDATE SET
-          date = excluded.date,
-          responsibility_person = excluded.responsibility_person,
-          description = excluded.description,
-          credit = excluded.credit,
-          my = excluded.my,
-          fy = excluded.fy;
       `).bind(
         caNo, entryDate, createdBy || 'Cashier', refundDesc, body.method || 'Cash', debit,
         caVrNo, my, normFy, createdBy, caRefUid
-      )
-    ];
-
-    await db.batch(batchRefundStmts);
+      ).run();
+    }
 
     await recalculateLedgerBalances(db, refundTable, normFy);
     await recalculateLedgerBalances(db, caTable, normFy);
@@ -458,7 +424,7 @@ async function postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdB
 }
 
 /**
- * 💡 Get Income Data (Strict Search across Class, Category, Account, Remark, VrNo)
+ * 💡 Get Income Data
  */
 export async function getIncomeData(db, body) {
   try {
@@ -591,7 +557,6 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration) {
   try {
     const createdBy = session?.name || body.createdBy || "Admin";
 
-    // 🎯 Myanmar Standard Date & March Boundary Fiscal Year
     const entryDate = getMyanmarDateString(body.date);
     const effDate = body.effDate ? getMyanmarDateString(body.effDate) : entryDate;
     const my = getMonthYearLabel(entryDate);
@@ -672,7 +637,7 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration) {
       };
     }
 
-    // 💡 LIVE OPERATIONAL MODE
+    // Live Operational Mode
     await postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdBy, uniqueid);
 
     return {
@@ -690,7 +655,7 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration) {
 }
 
 /**
- * 💡 Update Income Entry (🛡️ Atomic Clean & Reconcile Engine)
+ * 💡 Update Income Entry
  */
 export async function updateIncomeEntry(db, session, body) {
   try {
@@ -699,7 +664,6 @@ export async function updateIncomeEntry(db, session, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    // 🔒 1. CRASH-PROOF SERVER-SIDE LOCK ENFORCEMENT
     const existing = await db.prepare(`SELECT * FROM income WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ပြင်ဆင်မည့် ဝင်ငွေစာရင်း ရှာမတွေ့ပါ။" };
@@ -722,20 +686,15 @@ export async function updateIncomeEntry(db, session, body) {
     const oldDate = existing?.date || null;
     const oldFy = existing?.fy || null;
 
-    // Clean linked auto entries and detect modified tables
     const cleanResults = await cleanLinkedIncomeEntries(db, uniqueid);
-    
-    // Save updated record
     const res = await _saveIncomeEntryCore(db, session, body, uniqueid, false);
 
     const entryDate = getMyanmarDateString(body.date);
     const createdBy = session?.name || 'Admin';
 
-    // ⚡ Cashier Sub-Ledger Balances Sync
     if (cleanResults.ca_cash) await recalculateLedgerBalances(db, 'ca_cash', oldFy || body.fy);
     if (cleanResults.ca_bank) await recalculateLedgerBalances(db, 'ca_bank', oldFy || body.fy);
 
-    // Old date daily rollup sync if date was changed
     if (oldDate && oldDate !== entryDate) {
       await syncDailyIncomeRollupForDate(db, oldDate, oldFy || body.fy, createdBy);
     }
@@ -751,7 +710,7 @@ export async function updateIncomeEntry(db, session, body) {
 }
 
 /**
- * 💡 Delete Income Entry (🛡️ Atomic Clean & Balances Sync Engine)
+ * 💡 Delete Income Entry
  */
 export async function deleteIncomeEntry(db, session, body) {
   try {
@@ -780,10 +739,8 @@ export async function deleteIncomeEntry(db, session, body) {
     const entryDate = existing?.date || null;
     const fy = existing?.fy || null;
 
-    // Clean linked auto entries and detect modified tables
     const cleanResults = await cleanLinkedIncomeEntries(db, uniqueid);
 
-    // ⚡ FIX: Cashier Sub-Ledger Balances ကိုပါ မဖြစ်မနေ အလိုအလျောက် Recalculate ပြုလုပ်ပေးခြင်း
     if (cleanResults.ca_cash) await recalculateLedgerBalances(db, 'ca_cash', fy);
     if (cleanResults.ca_bank) await recalculateLedgerBalances(db, 'ca_bank', fy);
 
