@@ -2,10 +2,10 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - STUDENT MONEY LEDGER & WALLET HANDLER (CLOUDFLARE D1)
  * File: handlers-money.js
- * 💡 Features: Crash-Proof Student Name Extraction & Auto-Lookup from student Table,
- *              Individual Student Wallet Summary (Group By Student ID), Statement Timelines,
- *              ⚡ O(1) D1 Write-Optimized Window Function Recalculator (Zero D1 Quota Waste),
- *              🎯 Dynamic Date-derived FY Auto-Detection & Multi-FY Cross-Year Transition Safety
+ * 💡 Features: Fixed Wallet Balance Partition Leak (PARTITION BY student_id),
+ *              ⚡ O(1) D1 Write-Optimized Window Function via SQLite 3.33+ UPDATE...FROM,
+ *              Crash-Proof Student Name Extraction & Auto-Lookup,
+ *              Multi-FY Dynamic Transition Safety & Grouped Wallet Summaries
  * ==============================================================================
  */
 
@@ -29,14 +29,24 @@ function sanitizeFyidStr(fyidStr) {
 }
 
 /**
- * ⚡ FIX PERF #1: O(1) Single-Query Window Function Recalculation Engine
- * JS loops နှင့် 100-batch updates များကို ဖယ်ရှားပြီး
- * SQLite Window Function ဖြင့် ၁ ကြိမ်တည်း Update လုပ်သည်။
+ * 💡 Myanmar Standard Timezone Helper (UTC+6:30)
+ */
+function getMyanmarDateString(inputDate = null) {
+  if (inputDate) return String(inputDate).trim().split('T')[0];
+  const now = new Date(Date.now() + (6.5 * 3600 * 1000));
+  return now.toISOString().split('T')[0];
+}
+
+/**
+ * ⚡ FIX: O(1) Single-Pass D1 Window Function Recalculation Engine
+ * 1. ROW_NUMBER() OVER (ORDER BY date ASC, id ASC) -> စာအုပ်၏ စဉ်နံပါတ် (no)
+ * 2. SUM(debit - credit) OVER (PARTITION BY student_id ORDER BY date ASC, id ASC) 
+ *    -> ကျောင်းသားတစ်ဦးချင်းစီ၏ ကိုယ်ပိုင် လက်ကျန်ငွေ (Wallet Balance)
+ * 3. SQLite 3.33+ UPDATE ... FROM syntax -> Subquery ၂ ခါပတ်ရသည့် O(N^2) Bottleneck & Quota Leak ကို အပြီးတိုင် ဖယ်ရှားထားသည်။
  */
 async function recalculateStudentMoneyBalances(db, targetFy = null) {
   try {
     if (targetFy) {
-      // 🎯 သီးသန့် FY တစ်ခုတည်းကိုသာ ထိရောက်စွာ Update လုပ်ခြင်း
       const cleanFy = normalizeFyStr(targetFy);
       const fyPrefixed = `FY ${cleanFy}`;
 
@@ -47,6 +57,7 @@ async function recalculateStudentMoneyBalances(db, targetFy = null) {
                    ORDER BY date ASC, id ASC
                  ) as calc_no,
                  SUM(debit - credit) OVER (
+                   PARTITION BY student_id
                    ORDER BY date ASC, id ASC 
                    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
                  ) as calc_bal
@@ -54,13 +65,15 @@ async function recalculateStudentMoneyBalances(db, targetFy = null) {
           WHERE fy = ? OR fy = ?
         )
         UPDATE student_money 
-        SET no = (SELECT calc_no FROM calculated WHERE calculated.id = student_money.id),
-            balances = (SELECT calc_bal FROM calculated WHERE calculated.id = student_money.id),
+        SET no = calculated.calc_no,
+            balances = calculated.calc_bal,
             fy = ?
-        WHERE id IN (SELECT id FROM calculated);
+        FROM calculated
+        WHERE student_money.id = calculated.id;
       `).bind(cleanFy, fyPrefixed, cleanFy).run();
+
     } else {
-      // 🎯 FY သီးသန့်မပါပါက FY အားလုံးကို PARTITION BY fy ဖြင့် Query ၁ ကြိမ်တည်း တွက်ချက်ခြင်း
+      // FY သီးသန့်မပါပါက FY အားလုံးကို PARTITION BY fy ဖြင့် Sequential NO စီပြီး ကျောင်းသားအလိုက် Balance တွက်ခြင်း
       await db.prepare(`
         WITH calculated AS (
           SELECT id,
@@ -69,16 +82,17 @@ async function recalculateStudentMoneyBalances(db, targetFy = null) {
                    ORDER BY date ASC, id ASC
                  ) as calc_no,
                  SUM(debit - credit) OVER (
-                   PARTITION BY fy
+                   PARTITION BY student_id
                    ORDER BY date ASC, id ASC 
                    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
                  ) as calc_bal
           FROM student_money
         )
         UPDATE student_money 
-        SET no = (SELECT calc_no FROM calculated WHERE calculated.id = student_money.id),
-            balances = (SELECT calc_bal FROM calculated WHERE calculated.id = student_money.id)
-        WHERE id IN (SELECT id FROM calculated);
+        SET no = calculated.calc_no,
+            balances = calculated.calc_bal
+        FROM calculated
+        WHERE student_money.id = calculated.id;
       `).run();
     }
   } catch (e) {
@@ -265,29 +279,29 @@ export async function getStudentMoneySummary(db, body) {
 }
 
 /**
- * 💡 Save Student Money Entry (Crash-Proof Auto Name Lookup & Scoped Recalculation)
+ * 💡 Save Student Money Entry
  */
 export async function saveStudentMoneyEntry(db, userSession, body) {
   try {
-    const isPrivilegedAdmin = ['Owner', 'Admin'].includes(userSession?.role || '');
+    const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(userSession?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport);
 
     const uniqueid = (isMigration && body.uniqueId)
       ? String(body.uniqueId).trim()
       : `STM_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 
-    // 🎯 Transaction Date အလိုက် Dynamic FY ကို တွက်ချက်ခြင်း
-    const entryDate = body.date || new Date().toISOString().split('T')[0];
+    // 🎯 Transaction Date & Myanmar Timezone Safety
+    const entryDate = getMyanmarDateString(body.date);
     const d = new Date(entryDate);
     let fyYear = d.getFullYear();
-    if (d.getMonth() < 3) fyYear -= 1;
+    if (d.getMonth() < 2) fyYear -= 1; // Align with March academic year boundary
     const computedFy = `${fyYear}-${fyYear + 1}`;
     const cleanFy = normalizeFyStr(body.fy || computedFy);
 
     const studentId = parseInt(body.studentId || body.id, 10) || 1;
     const fyid = sanitizeFyidStr(body.fyid || '');
 
-    // 💡 INTELLIGENT STUDENT NAME RESOLVER
+    // Intelligent Student Name Resolver
     let studentName = String(body.name || body.studentName || '').trim();
     let rawFyidName = String(body.fyidName || body.fyid_name || '').trim();
     let studentClass = String(body.class || '').trim();
@@ -297,7 +311,6 @@ export async function saveStudentMoneyEntry(db, userSession, body) {
       studentName = parts.length > 1 ? parts[1].trim() : rawFyidName;
     }
 
-    // 💡 Auto-Lookup from `student` table if name or class is missing
     if ((!studentName || !studentClass) && studentId) {
       try {
         const studentRow = await db.prepare(
@@ -345,7 +358,7 @@ export async function saveStudentMoneyEntry(db, userSession, body) {
     ).run();
 
     if (!isMigration) {
-      // ⚡ သက်ဆိုင်ရာ FY တစ်ခုတည်းကိုသာ O(1) Window function ဖြင့် ချက်ချင်း recalculate ပြုလုပ်သည်
+      // ⚡ Scoped O(1) recalculation with partition by student
       await recalculateStudentMoneyBalances(db, cleanFy);
     }
 
@@ -361,23 +374,22 @@ export async function saveStudentMoneyEntry(db, userSession, body) {
 }
 
 /**
- * 💡 Update Student Money Entry (Crash-Proof Auto Name Lookup & Multi-FY Safety)
+ * 💡 Update Student Money Entry
  */
 export async function updateStudentMoneyEntry(db, userSession, body) {
   try {
     const uniqueid = body.uniqueId || body.uniqueid;
     if (!uniqueid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
 
-    // 🔒 Capture existing FY before update
     const existing = await db.prepare("SELECT * FROM student_money WHERE uniqueid = ?").bind(uniqueid).first();
     if (!existing) return { success: false, message: "ပြင်ဆင်မည့် ကျောင်းသားငွေစာရင်း ရှာမတွေ့ပါ။" };
 
     const oldFy = existing?.fy ? normalizeFyStr(existing.fy) : null;
 
-    const entryDate = body.date || existing.date || new Date().toISOString().split('T')[0];
+    const entryDate = getMyanmarDateString(body.date || existing.date);
     const d = new Date(entryDate);
     let fyYear = d.getFullYear();
-    if (d.getMonth() < 3) fyYear -= 1;
+    if (d.getMonth() < 2) fyYear -= 1;
     const computedFy = `${fyYear}-${fyYear + 1}`;
     const cleanFy = normalizeFyStr(body.fy || computedFy);
 
@@ -430,10 +442,8 @@ export async function updateStudentMoneyEntry(db, userSession, body) {
       uniqueid
     ).run();
 
-    // ⚡ သက်ဆိုင်ရာ cleanFy ၏ balances ကို recalculate ပြုလုပ်သည်
     await recalculateStudentMoneyBalances(db, cleanFy);
 
-    // ⚡ အကယ်၍ စာရင်းအား အခြား FY သို့ ရွှေ့လိုက်ပါက FY အဟောင်းကိုပါ အလိုအလျောက် ပြန်ညှိပေးသည်
     if (oldFy && oldFy !== cleanFy) {
       await recalculateStudentMoneyBalances(db, oldFy);
     }
@@ -449,7 +459,7 @@ export async function updateStudentMoneyEntry(db, userSession, body) {
 }
 
 /**
- * 💡 Delete Student Money Entry (Fast Scoped Recalculation)
+ * 💡 Delete Student Money Entry
  */
 export async function deleteStudentMoneyEntry(db, userSession, body) {
   try {
@@ -462,8 +472,6 @@ export async function deleteStudentMoneyEntry(db, userSession, body) {
     const targetFy = existing?.fy ? normalizeFyStr(existing.fy) : null;
 
     await db.prepare("DELETE FROM student_money WHERE uniqueid = ?").bind(uniqueid).run();
-
-    // ⚡ သက်ဆိုင်ရာ targetFy ကိုသာ 1-Query ဖြင့် recalculate လုပ်သည်
     await recalculateStudentMoneyBalances(db, targetFy);
 
     return {
