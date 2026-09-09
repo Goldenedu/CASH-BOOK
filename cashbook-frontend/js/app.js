@@ -1,10 +1,17 @@
 /**
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - MAIN SPA ROUTER & APPLICATION CONTROLLER (D1 DATABASE EDITION)
- * File: js/app.js 
- * 💡 Features: Instant Router, Centralized Grade Matrix Modal Loader & Modularized Views
+ * File: js/app.js (Location: cashbook-frontend/js/app.js)
+ * 💡 Features: 🛡️ 404 View Crash Eliminated (Canonical Unified Reports Mapping),
+ *              🎯 Sub-Report Sidebar Highlight Memory & Panel Visibility Fix,
+ *              Dynamic Header Academic Year Calculator (No Hardcoded 26-27),
+ *              Double-Submit Guard for Salary Grade Matrix Settings,
+ *              Event-Safe Animated Refresh Controller & Centralized Modal Loaders
+ * ==============================================================================
  */
 
 window.viewCache = window.viewCache || {};
+var isGradeSubmitting = false;
 
 /**
  * 💡 Universal Category Badge Formatter Across the Entire App
@@ -71,6 +78,8 @@ function initApp() {
   if (!currentTab) {
     if (role === 'Cashier' || role === 'Main Cashier') {
       currentTab = 'cashier';
+    } else if (role === 'HR' || role === 'HR Staff' || role === 'HRStaff') {
+      currentTab = 'staff';
     } else {
       currentTab = 'dashboard';
     }
@@ -80,7 +89,7 @@ function initApp() {
 }
 
 /**
- * 💡 Update Header Metadata Badge Dynamically
+ * 💡 Dynamic Header Academic Year & Time Indicator
  */
 function updateHeaderMetadata(username) {
   const metaEl = document.getElementById('live-metadata');
@@ -92,6 +101,11 @@ function updateHeaderMetadata(username) {
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const dayName = days[d.getDay()];
 
+  // 🎯 DYNAMIC FISCAL YEAR: မတ်လစတင်သည့် Academic Boundary အတိုင်း အလိုအလျောက် တွက်ချက်သည်
+  let fyYear = d.getFullYear();
+  if (d.getMonth() < 2) fyYear -= 1;
+  const currentFyStr = `FY ${fyYear}-${fyYear + 1}`;
+
   let hours = d.getHours();
   const minutes = String(d.getMinutes()).padStart(2, '0');
   const ampm = hours >= 12 ? 'PM' : 'AM';
@@ -100,7 +114,7 @@ function updateHeaderMetadata(username) {
   const formattedHours = String(hours).padStart(2, '0');
   const formattedTime = `${formattedHours}:${minutes} ${ampm}`;
 
-  metaEl.textContent = `FY 2026-2027 | ${dayName} | ${formattedTime} | User: ${activeUser}`;
+  metaEl.textContent = `${currentFyStr} | ${dayName} | ${formattedTime} | User: ${activeUser}`;
 }
 
 if (!window.headerClockInterval) {
@@ -121,7 +135,7 @@ async function switchTab(tabId) {
     return;
   }
 
-  // 💡 View mapping including separate 'hr' and 'staff'
+  // ⚡ FIX: 'report-staff-fund' သည် မရှိသော 'reports-fund.html' သို့ မသွားဘဲ 'reports.html' သို့ သွားရမည်
   const viewMap = {
     'dashboard': 'dashboard',
     'bank': 'bank-cash',
@@ -130,7 +144,7 @@ async function switchTab(tabId) {
     'office': 'office-kit',
     'kitchen': 'office-kit',
     'hr': 'hr',
-    'staff': 'staff', // ✅ Added Staff View Mapping
+    'staff': 'staff',
     'cashier': 'cashier',
     'student': 'student',
     'student-money': 'student-money',
@@ -140,7 +154,7 @@ async function switchTab(tabId) {
     'report-in-detail': 'reports',
     'report-in-rep': 'reports',
     'report-student': 'reports',
-    'report-staff-fund': 'reports-fund',
+    'report-staff-fund': 'reports', // 🎯 FIX: 404 View Crash အပြီးတိုင် ရှင်းလင်းပြီး
     'settings': 'settings'
   };
 
@@ -152,10 +166,10 @@ async function switchTab(tabId) {
     'office': 'Office Expense Book',
     'kitchen': 'Kitchen Expense Book',
     'hr': 'HR Payroll Expense Book',
-    'staff': 'Staff Directory & Matrix List', // ✅ Added Staff View Title
+    'staff': 'Staff Directory & Matrix List',
     'cashier': 'Cashier Cash Book',
     'student': 'Student Directory List',
-    'student-money': 'Student Money Ledger',
+    'student-money': 'Student Money Ledger & Wallet',
     'uniform': 'Uniform Inventory Ledger',
     'promotion': 'Promotion Fee Rate Matrix',
     'report-financial': 'Financial Statement Report',
@@ -179,7 +193,7 @@ async function switchTab(tabId) {
     window.AppState.currentModule = tabId;
   }
 
-  const isTemplateCached = !!window.viewCache[viewFileName];
+  const isTemplateCached = Boolean(window.viewCache[viewFileName]);
 
   try {
     if (!isTemplateCached && typeof toggleLoading === 'function') {
@@ -191,7 +205,7 @@ async function switchTab(tabId) {
     if (!htmlContent) {
       const response = await fetch(`views/${viewFileName}.html`);
       if (!response.ok) {
-        throw new Error(`Failed to load view template: views/${viewFileName}.html`);
+        throw new Error(`Failed to load view template: views/${viewFileName}.html (Status: ${response.status})`);
       }
       htmlContent = await response.text();
       window.viewCache[viewFileName] = htmlContent;
@@ -266,7 +280,7 @@ async function triggerModuleInit(tabId) {
         }
         break;
 
-      case 'staff': // ✅ Added Staff View Trigger Initialization
+      case 'staff':
         if (typeof switchStaffCategory === 'function') {
           await switchStaffCategory('Full Time');
         } else if (typeof loadStaffData === 'function') {
@@ -298,6 +312,7 @@ async function triggerModuleInit(tabId) {
         }
         break;
 
+      // 🎯 REPORTS: Sub-Panels Activation
       case 'report-financial':
         if (typeof showReportPanel === 'function') {
           showReportPanel('panel-report-financial');
@@ -325,7 +340,10 @@ async function triggerModuleInit(tabId) {
         break;
 
       case 'report-staff-fund':
-        if (typeof loadReportStaffFundData === 'function') {
+        // ⚡ FIX: Panel ကို အရင်ပြသပြီးမှ Data ဆွဲတင်စေသည်
+        if (typeof showReportPanel === 'function') {
+          showReportPanel('panel-report-staff-fund');
+        } else if (typeof loadReportStaffFundData === 'function') {
           await loadReportStaffFundData(false);
         }
         break;
@@ -344,20 +362,30 @@ async function triggerModuleInit(tabId) {
   }
 }
 
+/**
+ * 💡 Sidebar Active State Synchronization
+ * Sub-Report Tab ၅ ခုစလုံးအတွက် "Financial Reports" ခလုတ်ကို အမြဲတမ်း Highlight ထိန်းထားပေးသည်
+ */
 function updateSidebarHighlight(activeTabId) {
   const navBtns = document.querySelectorAll('.nav-btn');
   navBtns.forEach(btn => {
     btn.classList.remove('active');
   });
 
-  const activeBtn = document.getElementById(`btn-${activeTabId}`);
+  // 🎯 Sub-Reports များကို Main Sidebar Button နှင့် ချိတ်ဆက်ပေးခြင်း
+  let highlightTarget = activeTabId;
+  if (activeTabId.startsWith('report-')) {
+    highlightTarget = 'report-financial';
+  }
+
+  const activeBtn = document.getElementById(`btn-${highlightTarget}`);
   if (activeBtn) {
     activeBtn.classList.add('active');
   }
 }
 
 /**
- * 💡 OPEN SALARY GRADE MATRIX MODAL (CANONICAL SINGLE SOURCE)
+ * 💡 OPEN SALARY GRADE MATRIX MODAL
  */
 async function openGradeModal() {
   const modal = document.getElementById('grade-modal');
@@ -397,10 +425,13 @@ function closeGradeModal() {
 }
 
 /**
- * 💡 SAVE SALARY GRADE MATRIX SETTINGS (SAVE TO CLOUDFLARE D1 DATABASE)
+ * 💡 SAVE SALARY GRADE MATRIX SETTINGS (With Double-Submit Protection)
  */
 async function saveGradeForm(event) {
   if (event && event.preventDefault) event.preventDefault();
+
+  if (isGradeSubmitting) return;
+  isGradeSubmitting = true;
 
   const payload = {
     gradeA: parseFloat(document.getElementById('grade-A')?.value || 0),
@@ -424,7 +455,9 @@ async function saveGradeForm(event) {
     const res = await callApi('updatePayrollSettings', payload);
 
     if (res && res.success) {
-      if (typeof showToast === 'function') showToast("SUCCESS", "Grade Matrix နှုန်းထားများကို Cloudflare D1 Database ထဲသို့ အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။");
+      if (typeof showToast === 'function') {
+        showToast("SUCCESS", "Grade Matrix နှုန်းထားများကို Cloudflare D1 Database ထဲသို့ အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။");
+      }
       closeGradeModal();
 
       if (typeof fetchPayrollSettings === 'function') {
@@ -432,18 +465,20 @@ async function saveGradeForm(event) {
         if (typeof renderGradeDropdownOptions === 'function') renderGradeDropdownOptions();
       }
     } else {
-      if (typeof showToast === 'function') showToast("ERROR", (res ? res.message : "") || "Grade သိမ်းဆည်းမှု မအောင်မြင်ပါ။");
+      if (typeof showToast === 'function') {
+        showToast("ERROR", res?.message || "Grade သိမ်းဆည်းမှု မအောင်မြင်ပါ။");
+      }
     }
   } catch (err) {
     if (typeof showToast === 'function') showToast("ERROR", "Grade သိမ်းဆည်းမှု အမှား: " + err.message);
   } finally {
+    isGradeSubmitting = false;
     if (typeof toggleLoading === 'function') toggleLoading(false);
   }
 }
 
 /**
- * 💡 Universal Animated Refresh Button Controller
- * Adds smooth spinning animation & real-time server fetch feedback to all Refresh buttons
+ * 💡 Universal Animated Refresh Button Controller (Event-Safe Timing)
  */
 document.addEventListener('click', function(e) {
   const refreshBtn = e.target.closest('button');
@@ -452,16 +487,20 @@ document.addEventListener('click', function(e) {
   const btnText = refreshBtn.innerText || '';
   const hasRotateIcon = refreshBtn.querySelector('.fa-rotate, .fa-arrows-rotate, .fa-sync');
 
-  // Refresh ဟုပါသော ခလုတ်အားလုံးကို အလိုအလျောက် Animation ထည့်ပေးခြင်း
+  // Refresh ဟုပါသော ခလုတ်အားလုံးကို လှပသော Animation ထည့်ပေးခြင်း
   if (btnText.includes('Refresh') || hasRotateIcon) {
     const icon = refreshBtn.querySelector('i');
     if (icon) icon.classList.add('fa-spin');
-    refreshBtn.disabled = true;
 
-    // Clear Cache to force fresh server data
+    // ⚡ Clear Cache to force fresh server fetch
     if (typeof window.clearAllApiCache === 'function') {
       window.clearAllApiCache();
     }
+
+    // Event Handler execute ဖြစ်ပြီးမှ disabled လုပ်ရန် ခေတ္တစောင့်သည်
+    setTimeout(() => {
+      refreshBtn.disabled = true;
+    }, 10);
 
     setTimeout(() => {
       if (icon) icon.classList.remove('fa-spin');
@@ -473,8 +512,12 @@ document.addEventListener('click', function(e) {
   }
 });
 
-// 💡 EXPOSE GLOBALLY TO WINDOW (ဖိုင်၏ အောက်ဆုံးတွင် ထားရှိခြင်း)
+// 💡 EXPOSE GLOBALLY TO WINDOW
+window.initApp = initApp;
 window.openGradeModal = openGradeModal;
 window.closeGradeModal = closeGradeModal;
 window.saveGradeForm = saveGradeForm;
 window.switchTab = switchTab;
+window.triggerModuleInit = triggerModuleInit;
+window.updateSidebarHighlight = updateSidebarHighlight;
+window.updateHeaderMetadata = updateHeaderMetadata;
