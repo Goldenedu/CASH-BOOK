@@ -5,8 +5,8 @@
  * 💡 Features: 🛡️ Strict Domain-Specific RBAC Matrix (Zero Privilege Escalation),
  *              ⚡ O(1) SQLite 3.33+ UPDATE...FROM Global Recalculator Engine,
  *              Fail-Closed WebCrypto JWT & PBKDF2 Password Security (100k Iterations),
- *              Server-Side Brute-Force Lockout Defense & Audit Trail Logging,
- *              Multi-Origin Whitelisted CORS Handler & Masked Error Telemetry
+ *              Server-Side Brute-Force Lockout Defense & Inline Audit Logger,
+ *              Multi-Origin Whitelisted CORS Handler & Self-Contained Deployment
  * ==============================================================================
  */
 
@@ -23,7 +23,6 @@ import * as StudentMoneyHandlers from './handlers-money.js';
 import * as SettingsHandlers from './handlers-settings.js';
 import * as DashboardHandlers from './handlers-dashboard.js';
 import { validateLedgerInput } from './validation.js';
-import { writeAuditLog } from './logger.js';
 
 // ==============================================================================
 // 💡 1. DOMAIN-SPECIFIC SERVER-SIDE RBAC PERMISSION MATRIX
@@ -90,6 +89,16 @@ const ROLE_PERMS = {
     report_read: true, settings_write: false,
     grade_matrix: true, backup_dispatch: false
   },
+  "HRStaff": {
+    ledger_read: false, ledger_write: false,
+    cashier_read: false, cashier_write: false,
+    student_read: false, student_write: false,
+    staff_read: true, staff_write: true,
+    uniform_read: false, uniform_write: false,
+    promo_read: false, promo_write: false,
+    report_read: true, settings_write: false,
+    grade_matrix: true, backup_dispatch: false
+  },
   Cashier: {
     ledger_read: false, ledger_write: false, // 🛡️ Main Books ထဲသို့ လုံးဝ ဝင်ရေးခွင့်မရှိ
     cashier_read: true, cashier_write: true,  // Cashier စာအုပ်များသာ ရေးခွင့်ရှိသည်
@@ -146,7 +155,69 @@ function forbidden(corsHeaders, message = "ဒီလုပ်ဆောင်ခ�
 }
 
 // ==============================================================================
-// 💡 2. CRYPTOGRAPHIC JWT & PBKDF2 PASSWORD ENGINE (WebCrypto API)
+// 💡 2. INLINE AUDIT LOGGER & SENSITIVE DATA MASKING ENGINE
+// (သီးခြား logger.js မလိုဘဲ Build အောင်မြင်စေရန် ဤနေရာတွင် တိုက်ရိုက်ထည့်သွင်းထားသည်)
+// ==============================================================================
+
+function sanitizeDetailsForAudit(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(item => sanitizeDetailsForAudit(item));
+
+  const clean = { ...obj };
+  const SENSITIVE_KEYS = ['password', 'password_hash', 'token', 'authtoken', 'authsecret', 'secret', 'excelbase64'];
+
+  for (const key of Object.keys(clean)) {
+    const lowerKey = key.toLowerCase();
+    if (SENSITIVE_KEYS.some(k => lowerKey.includes(k))) {
+      clean[key] = '***';
+    } else if (typeof clean[key] === 'object' && clean[key] !== null) {
+      clean[key] = sanitizeDetailsForAudit(clean[key]);
+    }
+  }
+  return clean;
+}
+
+async function writeAuditLog(db, sessionOrUser, actionType, moduleOrPayload = {}, recordIdInput = null) {
+  if (!db || typeof db.prepare !== 'function') return;
+  try {
+    let username = "System";
+    let role = "User";
+
+    if (typeof sessionOrUser === "string") {
+      username = sessionOrUser;
+    } else if (sessionOrUser && typeof sessionOrUser === "object") {
+      username = sessionOrUser.username || sessionOrUser.name || "System";
+      role = sessionOrUser.role || "User";
+    }
+
+    let recordId = recordIdInput ? String(recordIdInput) : null;
+    if (!recordId && moduleOrPayload && typeof moduleOrPayload === "object") {
+      recordId = moduleOrPayload.uniqueId || moduleOrPayload.uniqueid || moduleOrPayload.id || null;
+    }
+
+    const safeDetails = sanitizeDetailsForAudit(moduleOrPayload);
+    let detailsJson = "";
+    try {
+      detailsJson = typeof safeDetails === "object" ? JSON.stringify(safeDetails) : String(safeDetails || "");
+    } catch (e) {
+      detailsJson = "{}";
+    }
+
+    if (detailsJson.length > 2000) {
+      detailsJson = detailsJson.slice(0, 2000) + '...[TRUNCATED]';
+    }
+
+    await db.prepare(`
+      INSERT INTO audit_logs (username, role, action, record_id, detail, created_at)
+      VALUES (?, ?, ?, ?, ?, datetime('now'))
+    `).bind(username, role, actionType || "UNKNOWN_ACTION", recordId, detailsJson).run();
+  } catch (err) {
+    console.warn("[AuditLog Fail-Safe Warning]:", err.message);
+  }
+}
+
+// ==============================================================================
+// 💡 3. CRYPTOGRAPHIC JWT & PBKDF2 PASSWORD ENGINE (WebCrypto API)
 // ==============================================================================
 
 function base64UrlEncode(bytesOrStr) {
@@ -259,13 +330,12 @@ async function verifyPassword(password, stored) {
     return { ok: timingSafeEqualStr(computedHex, hashHex), needsRehash: false };
   }
 
-  // Legacy plaintext fallback check
   const ok = timingSafeEqualStr(String(stored), String(password));
   return { ok, needsRehash: ok };
 }
 
 // ==============================================================================
-// 💡 3. BRUTE-FORCE LOCKOUT PROTECTION
+// 💡 4. BRUTE-FORCE LOCKOUT PROTECTION
 // ==============================================================================
 
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -325,7 +395,7 @@ async function resetLoginAttempts(db, username) {
 }
 
 // ==============================================================================
-// 💡 4. GLOBAL RECALCULATE BALANCES ENGINE (SQLite 3.33+ UPDATE...FROM Single-Pass)
+// 💡 5. GLOBAL RECALCULATE BALANCES ENGINE (SQLite 3.33+ UPDATE...FROM Single-Pass)
 // ==============================================================================
 
 async function executeAutoRecalculateAll(db, body = {}) {
@@ -352,7 +422,7 @@ async function executeAutoRecalculateAll(db, body = {}) {
   for (const tbl of targetTables) {
     try {
       if (tbl === 'student_money') {
-        // ⚡ Student money သည် ကျောင်းသားအလိုက် PARTITION BY student_id ဖြင့် တွက်ရသည်
+        // ⚡ Student money သည် ကျောင်းသားအလိုက် PARTITION BY student_id ဖြင့် တွက်သည်
         await db.prepare(`
           WITH calculated AS (
             SELECT id, 
@@ -405,7 +475,7 @@ async function executeAutoRecalculateAll(db, body = {}) {
 }
 
 // ==============================================================================
-// 💡 5. MAIN FETCH ROUTER (CLOUDFLARE WORKER EXPORT)
+// 💡 6. MAIN FETCH ROUTER (CLOUDFLARE WORKER EXPORT)
 // ==============================================================================
 
 export default {
@@ -498,7 +568,7 @@ export default {
       let result = null;
 
       // ========================================================================
-      // 💡 6. GRANULAR RBAC ROUTE DISPATCHER
+      // 💡 7. GRANULAR RBAC ROUTE DISPATCHER
       // ========================================================================
       switch (action) {
 
@@ -815,12 +885,16 @@ export default {
           return new Response(JSON.stringify({ success: false, message: `Action '${action}' မဟုတ်ပါ သို့မဟုတ် မပံ့ပိုးသေးပါ။` }), { headers: corsHeaders });
       }
 
-      // 🛡️ D1 AUDIT LOGGING: Mutating Action တိုင်းကို အလိုအလျောက် မှတ်တမ်းတင်သည်
+      // 🛡️ D1 AUDIT LOGGING: User ၏ Request နှောင့်နှေးမှုမရှိစေရန် ctx.waitUntil ဖြင့် Background တွင် သိမ်းသည်
       const isMutatingAction = /^(save|update|delete|export|send|recalculate)/i.test(action);
       if (isMutatingAction && result && result.success !== false && userSession) {
-        ctx.waitUntil(
-          writeAuditLog(db, userSession, action, body, body.uniqueId || body.uniqueid || body.id || null)
-        );
+        if (ctx && typeof ctx.waitUntil === 'function') {
+          ctx.waitUntil(
+            writeAuditLog(db, userSession, action, body, body.uniqueId || body.uniqueid || body.id || null)
+          );
+        } else {
+          await writeAuditLog(db, userSession, action, body, body.uniqueId || body.uniqueid || body.id || null);
+        }
       }
 
       return new Response(JSON.stringify(result || { success: true }), { headers: corsHeaders });
