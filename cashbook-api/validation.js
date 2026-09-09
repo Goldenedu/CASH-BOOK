@@ -6,7 +6,7 @@
  *              🎯 Real Calendar Date Validation (Zero 2026-02-31 JS Rollover Bug),
  *              Accounting Parentheses (1000) & Comma-Separated Number Support,
  *              Smarter Formula Injection Defense (Preserves Phone +95 & Bullet - Text),
- *              Active Ledger, Inventory, Student & Payroll Payload Verification
+ *              ⚡ FIX: Income & Student Money Description Bypass (Remark is optional)
  * ==============================================================================
  */
 
@@ -176,7 +176,8 @@ export function validateRequiredText(str, fieldName = "Field", minLen = 1, maxLe
 }
 
 /**
- * 💡 Validate Ledger Entry Body Payload (Bank, Cash, Office, Kitchen, Cashier)
+ * 💡 Validate Standard Ledger Payload (Bank, Cash, Office, Kitchen, Cashier)
+ * ⚡ NOTE: Income and StudentMoney are handled separately because they use optional 'remark' instead of 'description'.
  */
 export function validateLedgerPayload(body = {}) {
   const dateCheck = validateDateStr(body.date, "Transaction Date (ရက်စွဲ)");
@@ -270,8 +271,9 @@ export function validateLedgerInput(body = {}) {
 
   const action = String(body.action || "").trim();
 
-  // 🛡️ 2. Comprehensive Ledger Mutations Validation (Bank, Cash, Office, Kitchen, Cashier)
-  const isLedgerMutation = /^(save|update)(BankCash|Expense|Cashier|Income|StudentMoney)Entry$/i.test(action);
+  // 🛡️ 2. Standard Ledger Mutations Validation (Bank, Cash, Office, Kitchen, Cashier)
+  // ⚡ FIX: Income နှင့် StudentMoney တွင် 'Description' အစား 'Remark' ကိုသုံးသဖြင့် ဤနေရာမှ ဖြုတ်ထုတ်လိုက်ပါသည်
+  const isLedgerMutation = /^(save|update)(BankCash|Expense|Cashier)Entry$/i.test(action);
   if (isLedgerMutation) {
     const ledgerCheck = validateLedgerPayload(body);
     if (!ledgerCheck.valid) {
@@ -290,19 +292,32 @@ export function validateLedgerInput(body = {}) {
     if (!effDateCheck.valid) return { success: false, message: effDateCheck.message };
   }
 
-  // 🛡️ 4. Student Payload Validation
+  // 🛡️ 4. Income & Student Money Custom Validation (Description-free)
+  const isIncomeOrMoney = /^(save|update)(Income|StudentMoney)Entry$/i.test(action);
+  if (isIncomeOrMoney) {
+    if (body.debit !== undefined && body.debit !== null && body.debit !== "") {
+      const debCheck = validateAmount(body.debit, "Debit Amount (ဝင်ငွေ/ပြန်အမ်းငွေ)", false);
+      if (!debCheck.valid) return { success: false, message: debCheck.message };
+    }
+    if (body.credit !== undefined && body.credit !== null && body.credit !== "") {
+      const credCheck = validateAmount(body.credit, "Credit Amount (ထွက်ငွေ/ပေးချေငွေ)", false);
+      if (!credCheck.valid) return { success: false, message: credCheck.message };
+    }
+  }
+
+  // 🛡️ 5. Student Payload Validation
   if (action.includes("Student") && (action.startsWith("save") || action.startsWith("update")) && !action.includes("Money")) {
     const stuCheck = validateStudentPayload(body);
     if (!stuCheck.valid) return { success: false, message: stuCheck.message };
   }
 
-  // 🛡️ 5. Staff Payload Validation
+  // 🛡️ 6. Staff Payload Validation
   if (action.includes("Staff") && (action.startsWith("save") || action.startsWith("update"))) {
     const staffCheck = validateStaffPayload(body);
     if (!staffCheck.valid) return { success: false, message: staffCheck.message };
   }
 
-  // 🛡️ 6. Uniform Inventory Payload Validation
+  // 🛡️ 7. Uniform Inventory Payload Validation
   if (action.includes("Uniform") && (action.startsWith("save") || action.startsWith("update"))) {
     const uniCheck = validateUniformPayload(body);
     if (!uniCheck.valid) return { success: false, message: uniCheck.message };
