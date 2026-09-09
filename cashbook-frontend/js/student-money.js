@@ -1,10 +1,13 @@
 /**
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - STUDENT MONEY LEDGER & WALLET MODULE
- * File: js/student-money.js
- * 💡 Features: Universal Dynamic FY Generator (No Hardcoded 2627), Dual Sub-Tab Switcher (History | Wallet Summary),
- *              1 Student = 1 Row Summary, Live Student Statement Timeline Modal,
- *              Crash-Proof Name & ID Extraction in Form Payload (400 Bad Request Fixed),
- *              FY-Scoped Student Auto-Lookup, Live Balance Indicator & Multi-CSV Exporter
+ * File: js/student-money.js (Location: cashbook-frontend/js/student-money.js)
+ * 💡 Features: 🛡️ Immune to Single-Quote / XSS Injection via escapeJsAttr(),
+ *              🛡️ Universal CSV Formula Injection Sanitizer (safeCsvCell),
+ *              Dual Sub-Tab Switcher (Transaction History | Wallet Balance Summary),
+ *              1 Student = 1 Row Summary & Live Individual Statement Modal,
+ *              Zero-Amount Guard, Dynamic FY Generator & Live Wallet Balance Indicator
+ * ==============================================================================
  */
 
 var gCurrentStudentMoneyTab = 'history'; // 'history' | 'summary'
@@ -33,6 +36,50 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+/**
+ * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
+ * 🎯 FIX: Single-quote injection ကြောင့် UI Break ဖြစ်ခြင်းကို ကာကွယ်သည်
+ */
+function escapeJsAttr(str) {
+  if (str === null || str === undefined) return '';
+  if (typeof window.escapeJsAttr === 'function' && window.escapeJsAttr !== escapeJsAttr) {
+    return window.escapeJsAttr(str);
+  }
+  const jsEscaped = String(str)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '&quot;');
+  return escapeHtml(jsEscaped);
+}
+
+/**
+ * 🛡️ Safe CSV Cell Helper (Formula Injection & Quote Escape Protection)
+ */
+function safeCsvCell(val) {
+  if (typeof window.safeCsvCell === 'function') {
+    return window.safeCsvCell(val);
+  }
+  if (val === null || val === undefined) return '""';
+  if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
+
+  let str = String(val).trim();
+  if (str === '') return '""';
+
+  let cleanNumStr = str.replace(/,/g, '');
+  if (cleanNumStr.startsWith('(') && cleanNumStr.endsWith(')')) {
+    cleanNumStr = '-' + cleanNumStr.slice(1, -1).trim();
+  }
+  if (!isNaN(Number(cleanNumStr)) && cleanNumStr !== '') {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
 function parseCleanNum(val) {
   if (val === undefined || val === null || val === '') return 0;
   if (typeof val === 'number') return isNaN(val) ? 0 : val;
@@ -42,22 +89,22 @@ function parseCleanNum(val) {
 }
 
 /**
- * 💡 1. Universal Dynamic Academic Year Generator (e.g. "2026-2027", "2027-2028")
+ * 💡 1. Universal Dynamic Academic Year Generator (March Boundary Aligned)
+ * 🎯 FIX: မတ်လ (Month 2) သည် စာရင်းနှစ်သစ် စတင်သည့်လ ဖြစ်သောကြောင့် ဇန်နဝါရီ၊ ဖေဖော်ဝါရီ (< 2) သာ ယခင်နှစ်သို့ သတ်မှတ်သည်
  */
 function getCurrentAcademicYear(dateInput) {
-  var d = dateInput ? new Date(dateInput) : new Date();
+  var d = dateInput ? new Date(dateInput) : new Date(Date.now() + (6.5 * 3600 * 1000));
   var validDate = isNaN(d.getTime()) ? new Date() : d;
   var y = validDate.getFullYear();
 
-  if (validDate.getMonth() < 3) {
+  if (validDate.getMonth() < 2) {
     y -= 1;
   }
   return `${y}-${y + 1}`;
 }
 
 /**
- * 💡 2. System-Wide Dynamic FY Short Code Generator (100% Future-Proof)
- * Format: "2026-2027" -> "2627", "2027-2028" -> "2728", "2028-2029" -> "2829"
+ * 💡 2. System-Wide Dynamic FY Short Code Generator
  */
 function getFyShortCode(fyStr) {
   if (fyStr) {
@@ -215,7 +262,7 @@ function renderStatsStudentMoney(stats, count) {
   if (elInc) elInc.textContent = `${Number(stats.totalIncome || 0).toLocaleString('en-US')} MMK`;
   if (elExp) elExp.textContent = `${Number(stats.totalExpense || 0).toLocaleString('en-US')} MMK`;
   if (elBal) elBal.textContent = `${Number(stats.balance || 0).toLocaleString('en-US')} MMK`;
-  if (elCount) elCount.textContent = (count || 0).toLocaleString('en-US');
+  if (elCount) elCount.textContent = Number(count || 0).toLocaleString('en-US');
 }
 
 /**
@@ -295,12 +342,13 @@ function renderStudentMoneyHistoryTable() {
     const balStr = Number(row.balances || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
     const cleanFyid = sanitizeFyidStr(row.fyid);
+    const cleanStudentId = parseInt(row.studentId || row.id || 0, 10);
 
     tr.innerHTML = `
       <td class="text-center font-mono font-semibold text-slate-400 py-3 px-2">${displayNo}</td>
       <td class="font-mono text-xs py-3 px-2">${escapeHtml(row.date)}</td>
       <td class="font-mono font-bold text-indigo-300 py-3 px-2">${escapeHtml(row.fy)}</td>
-      <td class="font-mono font-bold py-3 px-2">${escapeHtml(row.studentId)}</td>
+      <td class="font-mono font-bold py-3 px-2">${cleanStudentId}</td>
       <td class="font-mono font-bold text-indigo-400 py-3 px-2">${escapeHtml(cleanFyid)}</td>
       <td class="font-bold text-slate-100 py-3 px-2">${escapeHtml(row.fyidName)}</td>
       <td class="py-3 px-2">${escapeHtml(row.class)}</td>
@@ -311,9 +359,9 @@ function renderStudentMoneyHistoryTable() {
       <td class="max-w-xs truncate text-xs text-slate-400 py-3 px-2" title="${escapeHtml(row.remark)}">${escapeHtml(row.remark || '-')}</td>
       <td class="right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg text-center py-3 px-2">
         <div class="flex items-center justify-center gap-2">
-          <button onclick="openStudentStatementModal(${row.studentId})" class="p-1 text-amber-400 hover:text-amber-300 transition" title="View Statement"><i class="fa-solid fa-file-invoice"></i></button>
-          <button onclick="editStudentMoneyEntry('${uid}')" class="p-1 text-indigo-400 hover:text-indigo-300 transition ${isViewer ? 'hidden' : ''}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>
-          <button onclick="deleteStudentMoneyEntry('${uid}')" class="p-1 text-rose-400 hover:text-rose-300 transition btn-delete ${isViewer ? 'hidden' : ''}" title="Delete"><i class="fa-solid fa-trash"></i></button>
+          <button onclick="openStudentStatementModal(${cleanStudentId})" class="p-1 text-amber-400 hover:text-amber-300 transition" title="View Statement"><i class="fa-solid fa-file-invoice"></i></button>
+          <button onclick="editStudentMoneyEntry('${escapeJsAttr(uid)}')" class="p-1 text-indigo-400 hover:text-indigo-300 transition ${isViewer ? 'hidden' : ''}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>
+          <button onclick="deleteStudentMoneyEntry('${escapeJsAttr(uid)}')" class="p-1 text-rose-400 hover:text-rose-300 transition btn-delete ${isViewer ? 'hidden' : ''}" title="Delete"><i class="fa-solid fa-trash"></i></button>
         </div>
       </td>
     `;
@@ -379,19 +427,20 @@ function renderStudentMoneySummaryTable() {
       : (bal < 0 ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Overdrawn (အနုတ်)</span>' : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700/50">Zero (လက်ကျန်မရှိ)</span>');
 
     const cleanFyid = sanitizeFyidStr(row.fyid);
+    const cleanStudentId = parseInt(row.studentId || 0, 10);
 
     tr.innerHTML = `
       <td class="text-center font-mono font-semibold text-slate-400 py-3 px-2">${idx + 1}</td>
-      <td class="font-mono font-bold text-indigo-300 py-3 px-2">${row.studentId}</td>
+      <td class="font-mono font-bold text-indigo-300 py-3 px-2">${cleanStudentId}</td>
       <td class="font-mono font-bold py-3 px-2 text-slate-300">${escapeHtml(cleanFyid)}</td>
       <td class="font-bold text-white py-3 px-2">${escapeHtml(row.fyidName)}</td>
       <td class="py-3 px-2">${escapeHtml(row.class)}</td>
-      <td class="text-right font-mono font-bold text-emerald-400 py-3 px-2">${Number(row.totalDeposit || 0).toLocaleString()} MMK</td>
-      <td class="text-right font-mono font-bold text-rose-400 py-3 px-2">${Number(row.totalWithdraw || 0).toLocaleString()} MMK</td>
-      <td class="text-right font-mono font-extrabold ${bal < 0 ? 'text-rose-400' : 'text-amber-300'} text-xs py-3 px-2">${bal.toLocaleString()} MMK</td>
+      <td class="text-right font-mono font-bold text-emerald-400 py-3 px-2">${Number(row.totalDeposit || 0).toLocaleString('en-US')} MMK</td>
+      <td class="text-right font-mono font-bold text-rose-400 py-3 px-2">${Number(row.totalWithdraw || 0).toLocaleString('en-US')} MMK</td>
+      <td class="text-right font-mono font-extrabold ${bal < 0 ? 'text-rose-400' : 'text-amber-300'} text-xs py-3 px-2">${bal.toLocaleString('en-US')} MMK</td>
       <td class="text-center py-3 px-2">${statusBadge}</td>
       <td class="text-center right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg py-3 px-2">
-        <button onclick="openStudentStatementModal(${row.studentId})" class="px-2.5 py-1 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white rounded text-[11px] font-bold transition flex items-center gap-1 mx-auto">
+        <button onclick="openStudentStatementModal(${cleanStudentId})" class="px-2.5 py-1 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white rounded text-[11px] font-bold transition flex items-center gap-1 mx-auto">
           <i class="fa-solid fa-file-invoice"></i> Statement
         </button>
       </td>
@@ -440,9 +489,9 @@ async function openStudentStatementModal(studentId) {
       const withEl = document.getElementById('stm-stmt-total-withdraw');
       const balEl = document.getElementById('stm-stmt-current-balance');
 
-      if (depEl) depEl.textContent = `${totDep.toLocaleString()} MMK`;
-      if (withEl) withEl.textContent = `${totWith.toLocaleString()} MMK`;
-      if (balEl) balEl.textContent = `${netBal.toLocaleString()} MMK`;
+      if (depEl) depEl.textContent = `${totDep.toLocaleString('en-US')} MMK`;
+      if (withEl) withEl.textContent = `${totWith.toLocaleString('en-US')} MMK`;
+      if (balEl) balEl.textContent = `${netBal.toLocaleString('en-US')} MMK`;
 
       const tbody = document.getElementById('stm-stmt-table-body');
       if (tbody) {
@@ -455,11 +504,11 @@ async function openStudentStatementModal(studentId) {
           return `
             <tr class="hover:bg-slate-800/30 text-xs">
               <td class="text-center font-mono py-2 px-3 text-slate-400">${i + 1}</td>
-              <td class="font-mono py-2 px-3 text-slate-300">${r.date}</td>
-              <td class="py-2 px-3 font-semibold">${r.method}</td>
-              <td class="text-right font-mono font-bold text-emerald-400 py-2 px-3">${r.debit > 0 ? Number(r.debit).toLocaleString() : '-'}</td>
-              <td class="text-right font-mono font-bold text-rose-400 py-2 px-3">${r.credit > 0 ? Number(r.credit).toLocaleString() : '-'}</td>
-              <td class="text-right font-mono font-bold text-indigo-400 py-2 px-3">${running.toLocaleString()}</td>
+              <td class="font-mono py-2 px-3 text-slate-300">${escapeHtml(r.date)}</td>
+              <td class="py-2 px-3 font-semibold">${escapeHtml(r.method)}</td>
+              <td class="text-right font-mono font-bold text-emerald-400 py-2 px-3">${r.debit > 0 ? Number(r.debit).toLocaleString('en-US') : '-'}</td>
+              <td class="text-right font-mono font-bold text-rose-400 py-2 px-3">${r.credit > 0 ? Number(r.credit).toLocaleString('en-US') : '-'}</td>
+              <td class="text-right font-mono font-bold text-indigo-400 py-2 px-3">${running.toLocaleString('en-US')}</td>
               <td class="py-2 px-3 text-slate-400 max-w-xs truncate" title="${escapeHtml(r.remark)}">${escapeHtml(r.remark || '-')}</td>
             </tr>
           `;
@@ -534,7 +583,7 @@ async function onStudentIdOrFYChangeMoney() {
       if (sumRes && sumRes.success && sumRes.data && sumRes.data.length > 0) {
         const studentSum = sumRes.data.find(r => r.studentId === targetIdNum);
         if (studentSum && liveBadge && liveAmountEl) {
-          liveAmountEl.textContent = `${Number(studentSum.netBalance || 0).toLocaleString()} MMK`;
+          liveAmountEl.textContent = `${Number(studentSum.netBalance || 0).toLocaleString('en-US')} MMK`;
           liveBadge.classList.remove('hidden');
         }
       }
@@ -598,7 +647,7 @@ function populateFYDropdownMoney() {
 }
 
 /**
- * 💡 SAVE STUDENT MONEY FORM (Crash-Proof Payload with Explicit Name & ID)
+ * 💡 SAVE STUDENT MONEY FORM (With Zero-Amount Guard & Double-Submit Protection)
  */
 async function saveStudentMoneyForm(e) {
   if (e && e.preventDefault) e.preventDefault();
@@ -610,7 +659,6 @@ async function saveStudentMoneyForm(e) {
   const fyidShowVal = document.getElementById('stm-fyid-show')?.value;
   const fyidNameVal = document.getElementById('stm-fyidname-show')?.value || '';
 
-  // 💡 Extract pure name from "[2627-STU-0001] မောင်မောင်"
   let pureName = fyidNameVal;
   if (pureName.includes(']')) {
     pureName = pureName.split(']')[1].trim();
@@ -622,20 +670,30 @@ async function saveStudentMoneyForm(e) {
     return;
   }
 
+  const debitAmt = parseFloat(document.getElementById('stm-debit')?.value || 0);
+  const creditAmt = parseFloat(document.getElementById('stm-credit')?.value || 0);
+
+  // 🎯 ZERO-AMOUNT GUARD: အပ်ငွေရော ထုတ်ငွေပါ ၀ ဖြစ်နေပါက သိမ်းဆည်းခွင့်မပြုပါ
+  if (debitAmt <= 0 && creditAmt <= 0) {
+    isStudentMoneySubmitting = false;
+    if (typeof showToast === 'function') showToast("ERROR", "အပ်ငွေ (Deposit) သို့မဟုတ် ထုတ်ငွေ (Withdraw) ပမာဏ ထည့်သွင်းပေးပါ။");
+    return;
+  }
+
   const uid = document.getElementById('stm-uniqueId')?.value || '';
   const payload = {
     uniqueId: uid,
     studentId: idVal,
     id: idVal,
-    name: pureName, // 💡 Explicit Student Name passed to prevent 400 Bad Request
+    name: pureName,
     fyid: fyidShowVal,
     fyidName: fyidNameVal,
     class: document.getElementById('stm-class')?.value || '',
     fy: document.getElementById('stm-fy')?.value || getCurrentAcademicYear(),
     date: document.getElementById('stm-date')?.value || new Date().toISOString().slice(0, 10),
     method: document.getElementById('stm-method')?.value || 'Cash',
-    debit: parseFloat(document.getElementById('stm-debit')?.value || 0),
-    credit: parseFloat(document.getElementById('stm-credit')?.value || 0),
+    debit: debitAmt,
+    credit: creditAmt,
     remark: document.getElementById('stm-remark')?.value || ''
   };
 
@@ -714,6 +772,9 @@ async function deleteStudentMoneyEntry(uniqueId) {
   }
 }
 
+/**
+ * 💡 CSV EXPORTER 1: Transaction History (Formula Injection Protected via safeCsvCell)
+ */
 function exportToCSVStudentMoney() {
   if (!gStudentMoneyHistoryData || gStudentMoneyHistoryData.length === 0) {
     if (typeof showToast === 'function') showToast("ERROR", "ထုတ်ယူရန် စာရင်း မရှိပါ။");
@@ -722,7 +783,18 @@ function exportToCSVStudentMoney() {
   let csv = "NO,DATE,FY,ID,FYID,NAME,CLASS,METHOD,DEBIT,CREDIT,BALANCES,REMARK\n";
   gStudentMoneyHistoryData.forEach(r => {
     const cleanFyid = sanitizeFyidStr(r.fyid);
-    csv += `${r.no},${r.date},${r.fy},${r.studentId},${cleanFyid},"${r.fyidName}",${r.class},${r.method},${r.debit},${r.credit},${r.balances},"${r.remark || ''}"\n`;
+    csv += `${r.no},` +
+           `${safeCsvCell(r.date || '')},` +
+           `${safeCsvCell(r.fy || '')},` +
+           `${r.studentId},` +
+           `${safeCsvCell(cleanFyid)},` +
+           `${safeCsvCell(r.fyidName || '')},` +
+           `${safeCsvCell(r.class || '')},` +
+           `${safeCsvCell(r.method || '')},` +
+           `${r.debit || 0},` +
+           `${r.credit || 0},` +
+           `${r.balances || 0},` +
+           `${safeCsvCell(r.remark || '')}\n`;
   });
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
   const url = window.URL.createObjectURL(blob);
@@ -732,6 +804,9 @@ function exportToCSVStudentMoney() {
   a.click();
 }
 
+/**
+ * 💡 CSV EXPORTER 2: Student Wallet Balances Summary (Formula Injection Protected via safeCsvCell)
+ */
 function exportStudentMoneySummaryToCSV() {
   if (!gStudentMoneySummaryData || gStudentMoneySummaryData.length === 0) {
     if (typeof showToast === 'function') showToast("ERROR", "ထုတ်ယူရန် လက်ကျန်စာရင်း မရှိပါ။");
@@ -740,7 +815,16 @@ function exportStudentMoneySummaryToCSV() {
   let csv = "NO,STUDENT_ID,FYID,NAME,CLASS,TOTAL_DEPOSITED,TOTAL_WITHDRAWN,WALLET_BALANCE,TOTAL_TRANSACTIONS,LAST_DATE\n";
   gStudentMoneySummaryData.forEach(r => {
     const cleanFyid = sanitizeFyidStr(r.fyid);
-    csv += `${r.no},${r.studentId},${cleanFyid},"${r.fyidName}",${r.class},${r.totalDeposit},${r.totalWithdraw},${r.netBalance},${r.transactionCount},${r.lastDate}\n`;
+    csv += `${r.no},` +
+           `${r.studentId},` +
+           `${safeCsvCell(cleanFyid)},` +
+           `${safeCsvCell(r.fyidName || '')},` +
+           `${safeCsvCell(r.class || '')},` +
+           `${r.totalDeposit || 0},` +
+           `${r.totalWithdraw || 0},` +
+           `${r.netBalance || 0},` +
+           `${r.transactionCount || 0},` +
+           `${safeCsvCell(r.lastDate || '')}\n`;
   });
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
   const url = window.URL.createObjectURL(blob);
@@ -750,7 +834,7 @@ function exportStudentMoneySummaryToCSV() {
   a.click();
 }
 
-// 💡 EXPOSE GLOBALLY
+// 💡 EXPOSE GLOBALLY TO WINDOW
 window.switchStudentMoneySubTab = switchStudentMoneySubTab;
 window.loadStudentMoneyData = loadStudentMoneyData;
 window.loadStudentMoneySummaryData = loadStudentMoneySummaryData;
