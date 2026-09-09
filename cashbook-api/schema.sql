@@ -1,6 +1,6 @@
 -- ==============================================================================
 -- GOLDEN ERP SYSTEM - CLOUDFLARE D1 DATABASE MASTER PRODUCTION SCHEMA
--- File: schema.sql
+-- File: schema.sql (Location: cashbook-api/schema.sql)
 -- 💡 Features: 20 Complete Relational Tables, High-Performance Composite Indexes,
 --              PBKDF2 Password Security & Canonical Grade Matrix Initial Seeds
 -- ==============================================================================
@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_username ON audit_logs(username);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
 
 -- ------------------------------------------------------------------------------
 -- 2. MAIN FINANCIAL & EXPENSE BOOKS (5 Core Ledgers)
@@ -450,6 +451,9 @@ CREATE TABLE IF NOT EXISTS ca_kitchen (
   is_locked INTEGER DEFAULT 0
 );
 
+-- ------------------------------------------------------------------------------
+-- 7E. Cashier Payroll Book (17 Cols)
+-- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS ca_payroll (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   no INTEGER DEFAULT 1,
@@ -475,16 +479,43 @@ CREATE TABLE IF NOT EXISTS ca_payroll (
 -- ------------------------------------------------------------------------------
 -- 8. HIGH-PERFORMANCE COMPOSITE INDEXES (Sub-Millisecond Query Scaling)
 -- ------------------------------------------------------------------------------
+
+-- Main Ledgers Date & FY Indexes
 CREATE INDEX IF NOT EXISTS idx_bank_fy_date ON bank(fy, date);
 CREATE INDEX IF NOT EXISTS idx_cash_fy_date ON cash(fy, date);
 CREATE INDEX IF NOT EXISTS idx_office_fy_date ON office(fy, date);
 CREATE INDEX IF NOT EXISTS idx_kitchen_fy_date ON kitchen(fy, date);
 CREATE INDEX IF NOT EXISTS idx_payroll_fy_date ON payroll(fy, date);
+
+-- ⚡ CRITICAL FIX: Income Date & Student Lookups
+CREATE INDEX IF NOT EXISTS idx_income_date ON income(date);
 CREATE INDEX IF NOT EXISTS idx_income_fy_date ON income(fy, date);
+CREATE INDEX IF NOT EXISTS idx_income_student_id ON income(student_id);
+
+-- ⚡ CRITICAL FIX: Student Directory & Pocket Money Lookups
 CREATE INDEX IF NOT EXISTS idx_student_fy_status ON student(fy, status);
+CREATE INDEX IF NOT EXISTS idx_student_student_id ON student(student_id);
+CREATE INDEX IF NOT EXISTS idx_student_fyid ON student(fyid);
 CREATE INDEX IF NOT EXISTS idx_student_money_fy_date ON student_money(fy, date);
-CREATE INDEX IF NOT EXISTS idx_ca_cash_fy_date ON ca_cash(fy, date);
+CREATE INDEX IF NOT EXISTS idx_student_money_student_id ON student_money(student_id, date);
+
+-- ⚡ CRITICAL FIX: Staff Lookups by Staff ID (Eliminates Payroll Lookup Lag)
+CREATE INDEX IF NOT EXISTS idx_staff_ft_staff_id ON staff_fulltime(staff_id);
+CREATE INDEX IF NOT EXISTS idx_staff_pt_staff_id ON staff_parttime(staff_id);
+CREATE INDEX IF NOT EXISTS idx_staff_ft_status ON staff_fulltime(status);
+
+-- ⚡ CRITICAL FIX: Uniform Product ID Lookup
+CREATE INDEX IF NOT EXISTS idx_uniform_product_id ON uniform_ledger(product_id);
+
+-- ⚡ CRITICAL FIX: Promotion Matrix Multi-Column Rate Lookup
+CREATE INDEX IF NOT EXISTS idx_promotion_fy_class_cat ON promotion(fy, class, category);
+
+-- ⚡ CRITICAL FIX: All 5 Cashier Sub-Ledger Indexes
 CREATE INDEX IF NOT EXISTS idx_ca_bank_fy_date ON ca_bank(fy, date);
+CREATE INDEX IF NOT EXISTS idx_ca_cash_fy_date ON ca_cash(fy, date);
+CREATE INDEX IF NOT EXISTS idx_ca_office_fy_date ON ca_office(fy, date);
+CREATE INDEX IF NOT EXISTS idx_ca_kitchen_fy_date ON ca_kitchen(fy, date);
+CREATE INDEX IF NOT EXISTS idx_ca_payroll_fy_date ON ca_payroll(fy, date);
 
 -- ------------------------------------------------------------------------------
 -- 9. CANONICAL INITIAL SEED DATA (Non-Sensitive Defaults Only)
@@ -493,8 +524,3 @@ CREATE INDEX IF NOT EXISTS idx_ca_bank_fy_date ON ca_bank(fy, date);
 -- A. Default Salary Grade Matrix Row (ID = 1, Grades A to L)
 INSERT OR IGNORE INTO salary_grade_matrix (id, grade_a, grade_b, grade_c, grade_d, grade_e, grade_f, grade_g, grade_h, grade_i, grade_j, grade_k, grade_l, bonus_rate, fund_rate, updated_at)
 VALUES (1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.05, datetime('now'));
-
--- 💡 SECURITY NOTICE: 
--- User accounts and passwords must NOT be stored in public schema files.
--- Create administrative users privately via Cloudflare D1 Console.
-
