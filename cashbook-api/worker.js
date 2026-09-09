@@ -6,7 +6,7 @@
  *              ⚡ O(1) SQLite 3.33+ UPDATE...FROM Global Recalculator Engine,
  *              Fail-Closed WebCrypto JWT & PBKDF2 Password Security (100k Iterations),
  *              Server-Side Brute-Force Lockout Defense & Inline Audit Logger,
- *              Multi-Origin Whitelisted CORS Handler & Self-Contained Deployment
+ *              Multi-Origin Whitelisted CORS Handler & Masked Error Telemetry
  * ==============================================================================
  */
 
@@ -24,120 +24,75 @@ import * as SettingsHandlers from './handlers-settings.js';
 import * as DashboardHandlers from './handlers-dashboard.js';
 import { validateLedgerInput } from './validation.js';
 
-// ==============================================================================
 // 💡 1. DOMAIN-SPECIFIC SERVER-SIDE RBAC PERMISSION MATRIX
 // Cashier နှင့် Staff များသည် Main Books ထဲသို့ မည်သည့်နည်းနှင့်မျှ ဝင်မရေးနိုင်စေရန် ခွဲခြားထားသည်
-// ==============================================================================
 const ROLE_PERMS = {
   Owner: {
-    ledger_read: true, ledger_write: true,
-    cashier_read: true, cashier_write: true,
-    student_read: true, student_write: true,
-    staff_read: true, staff_write: true,
-    uniform_read: true, uniform_write: true,
-    promo_read: true, promo_write: true,
-    report_read: true, settings_write: true,
-    grade_matrix: true, backup_dispatch: true
+    ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true,
+    student_read: true, student_write: true, staff_read: true, staff_write: true,
+    uniform_read: true, uniform_write: true, promo_read: true, promo_write: true,
+    report_read: true, settings_write: true, grade_matrix: true, backup_dispatch: true
   },
   Admin: {
-    ledger_read: true, ledger_write: true,
-    cashier_read: true, cashier_write: true,
-    student_read: true, student_write: true,
-    staff_read: true, staff_write: true,
-    uniform_read: true, uniform_write: true,
-    promo_read: true, promo_write: true,
-    report_read: true, settings_write: true,
-    grade_matrix: true, backup_dispatch: true
+    ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true,
+    student_read: true, student_write: true, staff_read: true, staff_write: true,
+    uniform_read: true, uniform_write: true, promo_read: true, promo_write: true,
+    report_read: true, settings_write: true, grade_matrix: true, backup_dispatch: true
   },
   Finance: {
-    ledger_read: true, ledger_write: true,
-    cashier_read: true, cashier_write: true,
-    student_read: true, student_write: true,
-    staff_read: true, staff_write: true,
-    uniform_read: true, uniform_write: true,
-    promo_read: true, promo_write: true,
-    report_read: true, settings_write: false,
-    grade_matrix: false, backup_dispatch: true
+    ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true,
+    student_read: true, student_write: true, staff_read: true, staff_write: true,
+    uniform_read: true, uniform_write: true, promo_read: true, promo_write: true,
+    report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: true
   },
   Accountant: {
-    ledger_read: true, ledger_write: true,
-    cashier_read: true, cashier_write: true,
-    student_read: true, student_write: true,
-    staff_read: true, staff_write: true,
-    uniform_read: true, uniform_write: true,
-    promo_read: true, promo_write: true,
-    report_read: true, settings_write: false,
-    grade_matrix: false, backup_dispatch: true
+    ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true,
+    student_read: true, student_write: true, staff_read: true, staff_write: true,
+    uniform_read: true, uniform_write: true, promo_read: true, promo_write: true,
+    report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: true
   },
   HR: {
-    ledger_read: false, ledger_write: false,
-    cashier_read: false, cashier_write: false,
-    student_read: false, student_write: false,
-    staff_read: true, staff_write: true,
-    uniform_read: false, uniform_write: false,
-    promo_read: false, promo_write: false,
-    report_read: true, settings_write: false,
-    grade_matrix: true, backup_dispatch: false
+    ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false,
+    student_read: false, student_write: false, staff_read: true, staff_write: true,
+    uniform_read: false, uniform_write: false, promo_read: false, promo_write: false,
+    report_read: true, settings_write: false, grade_matrix: true, backup_dispatch: false
   },
   "HR Staff": {
-    ledger_read: false, ledger_write: false,
-    cashier_read: false, cashier_write: false,
-    student_read: false, student_write: false,
-    staff_read: true, staff_write: true,
-    uniform_read: false, uniform_write: false,
-    promo_read: false, promo_write: false,
-    report_read: true, settings_write: false,
-    grade_matrix: true, backup_dispatch: false
+    ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false,
+    student_read: false, student_write: false, staff_read: true, staff_write: true,
+    uniform_read: false, uniform_write: false, promo_read: false, promo_write: false,
+    report_read: true, settings_write: false, grade_matrix: true, backup_dispatch: false
   },
   "HRStaff": {
-    ledger_read: false, ledger_write: false,
-    cashier_read: false, cashier_write: false,
-    student_read: false, student_write: false,
-    staff_read: true, staff_write: true,
-    uniform_read: false, uniform_write: false,
-    promo_read: false, promo_write: false,
-    report_read: true, settings_write: false,
-    grade_matrix: true, backup_dispatch: false
+    ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false,
+    student_read: false, student_write: false, staff_read: true, staff_write: true,
+    uniform_read: false, uniform_write: false, promo_read: false, promo_write: false,
+    report_read: true, settings_write: false, grade_matrix: true, backup_dispatch: false
   },
   Cashier: {
     ledger_read: false, ledger_write: false, // 🛡️ Main Books ထဲသို့ လုံးဝ ဝင်ရေးခွင့်မရှိ
     cashier_read: true, cashier_write: true,  // Cashier စာအုပ်များသာ ရေးခွင့်ရှိသည်
-    student_read: true, student_write: false,
-    staff_read: false, staff_write: false,
-    uniform_read: true, uniform_write: false,
-    promo_read: true, promo_write: false,
-    report_read: false, settings_write: false,
-    grade_matrix: false, backup_dispatch: false
+    student_read: true, student_write: false, staff_read: false, staff_write: false,
+    uniform_read: true, uniform_write: false, promo_read: true, promo_write: false,
+    report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false
   },
   "Main Cashier": {
-    ledger_read: false, ledger_write: false,
-    cashier_read: true, cashier_write: true,
-    student_read: true, student_write: false,
-    staff_read: false, staff_write: false,
-    uniform_read: true, uniform_write: false,
-    promo_read: true, promo_write: false,
-    report_read: false, settings_write: false,
-    grade_matrix: false, backup_dispatch: false
+    ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true,
+    student_read: true, student_write: false, staff_read: false, staff_write: false,
+    uniform_read: true, uniform_write: false, promo_read: true, promo_write: false,
+    report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false
   },
   Staff: {
-    ledger_read: false, ledger_write: false,
-    cashier_read: false, cashier_write: false,
-    student_read: true, student_write: false,
-    staff_read: false, staff_write: false,
-    uniform_read: true, uniform_write: false,
-    promo_read: true, promo_write: false,
-    report_read: false, settings_write: false,
-    grade_matrix: false, backup_dispatch: false
+    ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false,
+    student_read: true, student_write: false, staff_read: false, staff_write: false,
+    uniform_read: true, uniform_write: false, promo_read: true, promo_write: false,
+    report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false
   },
   Viewer: {
-    ledger_read: true, ledger_write: false,
-    cashier_read: true, cashier_write: false,
-    student_read: true, student_write: false,
-    staff_read: true, staff_write: false,
-    uniform_read: true, uniform_write: false,
-    promo_read: true, promo_write: false,
-    report_read: true, settings_write: false,
-    grade_matrix: false, backup_dispatch: false
+    ledger_read: true, ledger_write: false, cashier_read: true, cashier_write: false,
+    student_read: true, student_write: false, staff_read: true, staff_write: false,
+    uniform_read: true, uniform_write: false, promo_read: true, promo_write: false,
+    report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: false
   }
 };
 
@@ -154,11 +109,8 @@ function forbidden(corsHeaders, message = "ဒီလုပ်ဆောင်ခ�
   }), { status: 403, headers: corsHeaders });
 }
 
-// ==============================================================================
-// 💡 2. INLINE AUDIT LOGGER & SENSITIVE DATA MASKING ENGINE
-// (သီးခြား logger.js မလိုဘဲ Build အောင်မြင်စေရန် ဤနေရာတွင် တိုက်ရိုက်ထည့်သွင်းထားသည်)
-// ==============================================================================
-
+// 💡 2. INLINE AUDIT LOGGER & SENSITIVE DATA MASKING
+// ⚡ FIX: logger.js မရှိသဖြင့် Build Fail ဖြစ်ခြင်းကို ဤနေရာတွင် Inline ထည့်သွင်း၍ ဖြေရှင်းထားသည်
 function sanitizeDetailsForAudit(obj) {
   if (!obj || typeof obj !== 'object') return obj;
   if (Array.isArray(obj)) return obj.map(item => sanitizeDetailsForAudit(item));
@@ -180,9 +132,7 @@ function sanitizeDetailsForAudit(obj) {
 async function writeAuditLog(db, sessionOrUser, actionType, moduleOrPayload = {}, recordIdInput = null) {
   if (!db || typeof db.prepare !== 'function') return;
   try {
-    let username = "System";
-    let role = "User";
-
+    let username = "System", role = "User";
     if (typeof sessionOrUser === "string") {
       username = sessionOrUser;
     } else if (sessionOrUser && typeof sessionOrUser === "object") {
@@ -216,10 +166,7 @@ async function writeAuditLog(db, sessionOrUser, actionType, moduleOrPayload = {}
   }
 }
 
-// ==============================================================================
-// 💡 3. CRYPTOGRAPHIC JWT & PBKDF2 PASSWORD ENGINE (WebCrypto API)
-// ==============================================================================
-
+// 💡 3. CRYPTOGRAPHIC JWT & PBKDF2 PASSWORD ENGINE
 function base64UrlEncode(bytesOrStr) {
   const bytes = typeof bytesOrStr === "string" ? new TextEncoder().encode(bytesOrStr) : bytesOrStr;
   let binary = "";
@@ -334,10 +281,7 @@ async function verifyPassword(password, stored) {
   return { ok, needsRehash: ok };
 }
 
-// ==============================================================================
 // 💡 4. BRUTE-FORCE LOCKOUT PROTECTION
-// ==============================================================================
-
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
 
@@ -394,10 +338,8 @@ async function resetLoginAttempts(db, username) {
   } catch (e) {}
 }
 
-// ==============================================================================
 // 💡 5. GLOBAL RECALCULATE BALANCES ENGINE (SQLite 3.33+ UPDATE...FROM Single-Pass)
-// ==============================================================================
-
+// ⚡ FIX: $O(N^2) Loop ကို ဖယ်ရှားပြီး O(1) ဖြင့် တွက်ချက်သည်
 async function executeAutoRecalculateAll(db, body = {}) {
   const rawBook = body.bookName || body.tableName || body.book || "";
   const tableMap = {
@@ -426,7 +368,7 @@ async function executeAutoRecalculateAll(db, body = {}) {
         await db.prepare(`
           WITH calculated AS (
             SELECT id, 
-                   ROW_NUMBER() OVER (ORDER BY date ASC, id ASC) as new_no,
+                   ROW_NUMBER() OVER (PARTITION BY fy ORDER BY date ASC, id ASC) as new_no,
                    SUM(debit - credit) OVER (
                      PARTITION BY student_id 
                      ORDER BY date ASC, id ASC 
@@ -460,7 +402,6 @@ async function executeAutoRecalculateAll(db, body = {}) {
           WHERE ${tbl}.id = calculated.id;
         `).run();
       }
-
       updatedTables.push(tbl);
     } catch (e) {
       console.warn(`Recalculation warning on table ${tbl}:`, e.message);
@@ -494,7 +435,6 @@ export default {
       "Content-Type": "application/json"
     };
 
-    // 💡 2. OPTIONS PREFLIGHT
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
@@ -538,7 +478,6 @@ export default {
         }
       }
 
-      // 🛡️ Input Sanitization & Validation
       if (request.method !== "GET" && typeof validateLedgerInput === 'function') {
         const validation = validateLedgerInput(body);
         if (!validation.success) {
@@ -546,7 +485,6 @@ export default {
         }
       }
 
-      // 🔒 AUTHENTICATION GUARD
       const PUBLIC_ACTIONS = ["checkLogin"];
       let userSession = null;
 
@@ -567,12 +505,8 @@ export default {
 
       let result = null;
 
-      // ========================================================================
       // 💡 7. GRANULAR RBAC ROUTE DISPATCHER
-      // ========================================================================
       switch (action) {
-
-        // 🔑 1. AUTHENTICATION
         case 'checkLogin': {
           const username = String(body.username || "").trim();
           const password = String(body.password || "").trim();
@@ -597,10 +531,8 @@ export default {
                   await db.prepare("UPDATE users SET password_hash = ? WHERE username = ?").bind(newHash, user.username).run();
                 } catch (e) {}
               }
-
               await resetLoginAttempts(db, user.username.toLowerCase());
               await writeAuditLog(db, user, 'loginSuccess', { username: user.username, role: user.role });
-
               const token = await createJwtToken({ username: user.username, role: user.role, name: user.name || user.username }, authSecret);
               return new Response(JSON.stringify({
                 success: true,
@@ -612,137 +544,86 @@ export default {
 
           const gotLocked = await recordLoginFailure(db, username.toLowerCase());
           await writeAuditLog(db, username, 'loginFailed', { username }, gotLocked ? 'Account Locked' : 'Invalid Credentials');
-
-          return new Response(JSON.stringify({
-            success: false,
-            message: "Username သို့မဟုတ် Password မှားယွင်းနေပါသည်။"
-          }), { headers: corsHeaders });
+          return new Response(JSON.stringify({ success: false, message: "Username သို့မဟုတ် Password မှားယွင်းနေပါသည်။" }), { headers: corsHeaders });
         }
 
-        // 📊 2. DASHBOARD
         case 'getDashboardData':
-          result = await DashboardHandlers.getDashboardData(db, body);
-          break;
+          result = await DashboardHandlers.getDashboardData(db, body); break;
 
-        // 🏦 3. MAIN BANK & CASH BOOKS (Ledger Permission Required)
         case 'getBankCashData':
           if (!can(userSession, 'ledger_read')) return forbidden(corsHeaders);
-          result = await BankCashHandlers.getBankCashData(db, body);
-          break;
-
+          result = await BankCashHandlers.getBankCashData(db, body); break;
         case 'saveBankCashEntry':
           if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders, "Main Bank/Cash Book တွင် စာရင်းသွင်းခွင့် မရှိပါ။");
-          result = await BankCashHandlers.saveBankCashEntry(db, userSession, body);
-          break;
-
+          result = await BankCashHandlers.saveBankCashEntry(db, userSession, body); break;
         case 'updateBankCashEntry':
           if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders, "Main Bank/Cash Book တွင် စာရင်းပြင်ဆင်ခွင့် မရှိပါ။");
-          result = await BankCashHandlers.updateBankCashEntry(db, userSession, body);
-          break;
-
+          result = await BankCashHandlers.updateBankCashEntry(db, userSession, body); break;
         case 'deleteBankCashEntry':
           if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders, "Main Bank/Cash Book မှ စာရင်းဖျက်သိမ်းခွင့် မရှိပါ။");
-          result = await BankCashHandlers.deleteBankCashEntry(db, userSession, body);
-          break;
+          result = await BankCashHandlers.deleteBankCashEntry(db, userSession, body); break;
 
-        // 💰 4. MAIN INCOME BOOK
         case 'getIncomeData':
           if (!can(userSession, 'ledger_read') && !can(userSession, 'cashier_read')) return forbidden(corsHeaders);
-          result = await IncomeHandlers.getIncomeData(db, body);
-          break;
-
+          result = await IncomeHandlers.getIncomeData(db, body); break;
         case 'saveIncomeEntry':
           if (!can(userSession, 'ledger_write') && !can(userSession, 'cashier_write')) return forbidden(corsHeaders);
-          result = await IncomeHandlers.saveIncomeEntry(db, userSession, body);
-          break;
-
+          result = await IncomeHandlers.saveIncomeEntry(db, userSession, body); break;
         case 'updateIncomeEntry':
           if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders, "Income Book တွင် စာရင်းပြင်ဆင်ခွင့် မရှိပါ။");
-          result = await IncomeHandlers.updateIncomeEntry(db, userSession, body);
-          break;
-
+          result = await IncomeHandlers.updateIncomeEntry(db, userSession, body); break;
         case 'deleteIncomeEntry':
           if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders, "Income Book မှ စာရင်းဖျက်သိမ်းခွင့် မရှိပါ။");
-          result = await IncomeHandlers.deleteIncomeEntry(db, userSession, body);
-          break;
+          result = await IncomeHandlers.deleteIncomeEntry(db, userSession, body); break;
 
-        // 📖 5. OFFICE & KITCHEN EXPENSE BOOKS
         case 'getExpenseData':
           if (!can(userSession, 'ledger_read') && !can(userSession, 'staff_read')) return forbidden(corsHeaders);
-          result = await OfficeKitHandlers.getExpenseData(db, body);
-          break;
-
+          result = await OfficeKitHandlers.getExpenseData(db, body); break;
         case 'saveExpenseEntry':
           if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders, "Expense Book တွင် စာရင်းသွင်းခွင့် မရှိပါ။");
-          result = await OfficeKitHandlers.saveExpenseEntry(db, userSession, body);
-          break;
-
+          result = await OfficeKitHandlers.saveExpenseEntry(db, userSession, body); break;
         case 'updateExpenseEntry':
         case 'updatePayrollEntry':
           if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders, "Expense Book တွင် စာရင်းပြင်ဆင်ခွင့် မရှိပါ။");
-          result = await OfficeKitHandlers.updateExpenseEntry(db, userSession, body);
-          break;
-
+          result = await OfficeKitHandlers.updateExpenseEntry(db, userSession, body); break;
         case 'deleteExpenseEntry':
         case 'deletePayrollEntry':
           if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders, "Expense Book မှ စာရင်းဖျက်သိမ်းခွင့် မရှိပါ။");
-          result = await OfficeKitHandlers.deleteExpenseEntry(db, userSession, body);
-          break;
+          result = await OfficeKitHandlers.deleteExpenseEntry(db, userSession, body); break;
 
-        // 📖 6. CASHIER SUB-LEDGER BOOKS (Cashier Permission Scope)
         case 'getCashierData':
           if (!can(userSession, 'cashier_read')) return forbidden(corsHeaders);
-          result = await CashierHandlers.getCashierData(db, body);
-          break;
-
+          result = await CashierHandlers.getCashierData(db, body); break;
         case 'getTodayIncomeForCashier':
           if (!can(userSession, 'cashier_read')) return forbidden(corsHeaders);
-          result = await CashierHandlers.getTodayIncomeForCashier(db, body);
-          break;
-
+          result = await CashierHandlers.getTodayIncomeForCashier(db, body); break;
         case 'saveCashierEntry':
           if (!can(userSession, 'cashier_write')) return forbidden(corsHeaders, "Cashier စာအုပ်တွင် စာရင်းသွင်းခွင့် မရှိပါ။");
-          result = await CashierHandlers.saveCashierEntry(db, userSession, body);
-          break;
-
+          result = await CashierHandlers.saveCashierEntry(db, userSession, body); break;
         case 'updateCashierEntry':
           if (!can(userSession, 'cashier_write')) return forbidden(corsHeaders, "Cashier စာအုပ်တွင် စာရင်းပြင်ဆင်ခွင့် မရှိပါ။");
-          result = await CashierHandlers.updateCashierEntry(db, userSession, body);
-          break;
-
+          result = await CashierHandlers.updateCashierEntry(db, userSession, body); break;
         case 'deleteCashierEntry':
         case 'deleteLedgerEntry':
           if (!can(userSession, 'cashier_write')) return forbidden(corsHeaders, "Cashier စာအုပ်မှ စာရင်းဖျက်သိမ်းခွင့် မရှိပါ။");
-          result = await CashierHandlers.deleteCashierEntry(db, userSession, body);
-          break;
+          result = await CashierHandlers.deleteCashierEntry(db, userSession, body); break;
 
-        // 🎒 7. STUDENT MONEY LEDGER & WALLET
         case 'getStudentMoneyData':
         case 'getStudentMoneySummary':
           if (!can(userSession, 'ledger_read') && !can(userSession, 'student_read')) return forbidden(corsHeaders);
-          if (action === 'getStudentMoneySummary') {
-            result = await StudentMoneyHandlers.getStudentMoneySummary(db, body);
-          } else {
-            result = await StudentMoneyHandlers.getStudentMoneyData(db, body);
-          }
+          if (action === 'getStudentMoneySummary') result = await StudentMoneyHandlers.getStudentMoneySummary(db, body);
+          else result = await StudentMoneyHandlers.getStudentMoneyData(db, body);
           break;
-
         case 'saveStudentMoneyEntry':
           if (!can(userSession, 'ledger_write') && !can(userSession, 'cashier_write')) return forbidden(corsHeaders);
-          result = await StudentMoneyHandlers.saveStudentMoneyEntry(db, userSession, body);
-          break;
-
+          result = await StudentMoneyHandlers.saveStudentMoneyEntry(db, userSession, body); break;
         case 'updateStudentMoneyEntry':
           if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders);
-          result = await StudentMoneyHandlers.updateStudentMoneyEntry(db, userSession, body);
-          break;
-
+          result = await StudentMoneyHandlers.updateStudentMoneyEntry(db, userSession, body); break;
         case 'deleteStudentMoneyEntry':
           if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders);
-          result = await StudentMoneyHandlers.deleteStudentMoneyEntry(db, userSession, body);
-          break;
+          result = await StudentMoneyHandlers.deleteStudentMoneyEntry(db, userSession, body); break;
 
-        // 🎓 8. STUDENT DIRECTORY
         case 'getStudentData':
         case 'lookupStudentById':
           if (!can(userSession, 'student_read')) return forbidden(corsHeaders);
@@ -750,100 +631,63 @@ export default {
             ? await StudentHandlers.lookupStudentById(db, body)
             : await StudentHandlers.getStudentData(db, body);
           break;
-
         case 'saveStudentEntry':
           if (!can(userSession, 'student_write')) return forbidden(corsHeaders, "ကျောင်းသားစာရင်း သွင်းယူခွင့် မရှိပါ။");
-          result = await StudentHandlers.saveStudentEntry(db, userSession, body);
-          break;
-
+          result = await StudentHandlers.saveStudentEntry(db, userSession, body); break;
         case 'updateStudentEntry':
           if (!can(userSession, 'student_write')) return forbidden(corsHeaders, "ကျောင်းသားစာရင်း ပြင်ဆင်ခွင့် မရှိပါ။");
-          result = await StudentHandlers.updateStudentEntry(db, userSession, body);
-          break;
-
+          result = await StudentHandlers.updateStudentEntry(db, userSession, body); break;
         case 'deleteStudentEntry':
           if (!can(userSession, 'student_write')) return forbidden(corsHeaders, "ကျောင်းသားစာရင်း ဖျက်သိမ်းခွင့် မရှိပါ။");
-          result = await StudentHandlers.deleteStudentEntry(db, userSession, body);
-          break;
+          result = await StudentHandlers.deleteStudentEntry(db, userSession, body); break;
 
-        // 👨‍🏫 9. HR PAYROLL & STAFF DIRECTORY
         case 'getStaffData':
           if (!can(userSession, 'staff_read')) return forbidden(corsHeaders);
-          result = await PayrollStaffHandlers.getStaffData(db, body, userSession);
-          break;
-
+          result = await PayrollStaffHandlers.getStaffData(db, body, userSession); break;
         case 'saveStaffEntry':
           if (!can(userSession, 'staff_write')) return forbidden(corsHeaders, "ဝန်ထမ်းစာရင်း သွင်းယူခွင့် မရှိပါ။");
-          result = await PayrollStaffHandlers.saveStaffEntry(db, userSession, body);
-          break;
-
+          result = await PayrollStaffHandlers.saveStaffEntry(db, userSession, body); break;
         case 'updateStaffEntry':
           if (!can(userSession, 'staff_write')) return forbidden(corsHeaders, "ဝန်ထမ်းစာရင်း ပြင်ဆင်ခွင့် မရှိပါ။");
-          result = await PayrollStaffHandlers.updateStaffEntry(db, userSession, body);
-          break;
-
+          result = await PayrollStaffHandlers.updateStaffEntry(db, userSession, body); break;
         case 'deleteStaffEntry':
           if (!can(userSession, 'staff_write')) return forbidden(corsHeaders, "ဝန်ထမ်းစာရင်း ဖျက်သိမ်းခွင့် မရှိပါ။");
-          result = await PayrollStaffHandlers.deleteStaffEntry(db, userSession, body);
-          break;
-
+          result = await PayrollStaffHandlers.deleteStaffEntry(db, userSession, body); break;
         case 'saveHrPayrollForm':
           if (!can(userSession, 'staff_write') && !can(userSession, 'ledger_write')) return forbidden(corsHeaders);
-          result = await PayrollStaffHandlers.saveHrPayrollForm(db, userSession, body);
-          break;
-
+          result = await PayrollStaffHandlers.saveHrPayrollForm(db, userSession, body); break;
         case 'getPayrollSettings':
-          result = await PayrollStaffHandlers.getPayrollSettings(db, body);
-          break;
-
+          result = await PayrollStaffHandlers.getPayrollSettings(db, body); break;
         case 'updatePayrollSettings':
           if (!can(userSession, 'grade_matrix')) return forbidden(corsHeaders, "Salary Grade Matrix ပြင်ဆင်ခွင့် မရှိပါ။");
-          result = await PayrollStaffHandlers.updatePayrollSettings(db, userSession, body);
-          break;
+          result = await PayrollStaffHandlers.updatePayrollSettings(db, userSession, body); break;
 
-        // 👕 10. UNIFORM LEDGER
         case 'getUniformData':
           if (!can(userSession, 'uniform_read')) return forbidden(corsHeaders);
-          result = await UniformHandlers.getUniformData(db, body);
-          break;
-
+          result = await UniformHandlers.getUniformData(db, body); break;
         case 'saveUniformEntry':
           if (!can(userSession, 'uniform_write')) return forbidden(corsHeaders);
-          result = await UniformHandlers.saveUniformEntry(db, userSession, body);
-          break;
-
+          result = await UniformHandlers.saveUniformEntry(db, userSession, body); break;
         case 'updateUniformEntry':
           if (!can(userSession, 'uniform_write')) return forbidden(corsHeaders);
-          result = await UniformHandlers.updateUniformEntry(db, userSession, body);
-          break;
-
+          result = await UniformHandlers.updateUniformEntry(db, userSession, body); break;
         case 'deleteUniformEntry':
           if (!can(userSession, 'uniform_write')) return forbidden(corsHeaders);
-          result = await UniformHandlers.deleteUniformEntry(db, userSession, body);
-          break;
+          result = await UniformHandlers.deleteUniformEntry(db, userSession, body); break;
 
-        // 🏷️ 11. PROMOTION MATRIX
         case 'getPromotionData':
           if (!can(userSession, 'promo_read')) return forbidden(corsHeaders);
-          result = await PromotionHandlers.getPromotionData(db, body);
-          break;
-
+          result = await PromotionHandlers.getPromotionData(db, body); break;
         case 'savePromotionEntry':
           if (!can(userSession, 'promo_write')) return forbidden(corsHeaders);
-          result = await PromotionHandlers.savePromotionEntry(db, userSession, body);
-          break;
-
+          result = await PromotionHandlers.savePromotionEntry(db, userSession, body); break;
         case 'updatePromotionEntry':
           if (!can(userSession, 'promo_write')) return forbidden(corsHeaders);
-          result = await PromotionHandlers.updatePromotionEntry(db, userSession, body);
-          break;
-
+          result = await PromotionHandlers.updatePromotionEntry(db, userSession, body); break;
         case 'deletePromotionEntry':
           if (!can(userSession, 'promo_write')) return forbidden(corsHeaders);
-          result = await PromotionHandlers.deletePromotionEntry(db, userSession, body);
-          break;
+          result = await PromotionHandlers.deletePromotionEntry(db, userSession, body); break;
 
-        // 📈 12. REPORTS
         case 'getFinancialReportData':
         case 'getIncomeDetailReportData':
         case 'getMonthlyIncomeReportData':
@@ -857,41 +701,31 @@ export default {
           else if (action === 'getFundReportData') result = await ReportHandlers.getFundReportData(db, body);
           break;
 
-        // ⚙️ 13. SETTINGS & BACKUP
         case 'getSettingsData':
-          result = await SettingsHandlers.getSettingsData(db, body);
-          break;
-
+          result = await SettingsHandlers.getSettingsData(db, body); break;
         case 'exportBookDataByFy':
         case 'exportGroupDataByFy':
           if (!can(userSession, 'backup_dispatch')) return forbidden(corsHeaders);
-          result = await SettingsHandlers.exportGroupDataByFy(db, body);
-          break;
-
+          result = await SettingsHandlers.exportGroupDataByFy(db, body); break;
         case 'sendEmailBackupByFy':
         case 'sendGroupEmailBackupByFy':
           if (!can(userSession, 'backup_dispatch')) return forbidden(corsHeaders);
-          result = await SettingsHandlers.sendGroupEmailBackupByFy(db, userSession, body, env);
-          break;
+          result = await SettingsHandlers.sendGroupEmailBackupByFy(db, userSession, body, env); break;
 
-        // ⚡ 14. GLOBAL RUNNING BALANCES RECALCULATE ENGINE
         case 'recalculateAllBalances':
         case 'recalculateLedgerBalances':
           if (!can(userSession, 'settings_write') && !can(userSession, 'ledger_write')) return forbidden(corsHeaders);
-          result = await executeAutoRecalculateAll(db, body);
-          break;
+          result = await executeAutoRecalculateAll(db, body); break;
 
         default:
           return new Response(JSON.stringify({ success: false, message: `Action '${action}' မဟုတ်ပါ သို့မဟုတ် မပံ့ပိုးသေးပါ။` }), { headers: corsHeaders });
       }
 
-      // 🛡️ D1 AUDIT LOGGING: User ၏ Request နှောင့်နှေးမှုမရှိစေရန် ctx.waitUntil ဖြင့် Background တွင် သိမ်းသည်
+      // 🛡️ D1 AUDIT LOGGING (Non-blocking)
       const isMutatingAction = /^(save|update|delete|export|send|recalculate)/i.test(action);
       if (isMutatingAction && result && result.success !== false && userSession) {
         if (ctx && typeof ctx.waitUntil === 'function') {
-          ctx.waitUntil(
-            writeAuditLog(db, userSession, action, body, body.uniqueId || body.uniqueid || body.id || null)
-          );
+          ctx.waitUntil(writeAuditLog(db, userSession, action, body, body.uniqueId || body.uniqueid || body.id || null));
         } else {
           await writeAuditLog(db, userSession, action, body, body.uniqueId || body.uniqueid || body.id || null);
         }
