@@ -1,11 +1,13 @@
 /** 
  * ==============================================================================
  * GOLDEN ERP SYSTEM - CENTRAL API BRIDGE & OFFLINE INTERCEPTOR (D1 DATABASE EDITION)
- * File: js/api.js 
- * 💡 Features: Offline-First Network Interceptor, Background Outbox Auto-Routing,
- *              D1 Database Compatible API Bridge & SWR In-Memory Caching Engine,
- *              🛡️ Universal CSV Formula Injection Sanitizer (window.safeCsvCell),
- *              🎯 Bug #2 Fixed (Centralized Resilient escapeHtml & escapeJsAttr)
+ * File: js/api.js (Location: cashbook-frontend/js/api.js)
+ * 💡 Features: 🛡️ Quota-Safe In-Memory & LocalStorage Cache (Zero QuotaExceededError),
+ *              Offline-First Network Interceptor & Background Outbox Auto-Routing,
+ *              Clean 401 Session Revocation & Complete Storage Purge,
+ *              Pre-fetched 'staff' & Core Views for 0ms Instant Navigation,
+ *              Universal CSV Formula Injection Sanitizer (window.safeCsvCell),
+ *              Resilient DOM & Inline Event Escapers (escapeHtml & escapeJsAttr)
  * ==============================================================================
  */
 
@@ -22,16 +24,15 @@ window.AppState = window.AppState || {
   currentModule: 'dashboard'
 };
 
-// 💡 Global In-Memory Cache Store for 0ms Instant Navigation
+// 💡 Global In-Memory Cache Store for 0ms Instant Navigation (Always Fast & Unlimited)
 window.gDataCache = window.gDataCache || {};
 
 // ==============================================================================
-// 💡 BUG #2 FIX & GLOBAL SANITIZATION UTILITIES (Available immediately on load)
+// 💡 1. GLOBAL ESCAPERS & SANITIZATION UTILITIES
 // ==============================================================================
 
 /**
  * 💡 Central Safe Native DOM HTML Escaper
- * Pre-defined early to eliminate script load order dependencies across modules.
  */
 window.escapeHtml = function(str) {
   if (str === null || str === undefined) return "";
@@ -45,19 +46,19 @@ window.escapeHtml = function(str) {
 
 /**
  * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
- * Prevents quote breaking and XSS vulnerabilities in DOM tables.
+ * Prevents quote breaking, bracket collision and XSS vulnerabilities in DOM tables.
  */
 window.escapeJsAttr = function(str) {
   if (str === null || str === undefined) return "";
-  const jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const jsEscaped = String(str)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '&quot;');
   return window.escapeHtml(jsEscaped);
 };
 
 /**
  * 🛡️ UNIVERSAL SAFE CSV CELL GENERATOR (Prevents Excel/Sheets Formula Injection)
- * Text အကွက်များတွင် (=, +, -, @, \t, \r) ဖြင့် စတင်သော Formula execution များကို
- * ရှေ့မှ Single Quote (') ခံပေးပြီး Quote များကို Double Quote ခတ်ကာ လုံခြုံစွာ ထုတ်ပေးသည်။
- * ဂဏန်းအစစ်များ (-1000, 1500.50) ကို Text အဖြစ် မပြောင်းလဲစေဘဲ နဂိုအတိုင်း ထိန်းသိမ်းသည်။
  */
 window.safeCsvCell = function(val) {
   if (val === null || val === undefined) return '""';
@@ -66,8 +67,11 @@ window.safeCsvCell = function(val) {
   let str = String(val).trim();
   if (str === '') return '""';
 
-  // Pure Number (ကော်မာပါသော "1,000" သို့မဟုတ် အနုတ်ဂဏန်း "-500.25") ဖြစ်ပါက formula injection မဟုတ်ပါ
-  const cleanNumStr = str.replace(/,/g, '');
+  // Pure numbers (including decimals, commas and accounting parentheses)
+  let cleanNumStr = str.replace(/,/g, '');
+  if (cleanNumStr.startsWith('(') && cleanNumStr.endsWith(')')) {
+    cleanNumStr = '-' + cleanNumStr.slice(1, -1).trim();
+  }
   if (!isNaN(Number(cleanNumStr)) && cleanNumStr !== '') {
     return `"${str.replace(/"/g, '""')}"`;
   }
@@ -81,19 +85,21 @@ window.safeCsvCell = function(val) {
 };
 
 // ==============================================================================
-// 💡 CACHE HELPER FUNCTIONS (localStorage Persistence)
+// 💡 2. QUOTA-SAFE CACHE ENGINE (Zero QuotaExceededError Crash)
 // ==============================================================================
 
 window.getApiCache = function(cacheKey) {
+  // 1. Check Fast In-Memory Cache first (0ms)
   if (window.gDataCache[cacheKey]) {
     return window.gDataCache[cacheKey];
   }
   
+  // 2. Fallback to localStorage cache for small persistent data
   try {
     const persistedCache = localStorage.getItem('api_cache_' + cacheKey);
     if (persistedCache) {
       const parsed = JSON.parse(persistedCache);
-      const cacheAge = Date.now() - parsed.timestamp;
+      const cacheAge = Date.now() - (parsed.timestamp || 0);
       if (cacheAge < 24 * 60 * 60 * 1000) {
         window.gDataCache[cacheKey] = parsed.data;
         return parsed.data;
@@ -102,7 +108,7 @@ window.getApiCache = function(cacheKey) {
       }
     }
   } catch (e) {
-    console.warn('Failed to read from localStorage cache:', e);
+    console.warn('[Cache] Failed to read localStorage cache:', e);
   }
   
   return null;
@@ -110,15 +116,18 @@ window.getApiCache = function(cacheKey) {
 
 window.setApiCache = function(cacheKey, data) {
   if (data && data.success) {
+    // In-memory cache တွင် အမြဲသိမ်းဆည်းသည် (Storage Quota မရှိပါ)
     window.gDataCache[cacheKey] = data;
+
+    // ⚡ FIX: 80KB ထက်ကြီးသော Data (ကျောင်းသား ၅,၀၀၀၊ Cashier ၂,၀၀၀) များကို localStorage ထဲ မထည့်ဘဲ
+    // Browser ၏ 5MB Quota ပြည့်ကာ App Crash ဖြစ်သွားခြင်းကို ၁၀၀% ကာကွယ်သည်
     try {
-      const cacheEntry = {
-        timestamp: Date.now(),
-        data: data
-      };
-      localStorage.setItem('api_cache_' + cacheKey, JSON.stringify(cacheEntry));
+      const serialized = JSON.stringify({ timestamp: Date.now(), data: data });
+      if (serialized.length < 80000) {
+        localStorage.setItem('api_cache_' + cacheKey, serialized);
+      }
     } catch (e) {
-      console.warn('Failed to persist cache to localStorage:', e);
+      console.warn('[Cache Quota Protection] Memory cache only for large dataset.');
     }
   }
 };
@@ -133,7 +142,7 @@ window.clearAllApiCache = function() {
       }
     });
   } catch (e) {
-    console.warn('Failed to clear localStorage cache:', e);
+    console.warn('[Cache] Failed to clear localStorage cache:', e);
   }
 };
 
@@ -143,8 +152,9 @@ window.invalidateApiCache = function(actionPrefix = '') {
     return;
   }
   
+  const prefixLower = actionPrefix.toLowerCase();
   Object.keys(window.gDataCache).forEach(key => {
-    if (key.toLowerCase().includes(actionPrefix.toLowerCase())) {
+    if (key.toLowerCase().includes(prefixLower)) {
       delete window.gDataCache[key];
     }
   });
@@ -152,41 +162,38 @@ window.invalidateApiCache = function(actionPrefix = '') {
   try {
     const keys = Object.keys(localStorage);
     keys.forEach(key => {
-      if (key.startsWith('api_cache_') && key.toLowerCase().includes(actionPrefix.toLowerCase())) {
+      if (key.startsWith('api_cache_') && key.toLowerCase().includes(prefixLower)) {
         localStorage.removeItem(key);
       }
     });
   } catch (e) {
-    console.warn('Failed to invalidate localStorage cache:', e);
+    console.warn('[Cache] Failed to invalidate localStorage cache:', e);
   }
 };
 
 // ==============================================================================
-// 💡 ERROR LOGGING SYSTEM
+// 💡 3. SAFE ERROR LOGGING SYSTEM (Memory & Quota Protected)
 // ==============================================================================
 
 window.ErrorLogger = {
-  maxLogs: 50,
+  maxLogs: 20, // ⚡ Cap at 20 logs to prevent localStorage bloat
   
   logError: function(context, error, additionalInfo = {}) {
     const errorEntry = {
       timestamp: new Date().toISOString(),
       context: context,
-      errorMessage: error?.message || String(error),
-      errorStack: error?.stack || null,
+      errorMessage: String(error?.message || error || '').slice(0, 300),
+      errorStack: error?.stack ? String(error.stack).slice(0, 500) : null,
       additionalInfo: additionalInfo,
-      userAgent: navigator.userAgent,
       url: window.location.href
     };
     
     let logs = [];
     try {
       const storedLogs = localStorage.getItem('error_logs');
-      if (storedLogs) {
-        logs = JSON.parse(storedLogs);
-      }
+      if (storedLogs) logs = JSON.parse(storedLogs);
     } catch (e) {
-      console.warn('Failed to parse error logs:', e);
+      logs = [];
     }
     
     logs.unshift(errorEntry);
@@ -197,7 +204,8 @@ window.ErrorLogger = {
     try {
       localStorage.setItem('error_logs', JSON.stringify(logs));
     } catch (e) {
-      console.warn('Failed to save error logs:', e);
+      // If quota exceeded, purge old logs
+      localStorage.removeItem('error_logs');
     }
     
     console.error(`[ErrorLogger] ${context}:`, error, additionalInfo);
@@ -208,7 +216,6 @@ window.ErrorLogger = {
       const storedLogs = localStorage.getItem('error_logs');
       return storedLogs ? JSON.parse(storedLogs) : [];
     } catch (e) {
-      console.warn('Failed to get error logs:', e);
       return [];
     }
   },
@@ -233,23 +240,20 @@ window.toggleLoading = function(show) {
 };
 
 // ==============================================================================
-// 💡 CENTRAL D1-COMPATIBLE API FETCH ENGINE WITH OFFLINE-FIRST INTERCEPTOR
+// 💡 4. CENTRAL D1 API FETCH ENGINE WITH OFFLINE INTERCEPTOR
 // ==============================================================================
 
 window.callApi = async function(action, payload = {}, method = 'POST') {
   let serverPayload = {};
   let url = API_WORKER_URL;
 
-  const isReadAction = action.startsWith('get') || action.startsWith('check');
-  // ⚡ Updated: Added 'recalculate' to ensure cache is wiped on manual balance sync
-  const isWriteAction = action.startsWith('save') || 
-                        action.startsWith('update') || 
-                        action.startsWith('delete') || 
-                        action.startsWith('trigger') || 
-                        action.startsWith('backup') || 
-                        action.startsWith('export') || 
-                        action.startsWith('send') ||
-                        action.startsWith('recalculate');
+  const isReadAction = action.startsWith('get') || action.startsWith('check') || action.startsWith('lookup');
+  
+  // ⚡ FIX: 'export' နှင့် 'send' သည် Database မပြောင်းလဲသဖြင့် Cache အားလုံးကို မဖျက်စေဘဲ အမှန်တကယ် Mutation များသာ စာရင်းဖျက်စေသည်
+  const isActualMutation = action.startsWith('save') || 
+                           action.startsWith('update') || 
+                           action.startsWith('delete') || 
+                           action.startsWith('recalculate');
 
   const forceRefresh = payload.forceRefresh === true;
   const { forceRefresh: _, ...extractedPayload } = payload;
@@ -257,8 +261,8 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
 
   const cacheKey = `${action}_${JSON.stringify(serverPayload)}`;
 
-  // 1. FAST OFFLINE CHECK FOR WRITES: If strictly offline, enqueue immediately without timeout
-  if (isWriteAction && !navigator.onLine && window.OfflineSync) {
+  // 1. FAST OFFLINE CHECK FOR WRITES: If strictly offline, enqueue immediately
+  if (isActualMutation && !navigator.onLine && window.OfflineSync) {
     console.warn(`[OfflineSync] Offline detected. Enqueueing ${action} immediately...`);
     await window.OfflineSync.enqueue(action, serverPayload, method);
     window.clearAllApiCache();
@@ -311,12 +315,19 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
 
     const response = await fetch(url, options);
 
+    // ⚡ FIX: 401 Session Expiry Cleanup (Auth Keys ၅ ခုစလုံးကို အပြီးတိုင် ရှင်းလင်းသည်)
     if (response.status === 401) {
       console.warn(`[API 401] Unauthorized access for action: ${action}`);
 
-      localStorage.removeItem('golden_auth_token');
-      localStorage.removeItem('golden_user_name');
-      localStorage.removeItem('golden_user_role');
+      if (typeof window.clearAuthStorage === 'function') {
+        window.clearAuthStorage();
+      } else {
+        localStorage.removeItem('golden_auth_token');
+        localStorage.removeItem('golden_user_name');
+        localStorage.removeItem('golden_user_role');
+        localStorage.removeItem('golden_user');
+        localStorage.removeItem('golden_token_expires_at');
+      }
 
       if (window.AppState) {
         window.AppState.authToken = null;
@@ -329,7 +340,7 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
 
       const loginErrBox = document.getElementById('login-error');
       if (loginErrBox) {
-        loginErrBox.textContent = "Session သက်တမ်း ကုန်ဆုံးသွားပါပြီ။ ပြန်လည် Login ဝင်ရောက်ပါ။";
+        loginErrBox.textContent = "Session သက်တမ်း ကုန်ဆုံးသွားပါပြီ။ ကျေးဇူးပြု၍ ပြန်လည် Login ဝင်ရောက်ပါ။";
         loginErrBox.classList.remove('hidden');
       }
 
@@ -351,14 +362,14 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
       window.setApiCache(cacheKey, result);
     }
 
-    if (isWriteAction && result && result.success) {
+    // စာရင်းအမှန်တကယ် ပြောင်းလဲသွားမှသာ Cache များကို ဖျက်ဆီးသည်
+    if (isActualMutation && result && result.success) {
       window.clearAllApiCache();
     }
 
     return result;
 
   } catch (err) {
-    // 💡 2. NETWORK DROP INTERCEPTOR: If request failed due to offline/network disconnect
     const isNetworkErr = !navigator.onLine || 
                          err.name === 'TypeError' ||
                          (err.message && (
@@ -368,7 +379,8 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
                            err.message.includes('network')
                          ));
 
-    if (isWriteAction && isNetworkErr && window.OfflineSync) {
+    // Offline Write Interceptor
+    if (isActualMutation && isNetworkErr && window.OfflineSync) {
       console.warn(`[OfflineSync Interceptor] Network error during ${action}. Diverting to IndexedDB Outbox...`);
       await window.OfflineSync.enqueue(action, serverPayload, method);
       window.clearAllApiCache();
@@ -382,11 +394,10 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
       };
     }
 
-    // If Read Action failed offline, try to serve from Cache
+    // Offline Read Fallback to Cache
     if (isReadAction && isNetworkErr) {
       const staleCache = window.getApiCache(cacheKey);
       if (staleCache) {
-        console.info(`[Offline Read] Serving stale cache for ${action}`);
         return staleCache;
       }
     }
@@ -395,8 +406,7 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
       window.ErrorLogger.logError(`API_CALL_${action}`, err, {
         action: action,
         payload: serverPayload,
-        method: method,
-        url: url
+        method: method
       });
     }
 
@@ -410,13 +420,16 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
   }
 };
 
-/**
- * 💡 Enterprise Background Prefetching Engine (Student Money Added)
- */
+// ==============================================================================
+// 💡 5. BACKGROUND PREFETCHING ENGINE ('staff' view ပါဝင်အောင် ဖြည့်စွက်ပြီး)
+// ==============================================================================
+
 window.prefetchCoreModules = function() {
   window.viewCache = window.viewCache || {};
+  
+  // ⚡ FIX: 'staff' view ပါဝင်စေသဖြင့် Staff Directory ခေါ်ယူရာတွင် 0ms Instant Load ဖြစ်စေသည်
   const views = [
-    'dashboard', 'bank-cash', 'income', 'office-kit', 'hr',
+    'dashboard', 'bank-cash', 'income', 'office-kit', 'hr', 'staff',
     'cashier', 'student', 'student-money', 'uniform', 'promotion', 'reports',
     'settings'
   ];
@@ -489,9 +502,12 @@ window.cleanNumber = function(val) {
   return isNegative ? -num : num;
 };
 
+/**
+ * 💡 Resilient Calendar Date Parser (ISO DateTime & Standard String Support)
+ */
 window.parseIsoDate = function(dStr) {
   if (!dStr) return null;
-  var str = String(dStr).trim();
+  var str = String(dStr).split('T')[0].trim();
   if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(str)) {
     var parts = str.split(/[-/]/);
     return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
