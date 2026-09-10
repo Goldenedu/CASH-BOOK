@@ -272,9 +272,12 @@ async function resetLoginAttempts(db, username) {
   try { await db.prepare("DELETE FROM login_attempts WHERE username = ?").bind(username).run(); } catch (e) {}
 }
 
-// 💡 5. GLOBAL RECALCULATE BALANCES ENGINE (SQLite 3.33+ UPDATE...FROM)
+// ⚡ FIX: မတော်တဆ စာအုပ် ၁၂ အုပ်လုံး Auto Run သွားခြင်းနှင့် D1 Quota ကုန်ခြင်းကို အပြီးတိုင် တားဆီးထားသော Safe Recalculator Engine
 async function executeAutoRecalculateAll(db, body = {}) {
   const rawBook = body.bookName || body.tableName || body.book || "";
+  const targetFy = body.fy ? String(body.fy).trim().replace(/^FY\s*/i, "") : null;
+  const isExplicitAll = Boolean(body.confirmAll === true || body.all === true || body.action === 'recalculateAllBalances');
+
   const tableMap = {
     "bank": "bank", "main bank book": "bank", "cash": "cash", "main cash book": "cash",
     "office": "office", "office exp book": "office", "kitchen": "kitchen", "kitchen exp book": "kitchen",
@@ -284,50 +287,127 @@ async function executeAutoRecalculateAll(db, body = {}) {
     "ca_kitchen": "ca_kitchen", "cakitchen": "ca_kitchen", "ca_payroll": "ca_payroll", "capayroll": "ca_payroll"
   };
 
-  const targetTables = rawBook && tableMap[rawBook.toLowerCase().trim()]
-    ? [tableMap[rawBook.toLowerCase().trim()]]
-    : ["bank", "cash", "office", "kitchen", "payroll", "student_money", "income", "ca_bank", "ca_cash", "ca_office", "ca_kitchen", "ca_payroll"];
+  let targetTables = [];
+
+  // 🛡️ 1. စာအုပ်နာမည် တိကျစွာ ပါလာပါက အဆိုပါ ၁ အုပ်တည်းကိုသာ ညှိမည်
+  if (rawBook && tableMap[rawBook.toLowerCase().trim()]) {
+    targetTables = [tableMap[rawBook.toLowerCase().trim()]];
+  } 
+  // 🛡️ 2. User က Settings ထဲမှ တမင်သက်သက် "စာအုပ်အားလုံး ညှိမည်" ဟု ခေါ်မှသာ ၁၂ အုပ်လုံး Run မည်
+  else if (isExplicitAll) {
+    targetTables = ["bank", "cash", "office", "kitchen", "payroll", "student_money", "income", "ca_bank", "ca_cash", "ca_office", "ca_kitchen", "ca_payroll"];
+  } 
+  // 🛡️ 3. မတော်တဆ စာအုပ်နာမည် မပါဘဲ ခေါ်မိပါက စာအုပ် ၁၂ အုပ်လုံး Auto မပတ်စေဘဲ ချက်ချင်း ရပ်တန့်သည် (D1 Quota ကာကွယ်ခြင်း)
+  else {
+    return { success: false, message: "Target table name is required for recalculation." };
+  }
 
   const updatedTables = [];
   for (const tbl of targetTables) {
     try {
       if (tbl === 'student_money') {
-        await db.prepare(`
-          WITH calculated AS (
-            SELECT id, 
-                   ROW_NUMBER() OVER (PARTITION BY fy ORDER BY date ASC, id ASC) as new_no,
-                   SUM(debit - credit) OVER (PARTITION BY student_id ORDER BY date ASC, id ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as calc_bal
-            FROM student_money
-          )
-          UPDATE student_money SET no = calculated.new_no, balances = calculated.calc_bal FROM calculated WHERE student_money.id = calculated.id;
-        `).run();
+        // ⚡ Student Money: FY ပါလာပါက ထို FY သာ၊ မပါပါက အားလုံး
+        if (targetFy) {
+          await db.prepare(`
+            WITH calculated AS (
+              SELECT id, 
+                     ROW_NUMBER() OVER (ORDER BY date ASC, id ASC) as new_no,
+                     SUM(debit - credit) OVER (
+                       PARTITION BY student_id 
+                       ORDER BY date ASC, id ASC 
+                       ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                     ) as calc_bal
+              FROM student_money
+              WHERE fy = ? OR fy = ?
+            )
+            UPDATE student_money 
+            SET no = calculated.new_no, balances = calculated.calc_bal 
+            FROM calculated 
+            WHERE student_money.id = calculated.id;
+          `).bind(targetFy, `FY ${targetFy}`).run();
+        } else {
+          await db.prepare(`
+            WITH calculated AS (
+              SELECT id, 
+                     ROW_NUMBER() OVER (PARTITION BY fy ORDER BY date ASC, id ASC) as new_no,
+                     SUM(debit - credit) OVER (
+                       PARTITION BY student_id 
+                       ORDER BY date ASC, id ASC 
+                       ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                     ) as calc_bal
+              FROM student_money
+            )
+            UPDATE student_money 
+            SET no = calculated.new_no, balances = calculated.calc_bal 
+            FROM calculated 
+            WHERE student_money.id = calculated.id;
+          `).run();
+        }
       } else if (tbl === 'income') {
-        // ⚡ Income ဇယားတွင် balances ကော်လံ မရှိသဖြင့် no သာ စီပေးသည်
-        await db.prepare(`
-          WITH calculated AS (
-            SELECT id, ROW_NUMBER() OVER (PARTITION BY fy ORDER BY date ASC, id ASC) as new_no FROM income
-          )
-          UPDATE income SET no = calculated.new_no FROM calculated WHERE income.id = calculated.id;
-        `).run();
+        // ⚡ Income: balances ကော်လံ မရှိသဖြင့် no သာ စီသည်
+        if (targetFy) {
+          await db.prepare(`
+            WITH calculated AS (
+              SELECT id, ROW_NUMBER() OVER (ORDER BY date ASC, id ASC) as new_no 
+              FROM income
+              WHERE fy = ? OR fy = ?
+            )
+            UPDATE income SET no = calculated.new_no FROM calculated WHERE income.id = calculated.id;
+          `).bind(targetFy, `FY ${targetFy}`).run();
+        } else {
+          await db.prepare(`
+            WITH calculated AS (
+              SELECT id, ROW_NUMBER() OVER (PARTITION BY fy ORDER BY date ASC, id ASC) as new_no 
+              FROM income
+            )
+            UPDATE income SET no = calculated.new_no FROM calculated WHERE income.id = calculated.id;
+          `).run();
+        }
       } else {
-        await db.prepare(`
-          WITH calculated AS (
-            SELECT id, 
-                   ROW_NUMBER() OVER (PARTITION BY fy ORDER BY date ASC, id ASC) as new_no,
-                   SUM(debit - credit) OVER (PARTITION BY fy ORDER BY date ASC, id ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as calc_bal
-            FROM ${tbl}
-          )
-          UPDATE ${tbl} SET no = calculated.new_no, balances = calculated.calc_bal FROM calculated WHERE ${tbl}.id = calculated.id;
-        `).run();
+        // ⚡ အခြား စာရင်းအုပ်များ (Bank, Cash, Office, Kitchen, Payroll, Cashier)
+        if (targetFy) {
+          await db.prepare(`
+            WITH calculated AS (
+              SELECT id, 
+                     ROW_NUMBER() OVER (ORDER BY date ASC, id ASC) as new_no,
+                     SUM(debit - credit) OVER (
+                       ORDER BY date ASC, id ASC 
+                       ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                     ) as calc_bal
+              FROM ${tbl}
+              WHERE fy = ? OR fy = ?
+            )
+            UPDATE ${tbl} 
+            SET no = calculated.new_no, balances = calculated.calc_bal 
+            FROM calculated 
+            WHERE ${tbl}.id = calculated.id;
+          `).bind(targetFy, `FY ${targetFy}`).run();
+        } else {
+          await db.prepare(`
+            WITH calculated AS (
+              SELECT id, 
+                     ROW_NUMBER() OVER (PARTITION BY fy ORDER BY date ASC, id ASC) as new_no,
+                     SUM(debit - credit) OVER (
+                       PARTITION BY fy 
+                       ORDER BY date ASC, id ASC 
+                       ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                     ) as calc_bal
+              FROM ${tbl}
+            )
+            UPDATE ${tbl} 
+            SET no = calculated.new_no, balances = calculated.calc_bal 
+            FROM calculated 
+            WHERE ${tbl}.id = calculated.id;
+          `).run();
+        }
       }
       updatedTables.push(tbl);
     } catch (e) {
       console.warn(`Recalculation warning on table ${tbl}:`, e.message);
     }
   }
-  return { success: true, message: `စာရင်းအုပ် (${updatedTables.length}) ခု၏ Running Balances နှင့် NO စဉ်နံပါတ်များကို D1 Database ထဲတွင် O(1) တိကျစွာ ညှိယူပြီးပါပြီ။`, updatedTables };
+  return { success: true, message: `စာရင်းအုပ် (${updatedTables.length}) ခု၏ Balances ကို ညှိယူပြီးပါပြီ။`, updatedTables };
 }
-
 // ==============================================================================
 // 💡 6. MAIN FETCH ROUTER (CLOUDFLARE WORKER EXPORT)
 // ==============================================================================
