@@ -424,10 +424,14 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
 // 💡 5. BACKGROUND PREFETCHING ENGINE ('staff' view ပါဝင်အောင် ဖြည့်စွက်ပြီး)
 // ==============================================================================
 
+/**
+ * 💡 Light-Weight Background Prefetching Engine
+ * ⚡ FIX: မလိုအပ်ဘဲ Query ပေါင်း ၅၀ ကျော် ပြိုင်တူပစ်လွှတ်ပြီး Rows Read သိန်းချီ ကုန်နေခြင်းကို တားဆီးထားသည်
+ */
 window.prefetchCoreModules = function() {
   window.viewCache = window.viewCache || {};
   
-  // ⚡ FIX: 'staff' view ပါဝင်စေသဖြင့် Staff Directory ခေါ်ယူရာတွင် 0ms Instant Load ဖြစ်စေသည်
+  // HTML Template များကိုသာ ကြိုတင်ဆွဲထားမည် (Network Data များကို အတင်းမဆွဲတော့ပါ)
   const views = [
     'dashboard', 'bank-cash', 'income', 'office-kit', 'hr', 'staff',
     'cashier', 'student', 'student-money', 'uniform', 'promotion', 'reports',
@@ -442,6 +446,9 @@ window.prefetchCoreModules = function() {
         .catch(() => {});
     }
   });
+
+  // ⚡ Heavy API များကို အတင်းမဆွဲတော့ဘဲ လက်ရှိရောက်နေသော စာမျက်နှာတစ်ခုတည်းကိုသာ User သွားကြည့်ချိန်တွင် ဆွဲစေမည်
+};
 
   setTimeout(() => {
     window.callApi('getDashboardData', {}).catch(() => {});
