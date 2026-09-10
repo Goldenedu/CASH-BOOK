@@ -1,9 +1,10 @@
 /**
  * ==============================================================================
  * GOLDEN ERP SYSTEM - MAIN BANK & CASH BOOKS HANDLER (CLOUDFLARE D1)
- * File: handlers-bank-cash.js  
+ * File: handlers-bank-cash.js (Location: cashbook-api/handlers-bank-cash.js)
  * 💡 Features: 🛡️ 100% ACID Compliant Atomic Transfers via Cloudflare D1 db.batch(),
  *              ⚡ O(1) Single-Pass Window Function Engine via SQLite 3.33+ UPDATE...FROM,
+ *              🎯 Zero "no such column: is_locked" Crash (Crash-Proof SELECT * Pattern),
  *              Zero Transactional Leak on Save/Update/Delete Operations,
  *              Server-Side Auto-Lock Enforcement (5-Prefix Engine & Zero Client Bypass),
  *              Myanmar Standard Time (UTC+6:30) & March Academic Year Boundary Alignment,
@@ -69,7 +70,6 @@ function normalizeFyStr(fy) {
 
 /**
  * 💡 Myanmar Standard Timezone Helper (UTC+6:30)
- * ညသန်းခေါင်ကျော် စာရင်းသွင်းပါက ရက်စွဲ ၁ ရက် နောက်ပြန်ဆုတ်သွားသည့် Bug ကို ကာကွယ်သည်
  */
 function getMyanmarDateString(inputDate = null) {
   if (inputDate) return String(inputDate).trim().split('T')[0];
@@ -79,7 +79,6 @@ function getMyanmarDateString(inputDate = null) {
 
 /**
  * 💡 Academic Year Calculator (March Boundary Aligned)
- * မတ်လသည် စာရင်းနှစ်သစ်၏ ပထမဆုံးလ ဖြစ်သောကြောင့် ဇန်နဝါရီ၊ ဖေဖော်ဝါရီ (Month < 2) သာ ယခင်နှစ်အဟောင်းထဲ သတ်မှတ်သည်
  */
 function calculateAcademicFyFromDate(dateStr) {
   const d = new Date(dateStr);
@@ -90,8 +89,6 @@ function calculateAcademicFyFromDate(dateStr) {
 
 /**
  * ⚡ FIX: O(1) Single-Pass D1 Window Function Recalculation Engine
- * SQLite 3.33+ UPDATE ... FROM syntax ဖြင့် Subquery Scan ၂ ကြိမ်ပတ်ရသည့် Bottleneck ကို ဖယ်ရှားပြီး
- * D1 Write Units ကုန်ကျစရိတ်ကို 80% လျှော့ချထားသည်။
  */
 async function recalculateLedgerBalances(db, tableName, targetFy = null) {
   if (!tableName) return;
@@ -183,13 +180,11 @@ async function generateFyNo(db, tableName, fy) {
 
 /**
  * 💡 Target Transfer Statement Factory
- * Transfer ပြုလုပ်ရာတွင် Target စာအုပ်အလိုက် သင့်လျော်သော SQL Statement ကို ကြိုတင်ဖန်တီးပေးသည်
  */
 async function createTargetTransferStatement(db, body, sourceTable, targetTable, entryDate, my, normFy, createdBy, transferUid) {
   const debit = parseFloat(body.debit || 0);
   const credit = parseFloat(body.credit || 0);
 
-  // Source တွင် ထွက်ငွေ (Credit) ဖြစ်ပါက Target တွင် ဝင်ငွေ (Debit) ဖြစ်ရမည်
   const targetDebit = credit;
   const targetCredit = debit;
 
@@ -355,7 +350,6 @@ export async function saveBankCashEntry(db, session, body) {
     const tableName = getTableName(rawBook);
     const createdBy = session?.name || body.createdBy || "Admin";
 
-    // 🎯 Myanmar Standard Date & March Boundary Fiscal Year
     const entryDate = getMyanmarDateString(body.date);
     const d = new Date(entryDate);
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -399,7 +393,6 @@ export async function saveBankCashEntry(db, session, body) {
     // ⚡ LIVE OPERATIONAL MODE: D1 ATOMIC BATCH TRANSACTION
     const batchStatements = [];
 
-    // ၁။ မူရင်းစာအုပ်အတွက် Insert Statement (Silent Overwrite မဖြစ်စေရန် Standard INSERT INTO ကိုသာ သုံးသည်)
     batchStatements.push(
       db.prepare(`
         INSERT INTO ${tableName} (
@@ -412,7 +405,6 @@ export async function saveBankCashEntry(db, session, body) {
       )
     );
 
-    // ၂။ Transfer ဖြစ်ပါက Target စာအုပ်အတွက် Statement ကို တစ်ပါတည်း Batch ထဲ ထည့်သွင်းခြင်း
     const isTransfer = String(body.category || '').trim() === 'Transfer' && body.transfer;
     let targetTable = null;
 
@@ -427,10 +419,8 @@ export async function saveBankCashEntry(db, session, body) {
       }
     }
 
-    // ⚡ နှစ်ဖက်စလုံး အောင်မြင်မှသာ အပြီးသတ် Commit ဖြစ်မည် (တစ်ခုခုမှားပါက မူရင်းစာရင်းပါ Rollback ဖြစ်သည်)
     await db.batch(batchStatements);
 
-    // ၃။ Transaction ပြီးစီးမှသာ သက်ဆိုင်ရာ စာအုပ်များ၏ Balance ကို လုံခြုံစွာ Recalculate လုပ်သည်
     await recalculateLedgerBalances(db, tableName, fy);
     if (targetTable && targetTable !== tableName) {
       await recalculateLedgerBalances(db, targetTable, fy);
@@ -452,7 +442,7 @@ export async function saveBankCashEntry(db, session, body) {
 }
 
 /**
- * 💡 Update Bank / Cash Entry (🛡️ Atomic Batch Clean & Update Engine)
+ * 💡 Update Bank / Cash Entry (🛡️ Crash-Proof SELECT * Pattern)
  */
 export async function updateBankCashEntry(db, session, body) {
   try {
@@ -465,13 +455,14 @@ export async function updateBankCashEntry(db, session, body) {
     }
 
     // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT & Capture Existing Data
-    const existing = await db.prepare(`SELECT is_locked, uniqueid, transfer, fy, date FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    // 🎯 FIX: 'SELECT *' ကို သုံးထားသဖြင့် ဇယားထဲတွင် 'is_locked' ကော်လံ မရှိလျှင်ပင် Error လုံးဝ မတက်တော့ပါ
+    const existing = await db.prepare(`SELECT * FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ပြင်ဆင်မည့် စာရင်း ရှာမတွေ့ပါ။" };
     }
 
     const uid = String(existing.uniqueid || '');
-    const isAutoLocked = Boolean(existing.is_locked) ||
+    const isAutoLocked = Boolean(existing.is_locked || existing.isLocked) ||
       uid.startsWith('TRANS_') ||
       uid.startsWith('UNIPROFIT_') ||
       uid.startsWith('UNICASHIER_') ||
@@ -498,12 +489,9 @@ export async function updateBankCashEntry(db, session, body) {
     const debit = parseFloat(body.debit || 0);
     const credit = parseFloat(body.credit || 0);
 
-    // ⚡ ATOMIC BATCH RECONCILIATION:
-    // စာအုပ် ၅ အုပ်လုံးရှိ ချိတ်ဆက်ထားသော Transfer စာရင်းဟောင်း ဖျက်ခြင်း၊ မူရင်းစာအုပ် Update လုပ်ခြင်းနှင့်
-    // Transfer အသစ်ပြန်ထည့်ခြင်းတို့ကို Single Transaction အဖြစ် တစ်ပေါင်းတည်း Run ပါသည်
     const batchStatements = [];
 
-    // ၁။ Linked Transfer အဟောင်းများ ဖျက်ရန် Statements (Tables ၅ အုပ်လုံး)
+    // ၁။ Linked Transfer အဟောင်းများ ဖျက်ရန် Statements
     const tables = ['bank', 'cash', 'office', 'kitchen', 'payroll'];
     for (const tbl of tables) {
       batchStatements.push(
@@ -539,10 +527,8 @@ export async function updateBankCashEntry(db, session, body) {
       }
     }
 
-    // ⚡ Execute Atomic Batch
     await db.batch(batchStatements);
 
-    // ၄။ သက်ဆိုင်ရာ FY များ၏ Balance များကိုသာ တိကျစွာ Recalculate လုပ်သည်
     await recalculateLedgerBalances(db, tableName, fy);
     if (oldFy && oldFy !== fy) {
       await recalculateLedgerBalances(db, tableName, oldFy);
@@ -566,7 +552,7 @@ export async function updateBankCashEntry(db, session, body) {
 }
 
 /**
- * 💡 Delete Bank / Cash Entry (🛡️ Atomic Batch Delete Engine)
+ * 💡 Delete Bank / Cash Entry (🛡️ Crash-Proof SELECT * Pattern)
  */
 export async function deleteBankCashEntry(db, session, body) {
   try {
@@ -579,13 +565,14 @@ export async function deleteBankCashEntry(db, session, body) {
     }
 
     // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT & Capture Target Data
-    const existing = await db.prepare(`SELECT is_locked, uniqueid, fy, transfer FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    // 🎯 FIX: 'SELECT *' ကို သုံးထားသဖြင့် ဇယားထဲတွင် 'is_locked' ကော်လံ မရှိလျှင်ပင် Error လုံးဝ မတက်တော့ပါ
+    const existing = await db.prepare(`SELECT * FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ဖျက်သိမ်းမည့် စာရင်း ရှာမတွေ့ပါ။" };
     }
 
     const uid = String(existing.uniqueid || '');
-    const isAutoLocked = Boolean(existing.is_locked) ||
+    const isAutoLocked = Boolean(existing.is_locked || existing.isLocked) ||
       uid.startsWith('TRANS_') ||
       uid.startsWith('UNIPROFIT_') ||
       uid.startsWith('UNICASHIER_') ||
@@ -603,7 +590,7 @@ export async function deleteBankCashEntry(db, session, body) {
     const targetFy = existing.fy ? normalizeFyStr(existing.fy) : null;
     const transferUid = `TRANS_${uniqueid}`;
 
-    // ⚡ ATOMIC BATCH DELETE: မူရင်းစာရင်းနှင့် ချိတ်ဆက်ထားသော Transfer စာရင်းအားလုံးကို Single Transaction ဖြင့် ဖျက်သည်
+    // ⚡ ATOMIC BATCH DELETE
     const batchStatements = [
       db.prepare(`DELETE FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid),
       db.prepare(`DELETE FROM bank WHERE uniqueid = ?`).bind(transferUid),
@@ -615,10 +602,8 @@ export async function deleteBankCashEntry(db, session, body) {
 
     await db.batch(batchStatements);
 
-    // Balance ပြန်လည်တွက်ချက်ခြင်း
     await recalculateLedgerBalances(db, tableName, targetFy);
 
-    // Linked Transfer ပါဝင်ခဲ့ပါက အဆိုပါ Target စာအုပ်၏ Balance ကိုပါ Recalculate လုပ်သည်
     if (existing.transfer) {
       const linkedTable = getTableName(existing.transfer);
       if (linkedTable && linkedTable !== tableName) {
