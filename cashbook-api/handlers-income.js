@@ -350,10 +350,26 @@ async function upsertDailyIncomeRollup(db, tableName, entryDate, fy, createdBy) 
   await recalculateLedgerBalances(db, tableName, normFy);
 }
 
-async function syncDailyIncomeRollupForDate(db, entryDate, fy, createdBy) {
+async function syncDailyIncomeRollupForDate(db, entryDate, fy, createdBy, targetMethod = null) {
   if (!entryDate) return;
-  await upsertDailyIncomeRollup(db, 'cash', entryDate, fy, createdBy);
-  await upsertDailyIncomeRollup(db, 'bank', entryDate, fy, createdBy);
+
+  // ⚡ FIX: Cash သွင်းပါက Cash ကိုသာ Update လုပ်မည်။ Bank သွင်းပါက Bank ကိုသာ Update လုပ်မည်။
+  // မလိုအပ်ဘဲ စာအုပ် ၂ အုပ်စလုံးကို လိုက် Update လုပ်၍ Row Writes သောင်းချီ ကုန်နေခြင်းကို တားဆီးသည်
+  if (targetMethod) {
+    const m = String(targetMethod).toLowerCase();
+    if (m === 'cash') {
+      await upsertDailyIncomeRollup(db, 'cash', entryDate, fy, createdBy);
+    } else if (m === 'bank') {
+      await upsertDailyIncomeRollup(db, 'bank', entryDate, fy, createdBy);
+    } else {
+      await upsertDailyIncomeRollup(db, 'cash', entryDate, fy, createdBy);
+      await upsertDailyIncomeRollup(db, 'bank', entryDate, fy, createdBy);
+    }
+  } else {
+    // Method မသိပါက (ဥပမာ- Delete လုပ်ချိန်) မှသာ ၂ ခုစလုံး စစ်ဆေးမည်
+    await upsertDailyIncomeRollup(db, 'cash', entryDate, fy, createdBy);
+    await upsertDailyIncomeRollup(db, 'bank', entryDate, fy, createdBy);
+  }
 }
 
 /**
@@ -638,7 +654,7 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration) {
     }
 
     // Live Operational Mode
-    await postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdBy, uniqueid);
+    await postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdBy, uniqueid, body.method || 'Cash');
 
     return {
       success: true,
@@ -696,7 +712,7 @@ export async function updateIncomeEntry(db, session, body) {
     if (cleanResults.ca_bank) await recalculateLedgerBalances(db, 'ca_bank', oldFy || body.fy);
 
     if (oldDate && oldDate !== entryDate) {
-      await syncDailyIncomeRollupForDate(db, oldDate, oldFy || body.fy, createdBy);
+      await syncDailyIncomeRollupForDate(db, entryDate, normFy, createdBy, method);
     }
 
     return res;
