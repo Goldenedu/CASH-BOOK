@@ -1,8 +1,12 @@
 /**
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - MAIN INCOME BOOK MODULE
- * File: js/income.js 
- * 💡 Features: Dynamic Universal FY Generator (No Hardcoded 2627), 3-Tier Promotion Matrix AUT Calculator,
- *              100% Guaranteed Synchronized Credit & AUT Reset, Split Payment & Universal Invoice Printer
+ * File: js/income.js (Location: cashbook-frontend/js/income.js)
+ * 💡 Features: Dynamic Universal FY Generator (March Boundary getMonth() < 2), 
+ *              3-Tier Promotion Matrix AUT Calculator,
+ *              100% Guaranteed Synchronized Credit & AUT Reset, 
+ *              Split Payment & Universal Invoice Printer
+ * ==============================================================================
  */
 
 var incomePage = 1;
@@ -58,15 +62,15 @@ function parseCleanIntId(val) {
 }
 
 /**
- * 💡 1. Universal Dynamic Academic Year Generator (e.g. "2026-2027", "2027-2028")
+ * 💡 1. Universal Dynamic Academic Year Generator (Phase 1.1: March Boundary Aligned)
  */
 function getCurrentAcademicYear(dateInput) {
   var d = dateInput ? new Date(dateInput) : new Date();
   var validDate = isNaN(d.getTime()) ? new Date() : d;
   var y = validDate.getFullYear();
 
-  // ဇန်နဝါရီ၊ ဖေဖော်ဝါရီ၊ မတ်လ (လပိုင်း ၀, ၁, ၂) ဖြစ်ပါက ယခင်နှစ် FY ထဲတွင် ရှိနေဆဲဖြစ်သည်
-  if (validDate.getMonth() < 3) {
+  // 🎯 FIX (Phase 1.1): မတ်လ (Month index 2) သည် နှစ်သစ်ဖြစ်သဖြင့် ဇန်နဝါရီ၊ ဖေဖော်ဝါရီ (< 2) သာ ယခင်နှစ်ထဲ သတ်မှတ်သည်
+  if (validDate.getMonth() < 2) {
     y -= 1;
   }
   return `${y}-${y + 1}`;
@@ -90,7 +94,7 @@ function getFyShortCode(fyStr) {
     }
   }
 
-  // 💡 Dynamic Fallback: အချက်အလက်မပါပါက လက်ရှိနှစ်အလိုက် အလိုအလျောက် တွက်ထုတ်မည် (Hardcode မဟုတ်တော့ပါ)
+  // Dynamic Fallback: အချက်အလက်မပါပါက လက်ရှိနှစ်အလိုက် အလိုအလျောက် တွက်ထုတ်မည်
   var currentFy = getCurrentAcademicYear();
   var p = currentFy.split('-');
   return p[0].slice(-2) + p[1].slice(-2);
@@ -390,10 +394,10 @@ async function onAccountNameOrCategoryChangeIncome() {
   var creditEl = document.getElementById('inc-credit') || document.getElementById('income-credit');
   var debitEl = document.getElementById('inc-debit') || document.getElementById('income-debit');
 
-  // 💡 1. Registration နှင့် Services မဟုတ်ပါက (Ferry, Night Study, Others) စာရင်းဟောင်းမကျန်စေဘဲ 0 အဖြစ် တူညီစွာ ထားမည်
+  // Registration နှင့် Services မဟုတ်ပါက စာရင်းဟောင်းမကျန်စေဘဲ 0 သတ်မှတ်သည်
   if (accountName !== "Registration" && accountName !== "Services") {
     if (autAmtEl) autAmtEl.value = 0;
-    if (creditEl) creditEl.value = 0; // 👈 ၇ သောင်း အဟောင်းမကျန်စေဘဲ 0 ဖြစ်သွားမည်
+    if (creditEl) creditEl.value = 0;
     if (debitEl) debitEl.value = 0;
     if (typeof updateSplitAmountsIncome === 'function') updateSplitAmountsIncome();
     return;
@@ -417,7 +421,7 @@ async function onAccountNameOrCategoryChangeIncome() {
     var cleanClass = classVal.toLowerCase().replace(/\s+/g, '');
     var cleanCat = categoryVal.toLowerCase().replace(/\s+/g, '');
 
-    // 💡 1. Strict Match: Match by FY, Class AND Category
+    // 1. Strict Match: Match by FY, Class AND Category
     var match = promoMatrixCache.find(function(r) {
       var rFy = String(r.fy || '').trim().replace(/^FY\s*/i, '');
       var rClass = String(r.class || '').trim().toLowerCase().replace(/\s+/g, '');
@@ -430,7 +434,7 @@ async function onAccountNameOrCategoryChangeIncome() {
       return classMatches && (catMatches || !categoryVal) && fyMatches;
     });
 
-    // 💡 2. Fallback Match without FY
+    // 2. Fallback Match without FY
     if (!match) {
       match = promoMatrixCache.find(function(r) {
         var rClass = String(r.class || '').trim().toLowerCase().replace(/\s+/g, '');
@@ -439,7 +443,7 @@ async function onAccountNameOrCategoryChangeIncome() {
       });
     }
 
-    // 💡 3. Fallback for "Others" / Custom categories: Match Class alone
+    // 3. Fallback for "Others" / Custom categories: Match Class alone
     if (!match) {
       match = promoMatrixCache.find(function(r) {
         var rClass = String(r.class || '').trim().toLowerCase().replace(/\s+/g, '');
@@ -465,7 +469,7 @@ async function onAccountNameOrCategoryChangeIncome() {
     }
   }
 
-  // 💡 4. 100% SYNCHRONIZED UPDATE: Always set both fields to the exact same calculated fee
+  // 100% SYNCHRONIZED UPDATE
   if (autAmtEl) autAmtEl.value = calculatedFee;
   if (creditEl) creditEl.value = calculatedFee;
   if (debitEl) debitEl.value = 0;
@@ -586,7 +590,7 @@ function populateFYDropdownIncome() {
   ];
 
   fySelect.innerHTML = options.map(function(fy) { return '<option value="' + fy + '">' + fy + '</option>'; }).join('');
-  fySelect.value = `${currentYear}-${currentYear + 1}`;
+  fySelect.value = getCurrentAcademicYear();
 }
 
 /**
