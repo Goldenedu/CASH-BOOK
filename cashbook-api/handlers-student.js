@@ -1,25 +1,26 @@
 /**
  * ==============================================================================
  * GOLDEN ERP SYSTEM - STUDENT DIRECTORY D1 HANDLER MODULE
- * File: handlers-student.js
+ * File: handlers-student.js (Location: cashbook-api/handlers-student.js)
  * 💡 Features: Universal Dynamic FY Generator (No Hardcoded 2627), Float .0 Sanitizer,
  *              Direct isMigration Mode (Preserves exact NO, ID, FYID from Google Sheets),
  *              Server-Side Privilege Escalation Defense, Refined Myanmar/Ethnic Gender Auto-Detection,
  *              ⚡ 3x Faster 1-Query Stats Aggregator (Replaces 3 separate count queries),
+ *              🎯 Phase 1.1: March Boundary Aligned (getMonth() < 2),
  *              🎯 Auto Inactive Status Enforcement on Transfer Date
  * ==============================================================================
  */
 
 /**
- * 💡 1. Universal Dynamic Academic Year Generator (e.g. "2026-2027", "2027-2028")
+ * 💡 1. Universal Dynamic Academic Year Generator (Phase 1.1: March Boundary Aligned)
  */
 function getCurrentAcademicYear(dateInput) {
   const d = dateInput ? new Date(dateInput) : new Date();
   const validDate = isNaN(d.getTime()) ? new Date() : d;
   let y = validDate.getFullYear();
 
-  // မတ်လမတိုင်မီ (ဇန်နဝါရီ၊ ဖေဖော်ဝါရီ၊ မတ်လ) ဖြစ်ပါက ယခင်နှစ် ပညာသင်နှစ်ထဲတွင် ရှိနေဆဲဖြစ်သည်
-  if (validDate.getMonth() < 3) {
+  // 🎯 FIX (Phase 1.1): မတ်လ (Month index 2) သည် နှစ်သစ်ဖြစ်သဖြင့် ဇန်နဝါရီ၊ ဖေဖော်ဝါရီ (< 2) သာ ယခင်နှစ်ထဲ သတ်မှတ်သည်
+  if (validDate.getMonth() < 2) {
     y -= 1;
   }
   return `${y}-${y + 1}`;
