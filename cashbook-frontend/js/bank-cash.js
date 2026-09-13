@@ -1,10 +1,11 @@
 /**
  * ==============================================================================
  * GOLDEN ERP SYSTEM - BANK & CASH BOOK CONTROLLER
- * File: js/bank-cash.js  
- * 💡 Features: Strict Search Engine, Self-Transfer Prevention, Auto-Description Generator & Overwrite Bug Fixed,
+ * File: js/bank-cash.js (Location: cashbook-frontend/js/bank-cash.js)
+ * 💡 Features: Strict Search Engine, Self-Transfer Prevention, Auto-Description Generator,
  *              🛡️ Universal CSV Formula Injection Sanitizer (safeCsvCell),
- *              🔍 Full Database Real-Time Backend Search Engine (Cross-page search),
+ *              🎯 Phase 3.2: Full Dataset Loader & Client-Side Pagination Slicing (No Missing Search),
+ *              🎯 Phase 3.1: Inter-Module Dynamic Cache Clearing on Entry Save/Delete,
  *              🎯 Bug #2 Fixed (Resilient Local escapeHtml / escapeJsAttr Callbacks)
  * ==============================================================================
  */
@@ -106,18 +107,18 @@ function clearDateFilterBCK() {
   if (fromEl) fromEl.value = '';
   if (toEl) toEl.value = '';
   bckPage = 1;
-  loadBankCashKitData(true, true);
+  renderTableBankCashKit();
 }
 
 /**
- * 🔍 Debounced Search Input Handler (⚡ Triggers real Database Query across all records)
+ * 🔍 Debounced Search Input Handler
  */
 function onSearchInputBankCashKit() {
   if (searchTimeoutBck) clearTimeout(searchTimeoutBck);
   searchTimeoutBck = setTimeout(function() {
     bckPage = 1;
-    loadBankCashKitData(true, true);
-  }, 250);
+    renderTableBankCashKit();
+  }, 200);
 }
 
 /**
@@ -139,29 +140,28 @@ function switchSubBook(bookType) {
 }
 
 /**
- * 💡 Load Bank or Cash Ledger Data
+ * 💡 Phase 3.2: Load Bank or Cash Ledger Data with Full Dataset Retrieval Support
  */
 async function loadBankCashKitData(isSilent, forceRefresh) {
   var token = localStorage.getItem('golden_auth_token');
   if (!token) return;
 
   try {
-    var searchInput = document.getElementById('bck-search');
-    var searchVal = searchInput ? searchInput.value.trim() : '';
     var bookName = currentSubBook === 'bank' ? 'Main Bank Book' : 'Main Cash Book';
 
-    var cacheKey = `getBankCashData_${JSON.stringify({ bookName: bookName, page: bckPage, limit: bckLimit, searchVal: searchVal })}`;
+    var cacheKey = `getBankCashData_${JSON.stringify({ bookName: bookName, page: 1, limit: 2000, searchVal: '' })}`;
     var hasCache = !forceRefresh && !!window.getApiCache(cacheKey);
 
     if (!isSilent && !hasCache && typeof toggleLoading === 'function') {
       toggleLoading(true);
     }
 
+    // ⚡ Phase 3.2 Fix: Fetch full dataset (limit 2000) for cross-page search accuracy
     var res = await callApi('getBankCashData', {
       bookName: bookName,
-      page: bckPage,
-      limit: bckLimit,
-      searchVal: searchVal,
+      page: 1,
+      limit: 2000,
+      searchVal: '',
       forceRefresh: forceRefresh
     });
 
@@ -170,11 +170,11 @@ async function loadBankCashKitData(isSilent, forceRefresh) {
     }
 
     bckActiveData = res.data || [];
+    window.bckActiveData = bckActiveData;
     bckTotalRows = res.totalRows || bckActiveData.length || 0;
 
     renderStatsBankCashKit(res.stats || { totalIncome: 0, totalExpense: 0, balance: 0 });
     renderTableBankCashKit();
-    updatePaginationUIBankCashKit();
 
   } catch (err) {
     console.error("Bank/Cash Load Error:", err);
@@ -195,11 +195,11 @@ function renderStatsBankCashKit(stats) {
   if (incTotal) incTotal.textContent = Number(stats.totalIncome || 0).toLocaleString('en-US') + ' MMK';
   if (expTotal) expTotal.textContent = Number(stats.totalExpense || 0).toLocaleString('en-US') + ' MMK';
   if (balTotal) balTotal.textContent = Number(stats.balance || 0).toLocaleString('en-US') + ' MMK';
-  if (countTotal) countTotal.textContent = Number(bckTotalRows || 0).toLocaleString('en-US');
+  if (countTotal) countTotal.textContent = Number(bckTotalRows || bckActiveData.length || 0).toLocaleString('en-US');
 }
 
 /**
- * 💡 Render Table Grid Rows (Integer NO Fix)
+ * 💡 Phase 3.2: Render Table Grid Rows with Client-side Pagination Slicing
  */
 function renderTableBankCashKit() {
   var tbody = document.getElementById('bck-table-body');
@@ -214,15 +214,24 @@ function renderTableBankCashKit() {
   var toDate = toEl ? toEl.value : '';
 
   var filteredRows = filterBankCashKitData(bckActiveData, searchVal, fromDate, toDate);
+  var totalEntries = filteredRows.length;
 
-  if (!filteredRows || filteredRows.length === 0) {
+  if (!filteredRows || totalEntries === 0) {
     tbody.innerHTML = '<tr><td colspan="13" class="text-center py-8 text-slate-500 font-bold">ရှာဖွေမှုနှင့် ကိုက်ညီသော စာရင်း မရှိပါ။</td></tr>';
+    updatePaginationUIBankCashKit(0);
     return;
   }
 
+  // ⚡ Client-side slicing
+  var totalPages = Math.ceil(totalEntries / bckLimit) || 1;
+  if (bckPage > totalPages) bckPage = totalPages;
+  var startIndex = (bckPage - 1) * bckLimit;
+  var endIndex = Math.min(startIndex + bckLimit, totalEntries);
+  var pageItems = filteredRows.slice(startIndex, endIndex);
+
   var isViewer = (window.AppState ? window.AppState.currentUserRole : '') === "Viewer";
 
-  tbody.innerHTML = filteredRows.map(function(row) {
+  tbody.innerHTML = pageItems.map(function(row) {
     var isLocked = Boolean(row.isLocked || isViewer);
     var lockClass = isLocked ? "opacity-30 cursor-not-allowed pointer-events-none" : "hover:text-white";
     var lockTitle = row.isLocked ? "Locked (Must be edited from Source Book)" : "";
@@ -260,6 +269,8 @@ function renderTableBankCashKit() {
         '</td>' +
       '</tr>';
   }).join('');
+
+  updatePaginationUIBankCashKit(totalEntries);
 }
 
 /**
@@ -273,7 +284,10 @@ function openAddModalBankCashKit() {
   if (uniqueIdEl) uniqueIdEl.value = "";
 
   var dateEl = document.getElementById('bck-date');
-  if (dateEl) dateEl.value = new Date().toISOString().slice(0, 10);
+  if (dateEl) {
+    var now = new Date(Date.now() + (6.5 * 3600 * 1000));
+    dateEl.value = now.toISOString().slice(0, 10);
+  }
 
   var debitEl = document.getElementById('bck-debit');
   if (debitEl) debitEl.value = 0;
@@ -366,7 +380,7 @@ function autoFillTransferDescriptionBCK() {
 }
 
 /**
- * 💡 Save / Submit Entry with Double Submit Lock
+ * 💡 Save / Submit Entry with Double Submit Lock & Cache Purge
  */
 async function saveBankCashKitForm(e) {
   if (e && e.preventDefault) e.preventDefault();
@@ -398,7 +412,7 @@ async function saveBankCashKitForm(e) {
 
     if (res && res.success) {
       if (typeof showToast === 'function') showToast("SUCCESS", "စာရင်း သိမ်းဆည်းမှု အောင်မြင်ပါသည်။");
-      // ⚡ Wipe in-memory cache to guarantee real-time cross-book sync
+      // ⚡ Phase 3.1: Wipe in-memory cache to guarantee real-time cross-book sync
       if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
       await loadBankCashKitData(true, true);
     } else {
@@ -423,8 +437,6 @@ function editBankCashKitEntry(uniqueId) {
   }
 
   openAddModalBankCashKit();
-
-  // ✅ FIX: Populate dropdown options BEFORE setting row values to avoid innerHTML wiping!
   populateDropdownsBCK();
 
   var uidEl = document.getElementById('bck-uniqueId');
@@ -482,28 +494,36 @@ async function deleteBankCashKitEntry(uniqueId) {
 }
 
 function changePageBankCashKit(dir) {
+  var searchInput = document.getElementById('bck-search');
+  var fromEl = document.getElementById('bck-date-from');
+  var toEl = document.getElementById('bck-date-to');
+  var filtered = filterBankCashKitData(bckActiveData, searchInput?.value, fromEl?.value, toEl?.value);
+  var totalPages = Math.ceil(filtered.length / bckLimit) || 1;
+
   if (dir === -1 && bckPage > 1) {
     bckPage--;
-    loadBankCashKitData(false);
-  } else if (dir === 1 && (bckPage * bckLimit) < bckTotalRows) {
+    renderTableBankCashKit();
+  } else if (dir === 1 && bckPage < totalPages) {
     bckPage++;
-    loadBankCashKitData(false);
+    renderTableBankCashKit();
   }
 }
 
-function updatePaginationUIBankCashKit() {
+function updatePaginationUIBankCashKit(currentCount) {
   var info = document.getElementById('bck-pagination-info');
+  var totalToDisplay = (currentCount !== undefined) ? currentCount : bckTotalRows;
+
   if (info) {
-    var start = bckTotalRows === 0 ? 0 : (bckPage - 1) * bckLimit + 1;
-    var end = Math.min(bckPage * bckLimit, bckTotalRows);
-    info.innerHTML = 'Showing <span class="text-indigo-400 font-extrabold">' + start + '</span> to <span class="text-indigo-400 font-extrabold">' + end + '</span> of <span class="text-indigo-400 font-extrabold">' + bckTotalRows + '</span> entries';
+    var start = totalToDisplay === 0 ? 0 : (bckPage - 1) * bckLimit + 1;
+    var end = Math.min(bckPage * bckLimit, totalToDisplay);
+    info.innerHTML = 'Showing <span class="text-indigo-400 font-extrabold">' + start + '</span> to <span class="text-indigo-400 font-extrabold">' + end + '</span> of <span class="text-indigo-400 font-extrabold">' + totalToDisplay + '</span> entries';
   }
 
   var prevBtn = document.getElementById('bck-btn-prev');
   if (prevBtn) prevBtn.disabled = (bckPage === 1);
 
   var nextBtn = document.getElementById('bck-btn-next');
-  if (nextBtn) nextBtn.disabled = (bckPage * bckLimit >= bckTotalRows);
+  if (nextBtn) nextBtn.disabled = (bckPage * bckLimit >= totalToDisplay);
 }
 
 /**
