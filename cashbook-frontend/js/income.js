@@ -3,9 +3,10 @@
  * GOLDEN ERP SYSTEM - MAIN INCOME BOOK MODULE
  * File: js/income.js (Location: cashbook-frontend/js/income.js)
  * 💡 Features: Dynamic Universal FY Generator (March Boundary getMonth() < 2), 
- *              3-Tier Promotion Matrix AUT Calculator,
+ *              3-Tier Promotion Matrix AUT Calculator (Class Change Auto-Bind),
  *              100% Guaranteed Synchronized Credit & AUT Reset, 
- *              Split Payment & Universal Invoice Printer
+ *              Split Payment & Universal Invoice Printer,
+ *              🛡️ Formula Injection Protected CSV Exporter
  * ==============================================================================
  */
 
@@ -59,6 +60,24 @@ function parseCleanIntId(val) {
   if (typeof val === 'number') return isNaN(val) ? 0 : Math.trunc(val);
   var n = parseInt(String(val).trim(), 10);
   return isNaN(n) ? 0 : n;
+}
+
+/**
+ * 🛡️ Formula Injection Protected CSV Cell Helper
+ */
+function safeCsvCellInc(val) {
+  if (val === null || val === undefined) return '""';
+  if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
+  var str = String(val).trim();
+  if (str === '') return '""';
+  var cleanNumStr = str.replace(/,/g, '');
+  if (!isNaN(Number(cleanNumStr)) && cleanNumStr !== '') {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
 }
 
 /**
@@ -530,6 +549,12 @@ function bindIncomeModalLiveEvents() {
     catEl.onchange = onAccountNameOrCategoryChangeIncome;
   }
 
+  // 🎯 FIX: Class ပြောင်းလဲချိန်တွင် Promotion Matrix နှုန်းထားကို ချက်ချင်း Auto-Calculate လုပ်ခြင်း
+  var classEl = document.getElementById('inc-class');
+  if (classEl) {
+    classEl.onchange = onAccountNameOrCategoryChangeIncome;
+  }
+
   var idSearchEl = document.getElementById('inc-id-search');
   if (idSearchEl) {
     idSearchEl.oninput = onStudentIdOrFYChangeIncome;
@@ -773,9 +798,25 @@ function exportToCSVIncome() {
 
   var csv = "NO,EFFECT DATE,DATE,FY,ID,FYID,FYID NAME,CLASS,CATEGORY,ACCOUNT NAME,METHOD,DEBIT,CREDIT,AUT AMOUNT,PROMO,MY,VR NO,REMARK,UNIQUEID\n";
   incomeActiveData.forEach(function(r) {
-    var name = '"' + (r.fyidName || '').replace(/"/g, '""') + '"';
-    var remark = '"' + (r.remark || '').replace(/"/g, '""') + '"';
-    csv += (r.no || '') + ',' + (r.effDate || '') + ',' + (r.date || '') + ',' + (r.fy || '') + ',' + (r.id || '') + ',' + (r.fyid || '') + ',' + name + ',' + (r.class || '') + ',' + (r.category || '') + ',' + (r.accountName || '') + ',' + (r.method || '') + ',' + (r.debit || 0) + ',' + (r.credit || 0) + ',' + (r.autAmount || 0) + ',' + (r.promo || '') + ',' + (r.my || '') + ',' + (r.vrNo || '') + ',' + remark + ',' + (r.uniqueId || '') + '\n';
+    csv += (r.no || '') + ',' +
+           safeCsvCellInc(r.effDate || '') + ',' +
+           safeCsvCellInc(r.date || '') + ',' +
+           safeCsvCellInc(r.fy || '') + ',' +
+           safeCsvCellInc(r.id || '') + ',' +
+           safeCsvCellInc(r.fyid || '') + ',' +
+           safeCsvCellInc(r.fyidName || '') + ',' +
+           safeCsvCellInc(r.class || '') + ',' +
+           safeCsvCellInc(r.category || '') + ',' +
+           safeCsvCellInc(r.accountName || '') + ',' +
+           safeCsvCellInc(r.method || '') + ',' +
+           (r.debit || 0) + ',' +
+           (r.credit || 0) + ',' +
+           (r.autAmount || 0) + ',' +
+           safeCsvCellInc(r.promo || '') + ',' +
+           safeCsvCellInc(r.my || '') + ',' +
+           safeCsvCellInc(r.vrNo || '') + ',' +
+           safeCsvCellInc(r.remark || '') + ',' +
+           safeCsvCellInc(r.uniqueId || '') + '\n';
   });
 
   var blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
