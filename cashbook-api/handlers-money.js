@@ -1,9 +1,10 @@
 /**
  * ==============================================================================
  * GOLDEN ERP SYSTEM - STUDENT MONEY LEDGER & WALLET HANDLER (CLOUDFLARE D1)
- * File: handlers-money.js
- * 💡 Features: Fixed Wallet Balance Partition Leak (PARTITION BY student_id),
- *              ⚡ O(1) D1 Write-Optimized Window Function via SQLite 3.33+ UPDATE...FROM,
+ * File: handlers-money.js (Location: cashbook-api/handlers-money.js)
+ * 💡 Features: ⚡ QUOTA-SHIELD: O(1) Differential Row-Level Recalculation Engine,
+ *              🎯 Floating Point Safe Comparison (ROUND to 2 Decimals),
+ *              Fixed Wallet Balance Partition Leak (PARTITION BY student_id),
  *              Crash-Proof Student Name Extraction & Auto-Lookup,
  *              Multi-FY Dynamic Transition Safety & Grouped Wallet Summaries
  * ==============================================================================
@@ -38,11 +39,12 @@ function getMyanmarDateString(inputDate = null) {
 }
 
 /**
- * ⚡ FIX: O(1) Single-Pass D1 Window Function Recalculation Engine
+ * ⚡ QUOTA-SHIELD: O(1) Single-Pass D1 Window Function Recalculation Engine
  * 1. ROW_NUMBER() OVER (ORDER BY date ASC, id ASC) -> စာအုပ်၏ စဉ်နံပါတ် (no)
  * 2. SUM(debit - credit) OVER (PARTITION BY student_id ORDER BY date ASC, id ASC) 
  *    -> ကျောင်းသားတစ်ဦးချင်းစီ၏ ကိုယ်ပိုင် လက်ကျန်ငွေ (Wallet Balance)
- * 3. SQLite 3.33+ UPDATE ... FROM syntax -> Subquery ၂ ခါပတ်ရသည့် O(N^2) Bottleneck & Quota Leak ကို အပြီးတိုင် ဖယ်ရှားထားသည်။
+ * 3. Quota-Shield Condition: တန်ဖိုး တကယ်ပြောင်းလဲသွားသော Row များကိုသာ Update လုပ်သဖြင့်
+ *    D1 Row Writes ကုန်ကျမှုကို အပြီးတိုင် ရပ်တန့်စေသည်။
  */
 async function recalculateStudentMoneyBalances(db, targetFy = null) {
   try {
@@ -69,7 +71,11 @@ async function recalculateStudentMoneyBalances(db, targetFy = null) {
             balances = calculated.calc_bal,
             fy = ?
         FROM calculated
-        WHERE student_money.id = calculated.id;
+        WHERE student_money.id = calculated.id
+          AND (
+            student_money.no IS NOT calculated.calc_no OR 
+            ROUND(student_money.balances, 2) IS NOT ROUND(calculated.calc_bal, 2)
+          );
       `).bind(cleanFy, fyPrefixed, cleanFy).run();
 
     } else {
@@ -92,7 +98,11 @@ async function recalculateStudentMoneyBalances(db, targetFy = null) {
         SET no = calculated.calc_no,
             balances = calculated.calc_bal
         FROM calculated
-        WHERE student_money.id = calculated.id;
+        WHERE student_money.id = calculated.id
+          AND (
+            student_money.no IS NOT calculated.calc_no OR 
+            ROUND(student_money.balances, 2) IS NOT ROUND(calculated.calc_bal, 2)
+          );
       `).run();
     }
   } catch (e) {
@@ -358,7 +368,7 @@ export async function saveStudentMoneyEntry(db, userSession, body) {
     ).run();
 
     if (!isMigration) {
-      // ⚡ Scoped O(1) recalculation with partition by student
+      // ⚡ Scoped O(1) Quota-Shield recalculation with partition by student
       await recalculateStudentMoneyBalances(db, cleanFy);
     }
 
@@ -442,6 +452,7 @@ export async function updateStudentMoneyEntry(db, userSession, body) {
       uniqueid
     ).run();
 
+    // ⚡ Scoped O(1) Quota-Shield recalculation
     await recalculateStudentMoneyBalances(db, cleanFy);
 
     if (oldFy && oldFy !== cleanFy) {
@@ -472,6 +483,8 @@ export async function deleteStudentMoneyEntry(db, userSession, body) {
     const targetFy = existing?.fy ? normalizeFyStr(existing.fy) : null;
 
     await db.prepare("DELETE FROM student_money WHERE uniqueid = ?").bind(uniqueid).run();
+
+    // ⚡ Scoped O(1) Quota-Shield recalculation
     await recalculateStudentMoneyBalances(db, targetFy);
 
     return {
