@@ -6,7 +6,8 @@
  *              PII & Salary Data Protection (Role-Based Redaction including uniqueid),
  *              Privilege Escalation Defense (Server-Generated UUIDs for new records),
  *              Fund Date Calculation (Join Date + 3 Years) & Idempotent Upsert Engine,
- *              ⚡ Phase 2.2: O(1) SQLite 3.33+ UPDATE...FROM Window Function Recalculator,
+ *              ⚡ QUOTA-SHIELD: O(1) Differential Row-Level Recalculation Engine,
+ *              🎯 Floating Point Safe Comparison (ROUND to 2 Decimals),
  *              🛡️ Phase 2.2: Atomic Payroll Expense & Staff Accruals Batch Rollback Guard,
  *              🎯 Phase 1.1: March Boundary Aligned Dynamic FY Auto-Detection (getMonth() < 2)
  * ==============================================================================
@@ -55,8 +56,9 @@ function calculateFundDate(joinDateStr) {
 }
 
 /**
- * ⚡ Phase 2.2: O(1) Single-Pass D1 Window Function Recalculation Engine for Payroll
- * Subquery Bottleneck များကို ဖယ်ရှားပြီး SQLite 3.33+ UPDATE ... FROM syntax ဖြင့် ၁ ကြိမ်တည်း Update လုပ်သည်
+ * ⚡ QUOTA-SHIELD: O(1) Differential D1 Window Function Recalculation Engine for Payroll
+ * 💡 တန်ဖိုး တကယ်ပြောင်းလဲသွားသော Row များကိုသာ Update လုပ်သဖြင့်
+ * D1 Row Writes အလဟဿ ကုန်ကျမှုကို အပြီးတိုင် ရပ်တန့်စေသည်
  */
 async function recalculateLedgerBalances(db, tableName, targetFy = null) {
   if (!tableName) return;
@@ -82,7 +84,11 @@ async function recalculateLedgerBalances(db, tableName, targetFy = null) {
         SET no = calculated.calc_no,
             balances = calculated.calc_bal
         FROM calculated
-        WHERE ${tableName}.id = calculated.id;
+        WHERE ${tableName}.id = calculated.id
+          AND (
+            ${tableName}.no IS NOT calculated.calc_no OR 
+            ROUND(${tableName}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2)
+          );
       `).bind(normFy, cleanFy).run();
 
     } else {
@@ -104,7 +110,11 @@ async function recalculateLedgerBalances(db, tableName, targetFy = null) {
         SET no = calculated.calc_no,
             balances = calculated.calc_bal
         FROM calculated
-        WHERE ${tableName}.id = calculated.id;
+        WHERE ${tableName}.id = calculated.id
+          AND (
+            ${tableName}.no IS NOT calculated.calc_no OR 
+            ROUND(${tableName}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2)
+          );
       `).run();
     }
   } catch (e) {
@@ -523,7 +533,7 @@ export async function saveHrPayrollForm(db, userSession, body) {
     // Single Atomic Execution (One Fails -> All Rolled Back)
     await db.batch(batchStatements);
 
-    // ⚡ သက်ဆိုင်ရာ FY တစ်ခုတည်းကိုသာ O(1) Window Function ဖြင့် Recalculate လုပ်သည်
+    // ⚡ Quota-Shield Recalculate
     await recalculateLedgerBalances(db, 'payroll', fy);
 
     return { 
