@@ -2,11 +2,11 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - OFFLINE-FIRST BACKGROUND SYNC ENGINE
  * File: js/offline-sync.js (Location: cashbook-frontend/js/offline-sync.js)
- * 💡 Features: Direct Cloudflare Worker Routing (405 Method Not Allowed Fixed),
- *              🛡️ 401/400/404 Auto-Eviction (Prevents Infinite Blocking Queues),
+ * 💡 Features: Direct Cloudflare Worker Routing,
+ *              🎯 Phase 4.2: Non-Blocking Outbox Auto-Eviction (HTTP 400/401/403/404),
  *              Safe JSON Response Parser (Unexpected end of JSON fixed),
  *              IndexedDB Outbox Storage, Strict FIFO Sequential Sync,
- *              Live Connection Status Badge (Auto-Hides only when 100% Synced) & 
+ *              Live Connection Status Badge (Auto-Hides when 100% Synced) & 
  *              Silent Ledger Refresh with Correct API Method Hooks
  * ==============================================================================
  */
@@ -19,7 +19,6 @@
   const STORE_NAME = 'outbox_queue';
   const FALLBACK_KEY = 'golden_offline_fallback_queue';
 
-  // 💡 Real Cloudflare D1 Backend Worker Endpoint (Never post to pages.dev/api)
   const FALLBACK_WORKER_URL = "https://cashbook-app-api.goldeneduprivateschool.workers.dev/";
 
   let dbInstance = null;
@@ -77,7 +76,6 @@
   async function enqueueRequest(action, payload = {}, method = 'POST') {
     const db = await getDB();
     
-    // Ensure Unique ID exists so server treats as idempotent upsert
     if (payload && !payload.uniqueId && !payload.uniqueid) {
       payload.uniqueId = `OFFLINE_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     }
@@ -152,7 +150,6 @@
 
         req.onsuccess = () => {
           const list = req.result || [];
-          // Sort FIFO by timestamp
           list.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
           resolve(list);
         };
@@ -212,14 +209,13 @@
   }
 
   /**
-   * 💡 6. Background Sequential Replay Engine (Posts directly to Cloudflare Worker)
+   * 💡 6. Phase 4.2: Background Sequential Replay Engine (Non-Blocking Error Eviction)
    */
   async function processOfflineSyncQueue(isManual = false) {
     if (isSyncing) return;
 
     const queue = await getAllQueuedRequests();
     if (!queue || queue.length === 0) {
-      // Force hide badge if queue is empty
       const badge = document.getElementById('global-network-badge');
       if (badge) badge.classList.add('hidden');
 
@@ -241,7 +237,7 @@
     updateNetworkStatusUI(true, queue.length);
 
     let successCount = 0;
-    const apiUrl = getTargetApiUrl(); // 💡 Real Cloudflare Worker URL
+    const apiUrl = getTargetApiUrl();
     const token = localStorage.getItem('golden_auth_token') || (window.AppState ? window.AppState.authToken : '') || '';
     const role = localStorage.getItem('golden_user_role') || (window.AppState ? window.AppState.currentUserRole : '') || '';
 
@@ -249,7 +245,7 @@
       const item = queue[i];
 
       if (!navigator.onLine) {
-        break; // Stop syncing if network drops
+        break;
       }
 
       try {
@@ -275,22 +271,21 @@
           } catch (jsonErr) {}
 
           if (resData && resData.success) {
-            // 💡 Database ထဲ အမှန်တကယ် ရောက်သွားမှသာ Queue ထဲမှ ဖျက်ထုတ်မည်
             await removeQueuedRequest(item.id);
             successCount++;
           } else {
             console.warn(`[OfflineSync] Item validation error:`, resData?.message);
-            // Validation error (e.g. empty fields) -> Evict to prevent infinite blocking
+            // 🎯 Phase 4.2 Fix: Payload validation failure -> Evict to prevent blocking queue
             await removeQueuedRequest(item.id); 
           }
         } 
-        // ⚡ FIX: 401 Unauthorized / Session Expired တွင်လည်း မဖြစ်မနေ Queue ဖျက်ပေးရမည် (Infinite Loop ကာကွယ်ရန်)
+        // 🎯 Phase 4.2 Fix: Evict on client/auth errors (400, 401, 403, 404)
         else if (response.status === 400 || response.status === 401 || response.status === 403 || response.status === 404) {
-          console.warn(`[OfflineSync] HTTP ${response.status} Error. Evicting unresolvable payload.`);
+          console.warn(`[OfflineSync] HTTP ${response.status} unrecoverable error. Evicting queue item:`, item.id);
           await removeQueuedRequest(item.id); 
         } 
         else {
-          // Server 500 or real network drop -> Break and retry later
+          // Server 500 or temporary Cloudflare drop -> Keep in queue and retry next round
           break;
         }
       } catch (networkErr) {
@@ -301,7 +296,6 @@
 
     isSyncing = false;
     
-    // Auto UI refresh
     const newCount = await getQueueCount();
     if (newCount === 0) {
       const badge = document.getElementById('global-network-badge');
@@ -319,12 +313,11 @@
   }
 
   /**
-   * 💡 7. Trigger Silent Table Reload for whichever Module is active
+   * 💡 7. Trigger Silent Table Reload for Active Module
    */
   function triggerSilentActiveLedgerReload() {
     if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
 
-    // ⚡ FIX: Use proper existing globally exposed function names
     if (typeof window.loadIncomeData === 'function') window.loadIncomeData(true, true);
     if (typeof window.loadOfficeData === 'function') window.loadOfficeData(true, true);
     if (typeof window.loadBankCashKitData === 'function') window.loadBankCashKitData(true, true);
@@ -336,7 +329,7 @@
   }
 
   /**
-   * 💡 8. Live UI Indicator Badge (Auto Hides when Queue is 0)
+   * 💡 8. Live UI Indicator Badge
    */
   async function updateNetworkStatusUI(syncInProgress = false, totalToSync = 0) {
     let badge = document.getElementById('global-network-badge');
@@ -351,7 +344,6 @@
     const count = await getQueueCount();
     const isOnline = navigator.onLine;
 
-    // 💡 FIX: စာရင်းများ ဆာဗာသို့ အမှန်တကယ် ရောက်ရှိသွားပါက (count === 0) ချက်ချင်း အလိုအလျောက် ပျောက်သွားမည်
     if (count === 0 && !syncInProgress) {
       badge.classList.add('hidden');
       return;
@@ -409,7 +401,6 @@
       updateNetworkStatusUI();
     });
 
-    // Check queue every 15 seconds automatically
     if (syncIntervalId) clearInterval(syncIntervalId);
     syncIntervalId = setInterval(() => {
       if (navigator.onLine) {
@@ -417,7 +408,6 @@
       }
     }, 15000);
 
-    // Initial check on load
     updateNetworkStatusUI();
     if (navigator.onLine) {
       setTimeout(() => processOfflineSyncQueue(false), 2000);
@@ -434,7 +424,6 @@
     updateUI: updateNetworkStatusUI
   };
 
-  // Auto-init on script load
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initOfflineSyncEngine);
   } else {
