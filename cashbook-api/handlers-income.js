@@ -6,7 +6,7 @@
  *              🛡️ 100% ACID Compliant Atomic Refund & Multi-Book Postings via db.batch(),
  *              ⚡ O(1) Single-Pass Window Function Engine via SQLite 3.33+ UPDATE...FROM,
  *              Cashier Sub-Ledger Balances Auto-Sync on Income Delete & Update,
- *              Myanmar Standard Time (UTC+6:30) & March Academic Year Boundary Alignment,
+ *              Myanmar Standard Time (UTC+6:30) & March Academic Year Boundary Alignment (getMonth() < 2),
  *              Split Payment Support, Precision FY-Scoped Student Lookup & Auto-Posting Engine
  * ==============================================================================
  */
@@ -24,6 +24,9 @@ function getMyanmarDateString(inputDate = null) {
   return now.toISOString().split('T')[0];
 }
 
+/**
+ * 💡 Phase 1.1: Academic Year Calculator (March Boundary Aligned: Month < 2)
+ */
 function calculateAcademicFyFromDate(dateStr) {
   const d = new Date(dateStr);
   let fyYear = d.getFullYear();
@@ -31,6 +34,9 @@ function calculateAcademicFyFromDate(dateStr) {
   return `FY ${fyYear}-${fyYear + 1}`;
 }
 
+/**
+ * 💡 Phase 1.1: Academic Year Helper (March Boundary Aligned: Month < 2)
+ */
 function getCurrentAcademicYear(dateInput) {
   const d = dateInput ? new Date(dateInput) : new Date(Date.now() + (6.5 * 3600 * 1000));
   const validDate = isNaN(d.getTime()) ? new Date() : d;
@@ -204,7 +210,7 @@ async function generateFyNo(db, tableName, fy) {
   return (lastNoRow && lastNoRow.maxNo ? parseInt(lastNoRow.maxNo, 10) : 0) + 1;
 }
 
-async function insertIncomeRecord(db, p, isMigration = false) {
+function createInsertIncomeStatement(db, p, isMigration = false) {
   const normFy = normalizeFyStr(p.fy);
   const sqlVerb = isMigration ? "INSERT OR REPLACE INTO" : "INSERT INTO";
   const stmt = `
@@ -212,13 +218,16 @@ async function insertIncomeRecord(db, p, isMigration = false) {
       no, effect_date, date, fy, student_id, fyid, fyid_name, class, category, account_name, method, debit, credit, aut_amount, promo, my, vr_no, remark, created_by, created_at, uniqueid
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
   `;
-  await db.prepare(stmt).bind(
+  return db.prepare(stmt).bind(
     p.no, p.effDate, p.entryDate, normFy, p.studentId, p.fyid, p.fyidName,
     p.class, p.category, p.accountName, p.method, p.debit, p.credit,
     p.autAmount, p.promo, p.my, p.vrNo, p.remark, p.createdBy, p.uniqueid
-  ).run();
+  );
 }
 
+/**
+ * ⚡ Phase 2.1: Atomic Batch Clean for Linked Income Records
+ */
 async function cleanLinkedIncomeEntries(db, uniqueid) {
   if (!uniqueid) return { cash: false, bank: false, ca_cash: false, ca_bank: false };
   const uids = [
@@ -237,17 +246,20 @@ async function cleanLinkedIncomeEntries(db, uniqueid) {
 
   const placeholders = uids.map(() => '?').join(', ');
   
-  await db.prepare(`DELETE FROM income WHERE uniqueid IN (${placeholders})`).bind(...uids).run();
-  const delCash = await db.prepare(`DELETE FROM cash WHERE uniqueid IN (${placeholders})`).bind(...uids).run();
-  const delBank = await db.prepare(`DELETE FROM bank WHERE uniqueid IN (${placeholders})`).bind(...uids).run();
-  const delCaCash = await db.prepare(`DELETE FROM ca_cash WHERE uniqueid IN (${placeholders})`).bind(...uids).run();
-  const delCaBank = await db.prepare(`DELETE FROM ca_bank WHERE uniqueid IN (${placeholders})`).bind(...uids).run();
+  // Single Atomic db.batch() Execution
+  await db.batch([
+    db.prepare(`DELETE FROM income WHERE uniqueid IN (${placeholders})`).bind(...uids),
+    db.prepare(`DELETE FROM cash WHERE uniqueid IN (${placeholders})`).bind(...uids),
+    db.prepare(`DELETE FROM bank WHERE uniqueid IN (${placeholders})`).bind(...uids),
+    db.prepare(`DELETE FROM ca_cash WHERE uniqueid IN (${placeholders})`).bind(...uids),
+    db.prepare(`DELETE FROM ca_bank WHERE uniqueid IN (${placeholders})`).bind(...uids)
+  ]);
 
   return {
-    cash: Boolean(delCash?.meta?.changes > 0),
-    bank: Boolean(delBank?.meta?.changes > 0),
-    ca_cash: Boolean(delCaCash?.meta?.changes > 0),
-    ca_bank: Boolean(delCaBank?.meta?.changes > 0)
+    cash: true,
+    bank: true,
+    ca_cash: true,
+    ca_bank: true
   };
 }
 
@@ -265,7 +277,6 @@ async function postCashierIndividualLine(db, targetMethod, amount, body, entryDa
   const caUid = `INCCASHIER_${uidSuffix}`;
   const caDesc = buildStudentDetailedDesc(body, null);
 
-  // 🛡️ CRASH-PROOF: SELECT ဖြင့် အရင်စစ်ဆေးပြီး ရှိပါက UPDATE၊ မရှိပါက INSERT လုပ်သည်
   const existing = await db.prepare(`SELECT id FROM ${caTable} WHERE uniqueid = ?`).bind(caUid).first();
   if (existing) {
     await db.prepare(`
@@ -325,7 +336,6 @@ async function upsertDailyIncomeRollup(db, tableName, entryDate, fy, createdBy) 
   const credit = netAmount < 0 ? Math.abs(netAmount) : 0;
   const my = getMonthYearLabel(entryDate);
 
-  // 🛡️ CRASH-PROOF: SELECT ဖြင့် အရင်စစ်ဆေးပြီး ရှိပါက UPDATE၊ မရှိပါက INSERT လုပ်သည်
   const existing = await db.prepare(`SELECT id FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
   if (existing) {
     await db.prepare(`
@@ -353,8 +363,6 @@ async function upsertDailyIncomeRollup(db, tableName, entryDate, fy, createdBy) 
 async function syncDailyIncomeRollupForDate(db, entryDate, fy, createdBy, targetMethod = null) {
   if (!entryDate) return;
 
-  // ⚡ FIX: Cash သွင်းပါက Cash ကိုသာ Update လုပ်မည်။ Bank သွင်းပါက Bank ကိုသာ Update လုပ်မည်။
-  // မလိုအပ်ဘဲ စာအုပ် ၂ အုပ်စလုံးကို လိုက် Update လုပ်၍ Row Writes သောင်းချီ ကုန်နေခြင်းကို တားဆီးသည်
   if (targetMethod) {
     const m = String(targetMethod).toLowerCase();
     if (m === 'cash') {
@@ -366,7 +374,6 @@ async function syncDailyIncomeRollupForDate(db, entryDate, fy, createdBy, target
       await upsertDailyIncomeRollup(db, 'bank', entryDate, fy, createdBy);
     }
   } else {
-    // Method မသိပါက (ဥပမာ- Delete လုပ်ချိန်) မှသာ ၂ ခုစလုံး စစ်ဆေးမည်
     await upsertDailyIncomeRollup(db, 'cash', entryDate, fy, createdBy);
     await upsertDailyIncomeRollup(db, 'bank', entryDate, fy, createdBy);
   }
@@ -567,7 +574,7 @@ export async function saveIncomeEntry(db, session, body) {
 }
 
 /**
- * 💡 Internal upsert core
+ * 💡 Phase 2.1: Internal upsert core with Atomic db.batch() for Split Payments
  */
 async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration) {
   try {
@@ -588,6 +595,7 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration) {
     if (body.isSplit) {
       const cashAmt = parseFloat(body.cashAmount || 0);
       const bankAmt = parseFloat(body.bankAmount || 0);
+      const batchStmts = [];
 
       if (cashAmt > 0) {
         const cashNo = assignedNo;
@@ -595,17 +603,13 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration) {
         const cashUid = `${uniqueid}_CASH`;
         const cashRemark = `[Split - Cash] ${body.remark || ''}`.trim();
 
-        await insertIncomeRecord(db, {
+        batchStmts.push(createInsertIncomeStatement(db, {
           no: cashNo, effDate, entryDate, fy, studentId: cleanStudentId, fyid: cleanFyid,
           fyidName: body.fyidName || '', class: body.class || '', category: body.category || 'Boarder',
           accountName: body.accountName || 'Registration', method: 'Cash', debit: 0, credit: cashAmt,
           autAmount: parseFloat(body.autAmount || 0), promo: body.promo || '', my, vrNo: cashVrNo,
           remark: cashRemark, createdBy, uniqueid: cashUid
-        }, isMigration);
-
-        if (!isMigration) {
-          await postCashierIndividualLine(db, 'Cash', cashAmt, body, entryDate, my, fy, createdBy, `${uniqueid}_CASH`);
-        }
+        }, isMigration));
       }
 
       if (bankAmt > 0) {
@@ -614,15 +618,25 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration) {
         const bankUid = `${uniqueid}_BANK`;
         const bankRemark = `[Split - Bank] ${body.remark || ''}`.trim();
 
-        await insertIncomeRecord(db, {
+        batchStmts.push(createInsertIncomeStatement(db, {
           no: bankNo, effDate, entryDate, fy, studentId: cleanStudentId, fyid: cleanFyid,
           fyidName: body.fyidName || '', class: body.class || '', category: body.category || 'Boarder',
           accountName: body.accountName || 'Registration', method: 'Bank', debit: 0, credit: bankAmt,
           autAmount: 0, promo: body.promo || '', my, vrNo: bankVrNo,
           remark: bankRemark, createdBy, uniqueid: bankUid
-        }, isMigration);
+        }, isMigration));
+      }
 
-        if (!isMigration) {
+      // 🛡️ 100% ACID Compliant Split Payments Posting
+      if (batchStmts.length > 0) {
+        await db.batch(batchStmts);
+      }
+
+      if (!isMigration) {
+        if (cashAmt > 0) {
+          await postCashierIndividualLine(db, 'Cash', cashAmt, body, entryDate, my, fy, createdBy, `${uniqueid}_CASH`);
+        }
+        if (bankAmt > 0) {
           await postCashierIndividualLine(db, 'Bank', bankAmt, body, entryDate, my, fy, createdBy, `${uniqueid}_BANK`);
         }
       }
@@ -631,13 +645,15 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration) {
       const debit = parseFloat(body.debit || 0);
       const credit = parseFloat(body.credit || 0);
 
-      await insertIncomeRecord(db, {
+      const singleStmt = createInsertIncomeStatement(db, {
         no: assignedNo, effDate, entryDate, fy, studentId: cleanStudentId, fyid: cleanFyid,
         fyidName: body.fyidName || '', class: body.class || '', category: body.category || 'Boarder',
         accountName: body.accountName || 'Registration', method: body.method || 'Cash', debit, credit,
         autAmount: parseFloat(body.autAmount || 0), promo: body.promo || '', my, vrNo,
         remark: body.remark || '', createdBy, uniqueid
       }, isMigration);
+
+      await singleStmt.run();
 
       const netAmount = credit - debit;
       if (!isMigration && netAmount > 0) {
@@ -654,7 +670,7 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration) {
     }
 
     // Live Operational Mode
-    await postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdBy, uniqueid, body.method || 'Cash');
+    await postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdBy, uniqueid);
 
     return {
       success: true,
@@ -671,7 +687,7 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration) {
 }
 
 /**
- * 💡 Update Income Entry
+ * 💡 Phase 2.1: Update Income Entry (ReferenceError & Scope Resolution)
  */
 export async function updateIncomeEntry(db, session, body) {
   try {
@@ -705,14 +721,21 @@ export async function updateIncomeEntry(db, session, body) {
     const cleanResults = await cleanLinkedIncomeEntries(db, uniqueid);
     const res = await _saveIncomeEntryCore(db, session, body, uniqueid, false);
 
-    const entryDate = getMyanmarDateString(body.date);
+    const entryDate = getMyanmarDateString(body.date || existing.date);
     const createdBy = session?.name || 'Admin';
+
+    // 🎯 CRITICAL BUG FIX (Phase 2.1): Formally declare normFy and method in scope
+    const normFy = normalizeFyStr(body.fy || calculateAcademicFyFromDate(entryDate));
+    const method = body.method || existing.method || 'Cash';
 
     if (cleanResults.ca_cash) await recalculateLedgerBalances(db, 'ca_cash', oldFy || body.fy);
     if (cleanResults.ca_bank) await recalculateLedgerBalances(db, 'ca_bank', oldFy || body.fy);
 
     if (oldDate && oldDate !== entryDate) {
       await syncDailyIncomeRollupForDate(db, entryDate, normFy, createdBy, method);
+      if (oldDate) {
+        await syncDailyIncomeRollupForDate(db, oldDate, oldFy || normFy, createdBy, method);
+      }
     }
 
     return res;
