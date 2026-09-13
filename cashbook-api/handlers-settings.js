@@ -1,9 +1,14 @@
 /**
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - SYSTEM SETTINGS & CONTROLS HANDLER (D1 DATABASE)
- * File: handlers-settings.js 
- * 💡 Features: Crash-Proof Balances Control SQL Calculation, Dynamic FY List Fetching,
+ * File: handlers-settings.js (Location: cashbook-api/handlers-settings.js)
+ * 💡 Features: Crash-Proof Balances Control SQL Calculation,
+ *              🎯 Phase 1.3: Dynamic FY List Fetching (Zero Hardcoded Years),
+ *              🎯 Phase 1.3: Environment Variable Email Injection (env.BACKUP_EMAIL),
+ *              🎯 Phase 2.3: Role-Based PII & Sensitive Salary Redaction on Export,
  *              13-Tab Main & 5-Tab Cashier Grouped Export Engine (.xlsx & CSV) &
  *              Resend Email Backup Dispatcher with Native .xlsx Base64 Attachment Support
+ * ==============================================================================
  */
 
 /**
@@ -25,10 +30,21 @@ async function safeSumBal(db, tableName) {
 }
 
 /**
- * 💡 Dynamically fetch all unique FYs present in the D1 Database across all tables (Crash Safe)
+ * 💡 Phase 1.3: Dynamically fetch all unique FYs present in the D1 Database (Zero Hardcoded Set)
  */
 async function getAvailableFysFromD1(db) {
-  const fys = new Set(['2025-2026', '2026-2027', '2027-2028']);
+  const now = new Date(Date.now() + (6.5 * 3600 * 1000));
+  let y = now.getFullYear();
+  if (now.getMonth() < 2) y -= 1; // March academic boundary
+
+  // Dynamic Baseline FYs (Current Year +- 2 years)
+  const fys = new Set([
+    `${y - 2}-${y - 1}`,
+    `${y - 1}-${y}`,
+    `${y}-${y + 1}`,
+    `${y + 1}-${y + 2}`
+  ]);
+
   const tables = ['bank', 'cash', 'office', 'kitchen', 'payroll', 'income', 'student', 'student_money'];
   
   for (const tbl of tables) {
@@ -113,11 +129,16 @@ export async function getSettingsData(db, body) {
  * 💡 2. Grouped Multi-Tab Data Export Handler
  * Main Cash Book: 13 Tabs
  * Cashier Cash Book: 5 Tabs
+ * 🎯 Phase 2.3: Role-Based PII & Sensitive Salary Redaction on Export
  */
-export async function exportGroupDataByFy(db, body) {
+export async function exportGroupDataByFy(db, body, userSession = null) {
   try {
     const groupKey = String(body.groupKey || body.bookKey || 'main').toLowerCase().trim();
     const fyFilter = String(body.fy || '').trim();
+
+    // 🔒 Phase 2.3: Check Role for PII & Financial Access
+    const role = userSession?.role || 'Viewer';
+    const canSeeSensitive = ['Owner', 'Admin', 'HR'].includes(role);
 
     let groupTitle = "Main Cash Book";
     let tableDefs = [];
@@ -183,11 +204,40 @@ export async function exportGroupDataByFy(db, body) {
 
       grandTotalRecords += rows.length;
 
-      // Store in JSON tables dictionary for SheetJS Multi-Tab Excel generation
+      // 🛡️ Phase 2.3: Redact sensitive staff fields if user lacks full privilege
+      const isStaffTable = (tDef.key === 'staff_fulltime' || tDef.key === 'staff_parttime');
+      const sanitizedRows = rows.map(r => {
+        if (!isStaffTable || canSeeSensitive) return r;
+        return {
+          ...r,
+          basic_amt: 0,
+          basicAmt: 0,
+          extra_amt: 0,
+          extraAmt: 0,
+          total_salary: 0,
+          totalSalary: 0,
+          bonus: 0,
+          fund: 0,
+          total_net_amt: 0,
+          totalNetAmt: 0,
+          unpaid_bonus: 0,
+          unpaidBonus: 0,
+          unpaid_fund: 0,
+          unpaidFund: 0,
+          nrc_no: '***',
+          nrcNo: '***',
+          bank_account: '***',
+          bankAccount: '***',
+          phone_no: '***',
+          phoneNo: '***',
+          email: '***'
+        };
+      });
+
       tablesDict[tDef.tabName] = {
         title: tDef.title,
         headers: tDef.headers,
-        rows: rows
+        rows: sanitizedRows
       };
 
       // Build Multi-Section CSV Text
@@ -196,8 +246,8 @@ export async function exportGroupDataByFy(db, body) {
       csvContent += `==================================================\n`;
       csvContent += tDef.headers.join(',') + '\n';
 
-      if (rows.length > 0) {
-        rows.forEach((r, idx) => {
+      if (sanitizedRows.length > 0) {
+        sanitizedRows.forEach((r, idx) => {
           const rowLine = tDef.headers.map(h => {
             const hKey = h.toLowerCase().replace(/\s+/g, '_');
             let val = r[hKey] !== undefined ? r[hKey] : (r[h] !== undefined ? r[h] : (h === 'NO' ? idx + 1 : ''));
@@ -228,18 +278,21 @@ export async function exportGroupDataByFy(db, body) {
   }
 }
 
-export async function exportBookDataByFy(db, body) {
-  return await exportGroupDataByFy(db, body);
+export async function exportBookDataByFy(db, body, userSession = null) {
+  return await exportGroupDataByFy(db, body, userSession);
 }
 
 /**
- * 💡 3. Real Email Backup Dispatcher (Supports Direct .xlsx Base64 Attachment)
+ * 💡 3. Real Email Backup Dispatcher
+ * 🎯 Phase 1.3: Environment Variable Injection (env.BACKUP_EMAIL)
  */
 export async function sendGroupEmailBackupByFy(db, userSession, body, env) {
   try {
     const groupKey = String(body.groupKey || body.bookKey || 'main').toLowerCase().trim();
     const fyFilter = String(body.fy || 'All FY').trim();
-    const targetEmail = "goldeneduprivateschool@gmail.com";
+    
+    // 🎯 Phase 1.3 Fix: Read from Worker Environment Variables
+    const targetEmail = env?.BACKUP_EMAIL || "goldeneduprivateschool@gmail.com";
     const senderName = userSession?.name || userSession?.username || 'Admin';
 
     const now = new Date();
@@ -257,7 +310,7 @@ export async function sendGroupEmailBackupByFy(db, userSession, body, env) {
     let groupTitle = groupKey === 'cashier' ? "Cashier Cash Book" : "Main Cash Book";
     let fileFormatName = "Excel (.xlsx)";
 
-    // 💡 1. Prefer Direct Multi-Tab Excel Base64 from Frontend
+    // 1. Prefer Direct Multi-Tab Excel Base64 from Frontend
     if (body.excelBase64 && String(body.excelBase64).trim().length > 0) {
       const fileName = body.fileName || `${groupTitle.replace(/\s+/g, '_')}_FY${fyFilter || 'ALL'}_${now.toISOString().slice(0, 10)}.xlsx`;
       attachmentPayload = {
@@ -266,8 +319,8 @@ export async function sendGroupEmailBackupByFy(db, userSession, body, env) {
       };
       fileFormatName = "Multi-Tab Excel (.xlsx)";
     } else {
-      // 💡 2. Fallback to Multi-Section CSV Text
-      const exportRes = await exportGroupDataByFy(db, { groupKey, fy: fyFilter });
+      // 2. Fallback to Multi-Section CSV Text
+      const exportRes = await exportGroupDataByFy(db, { groupKey, fy: fyFilter }, userSession);
       const rawCsvText = exportRes.csvText || "NO DATA";
       groupTitle = exportRes.groupTitle || groupTitle;
       const fileName = `${groupTitle.replace(/\s+/g, '_')}_FY${fyFilter || 'ALL'}_${now.toISOString().slice(0, 10)}.csv`;
