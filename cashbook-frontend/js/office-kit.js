@@ -1,12 +1,12 @@
 /**
  * ==============================================================================
  * GOLDEN ERP SYSTEM - OFFICE EXPENSE & INVENTORY MODULE 
- * File: js/office-kit.js 
- * 💡 Features: Negative Liabilities & Accounting Parenthesis "(1000)" Engine (Mathematical Inversion Bug Fixed),
- *              Direct Uniform Inventory Binding, Profit Calculator, Clean Dropdowns & Multi-Book Context Engine,
+ * File: js/office-kit.js (Location: cashbook-frontend/js/office-kit.js)
+ * 💡 Features: Negative Liabilities & Accounting Parenthesis "(1000)" Engine,
+ *              Direct Uniform Inventory Binding, Profit Calculator, Clean Dropdowns,
  *              🛡️ Universal CSV Formula Injection Sanitizer (safeCsvCell),
- *              🔍 Full Database Real-Time Backend Search Engine (Cross-page search),
- *              🎯 Context-Aware CSV Exporter (Office 16-Cols vs Kitchen 13-Cols),
+ *              🎯 Phase 3.1: Inter-Module Cache Hooks (Uniform Stock & Bank/Cash Profit Sync),
+ *              🎯 Phase 3.2: Pagination Search Slicing Alignment (Full-dataset support),
  *              🎯 Bug #2 Fixed (Resilient Local escapeHtml / escapeJsAttr Callbacks)
  * ==============================================================================
  */
@@ -95,7 +95,6 @@ function parseLiabilityAmount(val) {
   if (typeof val === 'number') return isNaN(val) ? 0 : val;
   var s = String(val).trim().replace(/,/g, '');
   
-  // Handle accounting parenthesis: "(1000)" or "(1,000)" -> -1000
   if (s.startsWith('(') && s.endsWith(')')) {
     s = '-' + s.slice(1, -1).trim();
   }
@@ -494,7 +493,7 @@ function calculateDebitOffice() {
 }
 
 /**
- * 💡 Load Expense Data from Cloudflare D1 Backend
+ * 💡 Phase 3.2: Load Expense Data with Full Dataset Retrieval Support
  */
 async function loadOfficeData(isSilent, forceRefresh) {
   var state = window.OfficeState;
@@ -508,11 +507,12 @@ async function loadOfficeData(isSilent, forceRefresh) {
       toggleLoading(true);
     }
 
+    // ⚡ Phase 3.2 Fix: Retrieve full dataset (limit 2000) for cross-page search accuracy
     var response = await callApi('getExpenseData', {
       bookName: bookName,
-      page: state.page,
-      limit: state.limit,
-      searchVal: state.searchVal,
+      page: 1,
+      limit: 2000,
+      searchVal: '',
       forceRefresh: forceRefresh
     });
 
@@ -545,34 +545,44 @@ function updateStatsOffice() {
 }
 
 /**
- * 💡 Render Office Table Grid Rows (Handles Negative Liabilities Display)
+ * 💡 Phase 3.2: Render Office Table Grid Rows with Client-side Pagination Slicing
  */
 function renderOfficeTable() {
   var tableBody = document.getElementById('office-table-body');
   if (!tableBody) return;
 
-  var rawData = window.OfficeState.activeData || [];
-  var searchVal = window.OfficeState.searchVal || '';
+  var state = window.OfficeState;
+  var rawData = state.activeData || [];
+  var searchVal = state.searchVal || '';
 
   var fromEl = document.getElementById('office-date-from');
   var toEl = document.getElementById('office-date-to');
   var fromDate = fromEl ? fromEl.value : '';
   var toDate = toEl ? toEl.value : '';
 
-  var data = filterOfficeData(rawData, searchVal, fromDate, toDate);
+  var filteredData = filterOfficeData(rawData, searchVal, fromDate, toDate);
+  var totalEntries = filteredData.length;
   var ctx = getExpenseBookContext();
 
-  if (!data || data.length === 0) {
+  if (!filteredData || totalEntries === 0) {
     var emptyColspan = ctx.isKitchen ? 15 : 16;
     tableBody.innerHTML = '<tr><td colspan="' + emptyColspan + '" class="text-center py-8 text-slate-500 font-bold">ရှာဖွေမှုနှင့် ကိုက်ညီသော စာရင်း မရှိပါ။</td></tr>';
     toggleOfficeLiabilitiesColumn();
+    updatePaginationOffice(0);
     return;
   }
+
+  // ⚡ Client-side slicing
+  var totalPages = Math.ceil(totalEntries / state.limit) || 1;
+  if (state.page > totalPages) state.page = totalPages;
+  var startIndex = (state.page - 1) * state.limit;
+  var endIndex = Math.min(startIndex + state.limit, totalEntries);
+  var pageItems = filteredData.slice(startIndex, endIndex);
 
   var userRole = (window.AppState ? window.AppState.currentUserRole : 'Viewer');
   var isViewer = (userRole === "Viewer");
 
-  tableBody.innerHTML = data.map(function(row) {
+  tableBody.innerHTML = pageItems.map(function(row) {
     var displayDate = row.date || "";
     if (displayDate) {
       var parts = displayDate.split('-');
@@ -589,7 +599,6 @@ function renderOfficeTable() {
     var creditStr = row.credit > 0 ? Number(row.credit).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-';
     var balStr = Number(row.balances || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     
-    // 💡 Formatting Negative Liabilities (e.g. -1,000.00)
     var rawLiab = Number(row.liabilities || 0);
     var liabStr = '0.00';
     if (rawLiab < 0) {
@@ -631,6 +640,7 @@ function renderOfficeTable() {
   }).join('');
 
   toggleOfficeLiabilitiesColumn();
+  updatePaginationOffice(totalEntries);
 }
 
 /**
@@ -649,35 +659,42 @@ function toggleOfficeLiabilitiesColumn() {
   });
 }
 
-function updatePaginationOffice() {
+function updatePaginationOffice(currentCount) {
   var state = window.OfficeState;
   var info = document.getElementById('off-pagination-info');
+  var totalToDisplay = (currentCount !== undefined) ? currentCount : state.totalRows;
+
   if (info) {
-    var start = state.totalRows === 0 ? 0 : (state.page - 1) * state.limit + 1;
-    var end = Math.min(state.page * state.limit, state.totalRows);
-    info.innerHTML = 'Showing <span class="text-indigo-400 font-extrabold">' + start + '</span> to <span class="text-indigo-400 font-extrabold">' + end + '</span> of <span class="text-indigo-400 font-extrabold">' + state.totalRows + '</span> entries';
+    var start = totalToDisplay === 0 ? 0 : (state.page - 1) * state.limit + 1;
+    var end = Math.min(state.page * state.limit, totalToDisplay);
+    info.innerHTML = 'Showing <span class="text-indigo-400 font-extrabold">' + start + '</span> to <span class="text-indigo-400 font-extrabold">' + end + '</span> of <span class="text-indigo-400 font-extrabold">' + totalToDisplay + '</span> entries';
   }
 
   var prevBtn = document.getElementById('off-btn-prev');
-  if (prevBtn) prevBtn.disabled = (state.page === 1);
+  if (prevBtn) prevBtn.disabled = (state.page <= 1);
 
   var nextBtn = document.getElementById('off-btn-next');
-  if (nextBtn) nextBtn.disabled = (state.page * state.limit >= state.totalRows);
+  if (nextBtn) nextBtn.disabled = (state.page * state.limit >= totalToDisplay);
 }
 
 function changePageOffice(dir) {
   var state = window.OfficeState;
+  var fromEl = document.getElementById('office-date-from');
+  var toEl = document.getElementById('office-date-to');
+  var filtered = filterOfficeData(state.activeData, state.searchVal, fromEl?.value, toEl?.value);
+  var totalPages = Math.ceil(filtered.length / state.limit) || 1;
+
   if (dir === -1 && state.page > 1) {
     state.page--;
-    loadOfficeData(false);
-  } else if (dir === 1 && (state.page * state.limit) < state.totalRows) {
+    renderOfficeTable();
+  } else if (dir === 1 && state.page < totalPages) {
     state.page++;
-    loadOfficeData(false);
+    renderOfficeTable();
   }
 }
 
 /**
- * 🔍 Debounced Search Input Handler (⚡ Triggers real Database Query across all records)
+ * 🔍 Debounced Search Input Handler
  */
 function onSearchInputOffice() {
   clearTimeout(searchTimeoutOffice);
@@ -685,8 +702,8 @@ function onSearchInputOffice() {
     var input = document.getElementById('office-search');
     window.OfficeState.searchVal = input ? input.value.trim() : '';
     window.OfficeState.page = 1;
-    loadOfficeData(true, true); // ⚡ Real Database Search across all pages!
-  }, 250);
+    renderOfficeTable();
+  }, 200);
 }
 
 function bindModalOfficeListeners() {
@@ -715,7 +732,7 @@ async function openAddModalOffice() {
 
   var dateEl = document.getElementById('office-date');
   if (dateEl) {
-    var now = new Date();
+    var now = new Date(Date.now() + (6.5 * 3600 * 1000));
     var yyyy = now.getFullYear();
     var mm = String(now.getMonth() + 1).padStart(2, '0');
     var dd = String(now.getDate()).padStart(2, '0');
@@ -738,7 +755,7 @@ function closeOfficeModal() {
 }
 
 /**
- * 💡 Save Office / Kitchen Form with Double Submit Lock & Negative Liabilities
+ * 💡 Save Office / Kitchen Form (Phase 3.1 Inter-Module Sync Hook)
  */
 async function saveOfficeForm(e) {
   if (e && e.preventDefault) e.preventDefault();
@@ -777,7 +794,6 @@ async function saveOfficeForm(e) {
     }
   }
 
-  // 💡 Kitchen Exp Book တွင် Liabilities လုံးဝ မပါရှိစေဘဲ 0 သတ်မှတ်သည်
   var finalLiabilities = ctx.isKitchen ? 0 : parseLiabilityAmount(document.getElementById('office-liabilities')?.value);
 
   var entry = {
@@ -791,7 +807,7 @@ async function saveOfficeForm(e) {
     method: document.getElementById('office-method')?.value || 'Cash',
     debit: parseCleanNum(document.getElementById('office-debit')?.value),
     credit: parseCleanNum(document.getElementById('office-credit')?.value),
-    liabilities: finalLiabilities, // 💡 Handles -1000 and (1000)
+    liabilities: finalLiabilities,
     transfer: document.getElementById('office-transfer')?.value || '',
     description: document.getElementById('office-description')?.value || '',
     bookName: ctx.bookName,
@@ -811,11 +827,15 @@ async function saveOfficeForm(e) {
         showToast("SUCCESS", isAdd ? (label + " Expense စာရင်းသစ် အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။") : (label + " Expense စာရင်း အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။"));
       }
       
-      // ⚡ Clear Cache on Data Mutation
+      // ⚡ Phase 3.1: Inter-Module Invalidation Hook
       if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
 
+      // Clear Uniform and Bank/Cash caches so Uniform Profit & Stocks reflect immediately
       if (category === "Advance Uniform" || category === "Advance Unifrom") {
         window.OfficeState.uniformProducts = [];
+        if (typeof window.bckActiveData !== 'undefined') {
+          window.bckActiveData = [];
+        }
         if (typeof window.loadUniformData === 'function') {
           window.loadUniformData(true);
         }
@@ -834,7 +854,7 @@ async function saveOfficeForm(e) {
 }
 
 /**
- * 💡 EDIT OFFICE ENTRY (Populates Negative Liabilities accurately)
+ * 💡 EDIT OFFICE ENTRY
  */
 async function editOfficeEntry(uniqueId) {
   var row = window.OfficeState.activeData.find(function(item) { return item.uniqueId === uniqueId; });
@@ -897,7 +917,6 @@ async function editOfficeEntry(uniqueId) {
   var creditEl = document.getElementById('office-credit');
   if (creditEl) creditEl.value = row.credit || 0;
 
-  // 💡 Accurately populates Negative Liabilities
   var liabEl = document.getElementById('office-liabilities');
   if (liabEl) liabEl.value = row.liabilities !== undefined ? row.liabilities : 0;
 
@@ -951,7 +970,6 @@ function exportToCSVOffice() {
   var csv = "";
 
   if (ctx.isKitchen) {
-    // 💡 Kitchen Exp Book (13 Columns - No liabilities column)
     csv = "NO,DATE,CATEGORY,DESCRIPTION,METHOD,DEBIT,CREDIT,BALANCES,TRANSFER,VR NO,MY,FY,UNIQUEID\n";
     data.forEach(function(row) {
       csv += (row.no || '') + ',' +
@@ -969,7 +987,6 @@ function exportToCSVOffice() {
              safeCsvCell(row.uniqueId || row.uniqueid || '') + '\n';
     });
   } else {
-    // 💡 Office Exp Book (16 Columns - Includes liabilities)
     csv = "NO,DATE,CATEGORY,DESCRIPTION,UNIT,UNIT PRICE,METHOD,DEBIT,CREDIT,BALANCES,LIABILITIES,TRANSFER,VR NO,MY,FY,UNIQUEID\n";
     data.forEach(function(row) {
       csv += (row.no || '') + ',' +
