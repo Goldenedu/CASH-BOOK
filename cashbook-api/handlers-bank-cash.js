@@ -3,7 +3,8 @@
  * GOLDEN ERP SYSTEM - MAIN BANK & CASH BOOKS HANDLER (CLOUDFLARE D1)
  * File: handlers-bank-cash.js (Location: cashbook-api/handlers-bank-cash.js)
  * 💡 Features: 🛡️ 100% ACID Compliant Atomic Transfers via Cloudflare D1 db.batch(),
- *              ⚡ O(1) Single-Pass Window Function Engine via SQLite 3.33+ UPDATE...FROM,
+ *              ⚡ QUOTA-SHIELD: O(1) Differential Row-Level Recalculation Engine,
+ *              🎯 Floating Point Safe Comparison (ROUND to 2 Decimals),
  *              🎯 Zero "no such column: is_locked" Crash (Crash-Proof SELECT * Pattern),
  *              Zero Transactional Leak on Save/Update/Delete Operations,
  *              Server-Side Auto-Lock Enforcement (5-Prefix Engine & Zero Client Bypass),
@@ -57,11 +58,24 @@ function getBookTitle(tableName) {
 }
 
 /**
- * 💡 FY String Normalizer (Ensures "FY 2026-2027" format)
+ * 💡 Academic Year Helper (March Boundary Aligned: Month < 2)
  */
-function normalizeFyStr(fy) {
-  if (!fy) return 'FY 2026-2027';
-  let s = String(fy).trim();
+function getCurrentAcademicYear(dateInput = null) {
+  const d = dateInput ? new Date(dateInput) : new Date(Date.now() + (6.5 * 3600 * 1000));
+  const validDate = isNaN(d.getTime()) ? new Date() : d;
+  let y = validDate.getFullYear();
+  if (validDate.getMonth() < 2) {
+    y -= 1;
+  }
+  return `${y}-${y + 1}`;
+}
+
+/**
+ * 💡 100% Dynamic FY String Normalizer (Zero Hardcoded 2026-2027)
+ */
+function normalizeFyStr(fy, dateInput = null) {
+  let s = fy ? String(fy).trim() : `FY ${getCurrentAcademicYear(dateInput)}`;
+  if (!s) s = `FY ${getCurrentAcademicYear(dateInput)}`;
   if (!s.toUpperCase().startsWith('FY ')) {
     s = 'FY ' + s;
   }
@@ -78,7 +92,7 @@ function getMyanmarDateString(inputDate = null) {
 }
 
 /**
- * 💡 Academic Year Calculator (March Boundary Aligned)
+ * 💡 Academic Year Calculator (March Boundary Aligned: Month < 2)
  */
 function calculateAcademicFyFromDate(dateStr) {
   const d = new Date(dateStr);
@@ -88,7 +102,9 @@ function calculateAcademicFyFromDate(dateStr) {
 }
 
 /**
- * ⚡ FIX: O(1) Single-Pass D1 Window Function Recalculation Engine
+ * ⚡ QUOTA-SHIELD: O(1) Differential D1 Window Function Recalculation Engine
+ * 💡 တန်ဖိုး တကယ်ပြောင်းလဲသွားသော Row များကိုသာ Update လုပ်သဖြင့်
+ * D1 Row Writes အလဟဿ ကုန်ကျမှုကို အပြီးတိုင် ကာကွယ်ပေးသည်
  */
 async function recalculateLedgerBalances(db, tableName, targetFy = null) {
   if (!tableName) return;
@@ -114,7 +130,11 @@ async function recalculateLedgerBalances(db, tableName, targetFy = null) {
         SET no = calculated.calc_no,
             balances = calculated.calc_bal
         FROM calculated
-        WHERE ${tableName}.id = calculated.id;
+        WHERE ${tableName}.id = calculated.id
+          AND (
+            ${tableName}.no IS NOT calculated.calc_no OR 
+            ROUND(${tableName}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2)
+          );
       `).bind(normFy, cleanFy).run();
 
     } else {
@@ -136,7 +156,11 @@ async function recalculateLedgerBalances(db, tableName, targetFy = null) {
         SET no = calculated.calc_no,
             balances = calculated.calc_bal
         FROM calculated
-        WHERE ${tableName}.id = calculated.id;
+        WHERE ${tableName}.id = calculated.id
+          AND (
+            ${tableName}.no IS NOT calculated.calc_no OR 
+            ROUND(${tableName}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2)
+          );
       `).run();
     }
   } catch (e) {
@@ -240,7 +264,7 @@ export async function getBankCashData(db, body) {
     const limit = parseInt(body.limit || 30, 10);
     const offset = (page - 1) * limit;
 
-    const activeFy = normalizeFyStr(body.fy || "FY 2026-2027");
+    const activeFy = normalizeFyStr(body.fy);
 
     const statsResult = await db.prepare(`
       SELECT 
@@ -421,6 +445,7 @@ export async function saveBankCashEntry(db, session, body) {
 
     await db.batch(batchStatements);
 
+    // ⚡ Quota-Shield Recalculate
     await recalculateLedgerBalances(db, tableName, fy);
     if (targetTable && targetTable !== tableName) {
       await recalculateLedgerBalances(db, targetTable, fy);
@@ -454,8 +479,6 @@ export async function updateBankCashEntry(db, session, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT & Capture Existing Data
-    // 🎯 FIX: 'SELECT *' ကို သုံးထားသဖြင့် ဇယားထဲတွင် 'is_locked' ကော်လံ မရှိလျှင်ပင် Error လုံးဝ မတက်တော့ပါ
     const existing = await db.prepare(`SELECT * FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ပြင်ဆင်မည့် စာရင်း ရှာမတွေ့ပါ။" };
@@ -491,7 +514,6 @@ export async function updateBankCashEntry(db, session, body) {
 
     const batchStatements = [];
 
-    // ၁။ Linked Transfer အဟောင်းများ ဖျက်ရန် Statements
     const tables = ['bank', 'cash', 'office', 'kitchen', 'payroll'];
     for (const tbl of tables) {
       batchStatements.push(
@@ -499,7 +521,6 @@ export async function updateBankCashEntry(db, session, body) {
       );
     }
 
-    // ၂။ မူရင်းစာအုပ် Update Statement
     batchStatements.push(
       db.prepare(`
         UPDATE ${tableName} SET
@@ -513,7 +534,6 @@ export async function updateBankCashEntry(db, session, body) {
       )
     );
 
-    // ၃။ Transfer အသစ်ဖြစ်ပါက Target Statement ထည့်သွင်းခြင်း
     const isTransfer = String(body.category || '').trim() === 'Transfer' && body.transfer;
     let targetTable = null;
 
@@ -529,6 +549,7 @@ export async function updateBankCashEntry(db, session, body) {
 
     await db.batch(batchStatements);
 
+    // ⚡ Quota-Shield Recalculate
     await recalculateLedgerBalances(db, tableName, fy);
     if (oldFy && oldFy !== fy) {
       await recalculateLedgerBalances(db, tableName, oldFy);
@@ -564,8 +585,6 @@ export async function deleteBankCashEntry(db, session, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT & Capture Target Data
-    // 🎯 FIX: 'SELECT *' ကို သုံးထားသဖြင့် ဇယားထဲတွင် 'is_locked' ကော်လံ မရှိလျှင်ပင် Error လုံးဝ မတက်တော့ပါ
     const existing = await db.prepare(`SELECT * FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ဖျက်သိမ်းမည့် စာရင်း ရှာမတွေ့ပါ။" };
@@ -590,7 +609,6 @@ export async function deleteBankCashEntry(db, session, body) {
     const targetFy = existing.fy ? normalizeFyStr(existing.fy) : null;
     const transferUid = `TRANS_${uniqueid}`;
 
-    // ⚡ ATOMIC BATCH DELETE
     const batchStatements = [
       db.prepare(`DELETE FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid),
       db.prepare(`DELETE FROM bank WHERE uniqueid = ?`).bind(transferUid),
@@ -602,6 +620,7 @@ export async function deleteBankCashEntry(db, session, body) {
 
     await db.batch(batchStatements);
 
+    // ⚡ Quota-Shield Recalculate
     await recalculateLedgerBalances(db, tableName, targetFy);
 
     if (existing.transfer) {
