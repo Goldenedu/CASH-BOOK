@@ -6,8 +6,8 @@
  *              ⚡ O(1) SQLite 3.33+ UPDATE...FROM Global Recalculator Engine,
  *              Fail-Closed WebCrypto JWT & PBKDF2 Password Security (100k Iterations),
  *              Server-Side Brute-Force Lockout Defense,
- *              🎯 Phase 2.3: Single Source of Truth Audit Logger Unification (via logger.js),
- *              🎯 Phase 2.3: Strict RBAC Guard for Payroll Settings
+ *              🛡️ Standalone Zero-Dependency D1 Audit Logger (No Missing Module Error),
+ *              🎯 Strict RBAC Guard for Payroll Settings
  * ==============================================================================
  */
 
@@ -24,7 +24,6 @@ import * as StudentMoneyHandlers from './handlers-money.js';
 import * as SettingsHandlers from './handlers-settings.js';
 import * as DashboardHandlers from './handlers-dashboard.js';
 import { validateLedgerInput } from './validation.js';
-import { writeAuditLog } from './logger.js'; // 🎯 FIX (Phase 2.3): Unified Audit Logger Import
 
 // ==============================================================================
 // 💡 1. DOMAIN-SPECIFIC SERVER-SIDE RBAC PERMISSION MATRIX
@@ -119,7 +118,56 @@ function forbidden(corsHeaders, message = "ဒီလုပ်ဆောင်ခ�
 }
 
 // ==============================================================================
-// 💡 2. CRYPTOGRAPHIC JWT & PBKDF2 PASSWORD ENGINE
+// 💡 2. STANDALONE SAFE AUDIT LOGGER (No External File Dependency)
+// ==============================================================================
+function sanitizeDetailsForAudit(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(item => sanitizeDetailsForAudit(item));
+  const clean = { ...obj };
+  const SENSITIVE_KEYS = ['password', 'password_hash', 'token', 'authtoken', 'authsecret', 'secret', 'excelbase64'];
+  for (const key of Object.keys(clean)) {
+    const lowerKey = key.toLowerCase();
+    if (SENSITIVE_KEYS.some(k => lowerKey.includes(k))) clean[key] = '***';
+    else if (typeof clean[key] === 'object' && clean[key] !== null) clean[key] = sanitizeDetailsForAudit(clean[key]);
+  }
+  return clean;
+}
+
+async function writeAuditLog(db, sessionOrUser, actionType, moduleOrPayload = {}, recordIdInput = null) {
+  if (!db || typeof db.prepare !== 'function') return;
+  try {
+    let username = "System", role = "User";
+    if (typeof sessionOrUser === "string") username = sessionOrUser;
+    else if (sessionOrUser && typeof sessionOrUser === "object") {
+      username = sessionOrUser.username || sessionOrUser.name || "System";
+      role = sessionOrUser.role || "User";
+    }
+
+    let recordId = recordIdInput ? String(recordIdInput) : null;
+    if (!recordId && moduleOrPayload && typeof moduleOrPayload === "object") {
+      recordId = moduleOrPayload.uniqueId || moduleOrPayload.uniqueid || moduleOrPayload.id || null;
+    }
+
+    const safeDetails = sanitizeDetailsForAudit(moduleOrPayload);
+    let detailsJson = "";
+    try { 
+      detailsJson = typeof safeDetails === "object" ? JSON.stringify(safeDetails) : String(safeDetails || ""); 
+    } catch (e) { 
+      detailsJson = "{}"; 
+    }
+    if (detailsJson.length > 2000) detailsJson = detailsJson.slice(0, 2000) + '...[TRUNCATED]';
+
+    await db.prepare(`
+      INSERT INTO audit_logs (username, role, action, record_id, detail, created_at)
+      VALUES (?, ?, ?, ?, ?, datetime('now'))
+    `).bind(username, role, actionType || "UNKNOWN_ACTION", recordId, detailsJson).run();
+  } catch (err) {
+    console.warn("[AuditLog Fail-Safe Warning]:", err.message);
+  }
+}
+
+// ==============================================================================
+// 💡 3. CRYPTOGRAPHIC JWT & PBKDF2 PASSWORD ENGINE
 // ==============================================================================
 function base64UrlEncode(bytesOrStr) {
   const bytes = typeof bytesOrStr === "string" ? new TextEncoder().encode(bytesOrStr) : bytesOrStr;
@@ -201,7 +249,7 @@ async function verifyPassword(password, stored) {
 }
 
 // ==============================================================================
-// 💡 3. BRUTE-FORCE LOCKOUT PROTECTION
+// 💡 4. BRUTE-FORCE LOCKOUT PROTECTION
 // ==============================================================================
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
@@ -236,7 +284,7 @@ async function resetLoginAttempts(db, username) {
 }
 
 // ==============================================================================
-// 💡 4. SAFE GLOBAL RECALCULATOR ENGINE
+// 💡 5. SAFE GLOBAL RECALCULATOR ENGINE
 // ==============================================================================
 async function executeAutoRecalculateAll(db, body = {}) {
   const rawBook = body.bookName || body.tableName || body.book || "";
@@ -367,7 +415,7 @@ async function executeAutoRecalculateAll(db, body = {}) {
 }
 
 // ==============================================================================
-// 💡 5. MAIN FETCH ROUTER (CLOUDFLARE WORKER EXPORT)
+// 💡 6. MAIN FETCH ROUTER (CLOUDFLARE WORKER EXPORT)
 // ==============================================================================
 export default {
   async fetch(request, env, ctx) {
@@ -569,7 +617,6 @@ export default {
           if (!can(userSession, 'staff_write') && !can(userSession, 'ledger_write')) return forbidden(corsHeaders);
           result = await PayrollStaffHandlers.saveHrPayrollForm(db, userSession, body); break;
         case 'getPayrollSettings':
-          // 🎯 FIX (Phase 2.3): Server-Side RBAC Permission Guard on Payroll Settings
           if (!can(userSession, 'staff_read') && !can(userSession, 'grade_matrix')) return forbidden(corsHeaders, "Salary Grade Matrix ကြည့်ရှုခွင့် မရှိပါ။");
           result = await PayrollStaffHandlers.getPayrollSettings(db, body); break;
         case "updatePayrollSettings":
@@ -635,7 +682,7 @@ export default {
           return new Response(JSON.stringify({ success: false, message: `Action '${action}' မဟုတ်ပါ သို့မဟုတ် မပံ့ပိုးသေးပါ။` }), { headers: corsHeaders });
       }
 
-      // 🛡️ D1 AUDIT LOGGING (Phase 2.3: Single Source of Truth via logger.js)
+      // 🛡️ D1 AUDIT LOGGING
       const isMutatingAction = /^(save|update|delete|export|send|recalculate)/i.test(action);
       if (isMutatingAction && result && result.success !== false && userSession) {
         if (ctx && typeof ctx.waitUntil === 'function') {
