@@ -1,15 +1,16 @@
 /**
  * GOLDEN ERP SYSTEM - PROGRESSIVE WEB APP (PWA) SERVICE WORKER
- * File: sw.js
+ * File: sw.js (Location: cashbook-frontend/sw.js)
  * 💡 Features: Fault-Tolerant Parallel Pre-caching (Zero Install Bottlenecks),
  *              Native Route Reconciliation via ignoreSearch (Phase 4.3),
  *              0ms Instant Offline Navigation (Stale-While-Revalidate Engine),
+ *              🎯 Phase 4.1: Font Awesome WebFonts Pre-caching (Zero Broken Icons Offline),
  *              Crash-Proof Fetch Interceptor (Zero TypeError on Offline Drop)
  */
 
-const CACHE_NAME = 'golden-erp-cache-v2026.09.04';
+const CACHE_NAME = 'golden-erp-cache-v2026.09.13';
 
-// 💡 အော့ဖ်လိုင်းသုံးနိုင်ရန် စက်ထဲ ကြိုတင်သိမ်းဆည်းမည့် ဖိုင်များအားလုံး (CSS + JS + HTML Views)
+// 💡 အော့ဖ်လိုင်းသုံးနိုင်ရန် စက်ထဲ ကြိုတင်သိမ်းဆည်းမည့် ဖိုင်များအားလုံး (CSS + JS + HTML Views + WebFonts)
 const PRECACHE_ASSETS = [
   './',
   './index.html',
@@ -18,6 +19,12 @@ const PRECACHE_ASSETS = [
   './css/tailwind.min.css',
   './css/fontawesome.min.css',
   './css/style.css',
+
+  // 🎯 Phase 4.1 Fix: Offline Font Icons Pre-caching (အော့ဖ်လိုင်းတွင် icon များ အပြည့်အဝ ပေါ်စေရန်)
+  './webfonts/fa-solid-900.woff2',
+  './webfonts/fa-regular-400.woff2',
+  './webfonts/fa-brands-400.woff2',
+  './webfonts/fa-v4compatibility.woff2',
 
   // 💡 2. CORE APPLICATION SCRIPTS
   './js/config.js',
@@ -59,11 +66,9 @@ const PRECACHE_ASSETS = [
  * 💡 1. Install Event - Parallel Fault-Tolerant Pre-caching
  */
 self.addEventListener('install', (event) => {
-  console.log('[Service Worker] Installing & Pre-caching All Styles, Scripts & Views...');
+  console.log('[Service Worker] Installing & Pre-caching All Styles, Scripts, Fonts & Views...');
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // ⚡ FIX: တစ်ခုချင်းစီ (Serial) သိမ်းမည့်အစား ပြိုင်တူ (Parallel) သိမ်းဆည်းသဖြင့် Install အလွန်မြန်ဆန်သည်
-      // Error တက်သော ဖိုင်ရှိခဲ့လျှင်လည်း အခြားဖိုင်များ ဆက်လက် သိမ်းဆည်းနိုင်ရန် Catch လုပ်ပေးထားသည်
       return Promise.all(
         PRECACHE_ASSETS.map(asset => {
           return cache.add(asset).catch(err => {
@@ -100,14 +105,14 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const request = event.request;
 
-  // ⚠️ 1. Ignore non-HTTP/HTTPS requests (e.g. chrome-extension)
+  // Ignore non-HTTP/HTTPS requests
   if (!request.url.startsWith('http')) {
     return;
   }
 
   const url = new URL(request.url);
 
-  // ⚠️ 2. Bypass API calls & Cloudflare Worker endpoints (Handled by offline-sync.js)
+  // Bypass API calls & Cloudflare Worker endpoints (Handled by offline-sync.js)
   if (
     request.method !== 'GET' ||
     url.pathname.startsWith('/api') ||
@@ -117,18 +122,14 @@ self.addEventListener('fetch', (event) => {
     return; 
   }
 
-  // 💡 3. Stale-While-Revalidate Engine
+  // Stale-While-Revalidate Engine with Native ignoreSearch
   event.respondWith(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
-
-      // ⚡ FIX: Native 'ignoreSearch' ကို အသုံးပြုခြင်းဖြင့် ?v=... Query များကို အလိုအလျောက် ကျော်ဖြတ်ပြီး Cache ကို တိကျစွာ ဆွဲထုတ်သည်
       const cachedResponse = await cache.match(request, { ignoreSearch: true });
 
-      // Background revalidation (Network မှ နောက်ဆုံး Update ကို ယူပြီး Cache ထဲ ပြန်ထည့်သည်)
       const fetchPromise = fetch(request)
         .then((networkResponse) => {
-          // Response သေချာမှန်ကန်မှသာ Cache ထဲ ထည့်မည်
           if (networkResponse && networkResponse.status === 200 && (networkResponse.type === 'basic' || networkResponse.type === 'cors')) {
             cache.put(request, networkResponse.clone());
           }
@@ -136,25 +137,21 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(() => null);
 
-      // 🎯 Cache တွေ့ပါက 0ms ဖြင့် ချက်ချင်း Return ပြန်ပေးပြီး နောက်ကွယ်တွင် Fetch ဆက်လုပ်စေသည်
       if (cachedResponse) {
         event.waitUntil(fetchPromise);
         return cachedResponse;
       }
 
-      // Cache မရှိပါက Network အတိုင်း ဆက်သွားသည်
       const networkResponse = await fetchPromise;
       if (networkResponse) {
         return networkResponse;
       }
 
-      // 🎯 Offline SPA Route Fallback: အော့ဖ်လိုင်းဖြစ်နေချိန် စာမျက်နှာ Reload လုပ်မိပါက Index သို့ ပြန်ပို့ပေးသည်
       if (request.mode === 'navigate') {
         const indexFallback = await cache.match('./index.html', { ignoreSearch: true });
         if (indexFallback) return indexFallback;
       }
 
-      // 🛡️ Ultimate Fallback: Offline ပျတ်ကျချိန်တွင် 'Failed to convert value to Response' Error တက်ခြင်းကို ကာကွယ်သည်
       return new Response('', {
         status: 503,
         statusText: 'Service Unavailable (Offline)'
