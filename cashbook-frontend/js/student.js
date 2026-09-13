@@ -1,8 +1,8 @@
 /**
  * ==============================================================================
  * GOLDEN ERP SYSTEM - STUDENT LIST & DEMOGRAPHICS MODULE (D1 DATABASE COMPATIBLE)
- * File: js/student.js  
- * 💡 Features: Universal Dynamic FY Generator (No Hardcoded 2627), Float .0 Sanitizer,
+ * File: js/student.js (Location: cashbook-frontend/js/student.js)
+ * 💡 Features: Universal Dynamic FY Generator (March Boundary getMonth() < 2), Float .0 Sanitizer,
  *              Full Dataset Loader (5000 rows limit), Active FY Accurate KPI Analytics,
  *              Strict Sequential NO Sorting (1214, 1213, 1212...),
  *              Refined Myanmar/Ethnic Gender Auto-Detector (100% Accurate Male vs Female),
@@ -120,14 +120,15 @@ function autoDetectGender(nameStr) {
 }
 
 /**
- * 💡 1. Universal Dynamic Academic Year Generator (e.g. "2026-2027", "2027-2028")
+ * 💡 1. Universal Dynamic Academic Year Generator (Phase 1.1: March Boundary Aligned)
  */
 function getCurrentAcademicYear(dateInput) {
   var d = dateInput ? new Date(dateInput) : new Date();
   var validDate = isNaN(d.getTime()) ? new Date() : d;
   var y = validDate.getFullYear();
 
-  if (validDate.getMonth() < 3) {
+  // 🎯 FIX (Phase 1.1): မတ်လ (Month index 2) သည် နှစ်သစ်ဖြစ်သဖြင့် ဇန်နဝါရီ၊ ဖေဖော်ဝါရီ (< 2) သာ ယခင်နှစ်ထဲ သတ်မှတ်သည်
+  if (validDate.getMonth() < 2) {
     y -= 1;
   }
   return `${y}-${y + 1}`;
