@@ -7,6 +7,7 @@
  *              Strict Sequential NO Sorting (1214, 1213, 1212...),
  *              Refined Myanmar/Ethnic Gender Auto-Detector (100% Accurate Male vs Female),
  *              🛡️ Universal CSV Formula Injection Sanitizer (safeCsvCell),
+ *              🎯 Phase 3.1: Inter-Module Cache Invalidation Hooks (Income & Pocket Money Sync),
  *              🎯 Bug #2 Fixed (Resilient Local escapeHtml / escapeJsAttr Callbacks)
  * ==============================================================================
  */
@@ -125,9 +126,8 @@ function autoDetectGender(nameStr) {
 function getCurrentAcademicYear(dateInput) {
   var d = dateInput ? new Date(dateInput) : new Date();
   var validDate = isNaN(d.getTime()) ? new Date() : d;
-  var y = validDate.getFullYear();
+  let y = validDate.getFullYear();
 
-  // 🎯 FIX (Phase 1.1): မတ်လ (Month index 2) သည် နှစ်သစ်ဖြစ်သဖြင့် ဇန်နဝါရီ၊ ဖေဖော်ဝါရီ (< 2) သာ ယခင်နှစ်ထဲ သတ်မှတ်သည်
   if (validDate.getMonth() < 2) {
     y -= 1;
   }
@@ -196,7 +196,7 @@ function filterStudentData(list = [], searchVal = '', fyFilter = '') {
   filtered.sort((a, b) => {
     const noA = parseInt(a.no, 10) || 0;
     const noB = parseInt(b.no, 10) || 0;
-    return noB - noA; // Descending: 1214, 1213, 1212...
+    return noB - noA;
   });
 
   return filtered;
@@ -527,6 +527,9 @@ function onOldStudentIdLookup() {
   }, 400);
 }
 
+/**
+ * 💡 Save Student Form (With Phase 3.1 Inter-Module State Synchronization Hooks)
+ */
 async function saveStudentForm(e) {
   if (e && e.preventDefault) e.preventDefault();
 
@@ -579,7 +582,13 @@ async function saveStudentForm(e) {
       if (typeof showToast === 'function') {
         showToast("SUCCESS", isAdd ? "ကျောင်းသားသစ် မှတ်တမ်း အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။" : "ကျောင်းသား မှတ်တမ်း ပြင်ဆင်ခြင်း အောင်မြင်ပါသည်။");
       }
+      
+      // ⚡ Phase 3.1: Inter-Module Invalidation Hook
+      // ကျောင်းသားအသစ်အား Income နှင့် Student Money Module တွင် ချက်ချင်း ရှာတွေ့စေရန် Cache များကို အလိုအလျောက် Purge လုပ်သည်
       if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
+      window.studentsByFyCache = {};
+      window.gStudentCacheForMoney = {};
+
       loadStudentData(true);
     } else {
       if (typeof showToast === 'function') showToast("ERROR", "သိမ်းဆည်းမှု မအောင်မြင်ပါ: " + (response ? response.message : ""));
@@ -687,6 +696,8 @@ async function deleteStudentEntry(uniqueId) {
       if (response && response.success) {
         if (typeof showToast === 'function') showToast("SUCCESS", "ကျောင်းသား စာရင်း ဖျက်သိမ်းခြင်း အောင်မြင်ပါသည်။");
         if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
+        window.studentsByFyCache = {};
+        window.gStudentCacheForMoney = {};
         loadStudentData(true);
       } else {
         if (typeof showToast === 'function') showToast("ERROR", "ဖျက်သိမ်းမှု မအောင်မြင်ပါ: " + (response ? response.message : ""));
