@@ -278,7 +278,7 @@ async function cleanLinkedIncomeEntries(db, uniqueid) {
 }
 
 /**
- * ⚡ FIX: Safe SELECT -> UPDATE/INSERT (Zero ON CONFLICT Errors)
+ * ⚡ FIX: Safe SELECT -> UPDATE/INSERT (Zero ON CONFLICT Errors & Targeted Recalculate)
  */
 async function postCashierIndividualLine(db, targetMethod, amount, body, entryDate, my, fy, createdBy, uidSuffix) {
   if (amount <= 0) return;
@@ -313,6 +313,7 @@ async function postCashierIndividualLine(db, targetMethod, amount, body, entryDa
     ).run();
   }
 
+  // ⚡ သက်ဆိုင်ရာ Method ရှိသည့် Cashier ဇယားတစ်ခုတည်းကိုသာ Quota-Shield ဖြင့် တွက်စေသည်
   await recalculateLedgerBalances(db, caTable, normFy);
 }
 
