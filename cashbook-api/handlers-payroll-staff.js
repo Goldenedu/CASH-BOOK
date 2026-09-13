@@ -13,11 +13,27 @@
  */
 
 /**
- * 💡 FY String Normalizer (Ensures "FY 2026-2027" format)
+ * 💡 Dynamic Academic Year Helper (March Boundary: Month < 2)
+ * မတ်လ ၁ ရက်မတိုင်မီ (ဇန်နဝါရီ၊ ဖေဖော်ဝါရီ) သာ ယခင်နှစ်ထဲ သတ်မှတ်ပြီး
+ * မတ်လမှစ၍ နှစ်သစ်အဖြစ် အလိုအလျောက် တွက်ချက်သည်
  */
-function normalizeFyStr(fy) {
-  if (!fy) return 'FY 2026-2027';
-  let s = String(fy).trim();
+function getCurrentAcademicYear(dateInput = null) {
+  const d = dateInput ? new Date(dateInput) : new Date(Date.now() + (6.5 * 3600 * 1000));
+  const validDate = isNaN(d.getTime()) ? new Date() : d;
+  let y = validDate.getFullYear();
+  if (validDate.getMonth() < 2) {
+    y -= 1;
+  }
+  return `${y}-${y + 1}`;
+}
+
+/**
+ * 💡 100% Dynamic FY String Normalizer (Zero Hardcoded 2026-2027)
+ * fy တန်ဖိုး မပါလာပါက လက်ရှိ မြန်မာစံတော်ချိန်ရက်စွဲအလိုက် စာရင်းနှစ်ကို အလိုအလျောက် တွက်ယူမည်
+ */
+function normalizeFyStr(fy, dateInput = null) {
+  let s = fy ? String(fy).trim() : `FY ${getCurrentAcademicYear(dateInput)}`;
+  if (!s) s = `FY ${getCurrentAcademicYear(dateInput)}`;
   if (!s.toUpperCase().startsWith('FY ')) {
     s = 'FY ' + s;
   }
