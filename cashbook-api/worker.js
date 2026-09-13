@@ -3,7 +3,8 @@
  * GOLDEN ERP SYSTEM - CLOUDFLARE WORKER MAIN ROUTER (D1 MODULAR EDITION)
  * File: worker.js (Location: cashbook-api/worker.js)
  * 💡 Features: 🛡️ Strict Domain-Specific RBAC Matrix (Zero Privilege Escalation),
- *              ⚡ O(1) SQLite 3.33+ UPDATE...FROM Global Recalculator Engine,
+ *              ⚡ QUOTA-SHIELD: O(1) Differential Global Recalculator Engine,
+ *              🎯 Floating Point Safe Comparison (ROUND to 2 Decimals),
  *              Fail-Closed WebCrypto JWT & PBKDF2 Password Security (100k Iterations),
  *              Server-Side Brute-Force Lockout Defense,
  *              🛡️ Standalone Zero-Dependency D1 Audit Logger (No Missing Module Error),
@@ -284,7 +285,7 @@ async function resetLoginAttempts(db, username) {
 }
 
 // ==============================================================================
-// 💡 5. SAFE GLOBAL RECALCULATOR ENGINE
+// 💡 5. SAFE GLOBAL RECALCULATOR ENGINE (⚡ QUOTA-SHIELD PROTECTED)
 // ==============================================================================
 async function executeAutoRecalculateAll(db, body = {}) {
   const rawBook = body.bookName || body.tableName || body.book || "";
@@ -330,7 +331,11 @@ async function executeAutoRecalculateAll(db, body = {}) {
             UPDATE student_money 
             SET no = calculated.new_no, balances = calculated.calc_bal 
             FROM calculated 
-            WHERE student_money.id = calculated.id;
+            WHERE student_money.id = calculated.id
+              AND (
+                student_money.no IS NOT calculated.new_no OR 
+                ROUND(student_money.balances, 2) IS NOT ROUND(calculated.calc_bal, 2)
+              );
           `).bind(targetFy, `FY ${targetFy}`).run();
         } else {
           await db.prepare(`
@@ -347,7 +352,11 @@ async function executeAutoRecalculateAll(db, body = {}) {
             UPDATE student_money 
             SET no = calculated.new_no, balances = calculated.calc_bal 
             FROM calculated 
-            WHERE student_money.id = calculated.id;
+            WHERE student_money.id = calculated.id
+              AND (
+                student_money.no IS NOT calculated.new_no OR 
+                ROUND(student_money.balances, 2) IS NOT ROUND(calculated.calc_bal, 2)
+              );
           `).run();
         }
       } else if (tbl === 'income') {
@@ -358,7 +367,11 @@ async function executeAutoRecalculateAll(db, body = {}) {
               FROM income
               WHERE fy = ? OR fy = ?
             )
-            UPDATE income SET no = calculated.new_no FROM calculated WHERE income.id = calculated.id;
+            UPDATE income 
+            SET no = calculated.new_no 
+            FROM calculated 
+            WHERE income.id = calculated.id
+              AND income.no IS NOT calculated.new_no;
           `).bind(targetFy, `FY ${targetFy}`).run();
         } else {
           await db.prepare(`
@@ -366,7 +379,11 @@ async function executeAutoRecalculateAll(db, body = {}) {
               SELECT id, ROW_NUMBER() OVER (PARTITION BY fy ORDER BY date ASC, id ASC) as new_no 
               FROM income
             )
-            UPDATE income SET no = calculated.new_no FROM calculated WHERE income.id = calculated.id;
+            UPDATE income 
+            SET no = calculated.new_no 
+            FROM calculated 
+            WHERE income.id = calculated.id
+              AND income.no IS NOT calculated.new_no;
           `).run();
         }
       } else {
@@ -385,7 +402,11 @@ async function executeAutoRecalculateAll(db, body = {}) {
             UPDATE ${tbl} 
             SET no = calculated.new_no, balances = calculated.calc_bal 
             FROM calculated 
-            WHERE ${tbl}.id = calculated.id;
+            WHERE ${tbl}.id = calculated.id
+              AND (
+                ${tbl}.no IS NOT calculated.new_no OR 
+                ROUND(${tbl}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2)
+              );
           `).bind(targetFy, `FY ${targetFy}`).run();
         } else {
           await db.prepare(`
@@ -402,7 +423,11 @@ async function executeAutoRecalculateAll(db, body = {}) {
             UPDATE ${tbl} 
             SET no = calculated.new_no, balances = calculated.calc_bal 
             FROM calculated 
-            WHERE ${tbl}.id = calculated.id;
+            WHERE ${tbl}.id = calculated.id
+              AND (
+                ${tbl}.no IS NOT calculated.new_no OR 
+                ROUND(${tbl}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2)
+              );
           `).run();
         }
       }
@@ -411,7 +436,7 @@ async function executeAutoRecalculateAll(db, body = {}) {
       console.warn(`Recalculation warning on table ${tbl}:`, e.message);
     }
   }
-  return { success: true, message: `စာရင်းအုပ် (${updatedTables.length}) ခု၏ Balances ကို ညှိယူပြီးပါပြီ။`, updatedTables };
+  return { success: true, message: `စာရင်းအုပ် (${updatedTables.length}) ခု၏ Balances ကို လုံခြုံစွာ ညှိယူပြီးပါပြီ။`, updatedTables };
 }
 
 // ==============================================================================
