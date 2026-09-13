@@ -421,12 +421,12 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
 };
 
 // ==============================================================================
-// 💡 5. BACKGROUND PREFETCHING ENGINE ('staff' view ပါဝင်အောင် ဖြည့်စွက်ပြီး)
+// 💡 5. BACKGROUND PREFETCHING ENGINE (Phase 1.2 Syntax Fix Applied)
 // ==============================================================================
 
 /**
  * 💡 Light-Weight Background Prefetching Engine
- * ⚡ FIX: မလိုအပ်ဘဲ Query ပေါင်း ၅၀ ကျော် ပြိုင်တူပစ်လွှတ်ပြီး Rows Read သိန်းချီ ကုန်နေခြင်းကို တားဆီးထားသည်
+ * ⚡ FIX: Syntax error ဖြစ်စေသော trailing code ပိုများကို ဖယ်ရှားပြီး သန့်ရှင်းစွာ ပိတ်ထားသည်
  */
 window.prefetchCoreModules = function() {
   window.viewCache = window.viewCache || {};
@@ -446,28 +446,6 @@ window.prefetchCoreModules = function() {
         .catch(() => {});
     }
   });
-
-  // ⚡ Heavy API များကို အတင်းမဆွဲတော့ဘဲ လက်ရှိရောက်နေသော စာမျက်နှာတစ်ခုတည်းကိုသာ User သွားကြည့်ချိန်တွင် ဆွဲစေမည်
-};
-
-  setTimeout(() => {
-    window.callApi('getDashboardData', {}).catch(() => {});
-    window.callApi('getBankCashData', { bookName: 'Main Bank Book', page: 1, limit: 30, searchVal: '' }).catch(() => {});
-    window.callApi('getBankCashData', { bookName: 'Main Cash Book', page: 1, limit: 30, searchVal: '' }).catch(() => {});
-    window.callApi('getIncomeData', { page: 1, limit: 50, searchVal: '' }).catch(() => {});
-    window.callApi('getExpenseData', { bookName: 'Office Exp Book', page: 1, limit: 30, searchVal: '' }).catch(() => {});
-    window.callApi('getExpenseData', { bookName: 'Kitchen Exp Book', page: 1, limit: 30, searchVal: '' }).catch(() => {});
-    window.callApi('getExpenseData', { bookName: 'HR Payroll Exp Book', page: 1, limit: 30, searchVal: '' }).catch(() => {});
-    window.callApi('getCashierData', { bookName: 'CACash' }).catch(() => {});
-    window.callApi('getCashierData', { bookName: 'CABank' }).catch(() => {});
-    window.callApi('getTodayIncomeForCashier', {}).catch(() => {});
-    window.callApi('getStudentData', { page: 1, limit: 50 }).catch(() => {});
-    window.callApi('getStudentMoneyData', { page: 1, limit: 50 }).catch(() => {});
-    window.callApi('getStaffData', { category: 'Full Time', page: 1, limit: 30, searchVal: '' }).catch(() => {});
-    window.callApi('getUniformData', { page: 1, limit: 1000 }).catch(() => {});
-    window.callApi('getPromotionData', {}).catch(() => {});
-    window.callApi('getSettingsData', {}).catch(() => {});
-  }, 100);
 };
 
 window.showToast = function(type, message) {
