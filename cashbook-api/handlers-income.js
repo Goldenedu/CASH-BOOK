@@ -4,7 +4,8 @@
  * File: handlers-income.js (Location: cashbook-api/handlers-income.js)
  * 💡 Features: 🛡️ Zero ON CONFLICT Schema Errors (Safe SELECT -> UPDATE/INSERT Pattern),
  *              🛡️ 100% ACID Compliant Atomic Refund & Multi-Book Postings via db.batch(),
- *              ⚡ O(1) Single-Pass Window Function Engine via SQLite 3.33+ UPDATE...FROM,
+ *              ⚡ QUOTA-SHIELD: O(1) Differential Row-Level Recalculator Engine,
+ *              🎯 Floating Point Safe Comparison (ROUND to 2 Decimals),
  *              Cashier Sub-Ledger Balances Auto-Sync on Income Delete & Update,
  *              Myanmar Standard Time (UTC+6:30) & March Academic Year Boundary Alignment (getMonth() < 2),
  *              Split Payment Support, Precision FY-Scoped Student Lookup & Auto-Posting Engine
@@ -128,6 +129,11 @@ function buildStudentDetailedDesc(body, prefix) {
   return prefix ? `[${prefix}] ${fullDesc}` : fullDesc;
 }
 
+/**
+ * ⚡ QUOTA-SHIELD: O(1) Differential Recalculator Engine
+ * 💡 တန်ဖိုး တကယ်ပြောင်းလဲသွားသော Row များကိုသာ Update လုပ်သဖြင့်
+ * D1 Row Writes အလဟဿ ကုန်ကျမှုကို အပြီးတိုင် ရပ်တန့်စေသည်
+ */
 async function recalculateLedgerBalances(db, tableName, targetFy = null) {
   if (!tableName) return;
   try {
@@ -152,7 +158,11 @@ async function recalculateLedgerBalances(db, tableName, targetFy = null) {
         SET no = calculated.calc_no,
             balances = calculated.calc_bal
         FROM calculated
-        WHERE ${tableName}.id = calculated.id;
+        WHERE ${tableName}.id = calculated.id
+          AND (
+            ${tableName}.no IS NOT calculated.calc_no OR 
+            ROUND(${tableName}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2)
+          );
       `).bind(normFy, cleanFy).run();
 
     } else {
@@ -174,7 +184,11 @@ async function recalculateLedgerBalances(db, tableName, targetFy = null) {
         SET no = calculated.calc_no,
             balances = calculated.calc_bal
         FROM calculated
-        WHERE ${tableName}.id = calculated.id;
+        WHERE ${tableName}.id = calculated.id
+          AND (
+            ${tableName}.no IS NOT calculated.calc_no OR 
+            ROUND(${tableName}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2)
+          );
       `).run();
     }
   } catch (e) {
@@ -759,20 +773,22 @@ export async function deleteIncomeEntry(db, session, body) {
     }
 
     const existing = await db.prepare(`SELECT * FROM income WHERE uniqueid = ?`).bind(uniqueid).first();
-    if (existing) {
-      const uid = String(existing.uniqueid || '');
-      const isAutoLocked = Boolean(existing.is_locked || existing.isLocked) ||
-        uid.startsWith('INCMAIN_') ||
-        uid.startsWith('INCCASHIER_') ||
-        uid.startsWith('DAILY_INC_');
+    if (!existing) {
+      return { success: false, message: "ပြင်ဆင်မည့် ဝင်ငွေစာရင်း ရှာမတွေ့ပါ။" };
+    }
 
-      const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(session?.role || '');
-      if (isAutoLocked && !isPrivilegedAdmin) {
-        return { 
-          success: false, 
-          message: "ဤစာရင်းသည် စနစ်မှ အလိုအလျောက် သို့မဟုတ် ချိတ်ဆက်ထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ဖျက်သိမ်းနိုင်ပါသည်။" 
-        };
-      }
+    const uid = String(existing.uniqueid || '');
+    const isAutoLocked = Boolean(existing.is_locked || existing.isLocked) ||
+      uid.startsWith('INCMAIN_') ||
+      uid.startsWith('INCCASHIER_') ||
+      uid.startsWith('DAILY_INC_');
+
+    const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(session?.role || '');
+    if (isAutoLocked && !isPrivilegedAdmin) {
+      return { 
+        success: false, 
+        message: "ဤစာရင်းသည် စနစ်မှ အလိုအလျောက် သို့မဟုတ် ချိတ်ဆက်ထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ဖျက်သိမ်းနိုင်ပါသည်။" 
+      };
     }
 
     const entryDate = existing?.date || null;
