@@ -1,8 +1,13 @@
 /**
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - HR PAYROLL EXP BOOK CONTROLLER (D1 DATABASE EDITION)
- * File: js/hr.js   
- * 💡 Features: Bulletproof D1 Staff ID Lookup, Auto Credit (Total Salary),
- *              Full Dataset Limit (1000 rows), Clean Stats Engine & Isolated Dual-Copy Payslip Printer
+ * File: js/hr.js (Location: cashbook-frontend/js/hr.js)
+ * 💡 Features: 🛡️ Double-Submit Protection Lock (Prevents Duplicate Payroll Posting),
+ *              🎯 Universal Dynamic Academic FY (March Boundary getMonth() < 2),
+ *              Bulletproof D1 Staff ID Lookup, Auto Credit (Total Salary/Bonus/Fund),
+ *              Full Dataset Limit (1000 rows), Clean Stats Engine & Isolated Dual-Copy Payslip Printer,
+ *              🛡️ Formula Injection Protected CSV Exporter
+ * ==============================================================================
  */
 
 var gHrPayrollData = [];
@@ -14,6 +19,38 @@ var gHrPayrollTotalRows = 0;
 var gHrStaffFT = []; // Full-Time Staff Cache
 var gHrStaffPT = []; // Part-Time Staff Cache
 var gHrStaffCache = []; // Fallback Cache
+var isHrPayrollSubmitting = false; // 💡 Double-Submit Protection Flag
+
+/**
+ * 💡 Academic Year Calculator (March Boundary Aligned: Month < 2)
+ */
+function getCurrentAcademicYearHr(dateInput = null) {
+  const d = dateInput ? new Date(dateInput) : new Date();
+  const validDate = isNaN(d.getTime()) ? new Date() : d;
+  let y = validDate.getFullYear();
+  if (validDate.getMonth() < 2) {
+    y -= 1;
+  }
+  return `${y}-${y + 1}`;
+}
+
+/**
+ * 🛡️ Formula Injection Protected CSV Cell Helper
+ */
+function safeCsvCellHr(val) {
+  if (val === null || val === undefined) return '""';
+  if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
+  var str = String(val).trim();
+  if (str === '') return '""';
+  var cleanNumStr = str.replace(/,/g, '');
+  if (!isNaN(Number(cleanNumStr)) && cleanNumStr !== '') {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
+}
 
 async function loadHrPayrollData(useCache = true) {
   try {
@@ -359,22 +396,32 @@ function closeHrPayrollModal() {
   if (modalEl) modalEl.classList.add('hidden');
 }
 
+/**
+ * 💡 Save HR Payroll Form (With Double-Submit Protection Lock & Dynamic FY)
+ */
 async function saveHrPayrollForm(e) {
   if (e && e.preventDefault) e.preventDefault();
+
+  if (isHrPayrollSubmitting) return; // 👈 🛡️ Double Submit Protection Lock
+  isHrPayrollSubmitting = true;
 
   const staffIdVal = document.getElementById('hr-pay-staff-id')?.value.trim();
   const categoryVal = document.getElementById('hr-pay-category')?.value || 'Full Time Salary';
   const creditVal = parseFloat(document.getElementById('hr-pay-credit')?.value || 0);
 
   if (!staffIdVal) {
+    isHrPayrollSubmitting = false;
     if (typeof showToast === 'function') showToast("ERROR", "ကျောင်းသား/ဝန်ထမ်း ID ဖြည့်သွင်းပါ");
     return;
   }
 
+  const entryDate = document.getElementById('hr-pay-date')?.value || new Date().toISOString().slice(0, 10);
+  const dynamicFy = `FY ${getCurrentAcademicYearHr(entryDate)}`;
+
   const payload = {
     bookName: 'HR Payroll Exp Book',
     uniqueId: document.getElementById('hr-pay-uniqueId')?.value || '',
-    date: document.getElementById('hr-pay-date')?.value || new Date().toISOString().slice(0, 10),
+    date: entryDate,
     category: categoryVal,
     staffId: staffIdVal,
     method: document.getElementById('hr-pay-method')?.value || 'Cash',
@@ -383,7 +430,7 @@ async function saveHrPayrollForm(e) {
     unpaidBonus: parseFloat(document.getElementById('hr-pay-unpaid-bonus')?.value || 0),
     unpaidFund: parseFloat(document.getElementById('hr-pay-unpaid-fund')?.value || 0),
     description: document.getElementById('hr-pay-description')?.value || '',
-    fy: 'FY 2026-2027'
+    fy: dynamicFy
   };
 
   closeHrPayrollModal();
@@ -403,6 +450,7 @@ async function saveHrPayrollForm(e) {
   } catch (error) {
     if (typeof showToast === 'function') showToast('ERROR', `အမှားအယွင်း ဖြစ်ပေါ်ခဲ့သည်: ${error.message}`);
   } finally {
+    isHrPayrollSubmitting = false; // 👈 🛡️ Release Double Submit Lock
     if (typeof toggleLoading === 'function') toggleLoading(false);
   }
 }
@@ -536,12 +584,23 @@ function exportToCSVHrPayroll() {
 
   let csv = "NO,DATE,CATEGORY,DESCRIPTION,METHOD,DEBIT,CREDIT,BALANCES,UNPAID BONUS,UNPAID FUND,VR NO,MY,FY\n";
   gHrPayrollData.forEach((r, idx) => {
-    let desc = `"${(r.description || '').replace(/"/g, '""')}"`;
     let unpaidBonus = r.unpaid_bonus ?? r.unpaidBonus ?? 0;
     let unpaidFund = r.unpaid_fund ?? r.unpaidFund ?? 0;
     let vrNo = r.vr_no || r.vrNo || '';
 
-    csv += `${r.no || (idx + 1)},${r.date || ''},${r.category || ''},${desc},${r.method || ''},${r.debit || 0},${r.credit || 0},${r.balances || 0},${unpaidBonus},${unpaidFund},${vrNo},${r.my || ''},${r.fy || ''}\n`;
+    csv += `${r.no || (idx + 1)},` +
+           `${safeCsvCellHr(r.date || '')},` +
+           `${safeCsvCellHr(r.category || '')},` +
+           `${safeCsvCellHr(r.description || '')},` +
+           `${safeCsvCellHr(r.method || '')},` +
+           `${r.debit || 0},` +
+           `${r.credit || 0},` +
+           `${r.balances || 0},` +
+           `${unpaidBonus},` +
+           `${unpaidFund},` +
+           `${safeCsvCellHr(vrNo)},` +
+           `${safeCsvCellHr(r.my || '')},` +
+           `${safeCsvCellHr(r.fy || '')}\n`;
   });
 
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
