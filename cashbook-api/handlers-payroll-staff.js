@@ -1,13 +1,14 @@
 /**
  * ==============================================================================
  * GOLDEN ERP SYSTEM - HR PAYROLL & STAFF D1 SQL HANDLER MODULE
- * File: handlers-payroll-staff.js 
+ * File: handlers-payroll-staff.js (Location: cashbook-api/handlers-payroll-staff.js)
  * 💡 Features: Resigned Date Auto-Inactive Engine (Status Calculation & Active Force Stats),
  *              PII & Salary Data Protection (Role-Based Redaction including uniqueid),
  *              Privilege Escalation Defense (Server-Generated UUIDs for new records),
  *              Fund Date Calculation (Join Date + 3 Years) & Idempotent Upsert Engine,
- *              ⚡ O(1) D1 Write-Optimized Window Function Recalculator (Zero D1 Quota Waste),
- *              🎯 Dynamic Date-derived FY Auto-Detection & Migration Safe Staff Balance Updates
+ *              ⚡ Phase 2.2: O(1) SQLite 3.33+ UPDATE...FROM Window Function Recalculator,
+ *              🛡️ Phase 2.2: Atomic Payroll Expense & Staff Accruals Batch Rollback Guard,
+ *              🎯 Phase 1.1: March Boundary Aligned Dynamic FY Auto-Detection (getMonth() < 2)
  * ==============================================================================
  */
 
@@ -38,15 +39,13 @@ function calculateFundDate(joinDateStr) {
 }
 
 /**
- * ⚡ FIX PERF #1: O(1) Single-Query Window Function Recalculation Engine for Payroll
- * JS loops နှင့် batch updates (100 rows/batch) များကို ဖယ်ရှားပြီး
- * SQLite Window Function ဖြင့် ၁ ကြိမ်တည်း Update လုပ်သည်။
+ * ⚡ Phase 2.2: O(1) Single-Pass D1 Window Function Recalculation Engine for Payroll
+ * Subquery Bottleneck များကို ဖယ်ရှားပြီး SQLite 3.33+ UPDATE ... FROM syntax ဖြင့် ၁ ကြိမ်တည်း Update လုပ်သည်
  */
 async function recalculateLedgerBalances(db, tableName, targetFy = null) {
   if (!tableName) return;
   try {
     if (targetFy) {
-      // 🎯 သီးသန့် FY တစ်ခုတည်းကိုသာ ထိရောက်စွာ Update လုပ်ခြင်း
       const normFy = normalizeFyStr(targetFy);
       const cleanFy = normFy.replace(/^FY\s*/i, '');
 
@@ -64,12 +63,13 @@ async function recalculateLedgerBalances(db, tableName, targetFy = null) {
           WHERE fy = ? OR fy = ?
         )
         UPDATE ${tableName} 
-        SET no = (SELECT calc_no FROM calculated WHERE calculated.id = ${tableName}.id),
-            balances = (SELECT calc_bal FROM calculated WHERE calculated.id = ${tableName}.id)
-        WHERE id IN (SELECT id FROM calculated);
+        SET no = calculated.calc_no,
+            balances = calculated.calc_bal
+        FROM calculated
+        WHERE ${tableName}.id = calculated.id;
       `).bind(normFy, cleanFy).run();
+
     } else {
-      // 🎯 FY သီးသန့်မပါပါက FY အားလုံးကို PARTITION BY fy ဖြင့် Query ၁ ကြိမ်တည်း တွက်ချက်ခြင်း
       await db.prepare(`
         WITH calculated AS (
           SELECT id,
@@ -85,13 +85,14 @@ async function recalculateLedgerBalances(db, tableName, targetFy = null) {
           FROM ${tableName}
         )
         UPDATE ${tableName} 
-        SET no = (SELECT calc_no FROM calculated WHERE calculated.id = ${tableName}.id),
-            balances = (SELECT calc_bal FROM calculated WHERE calculated.id = ${tableName}.id)
-        WHERE id IN (SELECT id FROM calculated);
+        SET no = calculated.calc_no,
+            balances = calculated.calc_bal
+        FROM calculated
+        WHERE ${tableName}.id = calculated.id;
       `).run();
     }
   } catch (e) {
-    console.warn(`Running Balance & NO Recalculation Warning for ${tableName}:`, e.message);
+    console.warn(`Running Balance Recalculation Warning for ${tableName}:`, e.message);
   }
 }
 
@@ -105,11 +106,8 @@ async function generateVoucherNo(db, tableName, prefix, entryDate) {
     const y = parts[0].slice(-2);
     ddmmyy = `${parts[2]}${parts[1]}${y}`;
   } else {
-    const now = new Date();
-    const dd = String(now.getDate()).padStart(2, '0');
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const yy = String(now.getFullYear()).slice(-2);
-    ddmmyy = `${dd}${mm}${yy}`;
+    const now = new Date(Date.now() + (6.5 * 3600 * 1000));
+    ddmmyy = `${String(now.getDate()).padStart(2, '0')}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getFullYear()).slice(-2)}`;
   }
 
   const pattern = `${prefix}-${ddmmyy}-%`;
@@ -168,7 +166,6 @@ export async function getStaffData(db, body, userSession) {
     let totalNetAmt = 0;
 
     const staffList = rawStaffList.map(item => {
-      // 💡 Resigned Date ပါရှိပါက Inactive အဖြစ် အလိုအလျောက် သတ်မှတ်သည်
       const resignedDate = item.resigned_date || item.resignedDate || '';
       const isInactive = (item.status || '').toLowerCase() === 'inactive' || !!resignedDate;
       const finalStatus = isInactive ? 'Inactive' : 'Active';
@@ -183,7 +180,7 @@ export async function getStaffData(db, body, userSession) {
         else if (gender === 'female' || gender === 'မ' || gender.startsWith('fem')) femaleCount++;
       }
 
-      // 🛡️ Redact sensitive financial, personal & ID fields for unauthorized roles (Staff, Viewer, Cashier)
+      // 🛡️ Redact sensitive financial, personal & ID fields for unauthorized roles
       if (!canSeeSensitive) {
         return {
           id: item.id,
@@ -297,7 +294,6 @@ export async function saveStaffEntry(db, userSession, body) {
     const joinDateVal = body.joinDate || new Date().toISOString().split('T')[0];
     const computedFundDate = body.fundDate || calculateFundDate(joinDateVal);
 
-    // 💡 Resigned Date ပါပါက Status အား Inactive အဖြစ် Database ထဲ သို့ တိုက်ရိုက် သိမ်းဆည်းသည်
     const resignedDateVal = body.resignedDate || body.resigned_date || '';
     const computedStatus = resignedDateVal.trim() ? 'Inactive' : (body.status || 'Active');
 
@@ -372,7 +368,6 @@ export async function updateStaffEntry(db, userSession, body) {
     const joinDateVal = body.joinDate || new Date().toISOString().split('T')[0];
     const computedFundDate = body.fundDate || calculateFundDate(joinDateVal);
 
-    // 💡 Resigned Date ပါပါက Status အား Inactive အဖြစ် Database ထဲ သို့ တိုက်ရိုက် သိမ်းဆည်းသည်
     const resignedDateVal = body.resignedDate || body.resigned_date || '';
     const computedStatus = resignedDateVal.trim() ? 'Inactive' : (body.status || 'Active');
 
@@ -429,7 +424,7 @@ export async function deleteStaffEntry(db, userSession, body) {
 }
 
 /**
- * 💡 Save HR Payroll Entry (Date-derived Dynamic FY & Fast Recalculation)
+ * 💡 Save HR Payroll Entry (Phase 2.2: Atomic Batch with Staff Accruals Rollback Guard & March Boundary)
  */
 export async function saveHrPayrollForm(db, userSession, body) {
   try {
@@ -445,13 +440,13 @@ export async function saveHrPayrollForm(db, userSession, body) {
 
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const dObj = new Date(dateStr);
-    const now = new Date();
+    const now = new Date(Date.now() + (6.5 * 3600 * 1000));
     const fallbackMY = `${months[now.getMonth()]}-${String(now.getFullYear()).slice(-2)}`;
     const myVal = !isNaN(dObj.getTime()) ? `${months[dObj.getMonth()]}-${String(dObj.getFullYear()).slice(-2)}` : fallbackMY;
 
-    // 🎯 Transaction Date အလိုက် Dynamic FY ကို အလိုအလျောက် တွက်ချက်ခြင်း
+    // 🎯 FIX (Phase 1.1): Transaction Date အလိုက် Dynamic FY ကို မတ်လအခြေခံ (Month < 2) ဖြင့် အလိုအလျောက် တွက်ချက်ခြင်း
     let fyYear = dObj.getFullYear();
-    if (dObj.getMonth() < 3) fyYear -= 1;
+    if (dObj.getMonth() < 2) fyYear -= 1;
     const calculatedFy = `FY ${fyYear}-${fyYear + 1}`;
     const fy = normalizeFyStr(body.fy || calculatedFy);
 
@@ -465,23 +460,20 @@ export async function saveHrPayrollForm(db, userSession, body) {
     const unpaidFund = parseFloat(body.unpaidFund || 0);
 
     const sqlVerb = isMigration ? "INSERT OR REPLACE INTO" : "INSERT INTO";
-    const stmt = `${sqlVerb} payroll (
+    const expenseStmt = db.prepare(`${sqlVerb} payroll (
       no, date, category, description, method, debit, credit, balances,
       unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name,
       created_by, created_at, uniqueid
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`;
-
-    await db.prepare(stmt).bind(
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`).bind(
       newNo, dateStr, category, body.description || '', body.method || 'Cash',
       debitVal, creditVal, unpaidBonus, unpaidFund,
       body.transfer || '', vrNoVal, myVal, fy,
       'HR Payroll Exp Book', userSession?.name || 'Admin', uniqueid
-    ).run();
+    );
 
-    // ⚡ သက်ဆိုင်ရာ FY တစ်ခုတည်းကိုသာ O(1) Window Function ဖြင့် Recalculate လုပ်သည်
-    await recalculateLedgerBalances(db, 'payroll', fy);
+    // 🛡️ Phase 2.2: Accruals Rollback Guard via db.batch()
+    const batchStatements = [expenseStmt];
 
-    // 🛡️ Migration မဟုတ်သော Live အခါမှသာ Staff Balance ကို update ပြုလုပ်မည် (Accruals ၂ ထပ်မဖြစ်စေရန်)
     if (!isMigration && staffIdStr) {
       const targetStaffId = parseInt(staffIdStr, 10);
       const staffRow = await db.prepare("SELECT * FROM staff_fulltime WHERE staff_id = ? OR id = ? LIMIT 1").bind(targetStaffId, targetStaffId).first();
@@ -491,26 +483,32 @@ export async function saveHrPayrollForm(db, userSession, body) {
           const newUnpaidBonus = (parseFloat(staffRow.unpaid_bonus || 0)) + parseFloat(staffRow.bonus || 0);
           const newUnpaidFund = (parseFloat(staffRow.unpaid_fund || 0)) + parseFloat(staffRow.fund || 0);
 
-          await db.prepare(`UPDATE staff_fulltime SET 
-            unpaid_bonus = ?, unpaid_fund = ? 
-            WHERE id = ?`).bind(newUnpaidBonus, newUnpaidFund, staffRow.id).run();
-
+          batchStatements.push(
+            db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ?, unpaid_fund = ? WHERE id = ?`).bind(newUnpaidBonus, newUnpaidFund, staffRow.id)
+          );
         } else if (category === 'Full Time Bonus') {
           const currentBonus = parseFloat(staffRow.unpaid_bonus || 0);
           const newUnpaidBonus = Math.max(0, currentBonus - creditVal);
 
-          await db.prepare(`UPDATE staff_fulltime SET 
-            unpaid_bonus = ? WHERE id = ?`).bind(newUnpaidBonus, staffRow.id).run();
-
+          batchStatements.push(
+            db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ? WHERE id = ?`).bind(newUnpaidBonus, staffRow.id)
+          );
         } else if (category === 'Full Time Fund') {
           const currentFund = parseFloat(staffRow.unpaid_fund || 0);
           const newUnpaidFund = Math.max(0, currentFund - creditVal);
 
-          await db.prepare(`UPDATE staff_fulltime SET 
-            unpaid_fund = ? WHERE id = ?`).bind(newUnpaidFund, staffRow.id).run();
+          batchStatements.push(
+            db.prepare(`UPDATE staff_fulltime SET unpaid_fund = ? WHERE id = ?`).bind(newUnpaidFund, staffRow.id)
+          );
         }
       }
     }
+
+    // Single Atomic Execution (One Fails -> All Rolled Back)
+    await db.batch(batchStatements);
+
+    // ⚡ သက်ဆိုင်ရာ FY တစ်ခုတည်းကိုသာ O(1) Window Function ဖြင့် Recalculate လုပ်သည်
+    await recalculateLedgerBalances(db, 'payroll', fy);
 
     return { 
       success: true, 
