@@ -316,13 +316,25 @@ function renderBalancesControlTable(data) {
 
 /**
  * 💡 6. Render Export Table (Tab 2: Strict 2-Line Balanced Layout & Full FY Dropdowns)
+ * 🎯 Auto-selects Current Active FY (e.g. FY 2026-2027)
  */
 function renderExportTable() {
   const tbody = document.getElementById('settings-export-table-body');
   if (!tbody) return;
 
   const fys = (gAvailableFys && gAvailableFys.length > 0) ? gAvailableFys : ["2026-2027", "2025-2026"];
-  const fyOptions = fys.map(fy => `<option value="${fy}">FY ${fy}</option>`).join('');
+
+  // 🎯 လက်ရှိ ရောက်ရှိနေသော ပညာသင်နှစ် (ဥပမာ: "2026-2027") ကို Auto ရယူခြင်း
+  const currentActiveFy = (typeof window.getCurrentAcademicYear === 'function') 
+    ? window.getCurrentAcademicYear() 
+    : '2026-2027';
+
+  // 💡 လက်ရှိနှစ်နှင့် ကိုက်ညီသော option တွင် 'selected' attribute ထည့်သွင်းခြင်း
+  const fyOptions = fys.map(fy => {
+    const cleanFy = String(fy).trim().replace(/^FY\s*/i, '');
+    const isSelected = (cleanFy === currentActiveFy);
+    return `<option value="${cleanFy}" ${isSelected ? 'selected' : ''}>FY ${cleanFy}</option>`;
+  }).join('');
 
   tbody.innerHTML = `
     <!-- ROW 1: MAIN CASH BOOK (13 TABS SPLIT EVENLY INTO 2 CLEAN LINES) -->
