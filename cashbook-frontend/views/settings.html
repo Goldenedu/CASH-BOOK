@@ -8,109 +8,282 @@
         <i class="fa-solid fa-gears text-base"></i>
       </div>
       <div>
-        <h2 class="text-xs font-black tracking-wide uppercase text-indigo-300">System Control Center</h2>
-        <p class="text-[10px] mt-0.5 leading-relaxed text-slate-400">ERP စနစ်၏ ဘဏ်/လက်ငင်းငွေစာရင်း ထိန်းချုပ်မှုများ၊ ဓမ္မသတိပေးစာနှင့် အချက်အလက်များ အရန်သင့် သိမ်းဆည်းခြင်း စင်တာ ဖြစ်ပါသည်။</p>
+        <h2 class="text-xs font-black tracking-wide uppercase text-indigo-300">System Settings & Controls</h2>
+        <p class="text-[10px] mt-0.5 leading-relaxed text-slate-400">ERP စနစ်၏ ဘဏ်/လက်ငင်းငွေစာရင်း ထိန်းချုပ်မှုများ၊ ဒေတာ Backup နှင့် Cloudflare D1 Database အသုံးပြုမှု စောင့်ကြည့်စင်တာ ဖြစ်ပါသည်။</p>
+      </div>
+    </div>
+    
+    <!-- Quick Refresh Button -->
+    <button onclick="loadSettingsData(true)" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 flex items-center gap-2" title="Refresh All Data">
+      <i class="fa-solid fa-rotate text-xs"></i>
+      <span class="hidden sm:inline">Refresh Data</span>
+    </button>
+  </div>
+
+  <!-- 💡 2. Settings Sub-Tab Navigation Bar (Tab ၃ ခု ခွဲဝေမှု) -->
+  <div class="flex flex-wrap items-center gap-2.5 pb-1 border-b border-slate-800/80">
+    <!-- Tab 1 Button -->
+    <button id="btn-settings-tab-balances" onclick="switchSettingsSubTab('balances')"
+      class="px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 border bg-indigo-600 text-white border-indigo-500/40 shadow-lg shadow-indigo-600/20">
+      <i class="fa-solid fa-scale-balanced text-sm"></i>
+      <span>Balances & Mindfulness</span>
+    </button>
+
+    <!-- Tab 2 Button -->
+    <button id="btn-settings-tab-export" onclick="switchSettingsSubTab('export')"
+      class="px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border bg-slate-900/90 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700">
+      <i class="fa-solid fa-file-csv text-sm text-emerald-400"></i>
+      <span>Data Export & Backup Center</span>
+    </button>
+
+    <!-- Tab 3 Button (D1 Database Monitor) -->
+    <button id="btn-settings-tab-d1" onclick="switchSettingsSubTab('d1')"
+      class="px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border bg-slate-900/90 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700">
+      <i class="fa-solid fa-server text-sm text-amber-400"></i>
+      <span>D1 Database Health & Quota</span>
+      <span id="d1-tab-status-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-1"></span>
+    </button>
+  </div>
+
+  <!-- ============================================================================== -->
+  <!-- 💡 TAB 1 PANEL: BALANCES CONTROL & MINDFULNESS -->
+  <!-- ============================================================================== -->
+  <div id="panel-settings-balances" class="space-y-5">
+    
+    <!-- Top Action Toolbar for Tab 1 -->
+    <div class="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl bg-[#0c1322] border border-slate-800 text-xs">
+      <div class="flex items-center gap-2 text-slate-300">
+        <i class="fa-solid fa-circle-info text-sky-400"></i>
+        <span class="text-[11px] text-slate-400">စာရင်းကိုင် (Accountant) နှင့် ငွေကိုင် (Cashier) စာအုပ်များအကြား လက်ကျန် ကွာဟမှုများကို တိုက်ဆိုင်စစ်ဆေးသည့် ဇယား ဖြစ်ပါသည်။</span>
+      </div>
+      <button onclick="triggerAutoRecalculateAllBalances()" class="px-3.5 py-1.5 rounded-lg text-xs font-black transition-all bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20 flex items-center gap-2">
+        <i class="fa-solid fa-calculator"></i>
+        <span>Auto Recalculate All Balances</span>
+      </button>
+    </div>
+
+    <!-- Grid Layout (Balances Control + Always Be Mindful) -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
+
+      <!-- ROW 1 - LEFT: BALANCES CONTROL -->
+      <div class="p-5 rounded-2xl shadow-xl flex flex-col space-y-3.5 h-full bg-[#0c1322] border border-slate-800">
+        <div class="flex justify-between items-center pb-2.5 border-b border-slate-800">
+          <h3 class="text-xs font-black uppercase tracking-wider flex items-center gap-2 text-sky-400">
+            <i class="fa-solid fa-scale-balanced text-sm"></i> Balances Control (Real-Time Comparison)
+          </h3>
+          <button onclick="loadSettingsData(true)" class="p-1.5 rounded-md text-[10px] font-bold transition-all bg-slate-800 border border-slate-700 text-slate-300 hover:text-white" title="Refresh Balances">
+            <i class="fa-solid fa-rotate text-xs"></i>
+          </button>
+        </div>
+
+        <div class="overflow-x-auto table-container flex-grow">
+          <table class="w-full text-left border-collapse text-xs min-w-[380px]">
+            <thead>
+              <tr class="text-slate-400 font-bold uppercase text-[10px] bg-[#0e172a] border-b border-slate-800">
+                <th class="py-2.5 px-3">Book Name</th>
+                <th class="py-2.5 px-3 text-right">Accountant</th>
+                <th class="py-2.5 px-3 text-right">Cashier</th>
+                <th class="py-2.5 px-3 text-right">Control</th>
+              </tr>
+            </thead>
+            <tbody id="settings-balances-table-body" class="divide-y divide-slate-800/30 text-slate-200">
+              <tr><td colspan="4" class="py-6 text-center italic text-slate-500">Balances Control အချက်အလက်များ ဖတ်ယူနေပါသည်...</td></tr>
+            </tbody>
+            <tfoot id="settings-balances-table-foot"></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- ROW 1 - RIGHT: ALWAYS BE MINDFUL -->
+      <div class="p-5 rounded-2xl shadow-xl flex flex-col space-y-3 relative overflow-hidden h-full justify-between"
+        style="background: linear-gradient(145deg, #0c1322 0%, #18192d 50%, #1c1508 100%); border: 1px solid rgba(245, 158, 11, 0.35);">
+        <div>
+          <div class="flex items-center gap-2.5 pb-2.5" style="border-bottom: 1px solid rgba(245, 158, 11, 0.2);">
+            <div class="p-2.5 rounded-lg" style="background-color: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); color: #fbbf24;">
+              <i class="fa-solid fa-dharmachakra text-base"></i>
+            </div>
+            <div>
+              <h3 class="text-xs font-black uppercase tracking-widest" style="color: #fbbf24;">Always Be Mindful</h3>
+              <p class="text-[10px] uppercase tracking-wider font-semibold" style="color: #f59e0b;">Mindfulness in Action</p>
+            </div>
+          </div>
+
+          <div class="p-4 rounded-xl space-y-2.5 font-serif italic text-xs sm:text-sm shadow-inner mt-3" style="background-color: rgba(9, 13, 22, 0.7); border: 1px solid rgba(245, 158, 11, 0.25);">
+            <p style="color: #fef08a;" class="leading-relaxed">In every sight, -- မင်း ဘာပဲမြင်မြင် ... </p>
+            <p style="color: #7dd3fc;" class="leading-relaxed">In every sound, -- မင်း ဘာပဲကြားကြား ... </p>
+            <p style="color: #6ee7b7;" class="leading-relaxed">In every smell, -- မင်း ဘယ်လို အနံ့ပဲရရ ...</p>
+            <p style="color: #fda4af;" class="leading-relaxed">In every taste, -- မင်း ဘာပဲစားစား ... </p>
+            <p style="color: #5eead4;" class="leading-relaxed">In every touch, -- မင်း ဘာနဲ့ပဲ ထိတွေ့ရပါစေ ... </p>
+            <p style="color: #fbbf24; border-top: 1px solid rgba(245, 158, 11, 0.25);" class="font-extrabold not-italic pt-2 text-xs sm:text-sm leading-relaxed">In every thought -- မင်း ဘာပဲ တွေးတွေး... —stay mindful. -- အမြဲသတိ ထားပါလေ ...</p>
+          </div>
+        </div>
+
+        <div class="pt-2.5 flex justify-between items-center text-xs" style="border-top: 1px solid rgba(245, 158, 11, 0.2);">
+          <span class="font-black" style="color: #fbbf24;">Appamadena sampadetha <span class="font-sans font-normal italic text-[10px]" style="color: #f59e0b;">— The Buddha</span></span>
+          <span class="text-[9px] font-black px-3 py-1 rounded-full font-sans uppercase" style="background-color: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);">ERP Wisdom</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================================== -->
+  <!-- 💡 TAB 2 PANEL: FY DATA EXPORT & BACKUP CENTER -->
+  <!-- ============================================================================== -->
+  <div id="panel-settings-export" class="hidden space-y-4">
+    <div class="bg-[#0c1322] border border-slate-800 p-5 rounded-2xl shadow-xl space-y-4">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-3 gap-2">
+        <div>
+          <h3 class="text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+            <i class="fa-solid fa-file-csv text-base"></i> FY Data Export & Backup Center
+          </h3>
+          <p class="text-[10px] text-slate-400 mt-0.5">D1 Database ထဲမှ စာရင်းအုပ်များကို FY အလိုက် Real CSV / Multi-Tab Excel ဒေါင်းလုဒ်ဆွဲခြင်း နှင့် Gmail သို့ အီးမေးလ် Backup ပို့ဆောင်ခြင်း စင်တာ</p>
+        </div>
+        <span class="text-[10px] font-bold text-emerald-300 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1.5">
+          <i class="fa-solid fa-database"></i> Dynamic FY Auto-Populated
+        </span>
+      </div>
+
+      <!-- Full Width Table -->
+      <div class="w-full overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="bg-[#0e172a] text-slate-400 font-bold uppercase text-[10px] border-b border-slate-800">
+              <th class="py-3 px-2 w-10 text-center">NO</th>
+              <th class="py-3 px-3 min-w-[260px]">LEDGER / BOOK GROUP NAME</th>
+              <th class="py-3 px-2 w-32 text-center">CATEGORY</th>
+              <th class="py-3 px-2 w-40 text-center">SELECT FY</th>
+              <th class="py-3 px-3 w-60 text-center">ACTIONS</th>
+            </tr>
+          </thead>
+          <tbody id="settings-export-table-body" class="divide-y divide-slate-800/40 text-slate-200">
+            <!-- Dynamic Rows via js/settings.js -->
+            <tr><td colspan="5" class="py-6 text-center italic text-slate-500">Backup စာရင်းများ ဖတ်ယူနေပါသည်...</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
 
-  <!-- 2. Main Grid Layout (Row 1: Balances Control & Mindfulness Quote) -->
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+  <!-- ============================================================================== -->
+  <!-- 💡 TAB 3 PANEL: CLOUDFLARE D1 DATABASE HEALTH & QUOTA MONITOR (NEW) -->
+  <!-- ============================================================================== -->
+  <div id="panel-settings-d1" class="hidden space-y-5">
+    
+    <!-- 1. D1 Health & Plan Upgrade Reminder Banner -->
+    <div id="d1-health-banner" class="p-4 rounded-2xl border transition-all duration-300 bg-emerald-950/20 border-emerald-500/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div class="flex items-start gap-3.5">
+        <div id="d1-health-icon-box" class="p-3 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-lg">
+          <i id="d1-health-icon" class="fa-solid fa-shield-heart"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2.5">
+            <h3 id="d1-health-title" class="text-xs font-black uppercase tracking-wider text-emerald-300">Cloudflare D1 Database Status: Healthy</h3>
+            <span id="d1-health-badge" class="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Free Tier (5 GB)</span>
+          </div>
+          <p id="d1-health-desc" class="text-[11px] text-slate-300 mt-1 leading-relaxed">လက်ရှိတွင် Cloudflare Free Plan ၏ သတ်မှတ်ချက်အတွင်း စာရင်းများအား လုံလောက်စွာ သိမ်းဆည်းသုံးစွဲနိုင်သော အခြေအနေ ဖြစ်ပါသည်။</p>
+        </div>
+      </div>
+      <a href="https://dash.cloudflare.com/" target="_blank" rel="noopener noreferrer"
+        class="px-4 py-2 rounded-xl text-xs font-black transition-all bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 flex items-center gap-2 whitespace-nowrap shadow-md">
+        <i class="fa-solid fa-arrow-up-right-from-square text-[11px] text-amber-400"></i>
+        <span>Cloudflare Dashboard</span>
+      </a>
+    </div>
 
-    <!-- 💡 ROW 1 - LEFT: BALANCES CONTROL -->
-    <div class="p-5 rounded-xl shadow-xl flex flex-col space-y-3 h-full bg-[#0c1322] border border-slate-800">
-      <div class="flex justify-between items-center pb-2.5 border-b border-slate-800">
-        <h3 class="text-xs font-black uppercase tracking-wider flex items-center gap-2 text-sky-400">
-          <i class="fa-solid fa-scale-balanced text-sm"></i> Balances Control (Real-Time Comparison)
-        </h3>
-        <button onclick="loadSettingsData(true)" class="p-1.5 rounded-md text-[10px] font-bold transition-all bg-slate-800 border border-slate-700 text-slate-300 hover:text-white" title="Refresh Balances">
-          <i class="fa-solid fa-rotate text-xs"></i>
-        </button>
+    <!-- 2. Top 3 KPI Cards Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+      
+      <!-- Card 1: Storage Size & Progress Bar -->
+      <div class="p-5 rounded-2xl shadow-xl bg-[#0c1322] border border-slate-800 space-y-3.5">
+        <div class="flex justify-between items-center text-xs">
+          <span class="font-bold text-slate-400 uppercase tracking-wider text-[10px]">Database Storage Used</span>
+          <span id="d1-storage-percent" class="font-mono font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">0.00%</span>
+        </div>
+        <div>
+          <div class="flex items-baseline gap-1.5">
+            <h2 id="d1-storage-used-mb" class="text-2xl font-extrabold text-white font-mono">0.00</h2>
+            <span class="text-xs font-bold text-slate-400">MB</span>
+            <span class="text-xs text-slate-500 font-mono">/ <span id="d1-storage-max-mb">5,000</span> MB (5 GB)</span>
+          </div>
+        </div>
+        <!-- Visual Progress Bar -->
+        <div class="w-full bg-slate-800/80 rounded-full h-2.5 overflow-hidden border border-slate-700/50">
+          <div id="d1-storage-bar" class="h-full bg-emerald-500 rounded-full transition-all duration-700" style="width: 0%;"></div>
+        </div>
+        <p class="text-[10px] text-slate-500 leading-relaxed">SQLite Page Count & Size အရ တကယ့်ဖိုင်အရွယ်အစားကို တိုက်ရိုက်တွက်ချက်ထားခြင်း ဖြစ်ပါသည်။</p>
       </div>
 
-      <div class="overflow-x-auto table-container flex-grow">
-        <table class="w-full text-left border-collapse text-xs min-w-[380px]">
+      <!-- Card 2: Total Records Count -->
+      <div class="p-5 rounded-2xl shadow-xl bg-[#0c1322] border border-slate-800 space-y-3.5">
+        <div class="flex justify-between items-center text-xs">
+          <span class="font-bold text-slate-400 uppercase tracking-wider text-[10px]">Total Stored Records</span>
+          <span class="p-1 rounded bg-indigo-500/10 text-indigo-400"><i class="fa-solid fa-list-check text-xs"></i></span>
+        </div>
+        <div>
+          <h2 id="d1-total-rows" class="text-2xl font-extrabold text-white font-mono">0</h2>
+          <p class="text-[11px] text-indigo-300 font-bold mt-1">စာရင်းအုပ် (<span id="d1-total-tables">18</span>) ခုလုံး၏ စုစုပေါင်း မှတ်တမ်းများ</p>
+        </div>
+        <p class="text-[10px] text-slate-500 leading-relaxed">ကျောင်းလခ၊ ရုံးသုံးစရိတ်၊ ကျောင်းသားနှင့် ဝန်ထမ်း မှတ်တမ်းများအားလုံး ပါဝင်သည်။</p>
+      </div>
+
+      <!-- Card 3: Free Plan Daily Limits Policy -->
+      <div class="p-5 rounded-2xl shadow-xl bg-[#0c1322] border border-slate-800 space-y-2.5">
+        <div class="flex justify-between items-center text-xs">
+          <span class="font-bold text-slate-400 uppercase tracking-wider text-[10px]">Cloudflare Free Quota</span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20">Daily Policy</span>
+        </div>
+        <div class="space-y-1.5 text-xs font-mono pt-1">
+          <div class="flex justify-between items-center py-1 border-b border-slate-800/60">
+            <span class="text-slate-400 text-[11px]">Rows Read:</span>
+            <span class="font-bold text-slate-200">5,000,000 / day</span>
+          </div>
+          <div class="flex justify-between items-center py-1 border-b border-slate-800/60">
+            <span class="text-slate-400 text-[11px]">Rows Write:</span>
+            <span class="font-bold text-slate-200">100,000 / day</span>
+          </div>
+          <div class="flex justify-between items-center py-1">
+            <span class="text-slate-400 text-[11px]">Max Storage:</span>
+            <span class="font-bold text-emerald-400">5 GB (5,000 MB)</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 3. Table-by-Table Data Breakdown List -->
+    <div class="bg-[#0c1322] border border-slate-800 p-5 rounded-2xl shadow-xl space-y-4">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-3 gap-2">
+        <div>
+          <h3 class="text-xs font-black text-sky-400 uppercase tracking-wider flex items-center gap-2">
+            <i class="fa-solid fa-table-cells text-base"></i> Database Tables Data Breakdown
+          </h3>
+          <p class="text-[10px] text-slate-400 mt-0.5">မည်သည့် စာရင်းအုပ်ဇယားက ဒေတာအများဆုံး သုံးစွဲထားသည်ကို မှတ်တမ်းအလိုက် စစ်ဆေးနိုင်သော ဇယား</p>
+        </div>
+        <span class="text-[10px] font-bold text-slate-400 bg-slate-800 px-3 py-1 rounded-full border border-slate-700">
+          Sorted by Highest Records
+        </span>
+      </div>
+
+      <!-- Breakdown Table -->
+      <div class="w-full overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs min-w-[500px]">
           <thead>
-            <tr class="text-slate-400 font-bold uppercase text-[10px] bg-[#0e172a] border-b border-slate-800">
-              <th class="py-2.5 px-3">Book Name</th>
-              <th class="py-2.5 px-3 text-right">Accountant</th>
-              <th class="py-2.5 px-3 text-right">Cashier</th>
-              <th class="py-2.5 px-3 text-right">Control</th>
+            <tr class="bg-[#0e172a] text-slate-400 font-bold uppercase text-[10px] border-b border-slate-800">
+              <th class="py-2.5 px-3 w-12 text-center">NO</th>
+              <th class="py-2.5 px-3 min-w-[200px]">TABLE NAME (စာအုပ်အမည်)</th>
+              <th class="py-2.5 px-3 w-40">DATABASE TABLE KEY</th>
+              <th class="py-2.5 px-3 w-36 text-right">TOTAL ROWS</th>
+              <th class="py-2.5 px-3 min-w-[160px]">RELATIVE RATIO</th>
             </tr>
           </thead>
-          <tbody id="settings-balances-table-body" class="divide-y divide-slate-800/30 text-slate-200">
-            <tr><td colspan="4" class="py-4 text-center italic text-slate-500">Balances Control အချက်အလက်များ ဖတ်ယူနေပါသည်...</td></tr>
+          <tbody id="d1-table-breakdown-body" class="divide-y divide-slate-800/40 text-slate-200">
+            <tr><td colspan="5" class="py-6 text-center italic text-slate-500">Database စာရင်းများ တွက်ချက်နေပါသည်...</td></tr>
           </tbody>
-          <tfoot id="settings-balances-table-foot"></tfoot>
         </table>
       </div>
     </div>
 
-    <!-- 💡 ROW 1 - RIGHT: ALWAYS BE MINDFUL -->
-    <div class="p-5 rounded-xl shadow-xl flex flex-col space-y-3 relative overflow-hidden h-full justify-between"
-      style="background: linear-gradient(145deg, #0c1322 0%, #18192d 50%, #1c1508 100%); border: 1px solid rgba(245, 158, 11, 0.35);">
-      <div>
-        <div class="flex items-center gap-2.5 pb-2.5" style="border-bottom: 1px solid rgba(245, 158, 11, 0.2);">
-          <div class="p-2.5 rounded-lg" style="background-color: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); color: #fbbf24;">
-            <i class="fa-solid fa-dharmachakra text-base"></i>
-          </div>
-          <div>
-            <h3 class="text-xs font-black uppercase tracking-widest" style="color: #fbbf24;">Always Be Mindful</h3>
-            <p class="text-[10px] uppercase tracking-wider font-semibold" style="color: #f59e0b;">Mindfulness in Action</p>
-          </div>
-        </div>
-
-        <div class="p-4 rounded-xl space-y-2.5 font-serif italic text-xs sm:text-sm shadow-inner mt-3" style="background-color: rgba(9, 13, 22, 0.7); border: 1px solid rgba(245, 158, 11, 0.25);">
-          <p style="color: #fef08a;" class="leading-relaxed">In every sight, -- မင်း ဘာပဲမြင်မြင် ... </p>
-          <p style="color: #7dd3fc;" class="leading-relaxed">In every sound, -- မင်း ဘာပဲကြားကြား ... </p>
-          <p style="color: #6ee7b7;" class="leading-relaxed">In every smell, -- မင်း ဘယ်လို အနံ့ပဲရရ ...</p>
-          <p style="color: #fda4af;" class="leading-relaxed">In every taste, -- မင်း ဘာပဲစားစား ... </p>
-          <p style="color: #5eead4;" class="leading-relaxed">In every touch, -- မင်း ဘာနဲ့ပဲ ထိတွေ့ရပါစေ ... </p>
-          <p style="color: #fbbf24; border-top: 1px solid rgba(245, 158, 11, 0.25);" class="font-extrabold not-italic pt-2 text-xs sm:text-sm leading-relaxed">In every thought -- မင်း ဘာပဲ တွေးတွေး... —stay mindful. -- အမြဲသတိ ထားပါလေ ...</p>
-        </div>
-      </div>
-
-      <div class="pt-2.5 flex justify-between items-center text-xs" style="border-top: 1px solid rgba(245, 158, 11, 0.2);">
-        <span class="font-black" style="color: #fbbf24;">Appamadena sampadetha <span class="font-sans font-normal italic text-[10px]" style="color: #f59e0b;">— The Buddha</span></span>
-        <span class="text-[9px] font-black px-3 py-1 rounded-full font-sans uppercase" style="background-color: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);">ERP Wisdom</span>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- 💡 ROW 2: CONSOLIDATED FY DATA EXPORT & BACKUP CENTER -->
-  <div class="bg-[#0c1322] border border-slate-800 p-5 rounded-2xl shadow-xl space-y-4">
-    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-3 gap-2">
-      <div>
-        <h3 class="text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center gap-2">
-          <i class="fa-solid fa-file-csv text-base"></i> FY Data Export & Backup Center
-        </h3>
-        <p class="text-[10px] text-slate-400 mt-0.5">D1 Database ထဲမှ စာရင်းအုပ်များကို FY အလိုက် Real CSV ဖိုင် ဒေါင်းလုဒ်ဆွဲခြင်း နှင့် အီးမေးလ် ပေးပို့ခြင်း စင်တာ</p>
-      </div>
-      <span class="text-[10px] font-bold text-emerald-300 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
-        <i class="fa-solid fa-database mr-1"></i> Dynamic FY Auto-Populated
-      </span>
-    </div>
-
-    <!-- 💡 Full Width Table with Responsive Grid Balance (No Scrolling) -->
-    <div class="w-full overflow-x-auto">
-      <table class="w-full text-left border-collapse text-xs">
-        <thead>
-          <tr class="bg-[#0e172a] text-slate-400 font-bold uppercase text-[10px] border-b border-slate-800">
-            <th class="py-3 px-2 w-10 text-center">NO</th>
-            <th class="py-3 px-3 min-w-[260px]">LEDGER / BOOK GROUP NAME</th>
-            <th class="py-3 px-2 w-32 text-center">CATEGORY</th>
-            <!-- 💡 FY အတွက် နေရာကျယ်ကျယ် w-40 သတ်မှတ်ထားသည် -->
-            <th class="py-3 px-2 w-40 text-center">SELECT FY</th>
-            <!-- 💡 ခလုတ်များ အားလုံး နေရာဆန့်စေရန် w-60 သတ်မှတ်ထားသည် -->
-            <th class="py-3 px-3 w-60 text-center">ACTIONS</th>
-          </tr>
-        </thead>
-        <tbody id="settings-export-table-body" class="divide-y divide-slate-800/40 text-slate-200">
-          <!-- Dynamic 2 Rows via js/settings.js -->
-        </tbody>
-      </table>
-    </div>
   </div>
 
 </div>
