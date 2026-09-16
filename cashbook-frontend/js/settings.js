@@ -316,20 +316,29 @@ function renderBalancesControlTable(data) {
 
 /**
  * 💡 6. Render Export Table (Tab 2: Strict 2-Line Balanced Layout & Full FY Dropdowns)
- * 🎯 Auto-selects Current Active FY (e.g. FY 2026-2027)
+ * 🎯 100% Dynamic Auto FY Engine (Zero Hardcoding - ဘယ်နှစ်ရောက်ရောက် Auto တွက်သည်)
  */
 function renderExportTable() {
   const tbody = document.getElementById('settings-export-table-body');
   if (!tbody) return;
 
-  const fys = (gAvailableFys && gAvailableFys.length > 0) ? gAvailableFys : ["2026-2027", "2025-2026"];
-
-  // 🎯 လက်ရှိ ရောက်ရှိနေသော ပညာသင်နှစ် (ဥပမာ: "2026-2027") ကို Auto ရယူခြင်း
+  // 🎯 ၁။ လက်ရှိ ရောက်ရှိနေသော ပညာသင်နှစ် (ဥပမာ: "2026-2027") ကို System Date မှ Auto ရယူခြင်း
   const currentActiveFy = (typeof window.getCurrentAcademicYear === 'function') 
     ? window.getCurrentAcademicYear() 
     : '2026-2027';
 
-  // 💡 လက်ရှိနှစ်နှင့် ကိုက်ညီသော option တွင် 'selected' attribute ထည့်သွင်းခြင်း
+  // 🎯 ၂။ အကယ်၍ API မရောက်သေးပါက သုံးမည့် Fallback ကိုပါ လက်ရှိနှစ်အလိုက် Auto တွက်ပေးခြင်း
+  // (ဥပမာ- ၂၀၂၇ ရောက်လျှင် "2027-2028", "2026-2027" ဟု Auto ပြောင်းမည်)
+  const startYr = parseInt(currentActiveFy.split('-')[0], 10) || new Date().getFullYear();
+  const dynamicFallbackFys = [
+    `${startYr}-${startYr + 1}`,
+    `${startYr - 1}-${startYr}`
+  ];
+
+  // ၃။ D1 Database စာရင်း ရရှိပါက ၎င်းကို သုံးမည်၊ မရသေးပါက Dynamic Fallback ကို သုံးမည်
+  const fys = (gAvailableFys && gAvailableFys.length > 0) ? gAvailableFys : dynamicFallbackFys;
+
+  // 💡 လက်ရှိရောက်နေသော FY ကို Dropdown တွင် selected အဖြစ် အလိုအလျောက် သတ်မှတ်ခြင်း
   const fyOptions = fys.map(fy => {
     const cleanFy = String(fy).trim().replace(/^FY\s*/i, '');
     const isSelected = (cleanFy === currentActiveFy);
