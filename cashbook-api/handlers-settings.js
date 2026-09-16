@@ -7,7 +7,8 @@
  *              🎯 Phase 1.3: Environment Variable Email Injection (env.BACKUP_EMAIL),
  *              🎯 Phase 2.3: Role-Based PII & Sensitive Salary Redaction on Export,
  *              13-Tab Main & 5-Tab Cashier Grouped Export Engine (.xlsx & CSV) &
- *              Resend Email Backup Dispatcher with Native .xlsx Base64 Attachment Support
+ *              Resend Email Backup Dispatcher with Native .xlsx Base64 Attachment Support,
+ *              📊 NEW: Cloudflare D1 Storage & Health Quota Monitor Engine (PRAGMA Size & Table Rows)
  * ==============================================================================
  */
 
@@ -26,6 +27,19 @@ async function safeSumBal(db, tableName) {
     } catch (e2) {
       return 0;
     }
+  }
+}
+
+/**
+ * 💡 Safe Table Counter Helper
+ */
+async function safeCountTable(db, tbl) {
+  try {
+    const res = await db.prepare(`SELECT COUNT(*) as cnt FROM ${tbl}`).first();
+    const val = res ? (res.cnt !== undefined ? res.cnt : Object.values(res)[0]) : 0;
+    return parseInt(val || 0, 10);
+  } catch (e) {
+    return 0;
   }
 }
 
@@ -78,7 +92,133 @@ function safeBase64Encode(str) {
 }
 
 /**
- * 💡 1. Fetch Live Balances Control (Accountant vs Cashier) & Dynamic FY List
+ * 📊 CLOUDFLARE D1 DATABASE USAGE & QUOTA MONITOR ENGINE
+ * SQLite PRAGMA page_count * page_size ဖြင့် အမှန်တကယ် သုံးထားသော Database Size ကို တွက်ချက်ခြင်းနှင့်
+ * Cloudflare Free Tier (5 GB Storage, 100k Writes/day, 5M Reads/day) နှင့် နှိုင်းယှဉ်၍ အသိပေးခြင်း
+ */
+export async function getD1DatabaseUsage(db) {
+  try {
+    // 💡 1. Measure Exact Database Size via SQLite PRAGMA
+    let pageCount = 0;
+    let pageSize = 4096; // Default SQLite page size (4KB)
+
+    try {
+      const pcRes = await db.prepare("PRAGMA page_count").first();
+      const psRes = await db.prepare("PRAGMA page_size").first();
+
+      pageCount = pcRes ? Number(Object.values(pcRes)[0] || 0) : 0;
+      pageSize = psRes ? Number(Object.values(psRes)[0] || 4096) : 4096;
+    } catch (pragmaErr) {
+      console.warn("PRAGMA size query failed, using fallback:", pragmaErr.message);
+    }
+
+    let exactBytes = pageCount * pageSize;
+
+    // 💡 2. Count Rows across all 18 Tables Concurrently (Promise.all)
+    const tablesTracked = [
+      { name: "Income Book", key: "income" },
+      { name: "Main Bank Book", key: "bank" },
+      { name: "Main Cash Book", key: "cash" },
+      { name: "Office Expense", key: "office" },
+      { name: "Kitchen Expense", key: "kitchen" },
+      { name: "HR Payroll Book", key: "payroll" },
+      { name: "Student Directory", key: "student" },
+      { name: "Student Money Ledger", key: "student_money" },
+      { name: "Uniform Ledger", key: "uniform_ledger" },
+      { name: "Promotion List", key: "promotion" },
+      { name: "Full-Time Staff", key: "staff_fulltime" },
+      { name: "Part-Time Staff", key: "staff_parttime" },
+      { name: "Cashier Bank Book", key: "ca_bank" },
+      { name: "Cashier Cash Book", key: "ca_cash" },
+      { name: "Cashier Office Book", key: "ca_office" },
+      { name: "Cashier Kitchen Book", key: "ca_kitchen" },
+      { name: "Cashier Payroll Book", key: "ca_payroll" },
+      { name: "Audit Trail Logs", key: "audit_logs" }
+    ];
+
+    const countPromises = tablesTracked.map(t => safeCountTable(db, t.key));
+    const counts = await Promise.all(countPromises);
+
+    let totalRows = 0;
+    const tableBreakdown = tablesTracked.map((t, idx) => {
+      const rowCount = counts[idx] || 0;
+      totalRows += rowCount;
+      return {
+        tableName: t.name,
+        tableKey: t.key,
+        rowCount: rowCount
+      };
+    });
+
+    // Sort tables by row count descending (Most populated tables first)
+    tableBreakdown.sort((a, b) => b.rowCount - a.rowCount);
+
+    // If PRAGMA returned 0 bytes, calculate estimated size (~1.2 KB per record avg)
+    if (exactBytes <= 0 && totalRows > 0) {
+      exactBytes = totalRows * 1200;
+    }
+
+    // 💡 3. Unit Conversions
+    const sizeKB = Number((exactBytes / 1024).toFixed(2));
+    const sizeMB = Number((exactBytes / (1024 * 1024)).toFixed(2));
+    
+    // Cloudflare D1 Free Tier Quota Limits
+    const MAX_STORAGE_MB = 5000; // 5 GB Free Storage
+    const MAX_STORAGE_GB = 5.0;
+    const DAILY_READS_LIMIT = 5000000; // 5 Million Reads / Day
+    const DAILY_WRITES_LIMIT = 100000;  // 100k Writes / Day
+
+    const usagePercent = Number(((sizeMB / MAX_STORAGE_MB) * 100).toFixed(2));
+
+    // Health Evaluation
+    let healthStatus = "HEALTHY"; // "HEALTHY" | "WARNING" | "CRITICAL"
+    let statusMessage = "Free Plan သတ်မှတ်ချက်အတွင်း လုံလောက်စွာ သုံးစွဲနိုင်သော အခြေအနေ ဖြစ်ပါသည်။";
+
+    if (usagePercent >= 90) {
+      healthStatus = "CRITICAL";
+      statusMessage = "⚠️ သတိပေးချက်: ဒေတာသိုလှောင်မှု ၉၀% ကျော်လွန်နေပါပြီ။ စာရင်းများ ရပ်တန့်မသွားစေရန် Cloudflare Paid Plan ($5/mo) သို့ ချက်ချင်း Upgrade ပြုလုပ်ပါ။";
+    } else if (usagePercent >= 75) {
+      healthStatus = "WARNING";
+      statusMessage = "သတိပေးချက်: ဒေတာသိုလှောင်မှု ၇၅% ကျော်လွန်လာပါပြီ။ မကြာမီ Upgrade ပြုလုပ်ရန် စဉ်းစားပါ။";
+    }
+
+    return {
+      storage: {
+        usedBytes: exactBytes,
+        usedKB: sizeKB,
+        usedMB: sizeMB,
+        maxMB: MAX_STORAGE_MB,
+        maxGB: MAX_STORAGE_GB,
+        usagePercentage: usagePercent
+      },
+      records: {
+        totalRows: totalRows,
+        totalTables: tablesTracked.length,
+        breakdown: tableBreakdown
+      },
+      limits: {
+        dailyReadsLimit: DAILY_READS_LIMIT,
+        dailyWritesLimit: DAILY_WRITES_LIMIT,
+        maxStorageGB: MAX_STORAGE_GB
+      },
+      health: {
+        status: healthStatus,
+        message: statusMessage,
+        isFreePlan: true
+      }
+    };
+  } catch (err) {
+    console.error("Error in getD1DatabaseUsage:", err);
+    return {
+      storage: { usedMB: 0, maxMB: 5000, usagePercentage: 0 },
+      records: { totalRows: 0, totalTables: 18, breakdown: [] },
+      health: { status: "UNKNOWN", message: "Usage data unavailable" }
+    };
+  }
+}
+
+/**
+ * 💡 1. Fetch Live Balances Control (Accountant vs Cashier), Dynamic FY List & D1 Usage
  */
 export async function getSettingsData(db, body) {
   try {
@@ -109,7 +249,11 @@ export async function getSettingsData(db, body) {
     const totCas = bCas + cCas + oCas + kCas + pCas;
     const totalRow = ["Total", totAcc, totCas, totAcc - totCas];
 
-    const availableFys = await getAvailableFysFromD1(db);
+    // Concurrently fetch Dynamic FY List & D1 Usage Statistics
+    const [availableFys, d1Usage] = await Promise.all([
+      getAvailableFysFromD1(db),
+      getD1DatabaseUsage(db)
+    ]);
 
     return {
       success: true,
@@ -117,7 +261,8 @@ export async function getSettingsData(db, body) {
         data: dataRows,
         total: totalRow
       },
-      availableFys: availableFys
+      availableFys: availableFys,
+      d1Usage: d1Usage // 📊 D1 Database Health & Quota Data
     };
   } catch (err) {
     console.error("Error in getSettingsData handler:", err);
