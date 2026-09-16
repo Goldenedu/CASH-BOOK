@@ -1,6 +1,26 @@
 <!-- views/settings.html -->  
 <div class="space-y-5 max-w-7xl mx-auto">
 
+  <!-- 💡 0. Auto-Initializer (Ensures switchSettingsSubTab is ALWAYS defined immediately on render) -->
+  <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" 
+       onerror="
+         if (!window.switchSettingsSubTab) {
+           window.switchSettingsSubTab = function(tabName) {
+             tabName = tabName || 'balances';
+             var activeBtn = 'px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 border bg-indigo-600 text-white border-indigo-500/40 shadow-lg shadow-indigo-600/20';
+             var inactiveBtn = 'px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border bg-slate-900/90 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700';
+             var tabs = ['balances', 'export', 'd1'];
+             tabs.forEach(function(k) {
+               var panel = document.getElementById('panel-settings-' + k);
+               var btn = document.getElementById('btn-settings-tab-' + k);
+               if (panel) panel.classList.toggle('hidden', k !== tabName);
+               if (btn) btn.className = (k === tabName) ? activeBtn : inactiveBtn;
+             });
+           };
+         }
+         this.remove();
+       " class="hidden" style="display:none;" />
+
   <!-- 💡 1. Setting Panel Header Banner -->
   <div class="p-4 rounded-xl shadow-lg flex items-center justify-between gap-3 bg-[#0c1322] border border-indigo-500/30">
     <div class="flex items-center gap-3">
@@ -14,30 +34,33 @@
     </div>
     
     <!-- Quick Refresh Button -->
-    <button onclick="loadSettingsData(true)" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 flex items-center gap-2" title="Refresh All Data">
+    <button onclick="window.loadSettingsData ? window.loadSettingsData(true) : location.reload()" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 flex items-center gap-2" title="Refresh All Data">
       <i class="fa-solid fa-rotate text-xs"></i>
       <span class="hidden sm:inline">Refresh Data</span>
     </button>
   </div>
 
-  <!-- 💡 2. Settings Sub-Tab Navigation Bar (Tab ၃ ခု ခွဲဝေမှု) -->
+  <!-- 💡 2. Settings Sub-Tab Navigation Bar (Tab ၃ ခု ခွဲဝေမှု - Zero-Fail Event Handlers) -->
   <div class="flex flex-wrap items-center gap-2.5 pb-1 border-b border-slate-800/80">
     <!-- Tab 1 Button -->
-    <button id="btn-settings-tab-balances" onclick="switchSettingsSubTab('balances')"
+    <button id="btn-settings-tab-balances" 
+      onclick="(window.switchSettingsSubTab || (window.switchSettingsSubTab = function(t){ var a='px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 border bg-indigo-600 text-white border-indigo-500/40 shadow-lg shadow-indigo-600/20', i='px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border bg-slate-900/90 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'; ['balances','export','d1'].forEach(function(k){ var p=document.getElementById('panel-settings-'+k), b=document.getElementById('btn-settings-tab-'+k); if(p)p.classList.toggle('hidden',k!==t); if(b)b.className=(k===t)?a:i; }); }))('balances')"
       class="px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 border bg-indigo-600 text-white border-indigo-500/40 shadow-lg shadow-indigo-600/20">
       <i class="fa-solid fa-scale-balanced text-sm"></i>
       <span>Balances & Mindfulness</span>
     </button>
 
     <!-- Tab 2 Button -->
-    <button id="btn-settings-tab-export" onclick="switchSettingsSubTab('export')"
+    <button id="btn-settings-tab-export" 
+      onclick="(window.switchSettingsSubTab || (window.switchSettingsSubTab = function(t){ var a='px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 border bg-indigo-600 text-white border-indigo-500/40 shadow-lg shadow-indigo-600/20', i='px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border bg-slate-900/90 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'; ['balances','export','d1'].forEach(function(k){ var p=document.getElementById('panel-settings-'+k), b=document.getElementById('btn-settings-tab-'+k); if(p)p.classList.toggle('hidden',k!==t); if(b)b.className=(k===t)?a:i; }); }))('export')"
       class="px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border bg-slate-900/90 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700">
       <i class="fa-solid fa-file-csv text-sm text-emerald-400"></i>
       <span>Data Export & Backup Center</span>
     </button>
 
     <!-- Tab 3 Button (D1 Database Monitor) -->
-    <button id="btn-settings-tab-d1" onclick="switchSettingsSubTab('d1')"
+    <button id="btn-settings-tab-d1" 
+      onclick="(window.switchSettingsSubTab || (window.switchSettingsSubTab = function(t){ var a='px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 border bg-indigo-600 text-white border-indigo-500/40 shadow-lg shadow-indigo-600/20', i='px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border bg-slate-900/90 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'; ['balances','export','d1'].forEach(function(k){ var p=document.getElementById('panel-settings-'+k), b=document.getElementById('btn-settings-tab-'+k); if(p)p.classList.toggle('hidden',k!==t); if(b)b.className=(k===t)?a:i; }); }))('d1')"
       class="px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border bg-slate-900/90 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700">
       <i class="fa-solid fa-server text-sm text-amber-400"></i>
       <span>D1 Database Health & Quota</span>
@@ -56,7 +79,7 @@
         <i class="fa-solid fa-circle-info text-sky-400"></i>
         <span class="text-[11px] text-slate-400">စာရင်းကိုင် (Accountant) နှင့် ငွေကိုင် (Cashier) စာအုပ်များအကြား လက်ကျန် ကွာဟမှုများကို တိုက်ဆိုင်စစ်ဆေးသည့် ဇယား ဖြစ်ပါသည်။</span>
       </div>
-      <button onclick="triggerAutoRecalculateAllBalances()" class="px-3.5 py-1.5 rounded-lg text-xs font-black transition-all bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20 flex items-center gap-2">
+      <button onclick="(window.triggerAutoRecalculateAllBalances || window.triggerGlobalRecalculateBalances || function(){})()" class="px-3.5 py-1.5 rounded-lg text-xs font-black transition-all bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20 flex items-center gap-2">
         <i class="fa-solid fa-calculator"></i>
         <span>Auto Recalculate All Balances</span>
       </button>
@@ -71,7 +94,7 @@
           <h3 class="text-xs font-black uppercase tracking-wider flex items-center gap-2 text-sky-400">
             <i class="fa-solid fa-scale-balanced text-sm"></i> Balances Control (Real-Time Comparison)
           </h3>
-          <button onclick="loadSettingsData(true)" class="p-1.5 rounded-md text-[10px] font-bold transition-all bg-slate-800 border border-slate-700 text-slate-300 hover:text-white" title="Refresh Balances">
+          <button onclick="window.loadSettingsData ? window.loadSettingsData(true) : location.reload()" class="p-1.5 rounded-md text-[10px] font-bold transition-all bg-slate-800 border border-slate-700 text-slate-300 hover:text-white" title="Refresh Balances">
             <i class="fa-solid fa-rotate text-xs"></i>
           </button>
         </div>
@@ -157,7 +180,6 @@
             </tr>
           </thead>
           <tbody id="settings-export-table-body" class="divide-y divide-slate-800/40 text-slate-200">
-            <!-- Dynamic Rows via js/settings.js -->
             <tr><td colspan="5" class="py-6 text-center italic text-slate-500">Backup စာရင်းများ ဖတ်ယူနေပါသည်...</td></tr>
           </tbody>
         </table>
@@ -166,7 +188,7 @@
   </div>
 
   <!-- ============================================================================== -->
-  <!-- 💡 TAB 3 PANEL: CLOUDFLARE D1 DATABASE HEALTH & QUOTA MONITOR (NEW) -->
+  <!-- 💡 TAB 3 PANEL: CLOUDFLARE D1 DATABASE HEALTH & QUOTA MONITOR -->
   <!-- ============================================================================== -->
   <div id="panel-settings-d1" class="hidden space-y-5">
     
@@ -223,7 +245,6 @@
             <span class="text-xs text-slate-500 font-mono">/ <span id="d1-storage-max-mb">5,000</span> MB (5 GB)</span>
           </div>
         </div>
-        <!-- Visual Progress Bar -->
         <div class="w-full bg-slate-800/80 rounded-full h-2.5 overflow-hidden border border-slate-700/50">
           <div id="d1-storage-bar" class="h-full bg-emerald-500 rounded-full transition-all duration-700" style="width: 0%;"></div>
         </div>
@@ -238,7 +259,7 @@
         </div>
         <div>
           <h2 id="d1-total-rows" class="text-2xl font-extrabold text-white font-mono">0</h2>
-          <p class="text-[11px] text-indigo-300 font-bold mt-1">စာရင်းအုပ် (<span id="d1-total-tables">18</span>) ခုလုံး၏ စုစုပေါင်း မှတ်တမ်းများ</p>
+          <p class="text-[11px] text-indigo-300 font-bold mt-1">စာရင်းအုပ် (<span id="d1-total-tables">20</span>) ခုလုံး၏ စုစုပေါင်း မှတ်တမ်းများ</p>
         </div>
         <p class="text-[10px] text-slate-500 leading-relaxed">ကျောင်းလခ၊ ရုံးသုံးစရိတ်၊ ကျောင်းသားနှင့် ဝန်ထမ်း မှတ်တမ်းများအားလုံး ပါဝင်သည်။</p>
       </div>
