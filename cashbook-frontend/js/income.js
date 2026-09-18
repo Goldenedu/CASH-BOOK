@@ -3,6 +3,7 @@
  * GOLDEN ERP SYSTEM - MAIN INCOME BOOK MODULE
  * File: js/income.js (Location: cashbook-frontend/js/income.js)
  * 💡 Features: Refactored with Global api.js for DRY Principle
+ *              🎯 Auto-scaling Font Size & Header Labels update (MMK) exactly like Dashboard
  * ==============================================================================
  */
 
@@ -14,6 +15,51 @@ var studentsByFyCache = {};
 var promoMatrixCache = null;
 var searchTimeoutIncome = null;
 var isIncomeSubmitting = false;
+
+/**
+ * 💡 Update Labels to include (MMK) automatically
+ */
+function updateIncKpiLabels() {
+  const labels = {
+    'inc-total-income': 'TOTAL INCOME (MMK)',
+    'inc-total-expense': 'TOTAL EXPENSE (MMK)',
+    'inc-balance': 'TOTAL BALANCES (MMK)'
+  };
+  
+  for (const [id, text] of Object.entries(labels)) {
+    const valueEl = document.getElementById(id);
+    if (valueEl) {
+      const parent = valueEl.parentElement;
+      if (parent) {
+        const labelEl = parent.querySelector('p'); 
+        if (labelEl) labelEl.textContent = text;
+      }
+    }
+  }
+}
+
+/**
+ * 💡 Auto-Scale Font Size to Prevent Truncation on Large Numbers
+ */
+function adjustIncKpiFontSizes() {
+  const kpiIds = ['inc-total-income', 'inc-total-expense', 'inc-balance', 'inc-entries-count'];
+  kpiIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    el.style.fontSize = '24px'; 
+    el.style.whiteSpace = 'nowrap';
+    
+    let currentSize = 24;
+    while (el.scrollWidth > el.clientWidth && currentSize > 12) {
+      currentSize--;
+      el.style.fontSize = currentSize + 'px';
+    }
+  });
+}
+
+// Ensure resizing works on window resize
+window.addEventListener('resize', adjustIncKpiFontSizes);
 
 /**
  * 💡 Strict Search Filter Function for Main Income Book
@@ -116,15 +162,21 @@ async function preloadPromotionMatrix() {
 }
 
 function renderStatsIncome(stats) {
+  updateIncKpiLabels(); // Add (MMK) to titles
+
   var incTotal = document.getElementById('inc-total-income');
   var expTotal = document.getElementById('inc-total-expense');
   var balTotal = document.getElementById('inc-balance');
   var countTotal = document.getElementById('inc-entries-count');
 
-  if (incTotal) incTotal.textContent = Number(stats.totalIncome || 0).toLocaleString('en-US') + ' MMK';
-  if (expTotal) expTotal.textContent = Number(stats.totalExpense || 0).toLocaleString('en-US') + ' MMK';
-  if (balTotal) balTotal.textContent = Number(stats.balance || 0).toLocaleString('en-US') + ' MMK';
+  // Removed trailing MMK from values
+  if (incTotal) incTotal.textContent = Number(stats.totalIncome || 0).toLocaleString('en-US');
+  if (expTotal) expTotal.textContent = Number(stats.totalExpense || 0).toLocaleString('en-US');
+  if (balTotal) balTotal.textContent = Number(stats.balance || 0).toLocaleString('en-US');
   if (countTotal) countTotal.textContent = Number(incomeTotalRows || 0).toLocaleString('en-US');
+
+  // Trigger Auto Scale
+  setTimeout(adjustIncKpiFontSizes, 50);
 }
 
 function renderTableIncome() {
@@ -795,3 +847,5 @@ window.deleteIncomeEntry = deleteIncomeEntry;
 window.changePageIncome = changePageIncome;
 window.exportToCSVIncome = exportToCSVIncome;
 window.printInvoice = printInvoice;
+window.updateIncKpiLabels = updateIncKpiLabels;
+window.adjustIncKpiFontSizes = adjustIncKpiFontSizes;
