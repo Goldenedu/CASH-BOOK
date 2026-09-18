@@ -2,103 +2,17 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - STUDENT DIRECTORY D1 HANDLER MODULE
  * File: handlers-student.js (Location: cashbook-api/handlers-student.js)
- * 💡 Features: Universal Dynamic FY Generator (No Hardcoded 2627), Float .0 Sanitizer,
- *              Direct isMigration Mode (Preserves exact NO, ID, FYID from Google Sheets),
- *              Server-Side Privilege Escalation Defense, Refined Myanmar/Ethnic Gender Auto-Detection,
- *              ⚡ 3x Faster 1-Query Stats Aggregator (Replaces 3 separate count queries),
- *              🎯 Phase 1.1: March Boundary Aligned (getMonth() < 2),
- *              🎯 Auto Inactive Status Enforcement on Transfer Date
+ * 💡 Features: Refactored with utils.js for DRY Principle
  * ==============================================================================
  */
 
-/**
- * 💡 1. Universal Dynamic Academic Year Generator (Phase 1.1: March Boundary Aligned)
- */
-function getCurrentAcademicYear(dateInput) {
-  const d = dateInput ? new Date(dateInput) : new Date();
-  const validDate = isNaN(d.getTime()) ? new Date() : d;
-  let y = validDate.getFullYear();
-
-  // 🎯 FIX (Phase 1.1): မတ်လ (Month index 2) သည် နှစ်သစ်ဖြစ်သဖြင့် ဇန်နဝါရီ၊ ဖေဖော်ဝါရီ (< 2) သာ ယခင်နှစ်ထဲ သတ်မှတ်သည်
-  if (validDate.getMonth() < 2) {
-    y -= 1;
-  }
-  return `${y}-${y + 1}`;
-}
-
-/**
- * 💡 2. Dynamic FY String Normalizer (Returns clean "YYYY-YYYY" format)
- */
-function normalizeFyClean(fy, dateInput = null) {
-  let s = fy ? String(fy).trim() : getCurrentAcademicYear(dateInput);
-  if (!s) s = getCurrentAcademicYear(dateInput);
-  return s.replace(/^FY\s*/i, '');
-}
-
-/**
- * 💡 3. System-Wide Dynamic FY Short Code Generator (Format: "2026-2027" -> "2627")
- */
-function getFyShortCode(fyStr) {
-  if (fyStr) {
-    const clean = String(fyStr).replace(/^FY\s*/i, '').trim();
-    const parts = clean.split(/[-/]/);
-    if (parts.length >= 2 && parts[0].trim() && parts[1].trim()) {
-      const y1 = parts[0].trim().slice(-2);
-      const y2 = parts[1].trim().slice(-2);
-      return y1 + y2;
-    }
-    if (/^\d{4}$/.test(clean)) {
-      return clean;
-    }
-  }
-
-  const currentFy = getCurrentAcademicYear();
-  const p = currentFy.split('-');
-  return p[0].slice(-2) + p[1].slice(-2);
-}
-
-/**
- * 💡 FYID Float .0 Sanitizer
- */
-function sanitizeFyidStr(fyidStr) {
-  const s = String(fyidStr || '').trim();
-  if (!s) return s;
-  if (s.indexOf('.0') === -1) return s;
-  const cleaned = s.replace(/\.0/g, '');
-  const parts = cleaned.split('-STU-');
-  if (parts.length === 2) {
-    const numPart = parseInt(parts[1], 10) || 0;
-    return `${parts[0]}-STU-${String(numPart).padStart(4, '0')}`;
-  }
-  return cleaned;
-}
-
-/**
- * 💡 Refined Myanmar & Ethnic Gender Auto-Detector (100% Accurate Male vs Female)
- */
-function autoDetectGender(nameStr) {
-  if (!nameStr) return 'Male';
-  const clean = String(nameStr).trim();
-
-  // ၁။ ယောကျ်ားလေး ရှေ့စာလုံးများ (မင်းမင်း၊ မင်းခန့် စသည့် 'မင်း' ပါ ထည့်သွင်းထားသည်)
-  if (clean.startsWith('မောင်') || clean.startsWith('ကို') || clean.startsWith('ဦး') ||
-      clean.startsWith('မင်း') || /^(Mg|Ko|U|Min)\b/i.test(clean) || /^(မောင်|ကို|ဦး|မင်း)/.test(clean)) {
-    return 'Male';
-  }
-
-  // ၂။ မိန်းကလေး ရှေ့စာလုံးများနှင့် တိုင်းရင်းသူအမည်များ (နန်း၊ နော်)
-  if (clean.startsWith('မေ') || clean.startsWith('ဒေါ်') || clean.startsWith('နန်း') || clean.startsWith('နော်') ||
-      /^(May|Daw|Nang|Naw)\b/i.test(clean)) {
-    return 'Female';
-  }
-
-  // ၃။ 'မ' ဖြင့် စပြီး 'မောင်' သို့မဟုတ် 'မင်း' မဟုတ်ပါက Female
-  if ((clean.startsWith('မ') && !clean.startsWith('မောင်') && !clean.startsWith('မင်း')) || /^(Ma)\b/i.test(clean)) {
-    return 'Female';
-  }
-
-  return 'Male';
-}
+import {
+  normalizeFyClean,
+  getFyShortCode,
+  sanitizeFyidStr,
+  autoDetectGender,
+  generateUniqueId
+} from './utils.js';
 
 async function generateFyNo(db, tableName, fy) {
   const normFy = normalizeFyClean(fy);
@@ -254,6 +168,11 @@ export async function saveStudentEntry(db, userSession, body) {
     const isPrivilegedAdmin = ['Owner', 'Admin'].includes(userSession?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport);
 
+    // ⚡ Refactored: Uses generateUniqueId from utils.js
+    const uniqueid = (isMigration && body.uniqueId)
+      ? String(body.uniqueId).trim()
+      : generateUniqueId('STU');
+
     // 💡 1. PRESERVE EXACT ID FROM GOOGLE SHEET (Column E)
     let studentId = parseInt(body.studentId || body.id, 10);
     if (!studentId || isNaN(studentId)) {
@@ -280,11 +199,6 @@ export async function saveStudentEntry(db, userSession, body) {
     const assignedNo = (isMigration && body.no)
       ? parseInt(body.no, 10)
       : (parseInt(body.no, 10) || await generateFyNo(db, 'student', cleanFy));
-
-    // 💡 5. PRESERVE UNIQUEID WHEN MIGRATING
-    const uniqueid = (isMigration && body.uniqueId)
-      ? String(body.uniqueId).trim()
-      : `STU_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 
     const sqlVerb = isMigration ? "INSERT OR REPLACE INTO" : "INSERT INTO";
 
