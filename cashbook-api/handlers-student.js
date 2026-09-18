@@ -3,7 +3,8 @@
  * GOLDEN ERP SYSTEM - STUDENT DIRECTORY D1 HANDLER MODULE
  * File: handlers-student.js (Location: cashbook-api/handlers-student.js)
  * 💡 Features: Refactored with utils.js for DRY Principle
- *              🚀 OPTIMIZED: SQL-Side Active/Inactive Aggregations, Avoided SELECT *
+ *              🚀 OPTIMIZED: SQL-Side Active/Inactive Aggregations
+ *              🎯 EXPLICIT SELECTS: Avoided SELECT *, Exact Column Mapping
  * ==============================================================================
  */
 
@@ -24,7 +25,7 @@ async function generateFyNo(db, tableName, fy) {
 }
 
 /**
- * 💡 Get Student Data (⚡ 1-Query Combined Stats Optimization)
+ * 💡 Get Student Data (⚡ 1-Query Combined Stats Optimization & Explicit Columns)
  */
 export async function getStudentData(db, body) {
   try {
@@ -50,7 +51,7 @@ export async function getStudentData(db, body) {
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-    // ⚡ OPTIMIZED: Single Combined Query for Total, Active and Inactive Counts (Cuts 2 Round-trips)
+    // ⚡ OPTIMIZED: Single Combined Query for Total, Active and Inactive Counts
     const statsQuery = `
       SELECT 
         COUNT(id) as totalCount,
@@ -64,9 +65,9 @@ export async function getStudentData(db, body) {
     const totalActive = statsRow.activeCount || 0;
     const totalInactive = statsRow.inactiveCount || 0;
 
-    // 🚀 OPTIMIZATION: Explicit columns
+    // 🚀 OPTIMIZATION: Explicit columns using exact DB Schema names
     const dataQuery = `
-      SELECT id, student_id, no, stu_status, date, fy, fyid, name, fyid_name, class, category, promo, status, transfer_date, transferDate, gender, parents_name, phone_no, address, uniqueid 
+      SELECT id, student_id, no, stu_status, date, fy, fyid, name, fyid_name, class, category, promo, status, transfer_date, gender, parents_name, phone_no, address, uniqueid 
       FROM student 
       ${whereSql} 
       ORDER BY CAST(no AS INTEGER) DESC, id DESC 
@@ -76,7 +77,7 @@ export async function getStudentData(db, body) {
     const rawRows = rowsRes.results || [];
 
     const formattedRows = rawRows.map(row => {
-      const transDateVal = row.transfer_date || row.transferDate || '';
+      const transDateVal = row.transfer_date || '';
       const isTransferred = !!transDateVal;
       const finalStatus = isTransferred ? 'Inactive' : (row.status || 'Active');
 
@@ -129,6 +130,7 @@ export async function lookupStudentById(db, body) {
       return { success: false, message: "Student ID မမှန်ကန်ပါ။" };
     }
 
+    // 🚀 OPTIMIZATION: Explicit columns
     const row = await db.prepare(
       `SELECT student_id, id, name, class, category, promo, status, parents_name, phone_no, address, fyid FROM student WHERE student_id = ? OR id = ? ORDER BY id DESC LIMIT 1`
     ).bind(studentId, studentId).first();
