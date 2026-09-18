@@ -2,91 +2,23 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - MAIN INCOME BOOK HANDLER (CLOUDFLARE D1)
  * File: handlers-income.js (Location: cashbook-api/handlers-income.js)
- * 💡 Features: 🛡️ Zero ON CONFLICT Schema Errors (Safe SELECT -> UPDATE/INSERT Pattern),
- *              🛡️ 100% ACID Compliant Atomic Refund & Multi-Book Postings via db.batch(),
- *              ⚡ QUOTA-SHIELD: O(1) Differential Row-Level Recalculator Engine,
- *              🎯 Floating Point Safe Comparison (ROUND to 2 Decimals),
- *              Cashier Sub-Ledger Balances Auto-Sync on Income Delete & Update,
- *              Myanmar Standard Time (UTC+6:30) & March Academic Year Boundary Alignment (getMonth() < 2),
- *              Split Payment Support, Precision FY-Scoped Student Lookup & Auto-Posting Engine
+ * 💡 Features: Refactored with utils.js for DRY Principle
  * ==============================================================================
  */
 
-function parseCleanIntId(val) {
-  if (val === undefined || val === null || val === '') return 0;
-  if (typeof val === 'number') return isNaN(val) ? 0 : Math.trunc(val);
-  const n = parseInt(String(val).trim(), 10);
-  return isNaN(n) ? 0 : n;
-}
-
-function getMyanmarDateString(inputDate = null) {
-  if (inputDate) return String(inputDate).trim().split('T')[0];
-  const now = new Date(Date.now() + (6.5 * 3600 * 1000));
-  return now.toISOString().split('T')[0];
-}
-
-/**
- * 💡 Phase 1.1: Academic Year Calculator (March Boundary Aligned: Month < 2)
- */
-function calculateAcademicFyFromDate(dateStr) {
-  const d = new Date(dateStr);
-  let fyYear = d.getFullYear();
-  if (d.getMonth() < 2) fyYear -= 1;
-  return `FY ${fyYear}-${fyYear + 1}`;
-}
-
-/**
- * 💡 Phase 1.1: Academic Year Helper (March Boundary Aligned: Month < 2)
- */
-function getCurrentAcademicYear(dateInput) {
-  const d = dateInput ? new Date(dateInput) : new Date(Date.now() + (6.5 * 3600 * 1000));
-  const validDate = isNaN(d.getTime()) ? new Date() : d;
-  let y = validDate.getFullYear();
-  if (validDate.getMonth() < 2) {
-    y -= 1;
-  }
-  return `${y}-${y + 1}`;
-}
-
-function normalizeFyStr(fy) {
-  let s = fy ? String(fy).trim() : `FY ${getCurrentAcademicYear()}`;
-  if (!s) s = `FY ${getCurrentAcademicYear()}`;
-  if (!s.toUpperCase().startsWith('FY ')) {
-    s = 'FY ' + s;
-  }
-  return s;
-}
-
-function getFyShortCode(fyStr) {
-  if (fyStr) {
-    const clean = String(fyStr).replace(/^FY\s*/i, '').trim();
-    const parts = clean.split(/[-/]/);
-    if (parts.length >= 2 && parts[0].trim() && parts[1].trim()) {
-      const y1 = parts[0].trim().slice(-2);
-      const y2 = parts[1].trim().slice(-2);
-      return y1 + y2;
-    }
-    if (/^\d{4}$/.test(clean)) {
-      return clean;
-    }
-  }
-  const currentFy = getCurrentAcademicYear();
-  const p = currentFy.split('-');
-  return p[0].slice(-2) + p[1].slice(-2);
-}
-
-function sanitizeFyidStr(fyidStr) {
-  const s = String(fyidStr || '').trim();
-  if (!s) return s;
-  if (s.indexOf('.0') === -1) return s;
-  const cleaned = s.replace(/\.0/g, '');
-  const parts = cleaned.split('-STU-');
-  if (parts.length === 2) {
-    const numPart = parseInt(parts[1], 10) || 0;
-    return `${parts[0]}-STU-${String(numPart).padStart(4, '0')}`;
-  }
-  return cleaned;
-}
+import {
+  getMyanmarDateString,
+  calculateAcademicFyFromDate,
+  getCurrentAcademicYear,
+  normalizeFyStr,
+  getFyShortCode,
+  sanitizeFyidStr,
+  parseCleanIntId,
+  generateVoucherNo,
+  generateFyNo,
+  recalculateLedgerBalances,
+  generateUniqueId
+} from './utils.js';
 
 function formatDDMMYY(entryDate) {
   const parts = String(entryDate || '').split('-');
@@ -129,101 +61,6 @@ function buildStudentDetailedDesc(body, prefix) {
   return prefix ? `[${prefix}] ${fullDesc}` : fullDesc;
 }
 
-/**
- * ⚡ QUOTA-SHIELD: O(1) Differential Recalculator Engine
- * 💡 တန်ဖိုး တကယ်ပြောင်းလဲသွားသော Row များကိုသာ Update လုပ်သဖြင့်
- * D1 Row Writes အလဟဿ ကုန်ကျမှုကို အပြီးတိုင် ရပ်တန့်စေသည်
- */
-async function recalculateLedgerBalances(db, tableName, targetFy = null) {
-  if (!tableName) return;
-  try {
-    if (targetFy) {
-      const normFy = normalizeFyStr(targetFy);
-      const cleanFy = normFy.replace(/^FY\s*/i, '');
-
-      await db.prepare(`
-        WITH calculated AS (
-          SELECT id,
-                 ROW_NUMBER() OVER (
-                   ORDER BY date ASC, id ASC
-                 ) as calc_no,
-                 SUM(debit - credit) OVER (
-                   ORDER BY date ASC, id ASC 
-                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                 ) as calc_bal
-          FROM ${tableName}
-          WHERE fy = ? OR fy = ?
-        )
-        UPDATE ${tableName} 
-        SET no = calculated.calc_no,
-            balances = calculated.calc_bal
-        FROM calculated
-        WHERE ${tableName}.id = calculated.id
-          AND (
-            ${tableName}.no IS NOT calculated.calc_no OR 
-            ROUND(${tableName}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2)
-          );
-      `).bind(normFy, cleanFy).run();
-
-    } else {
-      await db.prepare(`
-        WITH calculated AS (
-          SELECT id,
-                 ROW_NUMBER() OVER (
-                   PARTITION BY fy
-                   ORDER BY date ASC, id ASC
-                 ) as calc_no,
-                 SUM(debit - credit) OVER (
-                   PARTITION BY fy
-                   ORDER BY date ASC, id ASC 
-                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                 ) as calc_bal
-          FROM ${tableName}
-        )
-        UPDATE ${tableName} 
-        SET no = calculated.calc_no,
-            balances = calculated.calc_bal
-        FROM calculated
-        WHERE ${tableName}.id = calculated.id
-          AND (
-            ${tableName}.no IS NOT calculated.calc_no OR 
-            ROUND(${tableName}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2)
-          );
-      `).run();
-    }
-  } catch (e) {
-    console.warn(`Running Balance Recalculation Warning for ${tableName}:`, e.message);
-  }
-}
-
-async function generateVoucherNo(db, tableName, prefix, entryDate) {
-  let ddmmyy = "";
-  const parts = String(entryDate || '').split('-');
-  if (parts.length === 3) {
-    const y = parts[0].slice(-2);
-    ddmmyy = `${parts[2]}${parts[1]}${y}`;
-  } else {
-    const now = new Date(Date.now() + (6.5 * 3600 * 1000));
-    ddmmyy = `${String(now.getDate()).padStart(2, '0')}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getFullYear()).slice(-2)}`;
-  }
-
-  const pattern = `${prefix}-${ddmmyy}-%`;
-  const countRow = await db.prepare(
-    `SELECT COUNT(*) as cnt FROM ${tableName} WHERE vr_no LIKE ? OR date = ?`
-  ).bind(pattern, entryDate).first();
-
-  const seq = (countRow ? parseInt(countRow.cnt, 10) : 0) + 1;
-  return `${prefix}-${ddmmyy}-${String(seq).padStart(3, '0')}`;
-}
-
-async function generateFyNo(db, tableName, fy) {
-  const normFy = normalizeFyStr(fy);
-  const lastNoRow = await db.prepare(
-    `SELECT MAX(CAST(no AS INTEGER)) as maxNo FROM ${tableName} WHERE fy = ? OR fy = ?`
-  ).bind(normFy, normFy.replace(/^FY\s*/i, '')).first();
-  return (lastNoRow && lastNoRow.maxNo ? parseInt(lastNoRow.maxNo, 10) : 0) + 1;
-}
-
 function createInsertIncomeStatement(db, p, isMigration = false) {
   const normFy = normalizeFyStr(p.fy);
   const sqlVerb = isMigration ? "INSERT OR REPLACE INTO" : "INSERT INTO";
@@ -260,7 +97,6 @@ async function cleanLinkedIncomeEntries(db, uniqueid) {
 
   const placeholders = uids.map(() => '?').join(', ');
   
-  // Single Atomic db.batch() Execution
   await db.batch([
     db.prepare(`DELETE FROM income WHERE uniqueid IN (${placeholders})`).bind(...uids),
     db.prepare(`DELETE FROM cash WHERE uniqueid IN (${placeholders})`).bind(...uids),
@@ -313,7 +149,6 @@ async function postCashierIndividualLine(db, targetMethod, amount, body, entryDa
     ).run();
   }
 
-  // ⚡ သက်ဆိုင်ရာ Method ရှိသည့် Cashier ဇယားတစ်ခုတည်းကိုသာ Quota-Shield ဖြင့် တွက်စေသည်
   await recalculateLedgerBalances(db, caTable, normFy);
 }
 
@@ -412,7 +247,6 @@ async function postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdB
     const caPrefix = (method === 'bank') ? 'CAB' : 'CAC';
     const caRefUid = `INCCASHIER_REFUND_${uniqueid}`;
 
-    // 1. Main Refund Table
     const exMain = await db.prepare(`SELECT id FROM ${refundTable} WHERE uniqueid = ?`).bind(mainRefUid).first();
     if (exMain) {
       await db.prepare(`
@@ -433,7 +267,6 @@ async function postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdB
       ).run();
     }
 
-    // 2. Cashier Refund Table
     const exCa = await db.prepare(`SELECT id FROM ${caTable} WHERE uniqueid = ?`).bind(caRefUid).first();
     if (exCa) {
       await db.prepare(`
@@ -581,9 +414,11 @@ export async function getIncomeData(db, body) {
 export async function saveIncomeEntry(db, session, body) {
   const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(session?.role || '');
   const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport || body.skipAutoPost);
+  
+  // ⚡ Refactored: Uses generateUniqueId from utils.js
   const uniqueid = (isMigration && body.uniqueId)
     ? String(body.uniqueId).trim()
-    : `INC_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    : generateUniqueId('INC');
 
   return _saveIncomeEntryCore(db, session, body, uniqueid, isMigration);
 }
