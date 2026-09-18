@@ -1,21 +1,12 @@
 /**
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - FINANCIAL & DEMOGRAPHIC REPORTS HANDLER (CLOUDFLARE D1)
- * File: handlers-reports.js 
- * 💡 Features: Single-Pass Fast SQL Aggregations (85% Faster), Timezone-Safe 13-Month Fiscal Engine,
- *              InDetail Matrix (1 Student = 1 Row, Integer ID) & Clean Categorized Reports
+ * File: handlers-reports.js (Location: cashbook-api/handlers-reports.js)
+ * 💡 Features: Refactored with utils.js for DRY Principle, Single-Pass Aggregations
+ * ==============================================================================
  */
 
-/**
- * 💡 FY String Normalizer (Ensures "FY 2026-2027" format)
- */
-function normalizeFyStr(fy) {
-  if (!fy) return 'FY 2026-2027';
-  let s = String(fy).trim();
-  if (!s.toUpperCase().startsWith('FY ')) {
-    s = 'FY ' + s;
-  }
-  return s;
-}
+import { normalizeFyStr } from './utils.js';
 
 /**
  * 💡 Clean ID decimals e.g., "1.0" -> "1"
