@@ -8,7 +8,8 @@
  *              Role-Based PII & Sensitive Salary Redaction on Export,
  *              13-Tab Main & 5-Tab Cashier Grouped Export Engine (.xlsx & CSV) &
  *              Resend Email Backup Dispatcher with Native .xlsx Base64 Attachment Support,
- *              📊 Precision Calibrated D1 Storage Engine (Matches Cloudflare 20 Tables & 6.22 MB)
+ *              📊 Precision Calibrated D1 Storage Engine (Matches Cloudflare 20 Tables & 6.22 MB),
+ *              🎯 Phase 4: Advanced Date Range Export Filter Engine Support
  * ==============================================================================
  */
 
@@ -282,18 +283,29 @@ export async function getSettingsData(db, body) {
 }
 
 /**
- * 💡 2. Grouped Multi-Tab Data Export Handler
+ * 💡 2. Grouped Multi-Tab Data Export Handler (Phase 4: Advanced Date Range Filter Engine Support)
  */
 export async function exportGroupDataByFy(db, body, userSession = null) {
   try {
     const groupKey = String(body.groupKey || body.bookKey || 'main').toLowerCase().trim();
+    
+    // 💡 Phase 4: Fetch Filter Inputs (FY, fromDate, toDate)
     const fyFilter = String(body.fy || '').trim();
+    const fromDate = String(body.fromDate || '').trim();
+    const toDate = String(body.toDate || '').trim();
 
     const role = userSession?.role || 'Viewer';
     const canSeeSensitive = ['Owner', 'Admin', 'HR'].includes(role);
 
     let groupTitle = "Main Cash Book";
     let tableDefs = [];
+
+    // Date Column Configuration for SQL Builder 
+    // (Different tables might use `date`, `effDate`, `join_date` etc.)
+    const getDateColumnName = (tblKey) => {
+      if (['staff_fulltime', 'staff_parttime'].includes(tblKey)) return 'join_date';
+      return 'date';
+    };
 
     if (groupKey === 'cashier' || groupKey.startsWith('ca_') || groupKey.startsWith('ca')) {
       groupTitle = "Cashier Cash Book";
@@ -327,61 +339,82 @@ export async function exportGroupDataByFy(db, body, userSession = null) {
     let grandTotalRecords = 0;
     let tablesDict = {};
 
+    // 💡 Phase 4: Construct Output Title based on Date Range
+    let dateRangeTitleText = `All FY`;
+    if (fyFilter && !fromDate && !toDate) {
+      dateRangeTitleText = `FY: ${fyFilter}`;
+    } else if (fromDate && toDate) {
+      dateRangeTitleText = `Date: ${fromDate} to ${toDate}`;
+    } else if (fromDate) {
+      dateRangeTitleText = `Date: From ${fromDate}`;
+    } else if (toDate) {
+      dateRangeTitleText = `Date: Up to ${toDate}`;
+    }
+
     for (const tDef of tableDefs) {
       let rows = [];
-      try {
-        let q = `SELECT * FROM ${tDef.key}`;
+      const dateCol = getDateColumnName(tDef.key);
+
+      // 💡 Helper to build SQL query with Date Filters
+      const fetchTableRows = async (tableName) => {
+        let conditions = [];
         let params = [];
+
+        // 1. FY Condition
         if (fyFilter && tDef.hasFy) {
-          q += ` WHERE (fy = ? OR fy LIKE ?)`;
+          conditions.push(`(fy = ? OR fy LIKE ?)`);
           params.push(fyFilter, `%${fyFilter}%`);
         }
+
+        // 2. Date Range Conditions (If table supports date)
+        if (tDef.key !== 'uniform_ledger' && tDef.key !== 'promotion' && tDef.key !== 'salary_grade_matrix') {
+          if (fromDate) {
+            conditions.push(`(${dateCol} >= ?)`);
+            params.push(fromDate);
+          }
+          if (toDate) {
+            conditions.push(`(${dateCol} <= ?)`);
+            params.push(toDate);
+          }
+        }
+
+        let q = `SELECT * FROM ${tableName}`;
+        if (conditions.length > 0) {
+          q += ` WHERE ` + conditions.join(' AND ');
+        }
         q += ` ORDER BY id ASC`;
+        
         const res = await db.prepare(q).bind(...params).all();
-        if (res && res.results) rows = res.results;
+        return (res && res.results) ? res.results : [];
+      };
+
+      try {
+        rows = await fetchTableRows(tDef.key);
       } catch (e) {
         try {
           const alt = tDef.altKey || tDef.key.replace('_', '');
-          let q = `SELECT * FROM ${alt}`;
-          let params = [];
-          if (fyFilter && tDef.hasFy) {
-            q += ` WHERE (fy = ? OR fy LIKE ?)`;
-            params.push(fyFilter, `%${fyFilter}%`);
-          }
-          q += ` ORDER BY id ASC`;
-          const res = await db.prepare(q).bind(...params).all();
-          if (res && res.results) rows = res.results;
+          rows = await fetchTableRows(alt);
         } catch (e2) {}
       }
 
       grandTotalRecords += rows.length;
 
+      // 💡 Salary Data Redaction Logic
       const isStaffTable = (tDef.key === 'staff_fulltime' || tDef.key === 'staff_parttime');
       const sanitizedRows = rows.map(r => {
         if (!isStaffTable || canSeeSensitive) return r;
         return {
           ...r,
-          basic_amt: 0,
-          basicAmt: 0,
-          extra_amt: 0,
-          extraAmt: 0,
-          total_salary: 0,
-          totalSalary: 0,
-          bonus: 0,
-          fund: 0,
-          total_net_amt: 0,
-          totalNetAmt: 0,
-          unpaid_bonus: 0,
-          unpaidBonus: 0,
-          unpaid_fund: 0,
-          unpaidFund: 0,
-          nrc_no: '***',
-          nrcNo: '***',
-          bank_account: '***',
-          bankAccount: '***',
-          phone_no: '***',
-          phoneNo: '***',
-          email: '***'
+          basic_amt: 0, basicAmt: 0,
+          extra_amt: 0, extraAmt: 0,
+          total_salary: 0, totalSalary: 0,
+          bonus: 0, fund: 0,
+          total_net_amt: 0, totalNetAmt: 0,
+          unpaid_bonus: 0, unpaidBonus: 0,
+          unpaid_fund: 0, unpaidFund: 0,
+          nrc_no: '***', nrcNo: '***',
+          bank_account: '***', bankAccount: '***',
+          phone_no: '***', phoneNo: '***', email: '***'
         };
       });
 
@@ -392,7 +425,7 @@ export async function exportGroupDataByFy(db, body, userSession = null) {
       };
 
       csvContent += `\n==================================================\n`;
-      csvContent += `=== TABLE: ${tDef.title} (FY: ${fyFilter || 'All FY'}) ===\n`;
+      csvContent += `=== TABLE: ${tDef.title} (${dateRangeTitleText}) ===\n`;
       csvContent += `==================================================\n`;
       csvContent += tDef.headers.join(',') + '\n';
 
@@ -407,7 +440,7 @@ export async function exportGroupDataByFy(db, body, userSession = null) {
           csvContent += rowLine + '\n';
         });
       } else {
-        csvContent += `"# NO RECORDS FOUND FOR THIS FY #"\n`;
+        csvContent += `"# NO RECORDS FOUND #"\n`;
       }
 
       csvContent += `\n`;
@@ -418,6 +451,7 @@ export async function exportGroupDataByFy(db, body, userSession = null) {
       groupTitle: groupTitle,
       groupKey: groupKey,
       fy: fyFilter || 'All FY',
+      dateRangeTitle: dateRangeTitleText,
       totalRecords: grandTotalRecords,
       tables: tablesDict,
       csvText: csvContent
@@ -439,6 +473,8 @@ export async function sendGroupEmailBackupByFy(db, userSession, body, env) {
   try {
     const groupKey = String(body.groupKey || body.bookKey || 'main').toLowerCase().trim();
     const fyFilter = String(body.fy || 'All FY').trim();
+    const fromDate = String(body.fromDate || '').trim();
+    const toDate = String(body.toDate || '').trim();
     const targetEmail = env?.BACKUP_EMAIL || "goldeneduprivateschool@gmail.com";
     const senderName = userSession?.name || userSession?.username || 'Admin';
 
@@ -456,18 +492,24 @@ export async function sendGroupEmailBackupByFy(db, userSession, body, env) {
     let groupTitle = groupKey === 'cashier' ? "Cashier Cash Book" : "Main Cash Book";
     let fileFormatName = "Excel (.xlsx)";
 
+    // 💡 Phase 4: Construct Output Title based on Date Range
+    let dateSuffix = `FY${fyFilter || 'ALL'}`;
+    if (fromDate && toDate) dateSuffix = `D_${fromDate}_to_${toDate}`;
+    else if (fromDate) dateSuffix = `D_From_${fromDate}`;
+    else if (toDate) dateSuffix = `D_UpTo_${toDate}`;
+
     if (body.excelBase64 && String(body.excelBase64).trim().length > 0) {
-      const fileName = body.fileName || `${groupTitle.replace(/\s+/g, '_')}_FY${fyFilter || 'ALL'}_${now.toISOString().slice(0, 10)}.xlsx`;
+      const fileName = body.fileName || `${groupTitle.replace(/\s+/g, '_')}_${dateSuffix}_${now.toISOString().slice(0, 10)}.xlsx`;
       attachmentPayload = {
         filename: fileName,
         content: body.excelBase64
       };
       fileFormatName = "Multi-Tab Excel (.xlsx)";
     } else {
-      const exportRes = await exportGroupDataByFy(db, { groupKey, fy: fyFilter }, userSession);
+      const exportRes = await exportGroupDataByFy(db, { groupKey, fy: fyFilter, fromDate, toDate }, userSession);
       const rawCsvText = exportRes.csvText || "NO DATA";
       groupTitle = exportRes.groupTitle || groupTitle;
-      const fileName = `${groupTitle.replace(/\s+/g, '_')}_FY${fyFilter || 'ALL'}_${now.toISOString().slice(0, 10)}.csv`;
+      const fileName = `${groupTitle.replace(/\s+/g, '_')}_${dateSuffix}_${now.toISOString().slice(0, 10)}.csv`;
 
       attachmentPayload = {
         filename: fileName,
@@ -476,15 +518,20 @@ export async function sendGroupEmailBackupByFy(db, userSession, body, env) {
       fileFormatName = "Multi-Section CSV (.csv)";
     }
 
+    let reportPeriodTxt = `Fiscal Year: ${fyFilter}`;
+    if (fromDate || toDate) {
+      reportPeriodTxt = `Date Filter: ${fromDate || 'Start'} to ${toDate || 'End'}`;
+    }
+
     const emailPayload = {
       from: "Golden ERP Backup <onboarding@resend.dev>",
       to: [targetEmail],
-      subject: `[GOLDEN ERP BACKUP] ${groupTitle} Data - FY ${fyFilter} (${timestampStr})`,
+      subject: `[GOLDEN ERP BACKUP] ${groupTitle} Data (${timestampStr})`,
       html: `
         <div style="font-family: sans-serif; padding: 20px; background-color: #0c1322; color: #e2e8f0; border-radius: 12px; border: 1px solid #1e293b;">
           <h2 style="color: #38bdf8; border-bottom: 1px solid #334155; padding-bottom: 8px;">GOLDEN ERP SYSTEM - REAL BACKUP REPORT</h2>
           <p><strong>Group Name:</strong> ${groupTitle}</p>
-          <p><strong>Fiscal Year:</strong> ${fyFilter}</p>
+          <p><strong>${reportPeriodTxt}</strong></p>
           <p><strong>Backup Format:</strong> ${fileFormatName}</p>
           <p><strong>Sent Date & Time:</strong> ${timestampStr}</p>
           <p><strong>Dispatched By:</strong> ${senderName}</p>
@@ -511,7 +558,7 @@ export async function sendGroupEmailBackupByFy(db, userSession, body, env) {
 
     return {
       success: true,
-      message: `'${groupTitle}' (${fyFilter}) ၏ ${fileFormatName} Backup Data အား ${targetEmail} သို့ အောင်မြင်စွာ ပို့ဆောင်ပြီးပါပြီ။\n\n(Sent Date: ${timestampStr})`
+      message: `'${groupTitle}' ၏ ${fileFormatName} Backup Data အား ${targetEmail} သို့ အောင်မြင်စွာ ပို့ဆောင်ပြီးပါပြီ။\n\n(Sent Date: ${timestampStr})`
     };
   } catch (err) {
     console.error("Error in sendGroupEmailBackupByFy handler:", err);
