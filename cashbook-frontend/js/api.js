@@ -7,7 +7,8 @@
  *              Clean 401 Session Revocation & Complete Storage Purge,
  *              Pre-fetched 'staff' & Core Views for 0ms Instant Navigation,
  *              Universal CSV Formula Injection Sanitizer (window.safeCsvCell),
- *              Resilient DOM & Inline Event Escapers (escapeHtml & escapeJsAttr)
+ *              Resilient DOM & Inline Event Escapers (escapeHtml & escapeJsAttr),
+ *              🎯 Refactored: Added Global Formatters & Parsers to eliminate Duplication
  * ==============================================================================
  */
 
@@ -85,7 +86,77 @@ window.safeCsvCell = function(val) {
 };
 
 // ==============================================================================
-// 💡 2. QUOTA-SAFE CACHE ENGINE (Zero QuotaExceededError Crash)
+// 💡 2. GLOBAL FORMATTERS, PARSERS & BUSINESS LOGIC (Added to eliminate duplication)
+// ==============================================================================
+
+window.parseCleanNum = function(val) {
+  if (val === undefined || val === null || val === '') return 0;
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  var str = String(val).replace(/,/g, '').trim();
+  var num = parseFloat(str);
+  return isNaN(num) ? 0 : num;
+};
+
+window.parseCleanIntId = function(val) {
+  if (val === undefined || val === null || val === '') return 0;
+  if (typeof val === 'number') return isNaN(val) ? 0 : Math.trunc(val);
+  var n = parseInt(String(val).trim(), 10);
+  return isNaN(n) ? 0 : n;
+};
+
+window.getCurrentAcademicYear = function(dateInput) {
+  var d = dateInput ? new Date(dateInput) : new Date(Date.now() + (6.5 * 3600 * 1000));
+  var validDate = isNaN(d.getTime()) ? new Date() : d;
+  var y = validDate.getFullYear();
+  if (validDate.getMonth() < 2) y -= 1; 
+  return `${y}-${y + 1}`;
+};
+
+window.getFyShortCode = function(fyStr) {
+  if (fyStr) {
+    var clean = String(fyStr).replace(/^FY\s*/i, '').trim();
+    var parts = clean.split(/[-/]/);
+    if (parts.length >= 2 && parts[0].trim() && parts[1].trim()) {
+      return parts[0].trim().slice(-2) + parts[1].trim().slice(-2);
+    }
+    if (/^\d{4}$/.test(clean)) return clean;
+  }
+  var currentFy = window.getCurrentAcademicYear();
+  var p = currentFy.split('-');
+  return p[0].slice(-2) + p[1].slice(-2);
+};
+
+window.sanitizeFyidStr = function(fyidStr) {
+  var s = String(fyidStr || '').trim();
+  if (!s) return s;
+  if (s.indexOf('.0') === -1) return s;
+  var cleaned = s.replace(/\.0/g, '');
+  var parts = cleaned.split('-STU-');
+  if (parts.length === 2) {
+    var numPart = parseInt(parts[1], 10) || 0;
+    return parts[0] + '-STU-' + String(numPart).padStart(4, '0');
+  }
+  return cleaned;
+};
+
+window.autoDetectGender = function(nameStr) {
+  if (!nameStr) return 'Male';
+  const clean = String(nameStr).trim();
+  if (
+    clean.startsWith('ဆရာမ') || clean.startsWith('တီချာ') || clean.startsWith('ဒေါ်') ||
+    clean.startsWith('မေ') || clean.startsWith('နန်း') || clean.startsWith('နော်') ||
+    clean.startsWith('ခင်') || clean.startsWith('နှင်း') || clean.startsWith('နွယ်') ||
+    /^(May|Daw|Nang|Naw|Khin|Hnin|Nwe|Miss|Mrs|Teacher|Sayama)\b/i.test(clean)
+  ) return 'Female';
+
+  if ((clean.startsWith('မ') && !clean.startsWith('မောင်') && !clean.startsWith('မင်း')) || /^(Ma)\b/i.test(clean)) {
+    return 'Female';
+  }
+  return 'Male';
+};
+
+// ==============================================================================
+// 💡 3. QUOTA-SAFE CACHE ENGINE (Zero QuotaExceededError Crash)
 // ==============================================================================
 
 window.getApiCache = function(cacheKey) {
@@ -172,7 +243,7 @@ window.invalidateApiCache = function(actionPrefix = '') {
 };
 
 // ==============================================================================
-// 💡 3. SAFE ERROR LOGGING SYSTEM (Memory & Quota Protected)
+// 💡 4. SAFE ERROR LOGGING SYSTEM (Memory & Quota Protected)
 // ==============================================================================
 
 window.ErrorLogger = {
@@ -240,7 +311,7 @@ window.toggleLoading = function(show) {
 };
 
 // ==============================================================================
-// 💡 4. CENTRAL D1 API FETCH ENGINE WITH OFFLINE INTERCEPTOR
+// 💡 5. CENTRAL D1 API FETCH ENGINE WITH OFFLINE INTERCEPTOR
 // ==============================================================================
 
 window.callApi = async function(action, payload = {}, method = 'POST') {
@@ -421,7 +492,7 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
 };
 
 // ==============================================================================
-// 💡 5. BACKGROUND PREFETCHING ENGINE (Phase 1.2 Syntax Fix Applied)
+// 💡 6. BACKGROUND PREFETCHING ENGINE (Phase 1.2 Syntax Fix Applied)
 // ==============================================================================
 
 /**
