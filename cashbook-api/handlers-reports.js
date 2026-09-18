@@ -2,7 +2,10 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - FINANCIAL & DEMOGRAPHIC REPORTS HANDLER (CLOUDFLARE D1)
  * File: handlers-reports.js (Location: cashbook-api/handlers-reports.js)
- * 💡 Features: Refactored with utils.js for DRY Principle, Single-Pass Aggregations
+ * 💡 Features: Refactored with utils.js for DRY Principle, Single-Pass Aggregations,
+ *              🎯 Server-Side Pagination (LIMIT 20) to massively reduce D1 Row Reads & RAM,
+ *              🎯 Auto Grade Sorting (Pre School to Grade 12),
+ *              🎯 Dynamic "Unpaid Month" Filter using efficient SQL Sub-Queries
  * ==============================================================================
  */
 
@@ -34,8 +37,21 @@ function parseSafeMonthYear(dateStr) {
 }
 
 /**
+ * 💡 Helper to convert "Sep-26" back to "2026-09" for SQL LIKE Queries
+ */
+function monthLabelToYYYYMM(label) {
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const parts = String(label).trim().split('-');
+  if (parts.length !== 2) return null;
+  const mIdx = monthNames.indexOf(parts[0]);
+  if (mIdx === -1) return null;
+  const mm = String(mIdx + 1).padStart(2, '0');
+  const yy = parts[1].length === 2 ? '20' + parts[1] : parts[1];
+  return `${yy}-${mm}`;
+}
+
+/**
  * 💡 Generate 13 Fiscal Month Labels starting from March of Year 1 to March of Year 2
- * e.g., for FY 2026-2027 -> Mar-26, Apr-26, May-26, Jun-26, Jul-26, Aug-26, Sep-26, Oct-26, Nov-26, Dec-26, Jan-27, Feb-27, Mar-27
  */
 function get13FiscalMonths(fyStr) {
   let startYear = 2026;
@@ -45,18 +61,10 @@ function get13FiscalMonths(fyStr) {
   }
 
   const monthsDef = [
-    { m: "Mar", y: startYear },
-    { m: "Apr", y: startYear },
-    { m: "May", y: startYear },
-    { m: "Jun", y: startYear },
-    { m: "Jul", y: startYear },
-    { m: "Aug", y: startYear },
-    { m: "Sep", y: startYear },
-    { m: "Oct", y: startYear },
-    { m: "Nov", y: startYear },
-    { m: "Dec", y: startYear },
-    { m: "Jan", y: startYear + 1 },
-    { m: "Feb", y: startYear + 1 },
+    { m: "Mar", y: startYear }, { m: "Apr", y: startYear }, { m: "May", y: startYear },
+    { m: "Jun", y: startYear }, { m: "Jul", y: startYear }, { m: "Aug", y: startYear },
+    { m: "Sep", y: startYear }, { m: "Oct", y: startYear }, { m: "Nov", y: startYear },
+    { m: "Dec", y: startYear }, { m: "Jan", y: startYear + 1 }, { m: "Feb", y: startYear + 1 },
     { m: "Mar", y: startYear + 1 }
   ];
 
@@ -71,7 +79,6 @@ export async function getFinancialReportData(db, body) {
     const activeFy = normalizeFyStr(body.fy || "FY 2026-2027");
     const fyClean = activeFy.replace(/^FY\s*/i, '');
 
-    // 1. Single-Pass Income Aggregation (Category & Accounts)
     const incAgg = await db.prepare(`
       SELECT 
         COALESCE(SUM(CASE WHEN LOWER(category) LIKE '%boarder%' AND LOWER(category) NOT LIKE '%semi%' THEN (credit - debit) ELSE 0 END), 0) as boarder,
@@ -96,7 +103,6 @@ export async function getFinancialReportData(db, body) {
     const nightStudy = parseFloat(incAgg.nightStudy || 0);
     const others = parseFloat(incAgg.others || 0);
 
-    // 2. Single-Pass Office Expense Aggregation
     const offAgg = await db.prepare(`
       SELECT 
         COALESCE(SUM(CASE WHEN LOWER(category) LIKE '%admin%' THEN credit ELSE 0 END), 0) as adminExp,
@@ -114,7 +120,6 @@ export async function getFinancialReportData(db, body) {
       WHERE fy = ? OR fy = ?
     `).bind(activeFy, fyClean).first() || {};
 
-    // 3. Single-Pass Kitchen Expense Aggregation
     const kitAgg = await db.prepare(`
       SELECT 
         COALESCE(SUM(CASE WHEN LOWER(category) LIKE '%rice%' THEN credit ELSE 0 END), 0) as riceOil,
@@ -128,7 +133,6 @@ export async function getFinancialReportData(db, body) {
       WHERE fy = ? OR fy = ?
     `).bind(activeFy, fyClean).first() || {};
 
-    // 4. Single-Pass Payroll Expense Aggregation
     const payAgg = await db.prepare(`
       SELECT 
         COALESCE(SUM(CASE WHEN LOWER(category) LIKE '%full%time%salary%' THEN credit ELSE 0 END), 0) as fullTimeSalary,
@@ -147,32 +151,22 @@ export async function getFinancialReportData(db, body) {
         categories: { boarder, semiBoarder, dayStudent, total: boarder + semiBoarder + dayStudent },
         accounts: { registration, services, ferry, nightStudy, others, total: registration + services + ferry + nightStudy + others },
         office: {
-          adminExp: parseFloat(offAgg.adminExp || 0),
-          vehicleExp: parseFloat(offAgg.vehicleExp || 0),
-          donationSocial: parseFloat(offAgg.donationSocial || 0),
-          assetsMaterials: parseFloat(offAgg.assetsMaterials || 0),
-          construction: parseFloat(offAgg.construction || 0),
-          hrStaffBenefit: parseFloat(offAgg.hrStaffBenefit || 0),
-          studentRefund: parseFloat(offAgg.studentRefund || 0),
-          ferryPayment: parseFloat(offAgg.ferryPayment || 0),
-          drawingAcc1: parseFloat(offAgg.drawingAcc1 || 0),
-          drawingAcc2: parseFloat(offAgg.drawingAcc2 || 0),
+          adminExp: parseFloat(offAgg.adminExp || 0), vehicleExp: parseFloat(offAgg.vehicleExp || 0),
+          donationSocial: parseFloat(offAgg.donationSocial || 0), assetsMaterials: parseFloat(offAgg.assetsMaterials || 0),
+          construction: parseFloat(offAgg.construction || 0), hrStaffBenefit: parseFloat(offAgg.hrStaffBenefit || 0),
+          studentRefund: parseFloat(offAgg.studentRefund || 0), ferryPayment: parseFloat(offAgg.ferryPayment || 0),
+          drawingAcc1: parseFloat(offAgg.drawingAcc1 || 0), drawingAcc2: parseFloat(offAgg.drawingAcc2 || 0),
           total: parseFloat(offAgg.totalOffice || 0)
         },
         kitchen: {
-          riceOil: parseFloat(kitAgg.riceOil || 0),
-          fishMeatEggs: parseFloat(kitAgg.fishMeatEggs || 0),
-          beansVegetables: parseFloat(kitAgg.beansVegetables || 0),
-          home1Exp: parseFloat(kitAgg.home1Exp || 0),
-          home2Exp: parseFloat(kitAgg.home2Exp || 0),
-          others: parseFloat(kitAgg.kitchenOthers || 0),
+          riceOil: parseFloat(kitAgg.riceOil || 0), fishMeatEggs: parseFloat(kitAgg.fishMeatEggs || 0),
+          beansVegetables: parseFloat(kitAgg.beansVegetables || 0), home1Exp: parseFloat(kitAgg.home1Exp || 0),
+          home2Exp: parseFloat(kitAgg.home2Exp || 0), others: parseFloat(kitAgg.kitchenOthers || 0),
           total: parseFloat(kitAgg.totalKitchen || 0)
         },
         payroll: {
-          fullTimeSalary: parseFloat(payAgg.fullTimeSalary || 0),
-          partTimeSalary: parseFloat(payAgg.partTimeSalary || 0),
-          fullTimeBonus: parseFloat(payAgg.fullTimeBonus || 0),
-          fullTimeFund: parseFloat(payAgg.fullTimeFund || 0),
+          fullTimeSalary: parseFloat(payAgg.fullTimeSalary || 0), partTimeSalary: parseFloat(payAgg.partTimeSalary || 0),
+          fullTimeBonus: parseFloat(payAgg.fullTimeBonus || 0), fullTimeFund: parseFloat(payAgg.fullTimeFund || 0),
           total: parseFloat(payAgg.totalPayroll || 0)
         }
       }
@@ -184,24 +178,20 @@ export async function getFinancialReportData(db, body) {
 }
 
 /**
- * 💡 2. Income Detail Report (InDetail Matrix - March to March 13 Months)
+ * 💡 2. Income Detail Report (InDetail Matrix - Server-Side Paginated & Filtered)
  */
 export async function getIncomeDetailReportData(db, body) {
   try {
     const activeFy = normalizeFyStr(body.fy || "FY 2026-2027");
     const fyClean = activeFy.replace(/^FY\s*/i, '');
+    
+    // 🎯 Pagination Parameters (Default 20 rows per page)
+    const page = parseInt(body.page || 1, 10);
+    const limit = parseInt(body.limit || 20, 10);
+    const offset = (page - 1) * limit;
 
-    const incRows = (await db.prepare(
-      `SELECT * FROM income WHERE fy = ? OR fy = ? ORDER BY id ASC`
-    ).bind(activeFy, fyClean).all()).results || [];
-
-    const stuRows = (await db.prepare(`SELECT * FROM student`).all()).results || [];
-    const stuMap = new Map();
-    stuRows.forEach(s => {
-      const sId = cleanIntegerId(s.student_id || s.id);
-      if (sId) stuMap.set(sId, s);
-      if (s.fyid) stuMap.set(String(s.fyid).trim().toLowerCase(), s);
-    });
+    const searchVal = String(body.searchVal || "").trim().toLowerCase();
+    const unpaidMonth = String(body.unpaidMonth || "").trim(); // e.g. "Sep-26"
 
     const monthKeys = get13FiscalMonths(activeFy);
     const headers = [
@@ -211,35 +201,114 @@ export async function getIncomeDetailReportData(db, body) {
       "TOTAL"
     ];
 
+    // 🎯 1. BUILD SERVER-SIDE STUDENT QUERY (Search & Unpaid Filter)
+    let whereClauses = [`(s.fy = ? OR s.fy = ?)`];
+    let params = [activeFy, fyClean];
+
+    if (searchVal) {
+      whereClauses.push(`(LOWER(s.name) LIKE ? OR LOWER(s.fyid) LIKE ? OR LOWER(s.class) LIKE ?)`);
+      const p = `%${searchVal}%`;
+      params.push(p, p, p);
+    }
+
+    if (unpaidMonth) {
+      const yyyymm = monthLabelToYYYYMM(unpaidMonth);
+      if (yyyymm) {
+        whereClauses.push(`LOWER(s.status) = 'active'`);
+        // Filter out students who already paid Service Fees in this month
+        whereClauses.push(`s.id NOT IN (
+          SELECT student_id FROM income
+          WHERE (fy = ? OR fy = ?)
+          AND LOWER(account_name) LIKE '%service%'
+          AND (effect_date LIKE ? OR (effect_date IS NULL AND date LIKE ?))
+          GROUP BY student_id
+          HAVING SUM(credit - debit) > 0
+        )`);
+        params.push(activeFy, fyClean, `${yyyymm}-%`, `${yyyymm}-%`);
+      }
+    }
+
+    const whereSql = `WHERE ` + whereClauses.join(' AND ');
+
+    // 🎯 2. SQL GRADE SEQUENTIAL SORTING
+    const orderSql = `
+      ORDER BY 
+        CASE s.class
+          WHEN 'Pre School' THEN 1
+          WHEN 'KG Student' THEN 2
+          WHEN 'Grade 1' THEN 3
+          WHEN 'Grade 2' THEN 4
+          WHEN 'Grade 3' THEN 5
+          WHEN 'Grade 4' THEN 6
+          WHEN 'Grade 5' THEN 7
+          WHEN 'Grade 6' THEN 8
+          WHEN 'Grade 7' THEN 9
+          WHEN 'Grade 8' THEN 10
+          WHEN 'Grade 9' THEN 11
+          WHEN 'Grade 10' THEN 12
+          WHEN 'Grade 11' THEN 13
+          WHEN 'Grade 12' THEN 14
+          ELSE 99
+        END ASC, CAST(s.student_id AS INTEGER) ASC
+    `;
+
+    // 🎯 3. EXECUTE PAGINATED STUDENT QUERY
+    const countRes = await db.prepare(`SELECT COUNT(*) as count FROM student s ${whereSql}`).bind(...params).first();
+    const totalRows = countRes ? countRes.count : 0;
+
+    const studentList = (await db.prepare(`
+      SELECT * FROM student s
+      ${whereSql}
+      ${orderSql}
+      LIMIT ? OFFSET ?
+    `).bind(...params, limit, offset).all()).results || [];
+
+    if (studentList.length === 0) {
+      return { success: true, headers, data: [], grandTotalRow: null, fy: activeFy, totalRows, page, limit };
+    }
+
+    // 🎯 4. FETCH INCOME ONLY FOR THESE 20 STUDENTS (Massive RAM & Row Read Saver)
+    const studentIds = studentList.map(s => parseInt(s.student_id || s.id, 10)).filter(id => !isNaN(id));
+    const placeholders = studentIds.map(() => '?').join(',');
+    
+    let incRows = [];
+    if (studentIds.length > 0) {
+      incRows = (await db.prepare(`
+        SELECT * FROM income 
+        WHERE (fy = ? OR fy = ?) AND student_id IN (${placeholders})
+      `).bind(activeFy, fyClean, ...studentIds).all()).results || [];
+    }
+
+    // 🎯 5. BUILD THE DATA MATRIX
     const studentGroupMap = new Map();
 
+    // Init Base Student Rows
+    studentList.forEach(s => {
+      const cleanStuId = parseInt(s.student_id || s.id, 10);
+      studentGroupMap.set(cleanStuId, {
+        fy: s.fy || activeFy,
+        id: cleanStuId,
+        fyid: s.fyid || '',
+        name: s.name || s.fyid_name || '',
+        promo: s.promo || 'Original price',
+        joinDate: '',
+        transferMonth: s.transfer_date || s.transferDate || '-',
+        status: s.status || 'Active',
+        class: s.class || '',
+        registration: 0,
+        ferry: 0,
+        nightStudy: 0,
+        others: 0,
+        monthlyServices: new Array(13).fill(0)
+      });
+    });
+
+    // Populate Matrix Columns
     incRows.forEach(row => {
-      const cleanStuId = cleanIntegerId(row.student_id);
-      const cleanFyid = String(row.fyid || '').trim();
-      const lookupKey = cleanStuId || cleanFyid.toLowerCase();
-      if (!lookupKey) return;
+      const cleanStuId = parseInt(row.student_id, 10);
+      if (!studentGroupMap.has(cleanStuId)) return;
 
-      if (!studentGroupMap.has(lookupKey)) {
-        const stuInfo = stuMap.get(cleanStuId) || stuMap.get(cleanFyid.toLowerCase()) || {};
-        studentGroupMap.set(lookupKey, {
-          fy: row.fy || activeFy,
-          id: cleanStuId || cleanIntegerId(stuInfo.student_id || stuInfo.id || '-'),
-          fyid: cleanFyid || stuInfo.fyid || '',
-          name: row.fyid_name || row.name || stuInfo.name || '',
-          promo: stuInfo.promo || row.promo || 'Original price',
-          joinDate: '',
-          transferMonth: stuInfo.transfer_date || stuInfo.transferDate || '-',
-          status: (stuInfo.status || 'Active'),
-          class: row.class || stuInfo.class || '',
-          registration: 0,
-          ferry: 0,
-          nightStudy: 0,
-          others: 0,
-          monthlyServices: new Array(13).fill(0)
-        });
-      }
-
-      const stGroup = studentGroupMap.get(lookupKey);
+      const stGroup = studentGroupMap.get(cleanStuId);
       const acc = String(row.account_name || row.accountName || '').toLowerCase().trim();
       const credit = parseFloat(row.credit || 0) - parseFloat(row.debit || 0);
       const effDate = row.effect_date || row.effDate || row.date || '';
@@ -248,7 +317,6 @@ export async function getIncomeDetailReportData(db, body) {
         if (!stGroup.joinDate || (effDate && effDate < stGroup.joinDate)) {
           stGroup.joinDate = effDate;
         }
-
         const mStr = parseSafeMonthYear(effDate);
         const mIdx = monthKeys.indexOf(mStr);
         if (mIdx >= 0) {
@@ -266,36 +334,31 @@ export async function getIncomeDetailReportData(db, body) {
     });
 
     const dataMatrix = [];
-    const grandTotals = new Array(headers.length).fill(0);
-    grandTotals[0] = "Total";
-    for (let k = 1; k <= 9; k++) grandTotals[k] = "";
+    const pageTotals = new Array(headers.length).fill(0);
+    pageTotals[0] = "Page Total";
+    for (let k = 1; k <= 9; k++) pageTotals[k] = "";
 
-    let seqNo = 1;
-    studentGroupMap.forEach(st => {
+    let seqNo = offset + 1;
+    
+    // Ensure strict sequential Grade sorting is maintained
+    studentList.forEach(s => {
+      const cleanStuId = parseInt(s.student_id || s.id, 10);
+      const st = studentGroupMap.get(cleanStuId);
+      if (!st) return;
+
       const servicesSum = st.monthlyServices.reduce((a, b) => a + b, 0);
       const rowTotal = st.registration + st.ferry + st.nightStudy + st.others + servicesSum;
 
       const rowArr = [
-        seqNo++,
-        st.fy,
-        st.id,
-        st.fyid,
-        st.name,
-        st.promo,
-        st.joinDate || '-',
-        st.transferMonth || '-',
-        st.status,
-        st.class,
-        st.registration,
-        st.ferry,
-        st.nightStudy,
-        st.others,
-        ...st.monthlyServices,
-        rowTotal
+        seqNo++, st.fy, st.id, st.fyid, st.name, st.promo,
+        st.joinDate || '-', st.transferMonth || '-', st.status, st.class,
+        st.registration, st.ferry, st.nightStudy, st.others,
+        ...st.monthlyServices, rowTotal
       ];
 
+      // Calculate Page Totals dynamically
       for (let c = 10; c < rowArr.length; c++) {
-        grandTotals[c] += parseFloat(rowArr[c] || 0);
+        pageTotals[c] += parseFloat(rowArr[c] || 0);
       }
 
       dataMatrix.push(rowArr);
@@ -305,8 +368,11 @@ export async function getIncomeDetailReportData(db, body) {
       success: true,
       headers,
       data: dataMatrix,
-      grandTotalRow: grandTotals,
-      fy: activeFy
+      grandTotalRow: pageTotals,
+      fy: activeFy,
+      totalRows,
+      page,
+      limit
     };
   } catch (err) {
     console.error("Error in getIncomeDetailReportData handler:", err);
@@ -330,7 +396,6 @@ export async function getMonthlyIncomeReportData(db, body) {
     const monthKeys = get13FiscalMonths(activeFy);
     const headers = ["ACCOUNT / CATEGORY", ...monthKeys, "TOTAL"];
 
-    // TABLE 1: Primary Revenue Breakdown (Effect Date Basis)
     const accounts = ["Registration", "Services", "Ferry", "Night Study Fees", "Others"];
     const t1Totals = new Array(14).fill(0);
 
@@ -354,7 +419,6 @@ export async function getMonthlyIncomeReportData(db, body) {
 
     const t1TotalRow = ["Total", ...t1Totals];
 
-    // TABLE 2: Secondary Category Summary (Cash Flow Date Basis)
     const categories = ["Boarder", "Semi Boarder", "Day Student"];
     const t2Totals = new Array(14).fill(0);
 
