@@ -226,6 +226,7 @@ export async function getIncomeDetailReportData(db, body) {
           GROUP BY student_id
           HAVING SUM(credit - debit) > 0
         )`);
+        // Need to push activeFy and fyClean again for the subquery
         params.push(activeFy, fyClean, `${yyyymm}-%`, `${yyyymm}-%`);
       }
     }
