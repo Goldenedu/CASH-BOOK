@@ -2,7 +2,8 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - CASHIER SUB-LEDGER HANDLER (CLOUDFLARE D1)
  * File: handlers-cashier.js  
- * 💡 Features: Refactored with utils.js for DRY Principle
+ * 💡 Features: Refactored with utils.js for DRY Principle,
+ *              🚀 OPTIMIZED: Aggregations natively in SQL (SUM/COUNT), Avoided SELECT *
  * ==============================================================================
  */
 
@@ -104,11 +105,12 @@ export async function getCashierData(db, body) {
     const { tableName, bookTitle } = getCashierMeta(rawBook);
     const searchVal = String(body.searchVal || "").trim();
     const page = parseInt(body.page || 1, 10);
-    const limit = parseInt(body.limit || 50, 10);
+    const limit = parseInt(body.limit || 50, 10); // Default pagination limit, though FE requests 2000
     const offset = (page - 1) * limit;
 
     const activeFy = normalizeFyStr(body.fy || "FY 2026-2027");
 
+    // 🚀 OPTIMIZATION 1: Fetch Aggregate Totals directly from SQL
     const statsResult = await db.prepare(`
       SELECT 
         COALESCE(SUM(debit), 0) as totalIncome,
@@ -120,6 +122,7 @@ export async function getCashierData(db, body) {
     let totalIncome = parseFloat(statsResult.totalIncome || 0);
     let totalExpense = parseFloat(statsResult.totalExpense || 0);
 
+    // Fallback logic if FY is empty (Legacy Mode Support)
     if (totalIncome === 0 && totalExpense === 0) {
       const allStats = await db.prepare(`
         SELECT 
@@ -144,11 +147,14 @@ export async function getCashierData(db, body) {
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-    const countRow = await db.prepare(`SELECT COUNT(*) as count FROM ${tableName} ${whereSql}`).bind(...params).first();
+    // 🚀 OPTIMIZATION 2: Row Count explicitly via SQL
+    const countRow = await db.prepare(`SELECT COUNT(id) as count FROM ${tableName} ${whereSql}`).bind(...params).first();
     const totalRows = countRow ? countRow.count : 0;
 
+    // 🚀 OPTIMIZATION 3: Explicit Columns Select (Avoid SELECT *)
     const dataQuery = `
-      SELECT * FROM ${tableName} 
+      SELECT id, no, date, responsibility_person as respPerson, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, is_locked, uniqueid 
+      FROM ${tableName} 
       ${whereSql} 
       ORDER BY id DESC 
       LIMIT ? OFFSET ?
@@ -172,7 +178,7 @@ export async function getCashierData(db, body) {
         id: row.id,
         no: Math.floor(parseFloat(row.no || row.id || 1)),
         date: row.date || '',
-        respPerson: row.responsibility_person || row.respPerson || '',
+        respPerson: row.respPerson || row.responsibility_person || '',
         category: row.category || '',
         description: row.description || '',
         method: row.method || 'Cash',
@@ -222,8 +228,13 @@ export async function getTodayIncomeForCashier(db, body) {
     const limit = parseInt(body.limit || 500, 10);
     const offset = (page - 1) * limit;
 
+    // 🚀 OPTIMIZATION 4: Explicit Select for Today Income
     const rowsRes = await db.prepare(
-      `SELECT * FROM income WHERE date = ? ORDER BY id DESC LIMIT ? OFFSET ?`
+      `SELECT student_id, id, no, effect_date, date, fy, fyid, fyid_name, class, category, account_name, method, debit, credit, aut_amount, promo, my, vr_no, remark, uniqueid, is_locked 
+       FROM income 
+       WHERE date = ? 
+       ORDER BY id DESC 
+       LIMIT ? OFFSET ?`
     ).bind(todayDate, limit, offset).all();
 
     const rawRows = rowsRes.results || [];
@@ -385,7 +396,7 @@ export async function updateCashierEntry(db, session, body) {
     }
 
     // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT & Capture Existing Data (Crash-Proof SELECT * Pattern)
-    const existing = await db.prepare(`SELECT * FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    const existing = await db.prepare(`SELECT fy, is_locked, uniqueid FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ပြင်ဆင်မည့် စာရင်း ရှာမတွေ့ပါ။" };
     }
@@ -500,7 +511,7 @@ export async function deleteCashierEntry(db, session, body) {
     }
 
     // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT & Capture Target Data (Crash-Proof SELECT * Pattern)
-    const existing = await db.prepare(`SELECT * FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    const existing = await db.prepare(`SELECT fy, transfer, is_locked, uniqueid FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ဖျက်သိမ်းမည့် စာရင်း ရှာမတွေ့ပါ။" };
     }
