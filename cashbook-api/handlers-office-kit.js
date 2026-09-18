@@ -3,6 +3,7 @@
  * GOLDEN ERP SYSTEM - OFFICE & KITCHEN EXPENSE HANDLER (CLOUDFLARE D1)
  * File: handlers-office-kit.js (Location: cashbook-api/handlers-office-kit.js)
  * 💡 Features: Refactored with utils.js for DRY Principle
+ *              🚀 OPTIMIZED: Aggregations natively in SQL (SUM/COUNT), Avoided SELECT *
  * ==============================================================================
  */
 
@@ -14,7 +15,8 @@ import {
   generateVoucherNo,
   generateFyNo,
   recalculateLedgerBalances,
-  generateUniqueId
+  generateUniqueId,
+  getCurrentAcademicYear
 } from './utils.js';
 
 const BOOK_TABLE_MAP = {
@@ -74,7 +76,7 @@ async function syncUniformStock(db, productId, unitDelta) {
     const formattedPid = `PID ${cleanNum.padStart(3, '0')}`;
 
     const item = await db.prepare(`
-      SELECT * FROM uniform_ledger 
+      SELECT id, opening_stock, selling_unit, unit_price FROM uniform_ledger 
       WHERE uniqueid = ? 
          OR LOWER(product_id) = LOWER(?) 
          OR LOWER(product_id) = LOWER(?) 
@@ -112,10 +114,13 @@ export async function getExpenseData(db, body) {
     const tableName = getTableName(rawBook);
     const searchVal = String(body.searchVal || "").trim();
     const page = parseInt(body.page || 1, 10);
-    const limit = parseInt(body.limit || 30, 10);
+    const limit = parseInt(body.limit || 30, 10); // Default pagination limit
     const offset = (page - 1) * limit;
-    const activeFy = normalizeFyStr(body.fy || "FY 2026-2027");
+    
+    // Zero Hardcoding FY
+    const activeFy = normalizeFyStr(body.fy || `FY ${getCurrentAcademicYear()}`);
 
+    // 🚀 OPTIMIZATION 1: Fetch Aggregate Totals directly from SQL
     const statsResult = await db.prepare(`
       SELECT 
         COALESCE(SUM(debit), 0) as totalIncome,
@@ -138,10 +143,39 @@ export async function getExpenseData(db, body) {
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-    const countRow = await db.prepare(`SELECT COUNT(*) as count FROM ${tableName} ${whereSql}`).bind(...params).first();
+    
+    // 🚀 OPTIMIZATION 2: Row Count explicitly via SQL
+    const countRow = await db.prepare(`SELECT COUNT(id) as count FROM ${tableName} ${whereSql}`).bind(...params).first();
     const totalRows = countRow ? countRow.count : 0;
 
-    const dataQuery = `SELECT * FROM ${tableName} ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`;
+    // 🚀 OPTIMIZATION 3: Explicit Columns Select (Avoid SELECT *)
+    let dataQuery = '';
+    if (tableName === 'payroll') {
+      dataQuery = `
+        SELECT id, no, date, category, description, method, debit, credit, balances, unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name, is_locked, uniqueid 
+        FROM ${tableName} 
+        ${whereSql} 
+        ORDER BY id DESC 
+        LIMIT ? OFFSET ?
+      `;
+    } else if (tableName === 'office') {
+      dataQuery = `
+        SELECT id, no, date, category, description, unit, unit_price, method, debit, credit, balances, liabilities, transfer, vr_no, my, fy, book_name, is_locked, uniqueid 
+        FROM ${tableName} 
+        ${whereSql} 
+        ORDER BY id DESC 
+        LIMIT ? OFFSET ?
+      `;
+    } else { // Kitchen
+      dataQuery = `
+        SELECT id, no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, is_locked, uniqueid 
+        FROM ${tableName} 
+        ${whereSql} 
+        ORDER BY id DESC 
+        LIMIT ? OFFSET ?
+      `;
+    }
+
     const rowsRes = await db.prepare(dataQuery).bind(...params, limit, offset).all();
     const rawRows = rowsRes.results || [];
 
