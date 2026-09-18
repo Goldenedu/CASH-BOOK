@@ -1,19 +1,12 @@
 /**
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - PROMOTION MATRIX HANDLER (CLOUDFLARE D1)
  * File: handlers-promotion.js 
- * 💡 Features: Promotion Rates CRUD Engine with Snake_case & CamelCase D1 Schema Normalization,
- *              FY-Scoped Filtering, Duplicate Rate Prevention & Integer Sequence NO Reset
+ * 💡 Features: Refactored with utils.js for DRY Principle
+ * ==============================================================================
  */
 
-/**
- * 💡 FY String Normalizer (Ensures "FY 2026-2027" or "2026-2027" match)
- */
-function normalizeFyStr(fy) {
-  if (!fy) return '2026-2027';
-  let s = String(fy).trim();
-  s = s.replace(/^FY\s*/i, '');
-  return s;
-}
+import { normalizeFyClean, generateUniqueId } from './utils.js';
 
 /**
  * 💡 Fetch Promotion Fee Rates Matrix Data
@@ -21,7 +14,7 @@ function normalizeFyStr(fy) {
 export async function getPromotionData(db, body) {
   try {
     const search = String(body.searchVal || "").trim();
-    const fyFilter = body.fy ? normalizeFyStr(body.fy) : "";
+    const fyFilter = body.fy ? normalizeFyClean(body.fy) : "";
 
     let whereClauses = [];
     let params = [];
@@ -83,10 +76,11 @@ export async function getPromotionData(db, body) {
  */
 export async function savePromotionEntry(db, userSession, body) {
   try {
-    const uniqueid = body.uniqueId || `PRO_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    // ⚡ Refactored: Uses generateUniqueId from utils.js
+    const uniqueid = body.uniqueId || generateUniqueId('PRO');
     const createdBy = userSession?.name || userSession?.username || body.createdBy || "Admin";
 
-    const fy = normalizeFyStr(body.fy || "2026-2027");
+    const fy = normalizeFyClean(body.fy || "2026-2027");
     const className = String(body.class || '').trim();
     const category = String(body.category || '').trim();
 
@@ -159,7 +153,7 @@ export async function updatePromotionEntry(db, userSession, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    const fy = normalizeFyStr(body.fy || "2026-2027");
+    const fy = normalizeFyClean(body.fy || "2026-2027");
 
     const stmt = `
       UPDATE promotion SET 
