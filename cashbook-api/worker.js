@@ -8,7 +8,7 @@
  *              Fail-Closed WebCrypto JWT & PBKDF2 Password Security (100k Iterations),
  *              Server-Side Brute-Force Lockout Defense,
  *              🛡️ Standalone Zero-Dependency D1 Audit Logger (No Missing Module Error),
- *              🎯 Strict RBAC Guard for Payroll Settings
+ *              🎯 Phase 3: Added Scheduled Cron Trigger for Auto Audit Logs Cleanup
  * ==============================================================================
  */
 
@@ -30,82 +30,16 @@ import { validateLedgerInput } from './validation.js';
 // 💡 1. DOMAIN-SPECIFIC SERVER-SIDE RBAC PERMISSION MATRIX
 // ==============================================================================
 const ROLE_PERMS = {
-  Owner: {
-    ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true,
-    student_read: true, student_write: true, staff_read: true, staff_write: true,
-    uniform_read: true, uniform_write: true, promo_read: true, promo_write: true,
-    report_read: true, settings_write: true, grade_matrix: true, backup_dispatch: true
-  },
-  Admin: {
-    ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true,
-    student_read: true, student_write: true, staff_read: true, staff_write: true,
-    uniform_read: true, uniform_write: true, promo_read: true, promo_write: true,
-    report_read: true, settings_write: true, grade_matrix: true, backup_dispatch: true
-  },
-  Finance: {
-    ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true,
-    student_read: true, student_write: true, staff_read: true, staff_write: true,
-    uniform_read: true, uniform_write: true, promo_read: true, promo_write: true,
-    report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: true
-  },
-  Accountant: {
-    ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true,
-    student_read: true, student_write: true, staff_read: true, staff_write: true,
-    uniform_read: true, uniform_write: true, promo_read: true, promo_write: true,
-    report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: true
-  },
-  HR: {
-    ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false,
-    student_read: false, student_write: false, staff_read: true, staff_write: true,
-    uniform_read: false, uniform_write: false, promo_read: false, promo_write: false,
-    report_read: true, settings_write: false, grade_matrix: true, backup_dispatch: false
-  },
-  "HR Staff": {
-    ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false,
-    student_read: false, student_write: false, staff_read: true, staff_write: true,
-    uniform_read: false, uniform_write: false, promo_read: false, promo_write: false,
-    report_read: true, settings_write: false, grade_matrix: true, backup_dispatch: false
-  },
-  Cashier: {
-    ledger_read: false, ledger_write: false,
-    cashier_read: true, cashier_write: true,
-    student_read: true, student_write: false,
-    staff_read: false, staff_write: false,
-    uniform_read: true, uniform_write: false,
-    promo_read: true, promo_write: false,
-    report_read: false, settings_write: false,
-    grade_matrix: false, backup_dispatch: false
-  },
-  "Main Cashier": {
-    ledger_read: false, ledger_write: false,
-    cashier_read: true, cashier_write: true,
-    student_read: true, student_write: false,
-    staff_read: false, staff_write: false,
-    uniform_read: true, uniform_write: false,
-    promo_read: true, promo_write: false,
-    report_read: false, settings_write: false,
-    grade_matrix: false, backup_dispatch: false
-  },
-  Staff: {
-    ledger_read: false, ledger_write: false,
-    cashier_read: false, cashier_write: false,
-    student_read: true, student_write: false,
-    staff_read: false, staff_write: false,
-    uniform_read: true, uniform_write: false,
-    promo_read: true, promo_write: false,
-    report_read: false, settings_write: false,
-    grade_matrix: false, backup_dispatch: false
-  },
-  Viewer: {
-    ledger_read: true, ledger_write: false,
-    cashier_read: true, cashier_write: false,
-    student_read: true, student_write: false,
-    staff_read: true, staff_write: false,
-    uniform_read: true, uniform_write: false,
-    promo_read: true, promo_write: false,
-    report_read: true, settings_write: false,
-    grade_matrix: false, backup_dispatch: false
-  }
+  Owner: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: true, grade_matrix: true, backup_dispatch: true },
+  Admin: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: true, grade_matrix: true, backup_dispatch: true },
+  Finance: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: true },
+  Accountant: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: true },
+  HR: { ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false, student_read: false, student_write: false, staff_read: true, staff_write: true, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: true, settings_write: false, grade_matrix: true, backup_dispatch: false },
+  "HR Staff": { ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false, student_read: false, student_write: false, staff_read: true, staff_write: true, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: true, settings_write: false, grade_matrix: true, backup_dispatch: false },
+  Cashier: { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: true, uniform_write: false, promo_read: true, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
+  "Main Cashier": { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: true, uniform_write: false, promo_read: true, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
+  Staff: { ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: true, uniform_write: false, promo_read: true, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
+  Viewer: { ledger_read: true, ledger_write: false, cashier_read: true, cashier_write: false, student_read: true, student_write: false, staff_read: true, staff_write: false, uniform_read: true, uniform_write: false, promo_read: true, promo_write: false, report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: false }
 };
 
 function can(session, perm) {
@@ -119,7 +53,7 @@ function forbidden(corsHeaders, message = "ဒီလုပ်ဆောင်ခ�
 }
 
 // ==============================================================================
-// 💡 2. STANDALONE SAFE AUDIT LOGGER (No External File Dependency)
+// 💡 2. STANDALONE SAFE AUDIT LOGGER
 // ==============================================================================
 function sanitizeDetailsForAudit(obj) {
   if (!obj || typeof obj !== 'object') return obj;
@@ -168,7 +102,7 @@ async function writeAuditLog(db, sessionOrUser, actionType, moduleOrPayload = {}
 }
 
 // ==============================================================================
-// 💡 3. CRYPTOGRAPHIC JWT & PBKDF2 PASSWORD ENGINE
+// 💡 3. CRYPTOGRAPHIC JWT & PBKDF2 PASSWORD ENGINE (Dynamic JWT EXPIRY Support)
 // ==============================================================================
 function base64UrlEncode(bytesOrStr) {
   const bytes = typeof bytesOrStr === "string" ? new TextEncoder().encode(bytesOrStr) : bytesOrStr;
@@ -189,15 +123,19 @@ function base64UrlDecodeToBytes(str) {
 async function hmacKey(secret) {
   return crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
 }
-async function createJwtToken(payload, secret) {
+
+// 🎯 DYNAMIC JWT EXPIRE FROM ENV
+async function createJwtToken(payload, secret, env) {
   const header = { alg: "HS256", typ: "JWT" };
   const encodedHeader = base64UrlEncode(JSON.stringify(header));
-  const encodedPayload = base64UrlEncode(JSON.stringify({ ...payload, exp: Math.floor(Date.now() / 1000) + (8 * 3600) }));
+  const expiryHours = env && env.JWT_EXPIRY_HOURS ? parseInt(env.JWT_EXPIRY_HOURS, 10) : 8;
+  const encodedPayload = base64UrlEncode(JSON.stringify({ ...payload, exp: Math.floor(Date.now() / 1000) + (expiryHours * 3600) }));
   const key = await hmacKey(secret);
   const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`));
   const encodedSignature = base64UrlEncode(new Uint8Array(signature));
   return `${encodedHeader}.${encodedPayload}.${encodedSignature}`;
 }
+
 async function verifyJwtToken(token, secret) {
   if (!token) return null;
   try {
@@ -523,7 +461,7 @@ export default {
               }
               await resetLoginAttempts(db, user.username.toLowerCase());
               await writeAuditLog(db, user, 'loginSuccess', { username: user.username, role: user.role });
-              const token = await createJwtToken({ username: user.username, role: user.role, name: user.name || user.username }, authSecret);
+              const token = await createJwtToken({ username: user.username, role: user.role, name: user.name || user.username }, authSecret, env);
               return new Response(JSON.stringify({ success: true, token: token, user: { username: user.username, role: user.role, name: user.name || user.username } }), { headers: corsHeaders });
             }
           }
@@ -729,6 +667,20 @@ export default {
         success: false,
         message: errorMessage
       }), { status: 500, headers: corsHeaders });
+    }
+  },
+
+  // 🛡️ Scheduled Cron Trigger for Auto Audit Logs Cleanup
+  async scheduled(event, env, ctx) {
+    try {
+      const db = env.DB || env.school_db;
+      if (!db) return;
+
+      // ၆ လ (ရက် ၁၈၀) ထက် ဟောင်းသော Log များကို ဖျက်ပစ်မည်
+      await db.prepare(`DELETE FROM audit_logs WHERE datetime(created_at) < datetime('now', '-180 days')`).run();
+      console.log("[CRON] Old audit logs cleaned up successfully.");
+    } catch (err) {
+      console.error("[CRON] Audit log cleanup failed:", err.message);
     }
   }
 };
