@@ -3,6 +3,7 @@
  * GOLDEN ERP SYSTEM - OFFICE EXPENSE & INVENTORY MODULE 
  * File: js/office-kit.js (Location: cashbook-frontend/js/office-kit.js)
  * 💡 Features: Refactored with Global api.js for DRY Principle
+ *              🎯 Auto-scaling Font Size & Header Labels update (MMK) exactly like Dashboard
  * ==============================================================================
  */
 
@@ -20,6 +21,51 @@ window.currentExpenseBook = 'office'; // 'office' | 'kitchen'
 
 var searchTimeoutOffice = null;
 var isOfficeSubmitting = false;
+
+/**
+ * 💡 Update Labels to include (MMK) automatically
+ */
+function updateOffKpiLabels() {
+  const labels = {
+    'off-total-income': 'TOTAL INCOME (MMK)',
+    'off-total-expense': 'TOTAL EXPENSE (MMK)',
+    'off-balance': 'TOTAL BALANCES (MMK)'
+  };
+  
+  for (const [id, text] of Object.entries(labels)) {
+    const valueEl = document.getElementById(id);
+    if (valueEl) {
+      const parent = valueEl.parentElement;
+      if (parent) {
+        const labelEl = parent.querySelector('p'); 
+        if (labelEl) labelEl.textContent = text;
+      }
+    }
+  }
+}
+
+/**
+ * 💡 Auto-Scale Font Size to Prevent Truncation on Large Numbers
+ */
+function adjustOffKpiFontSizes() {
+  const kpiIds = ['off-total-income', 'off-total-expense', 'off-balance', 'off-entries-count'];
+  kpiIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    el.style.fontSize = '24px'; 
+    el.style.whiteSpace = 'nowrap';
+    
+    let currentSize = 24;
+    while (el.scrollWidth > el.clientWidth && currentSize > 12) {
+      currentSize--;
+      el.style.fontSize = currentSize + 'px';
+    }
+  });
+}
+
+// Ensure resizing works on window resize
+window.addEventListener('resize', adjustOffKpiFontSizes);
 
 /**
  * 💡 Safe Accounting Number Parser (Correctly handles -1000, (1000), (1,000) & positive numbers)
@@ -472,10 +518,16 @@ function updateStatsOffice() {
   var stats = window.OfficeState.stats;
   var setT = function(id, val) { var el = document.getElementById(id); if (el) el.innerText = val; };
 
-  setT('off-total-income', Number(stats.totalIncome || 0).toLocaleString('en-US') + " MMK");
-  setT('off-total-expense', Number(stats.totalExpense || 0).toLocaleString('en-US') + " MMK");
-  setT('off-balance', Number(stats.balance || 0).toLocaleString('en-US') + " MMK");
+  updateOffKpiLabels(); // Add (MMK) to titles
+
+  // Removed trailing MMK from values
+  setT('off-total-income', Number(stats.totalIncome || 0).toLocaleString('en-US'));
+  setT('off-total-expense', Number(stats.totalExpense || 0).toLocaleString('en-US'));
+  setT('off-balance', Number(stats.balance || 0).toLocaleString('en-US'));
   setT('off-entries-count', window.OfficeState.totalRows.toLocaleString('en-US'));
+
+  // Trigger Auto Scale
+  setTimeout(adjustOffKpiFontSizes, 50);
 }
 
 /**
@@ -954,6 +1006,8 @@ function exportToCSVOffice() {
 }
 
 // 💡 EXPOSE GLOBALLY
+window.updateOffKpiLabels = updateOffKpiLabels;
+window.adjustOffKpiFontSizes = adjustOffKpiFontSizes;
 window.extractProductIdFromDescription = extractProductIdFromDescription;
 window.loadOfficeData = loadOfficeData;
 window.openAddModalOffice = openAddModalOffice;
