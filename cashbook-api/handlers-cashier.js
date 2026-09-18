@@ -2,16 +2,19 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - CASHIER SUB-LEDGER HANDLER (CLOUDFLARE D1)
  * File: handlers-cashier.js  
- * 💡 Features: 🛡️ 100% ACID Compliant Atomic Transfers via Cloudflare D1 db.batch(),
- *              ⚡ QUOTA-SHIELD: O(1) Differential Row-Level Recalculation Engine,
- *              🎯 Floating Point Safe Comparison (ROUND to 2 Decimals),
- *              Zero Transactional Leak on Save/Update/Delete Operations,
- *              Server-Side Auto-Lock Enforcement (Zero Client Bypass),
- *              Myanmar Standard Time (UTC+6:30) & March Academic Year Boundary Alignment,
- *              17-Column Schema Alignment (With Responsibility Person),
- *              Today's Income Live Feed for Invoice Printer
+ * 💡 Features: Refactored with utils.js for DRY Principle
  * ==============================================================================
  */
+
+import {
+  getMyanmarDateString,
+  calculateAcademicFyFromDate,
+  normalizeFyStr,
+  generateVoucherNo,
+  generateFyNo,
+  recalculateLedgerBalances,
+  generateUniqueId
+} from './utils.js';
 
 const CASHIER_TABLE_MAP = {
   "cabank": "ca_bank",
@@ -62,140 +65,6 @@ function getCashierMeta(rawBook) {
   }
 
   return { tableName, prefix, bookTitle };
-}
-
-/**
- * 💡 FY String Normalizer (Ensures "FY 2026-2027" format)
- */
-function normalizeFyStr(fy) {
-  if (!fy) return 'FY 2026-2027';
-  let s = String(fy).trim();
-  if (!s.toUpperCase().startsWith('FY ')) {
-    s = 'FY ' + s;
-  }
-  return s;
-}
-
-/**
- * 💡 Myanmar Standard Timezone Helper (UTC+6:30)
- * ညသန်းခေါင်ကျော် စာရင်းသွင်းပါက ရက်စွဲ ၁ ရက် နောက်ပြန်ဆုတ်သွားသည့် Bug ကို ကာကွယ်သည်
- */
-function getMyanmarDateString(inputDate = null) {
-  if (inputDate) return String(inputDate).trim().split('T')[0];
-  const now = new Date(Date.now() + (6.5 * 3600 * 1000));
-  return now.toISOString().split('T')[0];
-}
-
-/**
- * 💡 Academic Year Calculator (March Boundary Aligned)
- * မတ်လသည် စာရင်းနှစ်သစ်၏ ပထမဆုံးလ ဖြစ်သောကြောင့် ဇန်နဝါရီ၊ ဖေဖော်ဝါရီ (Month < 2) သာ ယခင်နှစ်အဟောင်းထဲ သတ်မှတ်သည်
- */
-function calculateAcademicFyFromDate(dateStr) {
-  const d = new Date(dateStr);
-  let fyYear = d.getFullYear();
-  if (d.getMonth() < 2) fyYear -= 1;
-  return `FY ${fyYear}-${fyYear + 1}`;
-}
-
-/**
- * ⚡ QUOTA-SHIELD: O(1) Single-Pass D1 Window Function Recalculation Engine for Cashier
- * 💡 တန်ဖိုး တကယ်ပြောင်းလဲသွားသော Row များကိုသာ Update လုပ်သဖြင့်
- * D1 Row Writes ကို 99.9% သက်သာစေပြီး 14k/18k row-write spikes များကို အပြီးတိုင် ရပ်တန့်စေသည်
- */
-async function recalculateLedgerBalances(db, tableName, targetFy = null) {
-  if (!tableName) return;
-  try {
-    if (targetFy) {
-      const normFy = normalizeFyStr(targetFy);
-      const cleanFy = normFy.replace(/^FY\s*/i, '');
-
-      await db.prepare(`
-        WITH calculated AS (
-          SELECT id,
-                 ROW_NUMBER() OVER (
-                   ORDER BY date ASC, id ASC
-                 ) as calc_no,
-                 SUM(debit - credit) OVER (
-                   ORDER BY date ASC, id ASC 
-                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                 ) as calc_bal
-          FROM ${tableName}
-          WHERE fy = ? OR fy = ?
-        )
-        UPDATE ${tableName} 
-        SET no = calculated.calc_no,
-            balances = calculated.calc_bal
-        FROM calculated
-        WHERE ${tableName}.id = calculated.id
-          AND (
-            ${tableName}.no IS NOT calculated.calc_no OR 
-            ROUND(${tableName}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2)
-          );
-      `).bind(normFy, cleanFy).run();
-
-    } else {
-      await db.prepare(`
-        WITH calculated AS (
-          SELECT id,
-                 ROW_NUMBER() OVER (
-                   PARTITION BY fy
-                   ORDER BY date ASC, id ASC
-                 ) as calc_no,
-                 SUM(debit - credit) OVER (
-                   PARTITION BY fy
-                   ORDER BY date ASC, id ASC 
-                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                 ) as calc_bal
-          FROM ${tableName}
-        )
-        UPDATE ${tableName} 
-        SET no = calculated.calc_no,
-            balances = calculated.calc_bal
-        FROM calculated
-        WHERE ${tableName}.id = calculated.id
-          AND (
-            ${tableName}.no IS NOT calculated.calc_no OR 
-            ROUND(${tableName}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2)
-          );
-      `).run();
-    }
-  } catch (e) {
-    console.warn(`Running Balance Recalculation Warning for ${tableName}:`, e.message);
-  }
-}
-
-/**
- * 💡 Date-Based Voucher Number Generator
- */
-async function generateVoucherNo(db, tableName, prefix, entryDate) {
-  let ddmmyy = "";
-  const parts = String(entryDate || '').split('-');
-  if (parts.length === 3) {
-    const y = parts[0].slice(-2);
-    ddmmyy = `${parts[2]}${parts[1]}${y}`;
-  } else {
-    const now = new Date(Date.now() + (6.5 * 3600 * 1000));
-    ddmmyy = `${String(now.getDate()).padStart(2, '0')}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getFullYear()).slice(-2)}`;
-  }
-
-  const pattern = `${prefix}-${ddmmyy}-%`;
-  const countRow = await db.prepare(
-    `SELECT COUNT(*) as cnt FROM ${tableName} WHERE vr_no LIKE ? OR date = ?`
-  ).bind(pattern, entryDate).first();
-
-  const seq = (countRow ? parseInt(countRow.cnt, 10) : 0) + 1;
-  return `${prefix}-${ddmmyy}-${String(seq).padStart(3, '0')}`;
-}
-
-/**
- * 💡 FY-Based Integer NO Generator
- */
-async function generateFyNo(db, tableName, fy) {
-  const normFy = normalizeFyStr(fy);
-  const lastNoRow = await db.prepare(
-    `SELECT MAX(CAST(no AS INTEGER)) as maxNo FROM ${tableName} WHERE fy = ? OR fy = ?`
-  ).bind(normFy, normFy.replace(/^FY\s*/i, '')).first();
-  return (lastNoRow && lastNoRow.maxNo ? parseInt(lastNoRow.maxNo, 10) : 0) + 1;
 }
 
 /**
@@ -418,9 +287,10 @@ export async function saveCashierEntry(db, session, body) {
     const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(session?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport || body.skipAutoPost);
 
+    // ⚡ Refactored: Uses generateUniqueId from utils.js
     const uniqueid = (isMigration && body.uniqueId)
       ? String(body.uniqueId).trim()
-      : `CAS_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      : generateUniqueId('CAS');
 
     const newNo = (isMigration && body.no) ? parseInt(body.no, 10) : await generateFyNo(db, tableName, fy);
     const vrNo = body.vrNo || await generateVoucherNo(db, tableName, prefix, entryDate);
@@ -605,7 +475,7 @@ export async function updateCashierEntry(db, session, body) {
 
     return {
       success: true,
-      message: "Cashier စာရင်း အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။"
+      message: "Cashier စာရင်း အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ."
     };
   } catch (err) {
     console.error("Error in updateCashierEntry handler:", err);
