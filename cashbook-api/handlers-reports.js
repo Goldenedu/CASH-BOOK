@@ -3,7 +3,7 @@
  * GOLDEN ERP SYSTEM - FINANCIAL & DEMOGRAPHIC REPORTS HANDLER (CLOUDFLARE D1)
  * File: handlers-reports.js (Location: cashbook-api/handlers-reports.js)
  * 💡 Features: Refactored with utils.js for DRY Principle, Single-Pass Aggregations,
- *              🎯 Server-Side Pagination (LIMIT 20) to massively reduce D1 Row Reads & RAM,
+ *              🎯 Server-Side Pagination (LIMIT 50) to massively reduce D1 Row Reads & RAM,
  *              🎯 Auto Grade Sorting (Pre School to Grade 12),
  *              🎯 Dynamic "Unpaid Month" Filter using efficient SQL Sub-Queries
  * ==============================================================================
@@ -185,13 +185,16 @@ export async function getIncomeDetailReportData(db, body) {
     const activeFy = normalizeFyStr(body.fy || "FY 2026-2027");
     const fyClean = activeFy.replace(/^FY\s*/i, '');
     
-    // 🎯 Pagination Parameters (Default 20 rows per page)
+    // 🎯 Pagination Parameters (Default 50 rows per page to save RAM)
     const page = parseInt(body.page || 1, 10);
-    const limit = parseInt(body.limit || 20, 10);
+    const limit = parseInt(body.limit || 50, 10);
     const offset = (page - 1) * limit;
 
     const searchVal = String(body.searchVal || "").trim().toLowerCase();
-    const unpaidMonth = String(body.unpaidMonth || "").trim(); // e.g. "Sep-26"
+    
+    // Unpaid Filter e.g. 14 -> "Mar-26", 15 -> "Apr-26"
+    // We expect the frontend to pass the exact Month Label string (e.g., "Sep-26")
+    const unpaidMonthLabel = String(body.unpaidMonthLabel || "").trim();
 
     const monthKeys = get13FiscalMonths(activeFy);
     const headers = [
@@ -211,8 +214,8 @@ export async function getIncomeDetailReportData(db, body) {
       params.push(p, p, p);
     }
 
-    if (unpaidMonth) {
-      const yyyymm = monthLabelToYYYYMM(unpaidMonth);
+    if (unpaidMonthLabel) {
+      const yyyymm = monthLabelToYYYYMM(unpaidMonthLabel);
       if (yyyymm) {
         whereClauses.push(`LOWER(s.status) = 'active'`);
         // Filter out students who already paid Service Fees in this month
@@ -224,6 +227,7 @@ export async function getIncomeDetailReportData(db, body) {
           GROUP BY student_id
           HAVING SUM(credit - debit) > 0
         )`);
+        // Need to push activeFy and fyClean again for the subquery
         params.push(activeFy, fyClean, `${yyyymm}-%`, `${yyyymm}-%`);
       }
     }
@@ -267,7 +271,7 @@ export async function getIncomeDetailReportData(db, body) {
       return { success: true, headers, data: [], grandTotalRow: null, fy: activeFy, totalRows, page, limit };
     }
 
-    // 🎯 4. FETCH INCOME ONLY FOR THESE 20 STUDENTS (Massive RAM & Row Read Saver)
+    // 🎯 4. FETCH INCOME ONLY FOR THESE STUDENTS (Massive RAM & Row Read Saver)
     const studentIds = studentList.map(s => parseInt(s.student_id || s.id, 10)).filter(id => !isNaN(id));
     const placeholders = studentIds.map(() => '?').join(',');
     
