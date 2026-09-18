@@ -3,6 +3,7 @@
  * GOLDEN ERP SYSTEM - UNIFORM INVENTORY D1 SQL HANDLER MODULE
  * File: handlers-uniform.js (Location: cashbook-api/handlers-uniform.js)
  * 💡 Features: Refactored with utils.js for DRY Principle
+ *              🚀 OPTIMIZED: Aggregations natively in SQL (SUM/COUNT), Avoided SELECT *
  * ==============================================================================
  */
 
@@ -29,22 +30,31 @@ export async function getUniformData(db, body) {
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-    const countRow = await db.prepare(`SELECT COUNT(*) as count FROM uniform_ledger ${whereSql}`).bind(...params).first();
-    const totalRows = countRow ? countRow.count : 0;
+    // 🚀 OPTIMIZATION 1: Fetch Aggregate Totals directly from SQL (Avoids iterating all rows in JS)
+    const statsRow = await db.prepare(`
+      SELECT 
+        COUNT(id) as count,
+        COALESCE(SUM(selling_unit), 0) as sellingUnit,
+        COALESCE(SUM(current_qty), 0) as currentQty,
+        COALESCE(SUM(total_stock_value), 0) as totalStockValue
+      FROM uniform_ledger ${whereSql}
+    `).bind(...params).first();
 
-    const query = `SELECT * FROM uniform_ledger ${whereSql} ORDER BY id ASC LIMIT ? OFFSET ?`;
+    const totalRows = statsRow ? statsRow.count : 0;
+    const sellingUnit = statsRow ? parseFloat(statsRow.sellingUnit || 0) : 0;
+    const currentQty = statsRow ? parseFloat(statsRow.currentQty || 0) : 0;
+    const totalStockValue = statsRow ? parseFloat(statsRow.totalStockValue || 0) : 0;
+
+    // 🚀 OPTIMIZATION 2: Explicit Columns Select
+    const query = `
+      SELECT id, no, product_id, product_name, type, size, opening_stock, unit_price, total_amount, selling_price, profit_amount, selling_unit, current_qty, total_stock_value, uniqueid 
+      FROM uniform_ledger 
+      ${whereSql} 
+      ORDER BY id ASC 
+      LIMIT ? OFFSET ?
+    `;
     const rows = await db.prepare(query).bind(...params, limit, offset).all();
     const list = rows.results || [];
-
-    let sellingUnit = 0;
-    let currentQty = 0;
-    let totalStockValue = 0;
-
-    list.forEach(item => {
-      sellingUnit += Number(item.selling_unit ?? item.sellingUnit ?? 0);
-      currentQty += Number(item.current_qty ?? item.currentQty ?? 0);
-      totalStockValue += Number(item.total_stock_value ?? item.totalStockValue ?? 0);
-    });
 
     return {
       success: true,
@@ -140,7 +150,7 @@ export async function updateUniformEntry(db, userSession, body) {
 
     // 1. Fetch Existing Record to prevent wiping selling_unit
     const existing = await db.prepare(
-      `SELECT * FROM uniform_ledger WHERE uniqueid = ? OR id = ? LIMIT 1`
+      `SELECT opening_stock, selling_unit, unit_price, selling_price, product_id, product_name, type, size FROM uniform_ledger WHERE uniqueid = ? OR id = ? LIMIT 1`
     ).bind(uniqueid || '', rowId || 0).first();
 
     const existingSellingUnit = existing ? parseFloat(existing.selling_unit || 0) : 0;
