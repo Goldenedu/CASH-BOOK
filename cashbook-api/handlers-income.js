@@ -2,7 +2,8 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - MAIN INCOME BOOK HANDLER (CLOUDFLARE D1)
  * File: handlers-income.js (Location: cashbook-api/handlers-income.js)
- * 💡 Features: Refactored with utils.js for DRY Principle
+ * 💡 Features: Refactored with utils.js for DRY Principle,
+ *              🚀 OPTIMIZED: Aggregations natively in SQL (SUM/COUNT), Avoided SELECT *
  * ==============================================================================
  */
 
@@ -162,6 +163,7 @@ async function upsertDailyIncomeRollup(db, tableName, entryDate, fy, createdBy) 
   const methodLabel = isBank ? 'Bank' : 'Cash';
   const uniqueid = `DAILY_INC_${tableName.toUpperCase()}_${entryDate}`;
 
+  // 🚀 OPTIMIZATION: Row Read Reduced drastically using direct SQL aggregation
   const stats = await db.prepare(`
     SELECT 
       COALESCE(SUM(credit - debit), 0) as netAmount,
@@ -306,6 +308,7 @@ export async function getIncomeData(db, body) {
 
     const activeFy = normalizeFyStr(body.fy || `FY ${getCurrentAcademicYear()}`);
 
+    // 🚀 OPTIMIZATION: Row Read Reduced drastically using direct SQL aggregation
     let statsResult;
     if (body.fy && body.fy !== 'all') {
       statsResult = await db.prepare(`
@@ -344,11 +347,15 @@ export async function getIncomeData(db, body) {
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-    const countRow = await db.prepare(`SELECT COUNT(*) as count FROM income ${whereSql}`).bind(...params).first();
+    
+    // 🚀 OPTIMIZATION: Count Query directly from SQL
+    const countRow = await db.prepare(`SELECT COUNT(id) as count FROM income ${whereSql}`).bind(...params).first();
     const totalRows = countRow ? countRow.count : 0;
 
+    // 🚀 OPTIMIZATION: Avoid SELECT * and specify required columns
     const dataQuery = `
-      SELECT * FROM income 
+      SELECT id, student_id, no, effect_date, effDate, date, fy, fyid, fyid_name, fyidName, class, category, account_name, accountName, method, debit, credit, aut_amount, autAmount, promo, my, vr_no, vrNo, remark, uniqueid, uniqueId, is_locked, isLocked
+      FROM income 
       ${whereSql} 
       ORDER BY id DESC 
       LIMIT ? OFFSET ?
@@ -546,7 +553,7 @@ export async function updateIncomeEntry(db, session, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    const existing = await db.prepare(`SELECT * FROM income WHERE uniqueid = ?`).bind(uniqueid).first();
+    const existing = await db.prepare(`SELECT fy, date, is_locked, uniqueid FROM income WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ပြင်ဆင်မည့် ဝင်ငွေစာရင်း ရှာမတွေ့ပါ။" };
     }
@@ -608,7 +615,7 @@ export async function deleteIncomeEntry(db, session, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    const existing = await db.prepare(`SELECT * FROM income WHERE uniqueid = ?`).bind(uniqueid).first();
+    const existing = await db.prepare(`SELECT fy, date, is_locked, uniqueid FROM income WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ပြင်ဆင်မည့် ဝင်ငွေစာရင်း ရှာမတွေ့ပါ။" };
     }
