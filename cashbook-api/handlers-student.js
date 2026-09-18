@@ -3,6 +3,7 @@
  * GOLDEN ERP SYSTEM - STUDENT DIRECTORY D1 HANDLER MODULE
  * File: handlers-student.js (Location: cashbook-api/handlers-student.js)
  * 💡 Features: Refactored with utils.js for DRY Principle
+ *              🚀 OPTIMIZED: SQL-Side Active/Inactive Aggregations, Avoided SELECT *
  * ==============================================================================
  */
 
@@ -52,7 +53,7 @@ export async function getStudentData(db, body) {
     // ⚡ OPTIMIZED: Single Combined Query for Total, Active and Inactive Counts (Cuts 2 Round-trips)
     const statsQuery = `
       SELECT 
-        COUNT(*) as totalCount,
+        COUNT(id) as totalCount,
         COALESCE(SUM(CASE WHEN LOWER(status) = 'active' THEN 1 ELSE 0 END), 0) as activeCount,
         COALESCE(SUM(CASE WHEN LOWER(status) = 'inactive' THEN 1 ELSE 0 END), 0) as inactiveCount
       FROM student ${whereSql}
@@ -63,8 +64,10 @@ export async function getStudentData(db, body) {
     const totalActive = statsRow.activeCount || 0;
     const totalInactive = statsRow.inactiveCount || 0;
 
+    // 🚀 OPTIMIZATION: Explicit columns
     const dataQuery = `
-      SELECT * FROM student 
+      SELECT id, student_id, no, stu_status, date, fy, fyid, name, fyid_name, class, category, promo, status, transfer_date, transferDate, gender, parents_name, phone_no, address, uniqueid 
+      FROM student 
       ${whereSql} 
       ORDER BY CAST(no AS INTEGER) DESC, id DESC 
       LIMIT ? OFFSET ?
@@ -127,7 +130,7 @@ export async function lookupStudentById(db, body) {
     }
 
     const row = await db.prepare(
-      `SELECT * FROM student WHERE student_id = ? OR id = ? ORDER BY id DESC LIMIT 1`
+      `SELECT student_id, id, name, class, category, promo, status, parents_name, phone_no, address, fyid FROM student WHERE student_id = ? OR id = ? ORDER BY id DESC LIMIT 1`
     ).bind(studentId, studentId).first();
 
     if (!row) {
@@ -168,7 +171,6 @@ export async function saveStudentEntry(db, userSession, body) {
     const isPrivilegedAdmin = ['Owner', 'Admin'].includes(userSession?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport);
 
-    // ⚡ Refactored: Uses generateUniqueId from utils.js
     const uniqueid = (isMigration && body.uniqueId)
       ? String(body.uniqueId).trim()
       : generateUniqueId('STU');
