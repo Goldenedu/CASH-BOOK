@@ -3,6 +3,8 @@
  * GOLDEN ERP SYSTEM - HOME DASHBOARD CONTROLLER
  * File: js/dashboard.js (Location: cashbook-frontend/js/dashboard.js)
  * 💡 Features: Refactored with Global api.js for DRY Principle
+ *              🎯 BUG FIX: Removed "MMK" from numeric values to prevent truncation
+ *              🎯 FEATURE: Auto-scaling Font Size for KPI numbers & added (MMK) to titles
  * ==============================================================================
  */
 
@@ -20,6 +22,54 @@ function setElementText(id, text) {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
 }
+
+/**
+ * 💡 Update Labels to include (MMK) automatically
+ */
+function updateKpiLabels() {
+  const labels = {
+    'db-total-income': 'TOTAL INCOME (MMK)',
+    'db-total-expense': 'TOTAL EXPENSE (MMK)',
+    'db-net-profit': 'NET PROFIT (MMK)'
+  };
+  
+  for (const [id, text] of Object.entries(labels)) {
+    const valueEl = document.getElementById(id);
+    if (valueEl) {
+      const parent = valueEl.parentElement;
+      if (parent) {
+        // Typically the title is inside a <p> tag above the <h3>
+        const labelEl = parent.querySelector('p'); 
+        if (labelEl) labelEl.textContent = text;
+      }
+    }
+  }
+}
+
+/**
+ * 💡 Auto-Scale Font Size to Prevent Truncation on Large Numbers
+ */
+function adjustKpiFontSizes() {
+  const kpiIds = ['db-total-income', 'db-total-expense', 'db-net-profit', 'db-total-entries'];
+  kpiIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    // Reset to default large size & prevent wrapping
+    el.style.fontSize = '24px'; 
+    el.style.whiteSpace = 'nowrap';
+    
+    let currentSize = 24;
+    // Reduce font size until scrollWidth fits within clientWidth (max drop to 12px)
+    while (el.scrollWidth > el.clientWidth && currentSize > 12) {
+      currentSize--;
+      el.style.fontSize = currentSize + 'px';
+    }
+  });
+}
+
+// 💡 Ensure it resizes correctly when the browser window changes
+window.addEventListener('resize', adjustKpiFontSizes);
 
 /**
  * 💡 Load Home Dashboard Analytics Data
@@ -41,35 +91,41 @@ async function loadDashboardData(isSilent = false, forceRefresh = false) {
     const rec = d.receivables || {};
     const demo = d.demographics || {};
 
-    // 1. Top KPI Cards
-    setElementText('db-total-income', formatMoney(fin.totalIncome) + ' MMK');
-    setElementText('db-total-expense', formatMoney(fin.totalExpense) + ' MMK');
-    setElementText('db-net-profit', formatMoney(fin.netProfit) + ' MMK');
+    // 1. Update Titles to include (MMK)
+    updateKpiLabels();
+
+    // 2. Top KPI Cards (Removed " MMK" from the end)
+    setElementText('db-total-income', formatMoney(fin.totalIncome));
+    setElementText('db-total-expense', formatMoney(fin.totalExpense));
+    setElementText('db-net-profit', formatMoney(fin.netProfit));
     setElementText('db-total-entries', formatNumber(fin.totalEntries || 0));
 
-    // 2. Daily Balances
-    setElementText('db-bal-bank', formatMoney(bal.bank) + ' MMK');
-    setElementText('db-bal-cash', formatMoney(bal.cash) + ' MMK');
-    setElementText('db-bal-office', formatMoney(bal.office) + ' MMK');
-    setElementText('db-bal-kitchen', formatMoney(bal.kitchen) + ' MMK');
-    setElementText('db-bal-payroll', formatMoney(bal.payroll) + ' MMK');
-    setElementText('db-bal-total', formatMoney(bal.total) + ' MMK');
+    // Trigger Auto Scale after placing values
+    setTimeout(adjustKpiFontSizes, 50);
 
-    // 3. Liabilities
-    setElementText('db-lia-bank', formatMoney(liab.bankLoan) + ' MMK');
-    setElementText('db-lia-cash', formatMoney(liab.cashLoan) + ' MMK');
-    setElementText('db-lia-office', formatMoney(liab.officeLiabilities) + ' MMK');
-    setElementText('db-lia-bonus', formatMoney(liab.hrBonus) + ' MMK');
-    setElementText('db-lia-fund', formatMoney(liab.hrFund) + ' MMK');
-    setElementText('db-lia-total', formatMoney(liab.total) + ' MMK');
+    // 3. Daily Balances (Removed " MMK" from the end)
+    setElementText('db-bal-bank', formatMoney(bal.bank));
+    setElementText('db-bal-cash', formatMoney(bal.cash));
+    setElementText('db-bal-office', formatMoney(bal.office));
+    setElementText('db-bal-kitchen', formatMoney(bal.kitchen));
+    setElementText('db-bal-payroll', formatMoney(bal.payroll));
+    setElementText('db-bal-total', formatMoney(bal.total));
 
-    // 4. Receivables
-    setElementText('db-rec-snack', formatMoney(rec.advanceSnack) + ' MMK');
-    setElementText('db-rec-uniform', formatMoney(rec.advanceUniform) + ' MMK');
-    setElementText('db-rec-other', formatMoney(rec.otherAdvance) + ' MMK');
-    setElementText('db-rec-total', formatMoney(rec.total) + ' MMK');
+    // 4. Liabilities (Removed " MMK" from the end)
+    setElementText('db-lia-bank', formatMoney(liab.bankLoan));
+    setElementText('db-lia-cash', formatMoney(liab.cashLoan));
+    setElementText('db-lia-office', formatMoney(liab.officeLiabilities));
+    setElementText('db-lia-bonus', formatMoney(liab.hrBonus));
+    setElementText('db-lia-fund', formatMoney(liab.hrFund));
+    setElementText('db-lia-total', formatMoney(liab.total));
 
-    // 5. Active Demographic Info (Male / Female / Total Active)
+    // 5. Receivables (Removed " MMK" from the end)
+    setElementText('db-rec-snack', formatMoney(rec.advanceSnack));
+    setElementText('db-rec-uniform', formatMoney(rec.advanceUniform));
+    setElementText('db-rec-other', formatMoney(rec.otherAdvance));
+    setElementText('db-rec-total', formatMoney(rec.total));
+
+    // 6. Active Demographic Info (Male / Female / Total Active)
     const stu = demo.students || { male: 0, female: 0, total: 0 };
     const ft = demo.fullTimeStaff || { male: 0, female: 0, total: 0 };
     const pt = demo.partTimeStaff || { male: 0, female: 0, total: 0 };
@@ -103,3 +159,4 @@ async function loadDashboardData(isSilent = false, forceRefresh = false) {
 
 // 💡 EXPOSE GLOBALLY FOR APP.JS
 window.loadDashboardData = loadDashboardData;
+window.adjustKpiFontSizes = adjustKpiFontSizes;
