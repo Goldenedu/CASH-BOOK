@@ -2,11 +2,7 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - BANK & CASH BOOK CONTROLLER
  * File: js/bank-cash.js (Location: cashbook-frontend/js/bank-cash.js)
- * 💡 Features: Strict Search Engine, Self-Transfer Prevention, Auto-Description Generator,
- *              🛡️ Universal CSV Formula Injection Sanitizer (safeCsvCell),
- *              🎯 Phase 3.2: Full Dataset Loader & Client-Side Pagination Slicing (No Missing Search),
- *              🎯 Phase 3.1: Inter-Module Dynamic Cache Clearing on Entry Save/Delete,
- *              🎯 Bug #2 Fixed (Resilient Local escapeHtml / escapeJsAttr Callbacks)
+ * 💡 Features: Refactored with Global api.js for DRY Principle
  * ==============================================================================
  */
 
@@ -17,67 +13,6 @@ var bckActiveData = [];
 var currentSubBook = 'bank'; // 'bank' or 'cash'
 var searchTimeoutBck = null;
 var isBankCashSubmitting = false; // 💡 Double Submit Protection Flag
-
-/**
- * 💡 Safe Native DOM HTML Escaper (Bug #2 Resilient Fallback)
- */
-function escapeHtml(str) {
-  if (str === null || str === undefined) return '';
-  if (typeof window.escapeHtml === 'function' && window.escapeHtml !== escapeHtml) {
-    return window.escapeHtml(str);
-  }
-  var div = document.createElement('div');
-  div.textContent = String(str);
-  return div.innerHTML;
-}
-
-/**
- * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
- */
-function escapeJsAttr(str) {
-  if (str === null || str === undefined) return '';
-  if (typeof window.escapeJsAttr === 'function' && window.escapeJsAttr !== escapeJsAttr) {
-    return window.escapeJsAttr(str);
-  }
-  var jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  return escapeHtml(jsEscaped);
-}
-
-/**
- * 🛡️ Safe CSV Cell Helper (Local Fallback if api.js is not loaded yet)
- */
-function safeCsvCell(val) {
-  if (typeof window.safeCsvCell === 'function') {
-    return window.safeCsvCell(val);
-  }
-  if (val === null || val === undefined) return '""';
-  if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
-
-  var str = String(val).trim();
-  if (str === '') return '""';
-
-  var cleanNumStr = str.replace(/,/g, '');
-  if (!isNaN(Number(cleanNumStr)) && cleanNumStr !== '') {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-
-  if (/^[=+\-@\t\r]/.test(str)) {
-    str = "'" + str;
-  }
-
-  return `"${str.replace(/"/g, '""')}"`;
-}
-
-/**
- * 💡 Safe Comma String Number Parser
- */
-function parseCleanNum(val) {
-  if (val === undefined || val === null || val === '') return 0;
-  if (typeof val === 'number') return isNaN(val) ? 0 : val;
-  var str = String(val).replace(/,/g, '').trim();
-  var num = parseFloat(str);
-  return isNaN(num) ? 0 : num;
-}
 
 /**
  * 💡 Strict Search Filter Function for Main Bank & Cash Books
@@ -237,32 +172,32 @@ function renderTableBankCashKit() {
     var lockTitle = row.isLocked ? "Locked (Must be edited from Source Book)" : "";
     var disabledAttr = isLocked ? 'disabled' : '';
 
-    var catBadge = typeof window.formatCategoryBadgeHtml === 'function' ? window.formatCategoryBadgeHtml(row.category) : escapeHtml(row.category);
+    var catBadge = typeof window.formatCategoryBadgeHtml === 'function' ? window.formatCategoryBadgeHtml(row.category) : window.escapeHtml(row.category);
     var debitStr = row.debit > 0 ? Number(row.debit).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-';
     var creditStr = row.credit > 0 ? Number(row.credit).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-';
     var balStr = Number(row.balances || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
-    var displayNo = Math.floor(parseCleanNum(row.no || row.id)) || 1;
+    var displayNo = Math.floor(window.parseCleanNum(row.no || row.id)) || 1;
 
     return '<tr class="hover:bg-slate-800/30 text-slate-300">' +
         '<td class="text-center font-semibold text-slate-500 py-3 px-2">' + displayNo + '</td>' +
-        '<td class="font-mono text-xs py-3 px-2">' + (escapeHtml(row.date) || '-') + '</td>' +
+        '<td class="font-mono text-xs py-3 px-2">' + (window.escapeHtml(row.date) || '-') + '</td>' +
         '<td class="py-3 px-2">' + catBadge + '</td>' +
-        '<td class="font-bold text-slate-100 max-w-sm truncate py-3 px-2" title="' + escapeHtml(row.description) + '">' + (escapeHtml(row.description) || '-') + '</td>' +
-        '<td class="font-bold text-slate-400 py-3 px-2">' + (escapeHtml(row.method) || '-') + '</td>' +
+        '<td class="font-bold text-slate-100 max-w-sm truncate py-3 px-2" title="' + window.escapeHtml(row.description) + '">' + (window.escapeHtml(row.description) || '-') + '</td>' +
+        '<td class="font-bold text-slate-400 py-3 px-2">' + (window.escapeHtml(row.method) || '-') + '</td>' +
         '<td class="text-right text-emerald-400 font-mono font-bold py-3 px-2">' + debitStr + '</td>' +
         '<td class="text-right text-rose-400 font-mono font-bold py-3 px-2">' + creditStr + '</td>' +
         '<td class="text-right text-slate-200 font-mono font-bold py-3 px-2">' + balStr + '</td>' +
-        '<td class="text-xs text-indigo-400 py-3 px-2">' + (escapeHtml(row.transfer) || '-') + '</td>' +
-        '<td class="font-mono text-xs text-slate-400 py-3 px-2">' + (escapeHtml(row.vrNo) || '-') + '</td>' +
-        '<td class="font-mono text-xs py-3 px-2">' + (escapeHtml(row.my) || '-') + '</td>' +
-        '<td class="font-mono text-xs font-bold text-indigo-300 py-3 px-2">' + (escapeHtml(row.fy) || '-') + '</td>' +
+        '<td class="text-xs text-indigo-400 py-3 px-2">' + (window.escapeHtml(row.transfer) || '-') + '</td>' +
+        '<td class="font-mono text-xs text-slate-400 py-3 px-2">' + (window.escapeHtml(row.vrNo) || '-') + '</td>' +
+        '<td class="font-mono text-xs py-3 px-2">' + (window.escapeHtml(row.my) || '-') + '</td>' +
+        '<td class="font-mono text-xs font-bold text-indigo-300 py-3 px-2">' + (window.escapeHtml(row.fy) || '-') + '</td>' +
         '<td class="right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg text-center py-3 px-2">' +
           '<div class="flex items-center justify-center gap-3">' +
-            '<button onclick="editBankCashKitEntry(\'' + escapeJsAttr(row.uniqueId) + '\')" class="text-indigo-400 hover:text-indigo-300 transition ' + lockClass + '" title="' + lockTitle + '" ' + disabledAttr + '>' +
+            '<button onclick="editBankCashKitEntry(\'' + window.escapeJsAttr(row.uniqueId) + '\')" class="text-indigo-400 hover:text-indigo-300 transition ' + lockClass + '" title="' + lockTitle + '" ' + disabledAttr + '>' +
               '<i class="fa-solid fa-pen-to-square"></i>' +
             '</button>' +
-            '<button onclick="deleteBankCashKitEntry(\'' + escapeJsAttr(row.uniqueId) + '\')" class="text-rose-400 hover:text-rose-300 transition btn-delete ' + lockClass + '" title="' + lockTitle + '" ' + disabledAttr + '>' +
+            '<button onclick="deleteBankCashKitEntry(\'' + window.escapeJsAttr(row.uniqueId) + '\')" class="text-rose-400 hover:text-rose-300 transition btn-delete ' + lockClass + '" title="' + lockTitle + '" ' + disabledAttr + '>' +
               '<i class="fa-solid fa-trash"></i>' +
             '</button>' +
           '</div>' +
@@ -527,7 +462,7 @@ function updatePaginationUIBankCashKit(currentCount) {
 }
 
 /**
- * 💡 FULL CSV EXPORTER (Formula Injection Protected via safeCsvCell + UTF-8 BOM)
+ * 💡 FULL CSV EXPORTER (Formula Injection Protected via window.safeCsvCell + UTF-8 BOM)
  */
 function exportToCSVBankCashKit() {
   if (!bckActiveData || bckActiveData.length === 0) {
@@ -538,18 +473,18 @@ function exportToCSVBankCashKit() {
   var csv = "NO,DATE,CATEGORY,DESCRIPTION,METHOD,DEBIT,CREDIT,BALANCES,TRANSFER,VR NO,MY,FY,UNIQUEID\n";
   bckActiveData.forEach(function(r) {
     csv += (r.no || '') + ',' +
-           safeCsvCell(r.date || '') + ',' +
-           safeCsvCell(r.category || '') + ',' +
-           safeCsvCell(r.description || '') + ',' +
-           safeCsvCell(r.method || '') + ',' +
+           window.safeCsvCell(r.date || '') + ',' +
+           window.safeCsvCell(r.category || '') + ',' +
+           window.safeCsvCell(r.description || '') + ',' +
+           window.safeCsvCell(r.method || '') + ',' +
            (r.debit || 0) + ',' +
            (r.credit || 0) + ',' +
            (r.balances || 0) + ',' +
-           safeCsvCell(r.transfer || '') + ',' +
-           safeCsvCell(r.vrNo || '') + ',' +
-           safeCsvCell(r.my || '') + ',' +
-           safeCsvCell(r.fy || '') + ',' +
-           safeCsvCell(r.uniqueId || '') + '\n';
+           window.safeCsvCell(r.transfer || '') + ',' +
+           window.safeCsvCell(r.vrNo || '') + ',' +
+           window.safeCsvCell(r.my || '') + ',' +
+           window.safeCsvCell(r.fy || '') + ',' +
+           window.safeCsvCell(r.uniqueId || '') + '\n';
   });
 
   var blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
