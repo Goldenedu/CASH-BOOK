@@ -1,8 +1,9 @@
 /**
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - PROMOTION MATRIX MODULE 
- * File: js/promotion.js
- * 💡 Features: Client-Side Pagination (promoLimit = 30), Dynamic FY/Category Filters,
- *              Clean Edit Pre-fill & CSV Export Engine
+ * File: js/promotion.js (Location: cashbook-frontend/js/promotion.js)
+ * 💡 Features: Refactored with Global api.js for DRY Principle
+ * ==============================================================================
  */
 
 var gPromotionData = [];
@@ -12,30 +13,6 @@ var gPromotionLimit = 30;
 var gPromotionSearch = '';
 var gPromotionFyFilter = '';
 var gPromotionCatFilter = '';
-
-/**
- * 💡 Safe Native DOM HTML Escaper
- */
-function escapeHtml(str) {
-  if (str === null || str === undefined) return '';
-  if (typeof window.escapeHtml === 'function' && window.escapeHtml !== escapeHtml) {
-    return window.escapeHtml(str);
-  }
-  var div = document.createElement('div');
-  div.textContent = String(str);
-  return div.innerHTML;
-}
-
-/**
- * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
- * Escapes backslashes/quotes for the JS string literal, then HTML-escapes the
- * result so it can't break out of the surrounding double-quoted HTML attribute.
- */
-function escapeJsAttr(str) {
-  if (str === null || str === undefined) return '';
-  var jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  return escapeHtml(jsEscaped);
-}
 
 /**
  * 💡 Generate Dynamic 3-Year Fiscal Years
@@ -204,9 +181,9 @@ function renderPromotionTable() {
     return `
       <tr class="hover:bg-slate-800/40 transition ${rowBorderClass}">
         <td class="text-center text-slate-400 py-3">${displayNo}</td>
-        <td class="py-3"><span class="inline-block px-2 py-0.5 rounded text-[10px] border ${fyBadgeStyle}">${escapeHtml(item.fy || 'N/A')}</span></td>
-        <td class="font-bold text-white py-3">${escapeHtml(item.class || '')}</td>
-        <td class="text-slate-300 py-3">${escapeHtml(item.category || '')}</td>
+        <td class="py-3"><span class="inline-block px-2 py-0.5 rounded text-[10px] border ${fyBadgeStyle}">${window.escapeHtml(item.fy || 'N/A')}</span></td>
+        <td class="font-bold text-white py-3">${window.escapeHtml(item.class || '')}</td>
+        <td class="text-slate-300 py-3">${window.escapeHtml(item.category || '')}</td>
         <td class="text-right font-bold text-indigo-400 font-mono py-3">${(item.registration || 0).toLocaleString()}</td>
         <td class="text-right font-bold text-slate-200 font-mono py-3">${(item.originalPrice || 0).toLocaleString()}</td>
         <td class="text-right font-bold text-teal-400 font-mono py-3">${(item.proA || 0).toLocaleString()}</td>
@@ -216,11 +193,11 @@ function renderPromotionTable() {
         <td class="text-right font-bold text-teal-400 font-mono py-3">${(item.proE || 0).toLocaleString()}</td>
         <td class="text-right font-bold text-amber-400 font-mono py-3">${(item.halfScholar || 0).toLocaleString()}</td>
         <td class="text-right font-bold text-emerald-400 font-mono py-3">${(item.fullScholar || 0).toLocaleString()}</td>
-        <td class="text-slate-400 py-3">${escapeHtml(item.remark || '')}</td>
+        <td class="text-slate-400 py-3">${window.escapeHtml(item.remark || '')}</td>
         <td class="text-center py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">
           <div class="flex items-center justify-center gap-2">
-            <button onclick="editPromotionEntry('${escapeJsAttr(item.uniqueId)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded transition" title="Edit Rate"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
-            <button onclick="deletePromotionEntry('${escapeJsAttr(item.uniqueId)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded transition" title="Delete Rate"><i class="fa-solid fa-trash-can text-xs"></i></button>
+            <button onclick="editPromotionEntry('${window.escapeJsAttr(item.uniqueId)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded transition" title="Edit Rate"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
+            <button onclick="deletePromotionEntry('${window.escapeJsAttr(item.uniqueId)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded transition" title="Delete Rate"><i class="fa-solid fa-trash-can text-xs"></i></button>
           </div>
         </td>
       </tr>
