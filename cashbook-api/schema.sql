@@ -3,6 +3,7 @@
 -- File: schema.sql (Location: cashbook-api/schema.sql)
 -- 💡 Features: 20 Complete Relational Tables, High-Performance Composite Indexes,
 --              PBKDF2 Password Security & Canonical Grade Matrix Initial Seeds
+--              🎯 Phase 3: Added Foreign Keys (ON DELETE SET NULL) to preserve Accounting Integrity
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
@@ -47,7 +48,6 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
 -- 2. MAIN FINANCIAL & EXPENSE BOOKS (5 Core Ledgers)
 -- ------------------------------------------------------------------------------
 
--- A. Main Bank Book (16 Cols)
 CREATE TABLE IF NOT EXISTS bank (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   no INTEGER DEFAULT 1,
@@ -69,7 +69,6 @@ CREATE TABLE IF NOT EXISTS bank (
   is_locked INTEGER DEFAULT 0
 );
 
--- B. Main Cash Book (16 Cols)
 CREATE TABLE IF NOT EXISTS cash (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   no INTEGER DEFAULT 1,
@@ -91,7 +90,6 @@ CREATE TABLE IF NOT EXISTS cash (
   is_locked INTEGER DEFAULT 0
 );
 
--- C. Office Expense Book (19 Cols - Includes liabilities)
 CREATE TABLE IF NOT EXISTS office (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   no INTEGER DEFAULT 1,
@@ -116,7 +114,6 @@ CREATE TABLE IF NOT EXISTS office (
   is_locked INTEGER DEFAULT 0
 );
 
--- D. Kitchen Expense Book (16 Cols - Strictly NO liabilities column)
 CREATE TABLE IF NOT EXISTS kitchen (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   no INTEGER DEFAULT 1,
@@ -138,7 +135,6 @@ CREATE TABLE IF NOT EXISTS kitchen (
   is_locked INTEGER DEFAULT 0
 );
 
--- E. HR Payroll Expense Book (18 Cols - Includes unpaid_bonus & unpaid_fund)
 CREATE TABLE IF NOT EXISTS payroll (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   no INTEGER DEFAULT 1,
@@ -163,36 +159,7 @@ CREATE TABLE IF NOT EXISTS payroll (
 );
 
 -- ------------------------------------------------------------------------------
--- 3. MAIN INCOME BOOK (Student Tuition & Split Payment Ledger - 21 Cols)
--- ------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS income (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  no INTEGER DEFAULT 1,
-  effect_date TEXT,
-  date TEXT NOT NULL,
-  fy TEXT DEFAULT 'FY 2026-2027',
-  student_id INTEGER,
-  fyid TEXT,
-  fyid_name TEXT,
-  class TEXT,
-  category TEXT DEFAULT 'Boarder',
-  account_name TEXT DEFAULT 'Registration',
-  method TEXT DEFAULT 'Cash',
-  debit REAL DEFAULT 0,
-  credit REAL DEFAULT 0,
-  aut_amount REAL DEFAULT 0,
-  promo TEXT DEFAULT 'Original price',
-  my TEXT,
-  vr_no TEXT,
-  remark TEXT,
-  created_by TEXT DEFAULT 'Admin',
-  created_at TEXT DEFAULT (datetime('now')),
-  uniqueid TEXT UNIQUE,
-  is_locked INTEGER DEFAULT 0
-);
-
--- ------------------------------------------------------------------------------
--- 4. STUDENT DIRECTORY & STUDENT MONEY LEDGER
+-- 3. STUDENT DIRECTORY (Master Table)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS student (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -218,6 +185,36 @@ CREATE TABLE IF NOT EXISTS student (
   uniqueid TEXT UNIQUE
 );
 
+-- ------------------------------------------------------------------------------
+-- 4. MAIN INCOME BOOK & STUDENT MONEY LEDGER (With Foreign Keys)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS income (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  no INTEGER DEFAULT 1,
+  effect_date TEXT,
+  date TEXT NOT NULL,
+  fy TEXT DEFAULT 'FY 2026-2027',
+  student_id INTEGER,
+  fyid TEXT,
+  fyid_name TEXT,
+  class TEXT,
+  category TEXT DEFAULT 'Boarder',
+  account_name TEXT DEFAULT 'Registration',
+  method TEXT DEFAULT 'Cash',
+  debit REAL DEFAULT 0,
+  credit REAL DEFAULT 0,
+  aut_amount REAL DEFAULT 0,
+  promo TEXT DEFAULT 'Original price',
+  my TEXT,
+  vr_no TEXT,
+  remark TEXT,
+  created_by TEXT DEFAULT 'Admin',
+  created_at TEXT DEFAULT (datetime('now')),
+  uniqueid TEXT UNIQUE,
+  is_locked INTEGER DEFAULT 0,
+  FOREIGN KEY (student_id) REFERENCES student(id) ON DELETE SET NULL
+);
+
 CREATE TABLE IF NOT EXISTS student_money (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   no INTEGER DEFAULT 1,
@@ -234,7 +231,8 @@ CREATE TABLE IF NOT EXISTS student_money (
   remark TEXT,
   created_by TEXT DEFAULT 'Admin',
   created_at TEXT DEFAULT (datetime('now')),
-  uniqueid TEXT UNIQUE
+  uniqueid TEXT UNIQUE,
+  FOREIGN KEY (student_id) REFERENCES student(id) ON DELETE SET NULL
 );
 
 -- ------------------------------------------------------------------------------
@@ -282,7 +280,7 @@ CREATE TABLE IF NOT EXISTS promotion (
 );
 
 -- ------------------------------------------------------------------------------
--- 6. STAFF DIRECTORY & SALARY GRADE MATRIX (Grades A to L)
+-- 6. STAFF DIRECTORY & SALARY GRADE MATRIX
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS staff_fulltime (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -451,9 +449,6 @@ CREATE TABLE IF NOT EXISTS ca_kitchen (
   is_locked INTEGER DEFAULT 0
 );
 
--- ------------------------------------------------------------------------------
--- 7E. Cashier Payroll Book (17 Cols)
--- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS ca_payroll (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   no INTEGER DEFAULT 1,
@@ -477,40 +472,26 @@ CREATE TABLE IF NOT EXISTS ca_payroll (
 );
 
 -- ------------------------------------------------------------------------------
--- 8. HIGH-PERFORMANCE COMPOSITE INDEXES (Sub-Millisecond Query Scaling)
+-- 8. HIGH-PERFORMANCE COMPOSITE INDEXES
 -- ------------------------------------------------------------------------------
-
--- Main Ledgers Date & FY Indexes
 CREATE INDEX IF NOT EXISTS idx_bank_fy_date ON bank(fy, date);
 CREATE INDEX IF NOT EXISTS idx_cash_fy_date ON cash(fy, date);
 CREATE INDEX IF NOT EXISTS idx_office_fy_date ON office(fy, date);
 CREATE INDEX IF NOT EXISTS idx_kitchen_fy_date ON kitchen(fy, date);
 CREATE INDEX IF NOT EXISTS idx_payroll_fy_date ON payroll(fy, date);
-
--- ⚡ CRITICAL FIX: Income Date & Student Lookups
 CREATE INDEX IF NOT EXISTS idx_income_date ON income(date);
 CREATE INDEX IF NOT EXISTS idx_income_fy_date ON income(fy, date);
 CREATE INDEX IF NOT EXISTS idx_income_student_id ON income(student_id);
-
--- ⚡ CRITICAL FIX: Student Directory & Pocket Money Lookups
 CREATE INDEX IF NOT EXISTS idx_student_fy_status ON student(fy, status);
 CREATE INDEX IF NOT EXISTS idx_student_student_id ON student(student_id);
 CREATE INDEX IF NOT EXISTS idx_student_fyid ON student(fyid);
 CREATE INDEX IF NOT EXISTS idx_student_money_fy_date ON student_money(fy, date);
 CREATE INDEX IF NOT EXISTS idx_student_money_student_id ON student_money(student_id, date);
-
--- ⚡ CRITICAL FIX: Staff Lookups by Staff ID (Eliminates Payroll Lookup Lag)
 CREATE INDEX IF NOT EXISTS idx_staff_ft_staff_id ON staff_fulltime(staff_id);
 CREATE INDEX IF NOT EXISTS idx_staff_pt_staff_id ON staff_parttime(staff_id);
 CREATE INDEX IF NOT EXISTS idx_staff_ft_status ON staff_fulltime(status);
-
--- ⚡ CRITICAL FIX: Uniform Product ID Lookup
 CREATE INDEX IF NOT EXISTS idx_uniform_product_id ON uniform_ledger(product_id);
-
--- ⚡ CRITICAL FIX: Promotion Matrix Multi-Column Rate Lookup
 CREATE INDEX IF NOT EXISTS idx_promotion_fy_class_cat ON promotion(fy, class, category);
-
--- ⚡ CRITICAL FIX: All 5 Cashier Sub-Ledger Indexes
 CREATE INDEX IF NOT EXISTS idx_ca_bank_fy_date ON ca_bank(fy, date);
 CREATE INDEX IF NOT EXISTS idx_ca_cash_fy_date ON ca_cash(fy, date);
 CREATE INDEX IF NOT EXISTS idx_ca_office_fy_date ON ca_office(fy, date);
@@ -518,9 +499,7 @@ CREATE INDEX IF NOT EXISTS idx_ca_kitchen_fy_date ON ca_kitchen(fy, date);
 CREATE INDEX IF NOT EXISTS idx_ca_payroll_fy_date ON ca_payroll(fy, date);
 
 -- ------------------------------------------------------------------------------
--- 9. CANONICAL INITIAL SEED DATA (Non-Sensitive Defaults Only)
+-- 9. CANONICAL INITIAL SEED DATA
 -- ------------------------------------------------------------------------------
-
--- A. Default Salary Grade Matrix Row (ID = 1, Grades A to L)
 INSERT OR IGNORE INTO salary_grade_matrix (id, grade_a, grade_b, grade_c, grade_d, grade_e, grade_f, grade_g, grade_h, grade_i, grade_j, grade_k, grade_l, bonus_rate, fund_rate, updated_at)
 VALUES (1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.05, datetime('now'));
