@@ -2,13 +2,7 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - STUDENT LIST & DEMOGRAPHICS MODULE (D1 DATABASE COMPATIBLE)
  * File: js/student.js (Location: cashbook-frontend/js/student.js)
- * 💡 Features: Universal Dynamic FY Generator (March Boundary getMonth() < 2), Float .0 Sanitizer,
- *              Full Dataset Loader (5000 rows limit), Active FY Accurate KPI Analytics,
- *              Strict Sequential NO Sorting (1214, 1213, 1212...),
- *              Refined Myanmar/Ethnic Gender Auto-Detector (100% Accurate Male vs Female),
- *              🛡️ Universal CSV Formula Injection Sanitizer (safeCsvCell),
- *              🎯 Phase 3.1: Inter-Module Cache Invalidation Hooks (Income & Pocket Money Sync),
- *              🎯 Bug #2 Fixed (Resilient Local escapeHtml / escapeJsAttr Callbacks)
+ * 💡 Features: Refactored with Global api.js for DRY Principle
  * ==============================================================================
  */
 
@@ -42,135 +36,6 @@ const CLASS_PROMOTION_MAP = {
   'Grade 11': 'Grade 12',
   'Grade 12': 'Grade 12'
 };
-
-/**
- * 💡 Safe Native DOM HTML Escaper (Bug #2 Resilient Fallback)
- */
-function escapeHtml(str) {
-  if (str === null || str === undefined) return '';
-  if (typeof window.escapeHtml === 'function' && window.escapeHtml !== escapeHtml) {
-    return window.escapeHtml(str);
-  }
-  var div = document.createElement('div');
-  div.textContent = String(str);
-  return div.innerHTML;
-}
-
-/**
- * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
- */
-function escapeJsAttr(str) {
-  if (str === null || str === undefined) return '';
-  if (typeof window.escapeJsAttr === 'function' && window.escapeJsAttr !== escapeJsAttr) {
-    return window.escapeJsAttr(str);
-  }
-  var jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  return escapeHtml(jsEscaped);
-}
-
-/**
- * 🛡️ Safe CSV Cell Helper (Local Fallback if api.js is not loaded yet)
- */
-function safeCsvCell(val) {
-  if (typeof window.safeCsvCell === 'function') {
-    return window.safeCsvCell(val);
-  }
-  if (val === null || val === undefined) return '""';
-  if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
-
-  var str = String(val).trim();
-  if (str === '') return '""';
-
-  var cleanNumStr = str.replace(/,/g, '');
-  if (!isNaN(Number(cleanNumStr)) && cleanNumStr !== '') {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-
-  if (/^[=+\-@\t\r]/.test(str)) {
-    str = "'" + str;
-  }
-
-  return `"${str.replace(/"/g, '""')}"`;
-}
-
-/**
- * 💡 Refined Myanmar & Ethnic Gender Auto-Detector (100% Accurate Male vs Female)
- */
-function autoDetectGender(nameStr) {
-  if (!nameStr) return 'Male';
-  const clean = String(nameStr).trim();
-
-  // ၁။ ယောကျ်ားလေး ရှေ့စာလုံးများ (မင်းမင်း၊ မင်းခန့် စသည့် 'မင်း' ပါ ထည့်သွင်းထားသည်)
-  if (clean.startsWith('မောင်') || clean.startsWith('ကို') || clean.startsWith('ဦး') ||
-      clean.startsWith('မင်း') || /^(Mg|Ko|U|Min)\b/i.test(clean) || /^(မောင်|ကို|ဦး|မင်း)/.test(clean)) {
-    return 'Male';
-  }
-
-  // ၂။ မိန်းကလေး ရှေ့စာလုံးများနှင့် တိုင်းရင်းသူအမည်များ (နန်း၊ နော်)
-  if (clean.startsWith('မေ') || clean.startsWith('ဒေါ်') || clean.startsWith('နန်း') || clean.startsWith('နော်') ||
-      /^(May|Daw|Nang|Naw)\b/i.test(clean)) {
-    return 'Female';
-  }
-
-  // ၃။ 'မ' ဖြင့် စပြီး 'မောင်' သို့မဟုတ် 'မင်း' မဟုတ်ပါက Female
-  if ((clean.startsWith('မ') && !clean.startsWith('မောင်') && !clean.startsWith('မင်း')) || /^(Ma)\b/i.test(clean)) {
-    return 'Female';
-  }
-
-  return 'Male';
-}
-
-/**
- * 💡 1. Universal Dynamic Academic Year Generator (Phase 1.1: March Boundary Aligned)
- */
-function getCurrentAcademicYear(dateInput) {
-  var d = dateInput ? new Date(dateInput) : new Date();
-  var validDate = isNaN(d.getTime()) ? new Date() : d;
-  let y = validDate.getFullYear();
-
-  if (validDate.getMonth() < 2) {
-    y -= 1;
-  }
-  return `${y}-${y + 1}`;
-}
-
-/**
- * 💡 2. System-Wide Dynamic FY Short Code Generator (Format: "2026-2027" -> "2627")
- */
-function getFyShortCode(fyStr) {
-  if (fyStr) {
-    var clean = String(fyStr).replace(/^FY\s*/i, '').trim();
-    var parts = clean.split(/[-/]/);
-    if (parts.length >= 2 && parts[0].trim() && parts[1].trim()) {
-      var y1 = parts[0].trim().slice(-2);
-      var y2 = parts[1].trim().slice(-2);
-      return y1 + y2;
-    }
-    if (/^\d{4}$/.test(clean)) {
-      return clean;
-    }
-  }
-
-  var currentFy = getCurrentAcademicYear();
-  var p = currentFy.split('-');
-  return p[0].slice(-2) + p[1].slice(-2);
-}
-
-/**
- * 💡 FYID Float .0 Sanitizer
- */
-function sanitizeFyidStr(fyidStr) {
-  var s = String(fyidStr || '').trim();
-  if (!s) return s;
-  if (s.indexOf('.0') === -1) return s;
-  var cleaned = s.replace(/\.0/g, '');
-  var parts = cleaned.split('-STU-');
-  if (parts.length === 2) {
-    var numPart = parseInt(parts[1], 10) || 0;
-    return `${parts[0]}-STU-${String(numPart).padStart(4, '0')}`;
-  }
-  return cleaned;
-}
 
 function filterStudentData(list = [], searchVal = '', fyFilter = '') {
   let filtered = list;
@@ -238,7 +103,7 @@ function populateMainFYFilterStudent() {
 
   const rawData = window.StudentState.activeData || [];
   const fySet = new Set();
-  fySet.add(getCurrentAcademicYear());
+  fySet.add(window.getCurrentAcademicYear());
 
   rawData.forEach(r => {
     if (r.fy) fySet.add(String(r.fy).trim().replace(/^FY\s*/i, ''));
@@ -348,37 +213,37 @@ function renderStudentTable() {
     const parentsNameVal = row.parents_name || row.parentsName || "-";
     const phoneNoVal = row.phone_no || row.phoneNo || "-";
 
-    const detectedGender = row.gender || autoDetectGender(row.name);
-    const displayFyid = sanitizeFyidStr(row.fyid || '-');
+    const detectedGender = row.gender || window.autoDetectGender(row.name);
+    const displayFyid = window.sanitizeFyidStr(row.fyid || '-');
     const displayNo = parseInt(row.no, 10) || 1;
 
     return `
       <tr class="hover:bg-slate-800/20 text-slate-300">
         <td class="text-center font-mono font-bold text-slate-400 py-3 px-2">${displayNo}</td>
-        <td class="py-3 px-2"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">${escapeHtml(stuStatusVal)}</span></td>
-        <td class="font-mono text-xs py-3 px-2">${escapeHtml(displayDate || '-')}</td>
-        <td class="font-mono font-bold text-indigo-300 py-3 px-2">${escapeHtml(row.fy || '-')}</td>
-        <td class="font-bold text-slate-200 font-mono py-3 px-2">${escapeHtml(displayFyid)}</td>
-        <td class="font-bold text-slate-100 py-3 px-2">${escapeHtml(row.name || '-')}</td>
-        <td class="py-3 px-2">${escapeHtml(row.class || '-')}</td>
-        <td class="py-3 px-2"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400">${escapeHtml(row.category || '-')}</span></td>
-        <td class="py-3 px-2">${escapeHtml(row.promo || '-')}</td>
+        <td class="py-3 px-2"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">${window.escapeHtml(stuStatusVal)}</span></td>
+        <td class="font-mono text-xs py-3 px-2">${window.escapeHtml(displayDate || '-')}</td>
+        <td class="font-mono font-bold text-indigo-300 py-3 px-2">${window.escapeHtml(row.fy || '-')}</td>
+        <td class="font-bold text-slate-200 font-mono py-3 px-2">${window.escapeHtml(displayFyid)}</td>
+        <td class="font-bold text-slate-100 py-3 px-2">${window.escapeHtml(row.name || '-')}</td>
+        <td class="py-3 px-2">${window.escapeHtml(row.class || '-')}</td>
+        <td class="py-3 px-2"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400">${window.escapeHtml(row.category || '-')}</span></td>
+        <td class="py-3 px-2">${window.escapeHtml(row.promo || '-')}</td>
         <td class="py-3 px-2">
           <span class="px-2 py-0.5 rounded text-[10px] font-bold ${!isInactive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}">
-            ${escapeHtml(finalStatus)}
+            ${window.escapeHtml(finalStatus)}
           </span>
         </td>
-        <td class="font-semibold py-3 px-2">${escapeHtml(detectedGender)}</td>
-        <td class="font-mono text-xs py-3 px-2">${escapeHtml(displayTransDate || '-')}</td>
-        <td class="py-3 px-2">${escapeHtml(parentsNameVal)}</td>
-        <td class="font-mono text-xs whitespace-normal max-w-xs py-3 px-2">${escapeHtml(phoneNoVal)}</td>
-        <td class="max-w-xs truncate py-3 px-2" title="${escapeHtml(row.address || '')}">${escapeHtml(row.address || '-')}</td>
+        <td class="font-semibold py-3 px-2">${window.escapeHtml(detectedGender)}</td>
+        <td class="font-mono text-xs py-3 px-2">${window.escapeHtml(displayTransDate || '-')}</td>
+        <td class="py-3 px-2">${window.escapeHtml(parentsNameVal)}</td>
+        <td class="font-mono text-xs whitespace-normal max-w-xs py-3 px-2">${window.escapeHtml(phoneNoVal)}</td>
+        <td class="max-w-xs truncate py-3 px-2" title="${window.escapeHtml(row.address || '')}">${window.escapeHtml(row.address || '-')}</td>
         <td class="right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg text-center py-3 px-2">
           <div class="flex items-center justify-center gap-3 ${isViewer ? 'hidden' : ''}">
-            <button onclick="editStudentEntry('${escapeJsAttr(uniqueIdVal)}')" class="text-indigo-400 hover:text-indigo-300 transition" title="Edit Profile">
+            <button onclick="editStudentEntry('${window.escapeJsAttr(uniqueIdVal)}')" class="text-indigo-400 hover:text-indigo-300 transition" title="Edit Profile">
               <i class="fa-solid fa-pen-to-square"></i>
             </button>
-            <button onclick="deleteStudentEntry('${escapeJsAttr(uniqueIdVal)}')" class="text-rose-400 hover:text-rose-300 transition btn-delete" title="Delete Profile">
+            <button onclick="deleteStudentEntry('${window.escapeJsAttr(uniqueIdVal)}')" class="text-rose-400 hover:text-rose-300 transition btn-delete" title="Delete Profile">
               <i class="fa-solid fa-trash"></i>
             </button>
           </div>
@@ -432,7 +297,7 @@ function populateDynamicFYDropdownStudent(selectId) {
   const select = document.getElementById(selectId);
   if (!select) return;
 
-  const currentFY = getCurrentAcademicYear();
+  const currentFY = window.getCurrentAcademicYear();
   const startYear = parseInt(currentFY.split('-')[0], 10);
 
   const prevFY = `${startYear - 1}-${startYear}`;
@@ -542,11 +407,11 @@ async function saveStudentForm(e) {
   const transferDateVal = document.getElementById('stu-transferdate')?.value || "";
   const calculatedStatus = transferDateVal ? "Inactive" : "Active";
 
-  const fyVal = document.getElementById('stu-fy')?.value || getCurrentAcademicYear();
+  const fyVal = document.getElementById('stu-fy')?.value || window.getCurrentAcademicYear();
   const nameVal = document.getElementById('stu-name')?.value || "";
 
-  const detectedGender = autoDetectGender(nameVal);
-  const fyShort = getFyShortCode(fyVal);
+  const detectedGender = window.autoDetectGender(nameVal);
+  const fyShort = window.getFyShortCode(fyVal);
   const inputStudentId = document.getElementById('stu-id-input')?.value.trim();
   const hiddenStudentId = document.getElementById('stu-id')?.value.trim();
   const studentIdVal = inputStudentId || hiddenStudentId || "";
@@ -727,26 +592,26 @@ function exportToCSVStudent() {
     let stat = isTransferred ? 'Inactive' : (row.status || 'Active');
 
     const displayNo = parseInt(row.no, 10) || (idx + 1);
-    const genderVal = row.gender || autoDetectGender(row.name);
-    const fyidClean = sanitizeFyidStr(row.fyid || '');
+    const genderVal = row.gender || window.autoDetectGender(row.name);
+    const fyidClean = window.sanitizeFyidStr(row.fyid || '');
 
     csv += `${displayNo},` +
-           `${safeCsvCell(row.stu_status || row.stuStatus || '')},` +
-           `${safeCsvCell(row.date || '')},` +
-           `${safeCsvCell(row.fy || '')},` +
-           `${safeCsvCell(row.student_id || row.id || '')},` +
-           `${safeCsvCell(fyidClean)},` +
-           `${safeCsvCell(row.name || '')},` +
-           `${safeCsvCell(row.class || '')},` +
-           `${safeCsvCell(row.category || '')},` +
-           `${safeCsvCell(row.promo || '')},` +
-           `${safeCsvCell(stat)},` +
-           `${safeCsvCell(genderVal)},` +
-           `${safeCsvCell(transDate)},` +
-           `${safeCsvCell(row.parents_name || row.parentsName || '')},` +
-           `${safeCsvCell(row.phone_no || row.phoneNo || '')},` +
-           `${safeCsvCell(row.address || '')},` +
-           `${safeCsvCell(row.uniqueid || row.uniqueId || '')}\n`;
+           `${window.safeCsvCell(row.stu_status || row.stuStatus || '')},` +
+           `${window.safeCsvCell(row.date || '')},` +
+           `${window.safeCsvCell(row.fy || '')},` +
+           `${window.safeCsvCell(row.student_id || row.id || '')},` +
+           `${window.safeCsvCell(fyidClean)},` +
+           `${window.safeCsvCell(row.name || '')},` +
+           `${window.safeCsvCell(row.class || '')},` +
+           `${window.safeCsvCell(row.category || '')},` +
+           `${window.safeCsvCell(row.promo || '')},` +
+           `${window.safeCsvCell(stat)},` +
+           `${window.safeCsvCell(genderVal)},` +
+           `${window.safeCsvCell(transDate)},` +
+           `${window.safeCsvCell(row.parents_name || row.parentsName || '')},` +
+           `${window.safeCsvCell(row.phone_no || row.phoneNo || '')},` +
+           `${window.safeCsvCell(row.address || '')},` +
+           `${window.safeCsvCell(row.uniqueid || row.uniqueId || '')}\n`;
   });
 
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
@@ -773,7 +638,3 @@ window.changePageStudent = changePageStudent;
 window.onStudentStatusChange = onStudentStatusChange;
 window.onOldStudentIdLookup = onOldStudentIdLookup;
 window.onFyFilterChangeStudent = onFyFilterChangeStudent;
-window.getCurrentAcademicYear = getCurrentAcademicYear;
-window.getFyShortCode = getFyShortCode;
-window.sanitizeFyidStr = sanitizeFyidStr;
-window.autoDetectGender = autoDetectGender;
