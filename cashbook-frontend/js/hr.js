@@ -3,6 +3,7 @@
  * GOLDEN ERP SYSTEM - HR PAYROLL EXP BOOK CONTROLLER (D1 DATABASE EDITION)
  * File: js/hr.js (Location: cashbook-frontend/js/hr.js)
  * 💡 Features: Refactored with Global api.js for DRY Principle
+ *              🎯 Auto-scaling Font Size & Header Labels update (MMK) exactly like Dashboard
  * ==============================================================================
  */
 
@@ -16,6 +17,51 @@ var gHrStaffFT = []; // Full-Time Staff Cache
 var gHrStaffPT = []; // Part-Time Staff Cache
 var gHrStaffCache = []; // Fallback Cache
 var isHrPayrollSubmitting = false; // 💡 Double-Submit Protection Flag
+
+/**
+ * 💡 Update Labels to include (MMK) automatically
+ */
+function updateHrKpiLabels() {
+  const labels = {
+    'hr-pay-total-income': 'TOTAL INCOME (MMK)',
+    'hr-pay-total-expense': 'TOTAL EXPENSE (MMK)',
+    'hr-pay-balance': 'TOTAL BALANCES (MMK)'
+  };
+  
+  for (const [id, text] of Object.entries(labels)) {
+    const valueEl = document.getElementById(id);
+    if (valueEl) {
+      const parent = valueEl.parentElement;
+      if (parent) {
+        const labelEl = parent.querySelector('p'); 
+        if (labelEl) labelEl.textContent = text;
+      }
+    }
+  }
+}
+
+/**
+ * 💡 Auto-Scale Font Size to Prevent Truncation on Large Numbers
+ */
+function adjustHrKpiFontSizes() {
+  const kpiIds = ['hr-pay-total-income', 'hr-pay-total-expense', 'hr-pay-balance', 'hr-pay-entries-count'];
+  kpiIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    el.style.fontSize = '24px'; 
+    el.style.whiteSpace = 'nowrap';
+    
+    let currentSize = 24;
+    while (el.scrollWidth > el.clientWidth && currentSize > 12) {
+      currentSize--;
+      el.style.fontSize = currentSize + 'px';
+    }
+  });
+}
+
+// Ensure resizing works on window resize
+window.addEventListener('resize', adjustHrKpiFontSizes);
 
 async function loadHrPayrollData(useCache = true) {
   try {
@@ -101,15 +147,21 @@ async function ensureStaffCacheForCategory(isPartTime) {
 }
 
 function renderHrPayrollStats(stats) {
+  updateHrKpiLabels(); // Add (MMK) to titles
+
   const elInc = document.getElementById('hr-pay-total-income');
   const elExp = document.getElementById('hr-pay-total-expense');
   const elBal = document.getElementById('hr-pay-balance');
   const elCount = document.getElementById('hr-pay-entries-count');
 
-  if (elInc) elInc.textContent = `${Number(stats.totalIncome || 0).toLocaleString('en-US')} MMK`;
-  if (elExp) elExp.textContent = `${Number(stats.totalExpense || 0).toLocaleString('en-US')} MMK`;
-  if (elBal) elBal.textContent = `${Number(stats.balance || 0).toLocaleString('en-US')} MMK`;
+  // Removed trailing MMK from values
+  if (elInc) elInc.textContent = `${Number(stats.totalIncome || 0).toLocaleString('en-US')}`;
+  if (elExp) elExp.textContent = `${Number(stats.totalExpense || 0).toLocaleString('en-US')}`;
+  if (elBal) elBal.textContent = `${Number(stats.balance || 0).toLocaleString('en-US')}`;
   if (elCount) elCount.textContent = (gHrPayrollTotalRows || gHrPayrollData.length || 0).toLocaleString('en-US');
+
+  // Trigger Auto Scale
+  setTimeout(adjustHrKpiFontSizes, 50);
 }
 
 function applyHrPayrollSearchAndRender() {
@@ -567,6 +619,8 @@ function exportToCSVHrPayroll() {
 }
 
 // 💡 EXPOSE GLOBALLY
+window.updateHrKpiLabels = updateHrKpiLabels;
+window.adjustHrKpiFontSizes = adjustHrKpiFontSizes;
 window.loadHrPayrollData = loadHrPayrollData;
 window.onSearchInputHrPayroll = onSearchInputHrPayroll;
 window.clearDateFilterHrPayroll = clearDateFilterHrPayroll;
