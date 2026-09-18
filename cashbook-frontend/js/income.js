@@ -2,11 +2,7 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - MAIN INCOME BOOK MODULE
  * File: js/income.js (Location: cashbook-frontend/js/income.js)
- * 💡 Features: Dynamic Universal FY Generator (March Boundary getMonth() < 2), 
- *              3-Tier Promotion Matrix AUT Calculator (Class Change Auto-Bind),
- *              100% Guaranteed Synchronized Credit & AUT Reset, 
- *              Split Payment & Universal Invoice Printer,
- *              🛡️ Formula Injection Protected CSV Exporter
+ * 💡 Features: Refactored with Global api.js for DRY Principle
  * ==============================================================================
  */
 
@@ -18,122 +14,6 @@ var studentsByFyCache = {};
 var promoMatrixCache = null;
 var searchTimeoutIncome = null;
 var isIncomeSubmitting = false;
-
-/**
- * 💡 Safe Native DOM HTML Escaper
- */
-function escapeHtml(str) {
-  if (str === null || str === undefined) return '';
-  if (typeof window.escapeHtml === 'function' && window.escapeHtml !== escapeHtml) {
-    return window.escapeHtml(str);
-  }
-  var div = document.createElement('div');
-  div.textContent = String(str);
-  return div.innerHTML;
-}
-
-/**
- * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
- */
-function escapeJsAttr(str) {
-  if (str === null || str === undefined) return '';
-  var jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  return escapeHtml(jsEscaped);
-}
-
-/**
- * 💡 Safe Comma String Number Parser
- */
-function parseCleanNum(val) {
-  if (val === undefined || val === null || val === '') return 0;
-  if (typeof val === 'number') return isNaN(val) ? 0 : val;
-  var str = String(val).replace(/,/g, '').trim();
-  var num = parseFloat(str);
-  return isNaN(num) ? 0 : num;
-}
-
-/**
- * 💡 Safe Integer ID Parser
- */
-function parseCleanIntId(val) {
-  if (val === undefined || val === null || val === '') return 0;
-  if (typeof val === 'number') return isNaN(val) ? 0 : Math.trunc(val);
-  var n = parseInt(String(val).trim(), 10);
-  return isNaN(n) ? 0 : n;
-}
-
-/**
- * 🛡️ Formula Injection Protected CSV Cell Helper
- */
-function safeCsvCellInc(val) {
-  if (val === null || val === undefined) return '""';
-  if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
-  var str = String(val).trim();
-  if (str === '') return '""';
-  var cleanNumStr = str.replace(/,/g, '');
-  if (!isNaN(Number(cleanNumStr)) && cleanNumStr !== '') {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  if (/^[=+\-@\t\r]/.test(str)) {
-    str = "'" + str;
-  }
-  return `"${str.replace(/"/g, '""')}"`;
-}
-
-/**
- * 💡 1. Universal Dynamic Academic Year Generator (Phase 1.1: March Boundary Aligned)
- */
-function getCurrentAcademicYear(dateInput) {
-  var d = dateInput ? new Date(dateInput) : new Date();
-  var validDate = isNaN(d.getTime()) ? new Date() : d;
-  var y = validDate.getFullYear();
-
-  // 🎯 FIX (Phase 1.1): မတ်လ (Month index 2) သည် နှစ်သစ်ဖြစ်သဖြင့် ဇန်နဝါရီ၊ ဖေဖော်ဝါရီ (< 2) သာ ယခင်နှစ်ထဲ သတ်မှတ်သည်
-  if (validDate.getMonth() < 2) {
-    y -= 1;
-  }
-  return `${y}-${y + 1}`;
-}
-
-/**
- * 💡 2. System-Wide Dynamic FY Short Code Generator (100% Future-Proof)
- * Format: "2026-2027" -> "2627", "2027-2028" -> "2728", "2028-2029" -> "2829"
- */
-function getFyShortCode(fyStr) {
-  if (fyStr) {
-    var clean = String(fyStr).replace(/^FY\s*/i, '').trim();
-    var parts = clean.split(/[-/]/);
-    if (parts.length >= 2 && parts[0].trim() && parts[1].trim()) {
-      var y1 = parts[0].trim().slice(-2);
-      var y2 = parts[1].trim().slice(-2);
-      return y1 + y2;
-    }
-    if (/^\d{4}$/.test(clean)) {
-      return clean;
-    }
-  }
-
-  // Dynamic Fallback: အချက်အလက်မပါပါက လက်ရှိနှစ်အလိုက် အလိုအလျောက် တွက်ထုတ်မည်
-  var currentFy = getCurrentAcademicYear();
-  var p = currentFy.split('-');
-  return p[0].slice(-2) + p[1].slice(-2);
-}
-
-/**
- * 💡 FYID Sanitizer
- */
-function sanitizeFyidStr(fyidStr) {
-  var s = String(fyidStr || '').trim();
-  if (!s) return s;
-  if (s.indexOf('.0') === -1) return s;
-  var cleaned = s.replace(/\.0/g, '');
-  var parts = cleaned.split('-STU-');
-  if (parts.length === 2) {
-    var numPart = parseInt(parts[1], 10) || 0;
-    return parts[0] + '-STU-' + String(numPart).padStart(4, '0');
-  }
-  return cleaned;
-}
 
 /**
  * 💡 Strict Search Filter Function for Main Income Book
@@ -274,37 +154,37 @@ function renderTableIncome() {
     var lockTitle = row.isLocked ? "Older than 7 days (Locked)" : "";
     var disabledAttr = isLocked ? 'disabled' : '';
 
-    var catBadge = typeof window.formatCategoryBadgeHtml === 'function' ? window.formatCategoryBadgeHtml(row.category) : escapeHtml(row.category);
+    var catBadge = typeof window.formatCategoryBadgeHtml === 'function' ? window.formatCategoryBadgeHtml(row.category) : window.escapeHtml(row.category);
     var debitStr = row.debit > 0 ? Number(row.debit).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-';
     var creditStr = row.credit > 0 ? Number(row.credit).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-';
     var autStr = row.autAmount > 0 ? Number(row.autAmount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-';
 
-    var displayNo = Math.floor(parseCleanNum(row.no || row.id)) || 1;
+    var displayNo = Math.floor(window.parseCleanNum(row.no || row.id)) || 1;
 
     return '<tr class="hover:bg-slate-800/30 text-slate-300">' +
         '<td class="text-center font-mono font-semibold text-slate-500 py-3 px-2">' + displayNo + '</td>' +
-        '<td class="font-mono text-xs py-3 px-2">' + (escapeHtml(row.effDate) || '-') + '</td>' +
-        '<td class="font-mono text-xs py-3 px-2">' + (escapeHtml(row.date) || '-') + '</td>' +
-        '<td class="font-mono font-bold text-indigo-300 py-3 px-2">' + (escapeHtml(row.fy) || '-') + '</td>' +
-        '<td class="font-mono font-bold py-3 px-2">' + (escapeHtml(row.id) || '-') + '</td>' +
-        '<td class="font-mono font-bold text-indigo-400 py-3 px-2">' + (escapeHtml(row.fyid) || '-') + '</td>' +
-        '<td class="font-bold text-slate-100 py-3 px-2">' + (escapeHtml(row.fyidName) || '-') + '</td>' +
-        '<td class="py-3 px-2">' + (escapeHtml(row.class) || '-') + '</td>' +
+        '<td class="font-mono text-xs py-3 px-2">' + (window.escapeHtml(row.effDate) || '-') + '</td>' +
+        '<td class="font-mono text-xs py-3 px-2">' + (window.escapeHtml(row.date) || '-') + '</td>' +
+        '<td class="font-mono font-bold text-indigo-300 py-3 px-2">' + (window.escapeHtml(row.fy) || '-') + '</td>' +
+        '<td class="font-mono font-bold py-3 px-2">' + (window.escapeHtml(row.id) || '-') + '</td>' +
+        '<td class="font-mono font-bold text-indigo-400 py-3 px-2">' + (window.escapeHtml(row.fyid) || '-') + '</td>' +
+        '<td class="font-bold text-slate-100 py-3 px-2">' + (window.escapeHtml(row.fyidName) || '-') + '</td>' +
+        '<td class="py-3 px-2">' + (window.escapeHtml(row.class) || '-') + '</td>' +
         '<td class="py-3 px-2">' + catBadge + '</td>' +
-        '<td class="font-semibold text-slate-200 py-3 px-2">' + (escapeHtml(row.accountName) || '-') + '</td>' +
-        '<td class="font-bold text-slate-400 py-3 px-2">' + (escapeHtml(row.method) || '-') + '</td>' +
+        '<td class="font-semibold text-slate-200 py-3 px-2">' + (window.escapeHtml(row.accountName) || '-') + '</td>' +
+        '<td class="font-bold text-slate-400 py-3 px-2">' + (window.escapeHtml(row.method) || '-') + '</td>' +
         '<td class="text-right text-rose-400 font-mono font-bold py-3 px-2">' + debitStr + '</td>' +
         '<td class="text-right text-emerald-400 font-mono font-bold py-3 px-2">' + creditStr + '</td>' +
         '<td class="text-right text-indigo-400 font-mono font-bold py-3 px-2">' + autStr + '</td>' +
-        '<td class="text-xs py-3 px-2">' + (escapeHtml(row.promo) || '-') + '</td>' +
-        '<td class="font-mono text-xs py-3 px-2">' + (escapeHtml(row.my) || '-') + '</td>' +
-        '<td class="font-mono text-xs text-slate-400 py-3 px-2">' + (escapeHtml(row.vrNo) || '-') + '</td>' +
-        '<td class="max-w-xs truncate text-xs text-slate-400 py-3 px-2" title="' + escapeHtml(row.remark) + '">' + (escapeHtml(row.remark) || '-') + '</td>' +
+        '<td class="text-xs py-3 px-2">' + (window.escapeHtml(row.promo) || '-') + '</td>' +
+        '<td class="font-mono text-xs py-3 px-2">' + (window.escapeHtml(row.my) || '-') + '</td>' +
+        '<td class="font-mono text-xs text-slate-400 py-3 px-2">' + (window.escapeHtml(row.vrNo) || '-') + '</td>' +
+        '<td class="max-w-xs truncate text-xs text-slate-400 py-3 px-2" title="' + window.escapeHtml(row.remark) + '">' + (window.escapeHtml(row.remark) || '-') + '</td>' +
         '<td class="right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg text-center py-3 px-2">' +
           '<div class="flex items-center justify-center gap-2">' +
-            '<button onclick="printInvoice(\'' + escapeJsAttr(row.uniqueId) + '\')" class="p-1 text-emerald-400 hover:text-emerald-300 transition" title="Print Receipt"><i class="fa-solid fa-print"></i></button>' +
-            '<button onclick="editIncomeEntry(\'' + escapeJsAttr(row.uniqueId) + '\')" class="p-1 text-indigo-400 hover:text-indigo-300 transition ' + lockClass + '" title="Edit ' + lockTitle + '" ' + disabledAttr + '><i class="fa-solid fa-pen-to-square"></i></button>' +
-            '<button onclick="deleteIncomeEntry(\'' + escapeJsAttr(row.uniqueId) + '\')" class="p-1 text-rose-400 hover:text-rose-300 transition ' + lockClass + '" title="Delete ' + lockTitle + '" ' + disabledAttr + '><i class="fa-solid fa-trash"></i></button>' +
+            '<button onclick="printInvoice(\'' + window.escapeJsAttr(row.uniqueId) + '\')" class="p-1 text-emerald-400 hover:text-emerald-300 transition" title="Print Receipt"><i class="fa-solid fa-print"></i></button>' +
+            '<button onclick="editIncomeEntry(\'' + window.escapeJsAttr(row.uniqueId) + '\')" class="p-1 text-indigo-400 hover:text-indigo-300 transition ' + lockClass + '" title="Edit ' + lockTitle + '" ' + disabledAttr + '><i class="fa-solid fa-pen-to-square"></i></button>' +
+            '<button onclick="deleteIncomeEntry(\'' + window.escapeJsAttr(row.uniqueId) + '\')" class="p-1 text-rose-400 hover:text-rose-300 transition ' + lockClass + '" title="Delete ' + lockTitle + '" ' + disabledAttr + '><i class="fa-solid fa-trash"></i></button>' +
           '</div>' +
         '</td>' +
       '</tr>';
@@ -315,7 +195,7 @@ function renderTableIncome() {
  * 💡 FY-Scoped Student Lookup & Live Rate Calculation
  */
 async function onStudentIdOrFYChangeIncome() {
-  var fyVal = document.getElementById('inc-fy')?.value || getCurrentAcademicYear();
+  var fyVal = document.getElementById('inc-fy')?.value || window.getCurrentAcademicYear();
   var idVal = document.getElementById('inc-id-search')?.value.trim();
 
   var fyidShow = document.getElementById('inc-fyid-show');
@@ -328,7 +208,7 @@ async function onStudentIdOrFYChangeIncome() {
     return;
   }
 
-  var fyShort = getFyShortCode(fyVal);
+  var fyShort = window.getFyShortCode(fyVal);
   var paddedId = String(idVal).padStart(4, '0');
   var targetFyid = `${fyShort}-STU-${paddedId}`;
 
@@ -345,11 +225,11 @@ async function onStudentIdOrFYChangeIncome() {
   }
 
   var list = studentsByFyCache[fyVal] || [];
-  var idValNum = parseCleanIntId(idVal);
+  var idValNum = window.parseCleanIntId(idVal);
 
   var student = list.find(function(s) {
-    var sFyid = sanitizeFyidStr(s.fyid).toLowerCase();
-    var sStudentIdNum = parseCleanIntId(s.student_id ?? s.studentId ?? s.id);
+    var sFyid = window.sanitizeFyidStr(s.fyid).toLowerCase();
+    var sStudentIdNum = window.parseCleanIntId(s.student_id ?? s.studentId ?? s.id);
 
     var fyidMatches = (sFyid === targetFyid.toLowerCase());
     var idMatches = (!isNaN(sStudentIdNum) && !isNaN(idValNum) && sStudentIdNum === idValNum);
@@ -358,7 +238,7 @@ async function onStudentIdOrFYChangeIncome() {
   });
 
   if (student) {
-    var actualFyid = sanitizeFyidStr(student.fyid) || targetFyid;
+    var actualFyid = window.sanitizeFyidStr(student.fyid) || targetFyid;
     var actualName = student.name || student.fyidName || student.fyid_name || '';
 
     if (fyidShow) fyidShow.value = actualFyid;
@@ -372,7 +252,6 @@ async function onStudentIdOrFYChangeIncome() {
     if (catEl) catEl.value = student.category || 'Boarder';
     if (promoEl) promoEl.value = student.promo || 'Original price';
 
-    // 💡 Trigger Live Fee Calculation & Credit Sync
     await onAccountNameOrCategoryChangeIncome();
   } else {
     if (fyidShow) fyidShow.value = targetFyid;
@@ -399,7 +278,7 @@ function resetIncomeAmounts(amount = 0) {
  * 💡 Precision Promotion Matrix Rate Auto-Calculation & 100% Synchronized Credit Engine
  */
 async function onAccountNameOrCategoryChangeIncome() {
-  var fyVal = document.getElementById('inc-fy')?.value || getCurrentAcademicYear();
+  var fyVal = document.getElementById('inc-fy')?.value || window.getCurrentAcademicYear();
   var cleanFy = String(fyVal).trim().replace(/^FY\s*/i, '');
 
   var accEl = document.getElementById('inc-account-name') || document.getElementById('inc-account');
@@ -413,7 +292,6 @@ async function onAccountNameOrCategoryChangeIncome() {
   var creditEl = document.getElementById('inc-credit') || document.getElementById('income-credit');
   var debitEl = document.getElementById('inc-debit') || document.getElementById('income-debit');
 
-  // Registration နှင့် Services မဟုတ်ပါက စာရင်းဟောင်းမကျန်စေဘဲ 0 သတ်မှတ်သည်
   if (accountName !== "Registration" && accountName !== "Services") {
     if (autAmtEl) autAmtEl.value = 0;
     if (creditEl) creditEl.value = 0;
@@ -422,7 +300,6 @@ async function onAccountNameOrCategoryChangeIncome() {
     return;
   }
 
-  // Load promo matrix if cache is missing
   if (!promoMatrixCache || !Array.isArray(promoMatrixCache) || promoMatrixCache.length === 0) {
     try {
       var res = await callApi('getPromotionData', {}, 'GET');
@@ -440,7 +317,6 @@ async function onAccountNameOrCategoryChangeIncome() {
     var cleanClass = classVal.toLowerCase().replace(/\s+/g, '');
     var cleanCat = categoryVal.toLowerCase().replace(/\s+/g, '');
 
-    // 1. Strict Match: Match by FY, Class AND Category
     var match = promoMatrixCache.find(function(r) {
       var rFy = String(r.fy || '').trim().replace(/^FY\s*/i, '');
       var rClass = String(r.class || '').trim().toLowerCase().replace(/\s+/g, '');
@@ -453,7 +329,6 @@ async function onAccountNameOrCategoryChangeIncome() {
       return classMatches && (catMatches || !categoryVal) && fyMatches;
     });
 
-    // 2. Fallback Match without FY
     if (!match) {
       match = promoMatrixCache.find(function(r) {
         var rClass = String(r.class || '').trim().toLowerCase().replace(/\s+/g, '');
@@ -462,7 +337,6 @@ async function onAccountNameOrCategoryChangeIncome() {
       });
     }
 
-    // 3. Fallback for "Others" / Custom categories: Match Class alone
     if (!match) {
       match = promoMatrixCache.find(function(r) {
         var rClass = String(r.class || '').trim().toLowerCase().replace(/\s+/g, '');
@@ -488,7 +362,6 @@ async function onAccountNameOrCategoryChangeIncome() {
     }
   }
 
-  // 100% SYNCHRONIZED UPDATE
   if (autAmtEl) autAmtEl.value = calculatedFee;
   if (creditEl) creditEl.value = calculatedFee;
   if (debitEl) debitEl.value = 0;
@@ -549,7 +422,6 @@ function bindIncomeModalLiveEvents() {
     catEl.onchange = onAccountNameOrCategoryChangeIncome;
   }
 
-  // 🎯 FIX: Class ပြောင်းလဲချိန်တွင် Promotion Matrix နှုန်းထားကို ချက်ချင်း Auto-Calculate လုပ်ခြင်း
   var classEl = document.getElementById('inc-class');
   if (classEl) {
     classEl.onchange = onAccountNameOrCategoryChangeIncome;
@@ -615,7 +487,7 @@ function populateFYDropdownIncome() {
   ];
 
   fySelect.innerHTML = options.map(function(fy) { return '<option value="' + fy + '">' + fy + '</option>'; }).join('');
-  fySelect.value = getCurrentAcademicYear();
+  fySelect.value = window.getCurrentAcademicYear();
 }
 
 /**
@@ -646,7 +518,7 @@ async function saveIncomeForm(e) {
     id: parseInt(document.getElementById('inc-id-search')?.value, 10) || 0,
     date: document.getElementById('inc-date')?.value || "",
     effDate: document.getElementById('inc-effdate')?.value || "",
-    fy: document.getElementById('inc-fy')?.value || getCurrentAcademicYear(),
+    fy: document.getElementById('inc-fy')?.value || window.getCurrentAcademicYear(),
     fyid: fyidShowVal,
     fyidName: document.getElementById('inc-fyidname-show')?.value || "",
     class: document.getElementById('inc-class')?.value || "",
@@ -799,24 +671,24 @@ function exportToCSVIncome() {
   var csv = "NO,EFFECT DATE,DATE,FY,ID,FYID,FYID NAME,CLASS,CATEGORY,ACCOUNT NAME,METHOD,DEBIT,CREDIT,AUT AMOUNT,PROMO,MY,VR NO,REMARK,UNIQUEID\n";
   incomeActiveData.forEach(function(r) {
     csv += (r.no || '') + ',' +
-           safeCsvCellInc(r.effDate || '') + ',' +
-           safeCsvCellInc(r.date || '') + ',' +
-           safeCsvCellInc(r.fy || '') + ',' +
-           safeCsvCellInc(r.id || '') + ',' +
-           safeCsvCellInc(r.fyid || '') + ',' +
-           safeCsvCellInc(r.fyidName || '') + ',' +
-           safeCsvCellInc(r.class || '') + ',' +
-           safeCsvCellInc(r.category || '') + ',' +
-           safeCsvCellInc(r.accountName || '') + ',' +
-           safeCsvCellInc(r.method || '') + ',' +
+           window.safeCsvCell(r.effDate || '') + ',' +
+           window.safeCsvCell(r.date || '') + ',' +
+           window.safeCsvCell(r.fy || '') + ',' +
+           window.safeCsvCell(r.id || '') + ',' +
+           window.safeCsvCell(r.fyid || '') + ',' +
+           window.safeCsvCell(r.fyidName || '') + ',' +
+           window.safeCsvCell(r.class || '') + ',' +
+           window.safeCsvCell(r.category || '') + ',' +
+           window.safeCsvCell(r.accountName || '') + ',' +
+           window.safeCsvCell(r.method || '') + ',' +
            (r.debit || 0) + ',' +
            (r.credit || 0) + ',' +
            (r.autAmount || 0) + ',' +
-           safeCsvCellInc(r.promo || '') + ',' +
-           safeCsvCellInc(r.my || '') + ',' +
-           safeCsvCellInc(r.vrNo || '') + ',' +
-           safeCsvCellInc(r.remark || '') + ',' +
-           safeCsvCellInc(r.uniqueId || '') + '\n';
+           window.safeCsvCell(r.promo || '') + ',' +
+           window.safeCsvCell(r.my || '') + ',' +
+           window.safeCsvCell(r.vrNo || '') + ',' +
+           window.safeCsvCell(r.remark || '') + ',' +
+           window.safeCsvCell(r.uniqueId || '') + '\n';
   });
 
   var blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
@@ -884,9 +756,9 @@ function printInvoice(uniqueId) {
       bodyEl.innerHTML = 
         '<tr class="border-b border-black">' +
           '<td class="border border-black p-1 text-center font-bold text-[10px]">1</td>' +
-          '<td class="border border-black p-1 font-semibold text-[10px]">' + escapeHtml(displayDesc) + '</td>' +
-          '<td class="border border-black p-1 text-center text-[10px]">' + escapeHtml(row.my || '-') + '</td>' +
-          '<td class="border border-black p-1 text-center font-bold text-[10px]">' + escapeHtml(row.method || '-') + '</td>' +
+          '<td class="border border-black p-1 font-semibold text-[10px]">' + window.escapeHtml(displayDesc) + '</td>' +
+          '<td class="border border-black p-1 text-center text-[10px]">' + window.escapeHtml(row.my || '-') + '</td>' +
+          '<td class="border border-black p-1 text-center font-bold text-[10px]">' + window.escapeHtml(row.method || '-') + '</td>' +
           '<td class="border border-black p-1 text-right font-bold text-[10px]">' + Number(displayAmount).toLocaleString('en-US') + ' MMK</td>' +
         '</tr>';
     }
@@ -923,5 +795,3 @@ window.deleteIncomeEntry = deleteIncomeEntry;
 window.changePageIncome = changePageIncome;
 window.exportToCSVIncome = exportToCSVIncome;
 window.printInvoice = printInvoice;
-window.getCurrentAcademicYear = getCurrentAcademicYear;
-window.getFyShortCode = getFyShortCode;
