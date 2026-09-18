@@ -5,7 +5,8 @@
  * 💡 Features: Refactored with utils.js for DRY Principle & Gender Detection
  *              Strict Category-Based Receivables, Resigned Staff Filter,
  *              Full 17-Table System Counter, Active FY Scoped Analytics,
- *              ⚡ PERF: 37 Parallelized Fast Queries via Promise.all
+ *              🚀 OPTIMIZED: 37 Parallelized SQL-Side Fast Queries via Promise.all,
+ *              🎯 PERFORMANCE: Switched COUNT(*) to COUNT(id) for faster index scans
  * ==============================================================================
  */
 
@@ -136,31 +137,31 @@ export async function getDashboardData(db, body) {
       safeFirstNum(db, `SELECT COALESCE(SUM(credit), 0) as total FROM kitchen WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
       safeFirstNum(db, `SELECT COALESCE(SUM(credit), 0) as total FROM payroll WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
 
-      // 💡 2. All 17-Table Total Entries & Master Records
+      // 💡 2. All 17-Table Total Entries & Master Records (OPTIMIZATION: Used COUNT(1) or COUNT(id) for faster scan)
       // A. Main Ledgers (6 Books)
-      safeCount(db, `SELECT COUNT(*) as cnt FROM income WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
-      safeCount(db, `SELECT COUNT(*) as cnt FROM cash WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
-      safeCount(db, `SELECT COUNT(*) as cnt FROM bank WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
-      safeCount(db, `SELECT COUNT(*) as cnt FROM office WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
-      safeCount(db, `SELECT COUNT(*) as cnt FROM kitchen WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
-      safeCount(db, `SELECT COUNT(*) as cnt FROM payroll WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
+      safeCount(db, `SELECT COUNT(id) as cnt FROM income WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
+      safeCount(db, `SELECT COUNT(id) as cnt FROM cash WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
+      safeCount(db, `SELECT COUNT(id) as cnt FROM bank WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
+      safeCount(db, `SELECT COUNT(id) as cnt FROM office WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
+      safeCount(db, `SELECT COUNT(id) as cnt FROM kitchen WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
+      safeCount(db, `SELECT COUNT(id) as cnt FROM payroll WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
 
       // B. Student Money Ledger (1 Book)
-      safeCount(db, `SELECT COUNT(*) as cnt FROM student_money WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
+      safeCount(db, `SELECT COUNT(id) as cnt FROM student_money WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
 
       // C. Cashier Sub-Ledgers (5 Books)
-      safeCount(db, `SELECT COUNT(*) as cnt FROM ca_bank WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
-      safeCount(db, `SELECT COUNT(*) as cnt FROM ca_cash WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
-      safeCount(db, `SELECT COUNT(*) as cnt FROM ca_office WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
-      safeCount(db, `SELECT COUNT(*) as cnt FROM ca_kitchen WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
-      safeCount(db, `SELECT COUNT(*) as cnt FROM ca_payroll WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
+      safeCount(db, `SELECT COUNT(id) as cnt FROM ca_bank WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
+      safeCount(db, `SELECT COUNT(id) as cnt FROM ca_cash WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
+      safeCount(db, `SELECT COUNT(id) as cnt FROM ca_office WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
+      safeCount(db, `SELECT COUNT(id) as cnt FROM ca_kitchen WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
+      safeCount(db, `SELECT COUNT(id) as cnt FROM ca_payroll WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
 
       // D. Master Lists, Directory & Inventory (5 Tables)
-      safeCount(db, `SELECT COUNT(*) as cnt FROM student WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
-      safeCount(db, `SELECT COUNT(*) as cnt FROM promotion WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
-      safeCount(db, `SELECT COUNT(*) as cnt FROM uniform_ledger`),
-      safeCount(db, `SELECT COUNT(*) as cnt FROM staff_fulltime WHERE LOWER(status) = 'active' AND (resigned_date IS NULL OR resigned_date = '')`),
-      safeCount(db, `SELECT COUNT(*) as cnt FROM staff_parttime WHERE LOWER(status) = 'active' AND (resigned_date IS NULL OR resigned_date = '')`),
+      safeCount(db, `SELECT COUNT(id) as cnt FROM student WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
+      safeCount(db, `SELECT COUNT(id) as cnt FROM promotion WHERE fy = ? OR fy = ?`, [activeFy, fyPrefixed]),
+      safeCount(db, `SELECT COUNT(product_id) as cnt FROM uniform_ledger`),
+      safeCount(db, `SELECT COUNT(id) as cnt FROM staff_fulltime WHERE LOWER(status) = 'active' AND (resigned_date IS NULL OR resigned_date = '')`),
+      safeCount(db, `SELECT COUNT(id) as cnt FROM staff_parttime WHERE LOWER(status) = 'active' AND (resigned_date IS NULL OR resigned_date = '')`),
 
       // 💡 3. Daily Balances (Current Ledger Net Balances)
       safeFirstNum(db, "SELECT COALESCE(SUM(debit - credit), 0) as total FROM bank"),
