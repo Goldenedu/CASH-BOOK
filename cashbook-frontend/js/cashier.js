@@ -5,6 +5,7 @@
  * 💡 Features: Full Dataset Loader (2000 rows limit), Accurate Total Entries Card (705+ rows),
  *              6 Sub-Books Routing, 17/19-Column Dynamic Schema & Cross-Module Invoice Printer,
  *              🛡️ Refactored with Global api.js for DRY Principle
+ *              🎯 Auto-scaling Font Size & Header Labels update (MMK) exactly like Dashboard
  *              🎯 BUG FIX: Cashier Categories now exactly 100% match all Main Books (Office, Kitchen, HR Payroll)
  * ==============================================================================
  */
@@ -17,6 +18,51 @@ var CASHIER_PAGE_SIZE = 20;
 var searchTimeoutCashier = null;
 var isCashierSubmitting = false;
 var currentCashierTotalRows = 0;
+
+/**
+ * 💡 Update Labels to include (MMK) automatically
+ */
+function updateCaKpiLabels() {
+  const labels = {
+    'ca-total-income': 'TOTAL INCOME (MMK)',
+    'ca-total-expense': 'TOTAL EXPENSE (MMK)',
+    'ca-balance': 'TOTAL BALANCES (MMK)'
+  };
+  
+  for (const [id, text] of Object.entries(labels)) {
+    const valueEl = document.getElementById(id);
+    if (valueEl) {
+      const parent = valueEl.parentElement;
+      if (parent) {
+        const labelEl = parent.querySelector('p'); 
+        if (labelEl) labelEl.textContent = text;
+      }
+    }
+  }
+}
+
+/**
+ * 💡 Auto-Scale Font Size to Prevent Truncation on Large Numbers
+ */
+function adjustCaKpiFontSizes() {
+  const kpiIds = ['ca-total-income', 'ca-total-expense', 'ca-balance', 'ca-entries-count'];
+  kpiIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    el.style.fontSize = '24px'; 
+    el.style.whiteSpace = 'nowrap';
+    
+    let currentSize = 24;
+    while (el.scrollWidth > el.clientWidth && currentSize > 12) {
+      currentSize--;
+      el.style.fontSize = currentSize + 'px';
+    }
+  });
+}
+
+// Ensure resizing works on window resize
+window.addEventListener('resize', adjustCaKpiFontSizes);
 
 /**
  * 💡 Initialize View
@@ -143,16 +189,22 @@ async function loadTodayIncomeForCashier(useCache) {
  * 💡 Render KPI Header Stats Cards
  */
 function renderStatsCashier(stats, totalRowsCount) {
+  updateCaKpiLabels(); // Add (MMK) to titles
+
   const elInc = document.getElementById('ca-total-income');
   const elExp = document.getElementById('ca-total-expense');
   const elBal = document.getElementById('ca-balance');
   const elCount = document.getElementById('ca-entries-count');
 
-  if (elInc) elInc.textContent = `${Number(stats.totalIncome || 0).toLocaleString('en-US')} MMK`;
-  if (elExp) elExp.textContent = `${Number(stats.totalExpense || 0).toLocaleString('en-US')} MMK`;
-  if (elBal) elBal.textContent = `${Number(stats.balance || 0).toLocaleString('en-US')} MMK`;
+  // Removed trailing MMK from values
+  if (elInc) elInc.textContent = `${Number(stats.totalIncome || 0).toLocaleString('en-US')}`;
+  if (elExp) elExp.textContent = `${Number(stats.totalExpense || 0).toLocaleString('en-US')}`;
+  if (elBal) elBal.textContent = `${Number(stats.balance || 0).toLocaleString('en-US')}`;
   
   if (elCount) elCount.textContent = (totalRowsCount || currentCashierTotalRows || allCashierData.length).toLocaleString('en-US');
+
+  // Trigger Auto Scale
+  setTimeout(adjustCaKpiFontSizes, 50);
 }
 
 /**
@@ -663,6 +715,8 @@ function exportToCSVCashier() {
 }
 
 // 💡 EXPOSE GLOBALLY
+window.updateCaKpiLabels = updateCaKpiLabels;
+window.adjustCaKpiFontSizes = adjustCaKpiFontSizes;
 window.initCashierView = initCashierView;
 window.switchCashierSubTab = switchCashierSubTab;
 window.loadCashierData = loadCashierData;
