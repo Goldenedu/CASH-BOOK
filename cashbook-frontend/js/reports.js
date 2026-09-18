@@ -272,17 +272,47 @@ function exportToCSVReportFinancial() {
 // ==========================================
 
 var gIncomeDetailPage = 1;
-var gIncomeDetailLimit = 50; // ⚡ Limit rendering to 50 rows to save RAM
+var gIncomeDetailLimit = 50; 
+var searchTimeoutReportIncome = null;
 
-async function loadReportIncomeData(forceRefresh = false) {
+async function loadReportIncomeData(forceRefresh = false, isPageChange = false) {
   try {
     const fyVal = document.getElementById('report-income-fy')?.value || '2026-2027';
+    const searchVal = document.getElementById('report-income-search')?.value || '';
+    const unpaidFilterEl = document.getElementById('report-income-unpaid-filter');
+    
+    let unpaidMonthLabel = '';
+    // Unpaid Filter မှ ရွေးချယ်ထားသော index ကို မူတည်ပြီး Header (လအမည် e.g. Sep-26) ကို ရှာဖွေခြင်း
+    if (unpaidFilterEl && unpaidFilterEl.value) {
+      const idx = parseInt(unpaidFilterEl.value, 10);
+      if (gIncomeDetailRawData && gIncomeDetailRawData.headers) {
+        unpaidMonthLabel = gIncomeDetailRawData.headers[idx];
+      }
+    }
+
+    if (!isPageChange) {
+      gIncomeDetailPage = 1; // ရှာဖွေမှု အသစ်လုပ်တိုင်း Page 1 သို့ ပြန်သွားမည်
+    }
+
     safeShowLoading(true);
-    const res = await callApi('getIncomeDetailReportData', { fy: fyVal, forceRefresh });
+
+    // ⚡ FIX: Server-Side သို့ page, limit, searchVal နှင့် unpaidMonthLabel များကို ပို့ဆောင်ပေးခြင်း
+    const res = await callApi('getIncomeDetailReportData', { 
+      fy: fyVal,
+      page: gIncomeDetailPage,
+      limit: gIncomeDetailLimit,
+      searchVal: searchVal,
+      unpaidMonthLabel: unpaidMonthLabel,
+      forceRefresh: forceRefresh 
+    });
+
     if (res && res.success) {
+      const currentUnpaidVal = unpaidFilterEl ? unpaidFilterEl.value : "";
       gIncomeDetailRawData = res;
-      gIncomeDetailPage = 1;
-      populateIncomeUnpaidFilter();
+      
+      if (!currentUnpaidVal) {
+         populateIncomeUnpaidFilter();
+      }
       renderIncomeDetailMatrixTable();
     }
   } catch (err) {
@@ -290,6 +320,160 @@ async function loadReportIncomeData(forceRefresh = false) {
   } finally {
     safeShowLoading(false);
   }
+}
+
+/**
+ * 💡 Populate the Unpaid Month Filter Dropdown dynamically based on Matrix Headers
+ */
+function populateIncomeUnpaidFilter() {
+  const filterEl = document.getElementById('report-income-unpaid-filter');
+  if (!filterEl || !gIncomeDetailRawData || !gIncomeDetailRawData.headers) return;
+
+  const headers = gIncomeDetailRawData.headers;
+  const currentVal = filterEl.value;
+  
+  let html = '<option value="">-- Show All Students --</option>';
+  
+  // Matrix Header များမှ လအမည်များကို ဆွဲထုတ်ခြင်း (Index 14 မှ စတင်လေ့ရှိသည်)
+  for (let i = 14; i < headers.length - 1; i++) {
+    html += `<option value="${i}">Unpaid for ${headers[i]}</option>`;
+  }
+  
+  filterEl.innerHTML = html;
+  filterEl.value = currentVal || "";
+}
+
+function onSearchInputReportIncome() {
+  clearTimeout(searchTimeoutReportIncome);
+  searchTimeoutReportIncome = setTimeout(() => {
+    loadReportIncomeData(true, false); // Fetch from server
+  }, 500);
+}
+
+function onFilterChangeReportIncome() {
+  loadReportIncomeData(true, false); // Fetch from server
+}
+
+function changePageReportIncome(delta) {
+  if (!gIncomeDetailRawData) return;
+  const totalRows = gIncomeDetailRawData.totalRows || 0;
+  const totalPages = Math.ceil(totalRows / gIncomeDetailLimit) || 1;
+  
+  const newPage = gIncomeDetailPage + delta;
+  if (newPage >= 1 && newPage <= totalPages) {
+    gIncomeDetailPage = newPage;
+    loadReportIncomeData(true, true); // ⚡ Fetch exact page from server
+  }
+}
+
+function renderIncomeDetailMatrixTable() {
+  const table = document.getElementById('report-income-main-table');
+  if (!table || !gIncomeDetailRawData) return;
+
+  const headers = gIncomeDetailRawData.headers || [];
+  const rawData = gIncomeDetailRawData.data || [];
+  const grandTotalRow = gIncomeDetailRawData.grandTotalRow || [];
+  
+  // ⚡ FIX: Server မှ ပို့ပေးလိုက်သော Total Rows အစစ်အမှန်ကို အသုံးပြုခြင်း
+  const totalRows = gIncomeDetailRawData.totalRows || 0;
+  
+  // Pagination Info Update
+  const startIndex = (gIncomeDetailPage - 1) * gIncomeDetailLimit;
+  const endIndex = Math.min(startIndex + gIncomeDetailLimit, totalRows);
+  
+  const infoEl = document.getElementById('report-income-pagination-info');
+  if (infoEl) {
+    infoEl.innerHTML = `Showing <span class="text-sky-400 font-extrabold">${totalRows === 0 ? 0 : startIndex + 1}</span> to <span class="text-sky-400 font-extrabold">${endIndex}</span> of <span class="text-sky-400 font-extrabold">${totalRows.toLocaleString()}</span> entries`;
+  }
+  
+  const btnPrev = document.getElementById('report-income-btn-prev');
+  if (btnPrev) btnPrev.disabled = (gIncomeDetailPage <= 1);
+  const btnNext = document.getElementById('report-income-btn-next');
+  if (btnNext) btnNext.disabled = (endIndex >= totalRows);
+
+  let headHtml = '<thead><tr class="bg-[#0e172a] text-slate-300 text-xs uppercase font-extrabold border-b border-slate-800">';
+  headers.forEach((h, i) => {
+    const alignClass = (i >= 10) ? 'text-right' : 'text-left';
+    headHtml += `<th class="px-3 py-3 border border-slate-800 ${alignClass}">${window.escapeHtml(h || '')}</th>`;
+  });
+  headHtml += '</tr></thead>';
+
+  let bodyHtml = '<tbody class="divide-y divide-slate-800/40 text-xs text-slate-300">';
+  if (rawData.length === 0) {
+    bodyHtml += `<tr><td colspan="${headers.length}" class="text-center py-8 text-slate-500 font-bold">ရှာဖွေမှုနှင့် ကိုက်ညီသော ဝင်ငွေ အသေးစိတ် မရှိပါ။</td></tr>`;
+  } else {
+    rawData.forEach(row => {
+      bodyHtml += '<tr class="hover:bg-slate-800/30 transition">';
+      row.forEach((cell, i) => {
+        if (i === 0) {
+          // NO စဉ်နံပါတ်ကို Server မှ တွက်ချက်ပေးလိုက်သည့်အတိုင်း ပြသမည်
+          bodyHtml += `<td class="px-3 py-2 border border-slate-800/60 font-bold text-center text-slate-400">${cell}</td>`;
+        } else if (i === 2) {
+          bodyHtml += `<td class="px-3 py-2 border border-slate-800/60 font-mono font-bold text-slate-200">${window.escapeHtml(cleanIntegerStr(cell))}</td>`;
+        } else if (i === 5) {
+          let promoBadge = 'bg-slate-800 text-slate-400 border-slate-700';
+          const pStr = String(cell || '').toLowerCase();
+          if (pStr.includes('pro')) promoBadge = 'bg-teal-500/10 text-teal-300 border-teal-500/20 font-bold';
+          else if (pStr.includes('scholar')) promoBadge = 'bg-amber-500/10 text-amber-300 border-amber-500/20 font-bold';
+          bodyHtml += `<td class="px-3 py-2 border border-slate-800/60"><span class="px-2 py-0.5 rounded text-[10px] border ${promoBadge}">${window.escapeHtml(cell || '-')}</span></td>`;
+        } else if (i === 8) {
+          const isAct = String(cell || '').toLowerCase() === 'active';
+          const statBadge = isAct ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 font-bold' : 'bg-rose-500/10 text-rose-400 border-rose-500/20 font-bold';
+          bodyHtml += `<td class="px-3 py-2 border border-slate-800/60"><span class="px-2 py-0.5 rounded text-[10px] border ${statBadge}">${window.escapeHtml(cell || 'Active')}</span></td>`;
+        } else if (i >= 10) {
+          const numVal = parseFloat(cell) || 0;
+          bodyHtml += `<td class="px-3 py-2 border border-slate-800/60 text-right font-mono font-bold ${i === row.length - 1 ? 'text-emerald-300 bg-emerald-500/5' : 'text-slate-300'}">${numVal !== 0 ? formatNumWithCommas(numVal) : '-'}</td>`;
+        } else {
+          bodyHtml += `<td class="px-3 py-2 border border-slate-800/60 ${i === 4 ? 'font-bold text-slate-100' : ''}">${window.escapeHtml(cell || '-')}</td>`;
+        }
+      });
+      bodyHtml += '</tr>';
+    });
+  }
+  bodyHtml += '</tbody>';
+
+  let footHtml = '';
+  if (grandTotalRow && grandTotalRow.length > 0 && rawData.length > 0) {
+    footHtml += '<tfoot><tr class="bg-indigo-500/10 font-black text-indigo-300 border-t-2 border-indigo-500/40 text-xs">';
+    grandTotalRow.forEach((cell, i) => {
+      if (i === 0) {
+        footHtml += `<td colspan="10" class="px-3 py-3 uppercase tracking-wider text-xs border border-indigo-500/20">Page Total</td>`;
+      } else if (i >= 10) {
+        const numVal = parseFloat(cell) || 0;
+        footHtml += `<td class="px-3 py-3 text-right font-mono border border-indigo-500/20 text-indigo-200">${formatNumWithCommas(numVal)}</td>`;
+      }
+    });
+    footHtml += '</tr></tfoot>';
+  }
+
+  table.innerHTML = headHtml + bodyHtml + footHtml;
+}
+
+function exportToCSVReportIncome() {
+  if (!gIncomeDetailRawData || !gIncomeDetailRawData.data || gIncomeDetailRawData.data.length === 0) {
+    return safeShowToast('ထုတ်ယူရန် ဝင်ငွေ အသေးစိတ် အချက်အလက် မရှိပါ။', 'warning');
+  }
+
+  let csvRows = [];
+  if (gIncomeDetailRawData.headers) {
+    csvRows.push(gIncomeDetailRawData.headers.map(h => window.safeCsvCell(h || '')));
+  }
+  gIncomeDetailRawData.data.forEach(r => {
+    csvRows.push(r.map(c => window.safeCsvCell(c || '')));
+  });
+  if (gIncomeDetailRawData.grandTotalRow) {
+    csvRows.push(gIncomeDetailRawData.grandTotalRow.map(c => window.safeCsvCell(c || '')));
+  }
+
+  const csvContent = "\uFEFF" + csvRows.map(e => e.join(",")).join("\n");
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  // 💡 Export name updated to reflect current view pagination
+  link.download = `Income_Detail_Page_${gIncomeDetailPage}_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 /**
