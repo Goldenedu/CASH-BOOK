@@ -2,12 +2,7 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - SYSTEM SETTINGS, BACKUP & D1 MONITOR CONTROLLER
  * File: js/settings.js 
- * 💡 Features: 3-Sub-Tab Responsive Navigation Engine (Balances / Export / D1 Monitor),
- *              1-Click Full Database Balance & Sequence Recalculator Engine,
- *              Balanced 2-Line Subtitle Layout (student_money on top line),
- *              Full-Width FY Dropdowns (w-36), Zero-Overflow Action Buttons,
- *              SheetJS Multi-Tab Real Excel (.xlsx) Generator & Resend Email Backup,
- *              📊 Cloudflare D1 Storage & Health Quota Visual Monitor (Dynamic % Bar & Alerts)
+ * 💡 Features: Refactored with Global api.js for DRY Principle
  * ==============================================================================
  */
 
@@ -262,7 +257,6 @@ async function triggerGlobalRecalculateBalances() {
   }
 }
 
-// 💡 Alias for the Tab 1 Recalculate button in views/settings.html
 const triggerAutoRecalculateAllBalances = triggerGlobalRecalculateBalances;
 
 /**
@@ -316,29 +310,23 @@ function renderBalancesControlTable(data) {
 
 /**
  * 💡 6. Render Export Table (Tab 2: Strict 2-Line Balanced Layout & Full FY Dropdowns)
- * 🎯 100% Dynamic Auto FY Engine (Zero Hardcoding - ဘယ်နှစ်ရောက်ရောက် Auto တွက်သည်)
  */
 function renderExportTable() {
   const tbody = document.getElementById('settings-export-table-body');
   if (!tbody) return;
 
-  // 🎯 ၁။ လက်ရှိ ရောက်ရှိနေသော ပညာသင်နှစ် (ဥပမာ: "2026-2027") ကို System Date မှ Auto ရယူခြင်း
   const currentActiveFy = (typeof window.getCurrentAcademicYear === 'function') 
     ? window.getCurrentAcademicYear() 
     : '2026-2027';
 
-  // 🎯 ၂။ အကယ်၍ API မရောက်သေးပါက သုံးမည့် Fallback ကိုပါ လက်ရှိနှစ်အလိုက် Auto တွက်ပေးခြင်း
-  // (ဥပမာ- ၂၀၂၇ ရောက်လျှင် "2027-2028", "2026-2027" ဟု Auto ပြောင်းမည်)
   const startYr = parseInt(currentActiveFy.split('-')[0], 10) || new Date().getFullYear();
   const dynamicFallbackFys = [
     `${startYr}-${startYr + 1}`,
     `${startYr - 1}-${startYr}`
   ];
 
-  // ၃။ D1 Database စာရင်း ရရှိပါက ၎င်းကို သုံးမည်၊ မရသေးပါက Dynamic Fallback ကို သုံးမည်
   const fys = (gAvailableFys && gAvailableFys.length > 0) ? gAvailableFys : dynamicFallbackFys;
 
-  // 💡 လက်ရှိရောက်နေသော FY ကို Dropdown တွင် selected အဖြစ် အလိုအလျောက် သတ်မှတ်ခြင်း
   const fyOptions = fys.map(fy => {
     const cleanFy = String(fy).trim().replace(/^FY\s*/i, '');
     const isSelected = (cleanFy === currentActiveFy);
