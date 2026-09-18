@@ -3,9 +3,9 @@
  * GOLDEN ERP SYSTEM - SYSTEM SETTINGS & CONTROLS HANDLER (D1 DATABASE)
  * File: handlers-settings.js (Location: cashbook-api/handlers-settings.js)
  * 💡 Features: Crash-Proof Balances Control SQL Calculation,
- *              🎯 Phase 1.3: Dynamic FY List Fetching (Zero Hardcoded Years),
- *              🎯 Phase 1.3: Environment Variable Email Injection (env.BACKUP_EMAIL),
- *              🎯 Phase 2.3: Role-Based PII & Sensitive Salary Redaction on Export,
+ *              Dynamic FY List Fetching (Zero Hardcoded Years),
+ *              Environment Variable Email Injection (env.BACKUP_EMAIL),
+ *              Role-Based PII & Sensitive Salary Redaction on Export,
  *              13-Tab Main & 5-Tab Cashier Grouped Export Engine (.xlsx & CSV) &
  *              Resend Email Backup Dispatcher with Native .xlsx Base64 Attachment Support,
  *              📊 Precision Calibrated D1 Storage Engine (Matches Cloudflare 20 Tables & 6.22 MB)
