@@ -2,7 +2,8 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - MAIN BANK & CASH BOOKS HANDLER (CLOUDFLARE D1)
  * File: handlers-bank-cash.js (Location: cashbook-api/handlers-bank-cash.js)
- * 💡 Features: Refactored with utils.js for DRY Principle
+ * 💡 Features: Refactored with utils.js for DRY Principle,
+ *              🚀 OPTIMIZED: Aggregations natively in SQL (SUM/COUNT), Avoided SELECT *
  * ==============================================================================
  */
 
@@ -13,7 +14,8 @@ import {
   generateVoucherNo,
   generateFyNo,
   recalculateLedgerBalances,
-  generateUniqueId
+  generateUniqueId,
+  getCurrentAcademicYear
 } from './utils.js';
 
 const BOOK_TABLE_MAP = {
@@ -119,22 +121,26 @@ export async function getBankCashData(db, body) {
     const tableName = getTableName(rawBook);
     const searchVal = String(body.searchVal || "").trim();
     const page = parseInt(body.page || 1, 10);
-    const limit = parseInt(body.limit || 30, 10);
+    const limit = parseInt(body.limit || 30, 10); // Default to 30, though FE requests 2000 for Search
     const offset = (page - 1) * limit;
 
-    const activeFy = normalizeFyStr(body.fy);
+    // Zero Hardcoding FY
+    const activeFy = normalizeFyStr(body.fy || `FY ${getCurrentAcademicYear()}`);
+    const fyClean = activeFy.replace(/^FY\s*/i, '');
 
+    // 🚀 OPTIMIZATION 1: Fetch Aggregate Totals directly from SQL
     const statsResult = await db.prepare(`
       SELECT 
         COALESCE(SUM(debit), 0) as totalIncome,
         COALESCE(SUM(credit), 0) as totalExpense
       FROM ${tableName}
       WHERE fy = ? OR fy = ?
-    `).bind(activeFy, activeFy.replace(/^FY\s*/i, '')).first() || { totalIncome: 0, totalExpense: 0 };
+    `).bind(activeFy, fyClean).first() || { totalIncome: 0, totalExpense: 0 };
 
     let totalIncome = parseFloat(statsResult.totalIncome || 0);
     let totalExpense = parseFloat(statsResult.totalExpense || 0);
 
+    // Fallback logic if FY is empty (Legacy Mode Support)
     if (totalIncome === 0 && totalExpense === 0) {
       const allStats = await db.prepare(`
         SELECT 
@@ -151,19 +157,23 @@ export async function getBankCashData(db, body) {
     let whereClauses = [];
     let params = [];
 
+    // Search Logic implementation (Allows cross-fy search if fy is omitted or search explicitly provided)
     if (searchVal) {
-      whereClauses.push(`(description LIKE ? OR category LIKE ? OR CAST(debit AS TEXT) LIKE ? OR CAST(credit AS TEXT) LIKE ?)`);
+      whereClauses.push(`(description LIKE ? OR category LIKE ? OR CAST(debit AS TEXT) LIKE ? OR CAST(credit AS TEXT) LIKE ? OR vr_no LIKE ?)`);
       const p = `%${searchVal}%`;
-      params.push(p, p, p, p);
+      params.push(p, p, p, p, p);
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-    const countRow = await db.prepare(`SELECT COUNT(*) as count FROM ${tableName} ${whereSql}`).bind(...params).first();
+    // 🚀 OPTIMIZATION 2: Row Count explicitly via SQL
+    const countRow = await db.prepare(`SELECT COUNT(id) as count FROM ${tableName} ${whereSql}`).bind(...params).first();
     const totalRows = countRow ? countRow.count : 0;
 
+    // 🚀 OPTIMIZATION 3: Explicit Columns Select
     const dataQuery = `
-      SELECT * FROM ${tableName} 
+      SELECT id, no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, is_locked, uniqueid 
+      FROM ${tableName} 
       ${whereSql} 
       ORDER BY id DESC 
       LIMIT ? OFFSET ?
@@ -304,6 +314,7 @@ export async function saveBankCashEntry(db, session, body) {
 
     await db.batch(batchStatements);
 
+    // ⚡ Quota-Shield Recalculate
     await recalculateLedgerBalances(db, tableName, fy);
     if (targetTable && targetTable !== tableName) {
       await recalculateLedgerBalances(db, targetTable, fy);
@@ -407,6 +418,7 @@ export async function updateBankCashEntry(db, session, body) {
 
     await db.batch(batchStatements);
 
+    // ⚡ Quota-Shield Recalculate
     await recalculateLedgerBalances(db, tableName, fy);
     if (oldFy && oldFy !== fy) {
       await recalculateLedgerBalances(db, tableName, oldFy);
