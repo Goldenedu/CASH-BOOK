@@ -2,16 +2,20 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - OFFICE & KITCHEN EXPENSE HANDLER (CLOUDFLARE D1)
  * File: handlers-office-kit.js (Location: cashbook-api/handlers-office-kit.js)
- * 💡 Features: 🛡️ 100% ACID Compliant Atomic Mutations via Cloudflare D1 db.batch(),
- *              ⚡ QUOTA-SHIELD: O(1) Differential Row-Level Update Engine (Zero D1 Quota Waste),
- *              🎯 Floating Point Safe Comparison (ROUND to 2 Decimals),
- *              🎯 Complete Month-Year (my) Column Integrity across INSERT & UPDATE,
- *              Atomic Uniform Inventory Stock & Multi-Book Profit Synchronization,
- *              Safe Liabilities Handling (Negative, (1000) & Accounting Formats),
- *              Kitchen 16-Cols Schema (Strictly NO Liabilities Column),
- *              Myanmar Standard Time (UTC+6:30) & March Academic Year Boundary Alignment
+ * 💡 Features: Refactored with utils.js for DRY Principle
  * ==============================================================================
  */
+
+import {
+  getMyanmarDateString,
+  calculateAcademicFyFromDate,
+  normalizeFyStr,
+  parseAccountingNum,
+  generateVoucherNo,
+  generateFyNo,
+  recalculateLedgerBalances,
+  generateUniqueId
+} from './utils.js';
 
 const BOOK_TABLE_MAP = {
   "kitchen": "kitchen", 
@@ -40,34 +44,6 @@ function getTablePrefix(tableName) {
   }
 }
 
-function normalizeFyStr(fy) {
-  if (!fy) return 'FY 2026-2027';
-  let s = String(fy).trim();
-  if (!s.toUpperCase().startsWith('FY ')) {
-    s = 'FY ' + s;
-  }
-  return s;
-}
-
-/**
- * 💡 Myanmar Standard Timezone Helper (UTC+6:30)
- */
-function getMyanmarDateString(inputDate = null) {
-  if (inputDate) return String(inputDate).trim().split('T')[0];
-  const now = new Date(Date.now() + (6.5 * 3600 * 1000));
-  return now.toISOString().split('T')[0];
-}
-
-/**
- * 💡 Academic Year Calculator (March Boundary Aligned: Month < 2)
- */
-function calculateAcademicFyFromDate(dateStr) {
-  const d = new Date(dateStr);
-  let fyYear = d.getFullYear();
-  if (d.getMonth() < 2) fyYear -= 1;
-  return `FY ${fyYear}-${fyYear + 1}`;
-}
-
 /**
  * 💡 Resilient Product ID Extractor
  */
@@ -85,115 +61,6 @@ function extractProductId(body = {}, description = '', fallbackId = null) {
   }
 
   return fallbackId ? String(fallbackId).trim() : null;
-}
-
-/**
- * 💡 Safe Accounting Number Parser (-1000 & (1000) Parentheses Support)
- */
-function parseAccountingNum(val) {
-  if (val === undefined || val === null || val === '') return 0;
-  if (typeof val === 'number') return isNaN(val) ? 0 : val;
-  let s = String(val).trim().replace(/,/g, '');
-  if (s.startsWith('(') && s.endsWith(')')) {
-    s = '-' + s.slice(1, -1).trim();
-  }
-  const n = parseFloat(s);
-  return isNaN(n) ? 0 : n;
-}
-
-/**
- * ⚡ QUOTA-SHIELD: O(1) Differential Row-Level Recalculation Engine
- * 💡 တန်ဖိုး တကယ်ပြောင်းလဲသွားသော Row များကိုသာ Update လုပ်သဖြင့်
- * D1 Row Writes ကို 2,500 writes မှ 1~2 writes သို့ လျှော့ချပေးသည် (Quota 99.9% သက်သာစေသည်)
- */
-async function recalculateLedgerBalances(db, tableName, targetFy = null) {
-  if (!tableName) return;
-  try {
-    if (targetFy) {
-      const normFy = normalizeFyStr(targetFy);
-      const cleanFy = normFy.replace(/^FY\s*/i, '');
-
-      await db.prepare(`
-        WITH calculated AS (
-          SELECT id,
-                 ROW_NUMBER() OVER (
-                   ORDER BY date ASC, id ASC
-                 ) as calc_no,
-                 SUM(debit - credit) OVER (
-                   ORDER BY date ASC, id ASC 
-                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                 ) as calc_bal
-          FROM ${tableName}
-          WHERE fy = ? OR fy = ?
-        )
-        UPDATE ${tableName} 
-        SET no = calculated.calc_no,
-            balances = calculated.calc_bal
-        FROM calculated
-        WHERE ${tableName}.id = calculated.id
-          AND (
-            ${tableName}.no IS NOT calculated.calc_no OR 
-            ROUND(${tableName}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2)
-          );
-      `).bind(normFy, cleanFy).run();
-
-    } else {
-      await db.prepare(`
-        WITH calculated AS (
-          SELECT id,
-                 ROW_NUMBER() OVER (
-                   PARTITION BY fy
-                   ORDER BY date ASC, id ASC
-                 ) as calc_no,
-                 SUM(debit - credit) OVER (
-                   PARTITION BY fy
-                   ORDER BY date ASC, id ASC 
-                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                 ) as calc_bal
-          FROM ${tableName}
-        )
-        UPDATE ${tableName} 
-        SET no = calculated.calc_no,
-            balances = calculated.calc_bal
-        FROM calculated
-        WHERE ${tableName}.id = calculated.id
-          AND (
-            ${tableName}.no IS NOT calculated.calc_no OR 
-            ROUND(${tableName}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2)
-          );
-      `).run();
-    }
-  } catch (e) {
-    console.warn(`Running Balance Recalculation Warning for ${tableName}:`, e.message);
-  }
-}
-
-async function generateVoucherNo(db, tableName, prefix, entryDate) {
-  let ddmmyy = "";
-  const parts = String(entryDate || '').split('-');
-  if (parts.length === 3) {
-    const y = parts[0].slice(-2);
-    ddmmyy = `${parts[2]}${parts[1]}${y}`;
-  } else {
-    const now = new Date(Date.now() + (6.5 * 3600 * 1000));
-    ddmmyy = `${String(now.getDate()).padStart(2, '0')}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getFullYear()).slice(-2)}`;
-  }
-
-  const pattern = `${prefix}-${ddmmyy}-%`;
-  const countRow = await db.prepare(
-    `SELECT COUNT(*) as cnt FROM ${tableName} WHERE vr_no LIKE ? OR date = ?`
-  ).bind(pattern, entryDate).first();
-
-  const seq = (countRow ? parseInt(countRow.cnt, 10) : 0) + 1;
-  return `${prefix}-${ddmmyy}-${String(seq).padStart(3, '0')}`;
-}
-
-async function generateFyNo(db, tableName, fy) {
-  const normFy = normalizeFyStr(fy);
-  const lastNoRow = await db.prepare(
-    `SELECT MAX(CAST(no AS INTEGER)) as maxNo FROM ${tableName} WHERE fy = ? OR fy = ?`
-  ).bind(normFy, normFy.replace(/^FY\s*/i, '')).first();
-  return (lastNoRow && lastNoRow.maxNo ? parseInt(lastNoRow.maxNo, 10) : 0) + 1;
 }
 
 /**
@@ -353,9 +220,10 @@ export async function saveExpenseEntry(db, session, body) {
     const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(session?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport || body.skipAutoPost);
 
+    // ⚡ Refactored: Uses generateUniqueId from utils.js
     const uniqueid = (isMigration && body.uniqueId)
       ? String(body.uniqueId).trim()
-      : `EXP_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      : generateUniqueId('EXP');
 
     const newNo = (isMigration && body.no) ? parseInt(body.no, 10) : await generateFyNo(db, tableName, fy);
     const bookPrefix = getTablePrefix(tableName);
