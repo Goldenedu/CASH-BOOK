@@ -6,11 +6,13 @@
  *              🎯 Server-Side Pagination (LIMIT 50),
  *              🎯 12 Months Fiscal Year Logic (Mar to Feb),
  *              🎯 Auto Grade Sorting Reversed (Grade 12 to Pre School),
- *              🎯 Advanced "Unpaid Month" Logic (Accumulated check from Join Date)
+ *              🎯 Advanced "Unpaid Month" Logic (Accumulated check from Join Date),
+ *              🎯 ZERO HARDCODING: Dynamic Fiscal Year Fallbacks via getCurrentAcademicYear
  * ==============================================================================
  */
 
-import { normalizeFyStr } from './utils.js';
+// 💡 Added getCurrentAcademicYear to automatically calculate dynamic FY
+import { normalizeFyStr, getCurrentAcademicYear } from './utils.js';
 
 function cleanIntegerId(val) {
   if (val === null || val === undefined) return '';
@@ -46,7 +48,10 @@ function monthLabelToYYYYMM(label) {
  * 💡 Generate 12 Fiscal Month Labels starting from March (e.g. Mar to Feb)
  */
 function get12FiscalMonths(fyStr) {
-  let startYear = 2026;
+  // 💡 Dynamically get start year from current academic year fallback
+  const dynamicFallback = getCurrentAcademicYear(); 
+  let startYear = parseInt(dynamicFallback.split('-')[0], 10) || new Date().getFullYear();
+  
   const parts = String(fyStr || '').replace(/^FY\s*/i, '').split(/[-/]/);
   if (parts.length >= 1 && !isNaN(parseInt(parts[0], 10))) {
     startYear = parseInt(parts[0], 10);
@@ -64,7 +69,9 @@ function get12FiscalMonths(fyStr) {
 
 export async function getFinancialReportData(db, body) {
   try {
-    const activeFy = normalizeFyStr(body.fy || "FY 2026-2027");
+    // 💡 Completely removed hardcoded "FY 2026-2027"
+    const fallbackFy = `FY ${getCurrentAcademicYear()}`;
+    const activeFy = normalizeFyStr(body.fy || fallbackFy);
     const fyClean = activeFy.replace(/^FY\s*/i, '');
 
     const incAgg = await db.prepare(`
@@ -169,7 +176,9 @@ export async function getFinancialReportData(db, body) {
  */
 export async function getIncomeDetailReportData(db, body) {
   try {
-    const activeFy = normalizeFyStr(body.fy || "FY 2026-2027");
+    // 💡 Completely removed hardcoded "FY 2026-2027"[cite: 21]
+    const fallbackFy = `FY ${getCurrentAcademicYear()}`;
+    const activeFy = normalizeFyStr(body.fy || fallbackFy);
     const fyClean = activeFy.replace(/^FY\s*/i, '');
     
     const page = parseInt(body.page || 1, 10);
@@ -177,9 +186,9 @@ export async function getIncomeDetailReportData(db, body) {
     const offset = (page - 1) * limit;
 
     const searchVal = String(body.searchVal || "").trim().toLowerCase();
-    const unpaidMonthLabel = String(body.unpaidMonthLabel || "").trim(); // e.g. "Sep-26"
+    const unpaidMonthLabel = String(body.unpaidMonthLabel || "").trim();
 
-    const monthKeys = get12FiscalMonths(activeFy); // 12 Months
+    const monthKeys = get12FiscalMonths(activeFy);
     const monthKeysYYYYMM = monthKeys.map(mk => monthLabelToYYYYMM(mk));
     
     const headers = [
@@ -189,7 +198,6 @@ export async function getIncomeDetailReportData(db, body) {
       "TOTAL"
     ];
 
-    // 1. Fetch Students
     let whereClauses = [`(s.fy = ? OR s.fy = ?)`];
     let params = [activeFy, fyClean];
 
@@ -200,15 +208,11 @@ export async function getIncomeDetailReportData(db, body) {
     }
     const whereSql = `WHERE ` + whereClauses.join(' AND ');
 
-    // Read all matching students
     const allStudents = (await db.prepare(`SELECT * FROM student s ${whereSql}`).bind(...params).all()).results || [];
-
-    // Read all income for FY (one query is faster than looping)
     const allIncome = (await db.prepare(`SELECT * FROM income WHERE fy = ? OR fy = ?`).bind(activeFy, fyClean).all()).results || [];
 
     const studentGroupMap = new Map();
 
-    // 2. Initialize Matrix
     allStudents.forEach(s => {
       const cleanStuId = parseInt(s.student_id || s.id, 10);
       studentGroupMap.set(cleanStuId, {
@@ -217,8 +221,8 @@ export async function getIncomeDetailReportData(db, body) {
         fyid: s.fyid || '',
         name: s.name || s.fyid_name || '',
         promo: s.promo || 'Original price',
-        joinDate: '', // Derived from first Service Fee
-        registrationDate: s.date || '', // Fallback join date
+        joinDate: '',
+        registrationDate: s.date || '',
         transferMonth: s.transfer_date || s.transferDate || '-',
         status: s.status || 'Active',
         class: s.class || '',
@@ -230,7 +234,6 @@ export async function getIncomeDetailReportData(db, body) {
       });
     });
 
-    // 3. Populate Services
     allIncome.forEach(row => {
       const cleanStuId = parseInt(row.student_id, 10);
       if (!studentGroupMap.has(cleanStuId)) return;
@@ -260,7 +263,6 @@ export async function getIncomeDetailReportData(db, body) {
       }
     });
 
-    // 4. Transform to Array & Apply Advanced Unpaid Logic
     let processedList = Array.from(studentGroupMap.values());
 
     if (unpaidMonthLabel) {
@@ -271,23 +273,16 @@ export async function getIncomeDetailReportData(db, body) {
 
           let joinDateStr = st.joinDate || st.registrationDate;
           let joinYYYYMM = '';
-          if (joinDateStr) {
-             joinYYYYMM = joinDateStr.substring(0, 7);
-          }
+          if (joinDateStr) joinYYYYMM = joinDateStr.substring(0, 7);
 
           let joinIdx = monthKeysYYYYMM.indexOf(joinYYYYMM);
           if (joinIdx === -1) {
-            if (joinYYYYMM && joinYYYYMM < monthKeysYYYYMM[0]) {
-              joinIdx = 0; // Joined before March
-            } else {
-              joinIdx = 999; // Joined after the 12 months limit
-            }
+            if (joinYYYYMM && joinYYYYMM < monthKeysYYYYMM[0]) joinIdx = 0;
+            else joinIdx = 999;
           }
 
-          // If they joined AFTER the selected month, they don't owe for this selected month
           if (joinIdx > targetIdx) return false;
 
-          // Accumulated Check: Is ANY month from Join Date up to Selected Month Unpaid (0)?
           let hasUnpaid = false;
           for (let i = joinIdx; i <= targetIdx; i++) {
             if (st.monthlyServices[i] <= 0) {
@@ -301,7 +296,6 @@ export async function getIncomeDetailReportData(db, body) {
       }
     }
 
-    // 5. Reversed Sorting (Grade 12 down to Pre School)
     const classOrder = ["Grade 12", "Grade 11", "Grade 10", "Grade 9", "Grade 8", "Grade 7", "Grade 6", "Grade 5", "Grade 4", "Grade 3", "Grade 2", "Grade 1", "KG Student", "Pre School"];
     processedList.sort((a, b) => {
       let idxA = classOrder.indexOf(a.class);
@@ -309,18 +303,14 @@ export async function getIncomeDetailReportData(db, body) {
       if (idxA === -1) idxA = 99;
       if (idxB === -1) idxB = 99;
       
-      if (idxA === idxB) {
-        return String(a.name).localeCompare(String(b.name));
-      }
+      if (idxA === idxB) return String(a.name).localeCompare(String(b.name));
       return idxA - idxB;
     });
 
-    // 6. Paginate Data (Limit rows to save RAM on Browser)
     const totalRows = processedList.length;
     const endIndex = Math.min(offset + limit, totalRows);
     const paginatedList = processedList.slice(offset, endIndex);
 
-    // 7. Format Result Matrix
     const dataMatrix = [];
     const pageTotals = new Array(headers.length).fill(0);
     pageTotals[0] = "Page Total";
@@ -365,13 +355,15 @@ export async function getIncomeDetailReportData(db, body) {
  */
 export async function getMonthlyIncomeReportData(db, body) {
   try {
-    const activeFy = normalizeFyStr(body.fy || "FY 2026-2027");
+    // 💡 Completely removed hardcoded "FY 2026-2027"
+    const fallbackFy = `FY ${getCurrentAcademicYear()}`;
+    const activeFy = normalizeFyStr(body.fy || fallbackFy);
     const fyClean = activeFy.replace(/^FY\s*/i, '');
 
     const rowsRes = await db.prepare(`SELECT * FROM income WHERE fy = ? OR fy = ?`).bind(activeFy, fyClean).all();
     const list = rowsRes.results || [];
 
-    const monthKeys = get12FiscalMonths(activeFy); // 12 Months
+    const monthKeys = get12FiscalMonths(activeFy);
     const headers = ["ACCOUNT / CATEGORY", ...monthKeys, "TOTAL"];
 
     const accounts = ["Registration", "Services", "Ferry", "Night Study Fees", "Others"];
@@ -383,20 +375,16 @@ export async function getMonthlyIncomeReportData(db, body) {
         const effDate = r.effect_date || r.effDate || r.date || '';
         const mStr = parseSafeMonthYear(effDate);
         const idx = monthKeys.indexOf(mStr);
-        if (idx >= 0) {
-          monthAmts[idx] += (parseFloat(r.credit || 0) - parseFloat(r.debit || 0));
-        }
+        if (idx >= 0) monthAmts[idx] += (parseFloat(r.credit || 0) - parseFloat(r.debit || 0));
       });
 
       const rowSum = monthAmts.reduce((a, b) => a + b, 0);
       monthAmts.forEach((amt, i) => t1Totals[i + 1] += amt);
       t1Totals[13] += rowSum;
-
       return [acc, ...monthAmts, rowSum];
     });
 
     const t1TotalRow = ["Total", ...t1Totals.slice(1)];
-
     const categories = ["Boarder", "Semi Boarder", "Day Student"];
     const t2Totals = new Array(14).fill(0);
 
@@ -406,15 +394,12 @@ export async function getMonthlyIncomeReportData(db, body) {
         const txDate = r.date || r.effect_date || '';
         const mStr = parseSafeMonthYear(txDate);
         const idx = monthKeys.indexOf(mStr);
-        if (idx >= 0) {
-          monthAmts[idx] += (parseFloat(r.credit || 0) - parseFloat(r.debit || 0));
-        }
+        if (idx >= 0) monthAmts[idx] += (parseFloat(r.credit || 0) - parseFloat(r.debit || 0));
       });
 
       const rowSum = monthAmts.reduce((a, b) => a + b, 0);
       monthAmts.forEach((amt, i) => t2Totals[i + 1] += amt);
       t2Totals[13] += rowSum;
-
       return [cat, ...monthAmts, rowSum];
     });
 
@@ -437,7 +422,9 @@ export async function getMonthlyIncomeReportData(db, body) {
  */
 export async function getStudentReportDetails(db, body) {
   try {
-    const activeFy = body.fy ? body.fy.replace(/^FY\s*/i, '') : "2026-2027";
+    // 💡 Completely removed hardcoded "2026-2027"
+    const fallbackFy = getCurrentAcademicYear();
+    const activeFy = body.fy ? body.fy.replace(/^FY\s*/i, '') : fallbackFy;
     const fyPrefixed = `FY ${activeFy}`;
 
     const list = (await db.prepare(`SELECT * FROM student WHERE fy = ? OR fy = ?`).bind(activeFy, fyPrefixed).all()).results || [];
