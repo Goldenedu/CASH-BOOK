@@ -2,12 +2,7 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - CASHIER CASH BOOK MODULE
  * File: js/cashier.js 
- * 💡 Features: Full Dataset Loader (2000 rows limit), Accurate Total Entries Card (705+ rows),
- *              6 Sub-Books Routing, 17/19-Column Dynamic Schema & Cross-Module Invoice Printer,
- *              🛡️ Universal CSV Formula Injection Sanitizer (safeCsvCell),
- *              🎯 Context-Aware CSV Exporter (Today Income vs Cashier Sub-Books),
- *              🔢 Comma-Safe Numeric Parser & Double-Submit Lock Engine,
- *              🎯 Bug #2 Fixed (Resilient Local escapeHtml / escapeJsAttr Callbacks)
+ * 💡 Features: Refactored with Global api.js for DRY Principle
  * ==============================================================================
  */
 
@@ -19,67 +14,6 @@ var CASHIER_PAGE_SIZE = 20;
 var searchTimeoutCashier = null;
 var isCashierSubmitting = false;
 var currentCashierTotalRows = 0; // 💡 Accurate Total Rows Tracker
-
-/**
- * 💡 Safe Native DOM HTML Escaper (Bug #2 Resilient Fallback)
- */
-function escapeHtml(str) {
-  if (str === null || str === undefined) return '';
-  if (typeof window.escapeHtml === 'function' && window.escapeHtml !== escapeHtml) {
-    return window.escapeHtml(str);
-  }
-  var div = document.createElement('div');
-  div.textContent = String(str);
-  return div.innerHTML;
-}
-
-/**
- * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
- */
-function escapeJsAttr(str) {
-  if (str === null || str === undefined) return '';
-  if (typeof window.escapeJsAttr === 'function' && window.escapeJsAttr !== escapeJsAttr) {
-    return window.escapeJsAttr(str);
-  }
-  var jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  return escapeHtml(jsEscaped);
-}
-
-/**
- * 🛡️ Safe CSV Cell Helper (Local Fallback if api.js is not loaded yet)
- */
-function safeCsvCell(val) {
-  if (typeof window.safeCsvCell === 'function') {
-    return window.safeCsvCell(val);
-  }
-  if (val === null || val === undefined) return '""';
-  if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
-
-  var str = String(val).trim();
-  if (str === '') return '""';
-
-  var cleanNumStr = str.replace(/,/g, '');
-  if (!isNaN(Number(cleanNumStr)) && cleanNumStr !== '') {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-
-  if (/^[=+\-@\t\r]/.test(str)) {
-    str = "'" + str;
-  }
-
-  return `"${str.replace(/"/g, '""')}"`;
-}
-
-/**
- * 💡 Safe Comma String Number Parser
- */
-function parseCleanNum(val) {
-  if (val === undefined || val === null || val === '') return 0;
-  if (typeof val === 'number') return isNaN(val) ? 0 : val;
-  var str = String(val).replace(/,/g, '').trim();
-  var num = parseFloat(str);
-  return isNaN(num) ? 0 : num;
-}
 
 /**
  * 💡 Initialize View
@@ -370,30 +304,30 @@ function renderCashierTable() {
     const tr = document.createElement('tr');
     tr.className = 'hover:bg-slate-800/30 transition-all border-b border-slate-800/40 text-xs';
 
-    const displayNo = Math.floor(parseCleanNum(item.no || (startIndex + index + 1))) || 1;
+    const displayNo = Math.floor(window.parseCleanNum(item.no || (startIndex + index + 1))) || 1;
 
     if (isTodayIncomeTab) {
       tr.innerHTML = `
         <td class="text-center font-mono font-semibold text-slate-400 py-3 px-2">${displayNo}</td>
-        <td class="font-mono py-3 px-2">${escapeHtml(item.effDate) || '-'}</td>
-        <td class="font-mono py-3 px-2">${escapeHtml(item.date) || '-'}</td>
-        <td class="font-mono font-bold text-indigo-400 py-3 px-2">${escapeHtml(item.fy) || '-'}</td>
-        <td class="font-mono font-bold py-3 px-2">${escapeHtml(item.id) || '-'}</td>
-        <td class="font-mono font-bold text-indigo-300 py-3 px-2">${escapeHtml(item.fyid) || '-'}</td>
-        <td class="font-bold text-slate-100 py-3 px-2">${escapeHtml(item.fyidName) || '-'}</td>
-        <td class="py-3 px-2">${escapeHtml(item.class) || '-'}</td>
-        <td class="py-3 px-2">${typeof window.formatCategoryBadgeHtml === 'function' ? window.formatCategoryBadgeHtml(item.category) : escapeHtml(item.category)}</td>
-        <td class="font-semibold text-slate-200 py-3 px-2">${escapeHtml(item.accountName) || '-'}</td>
-        <td class="font-bold text-slate-400 py-3 px-2">${escapeHtml(item.method) || '-'}</td>
+        <td class="font-mono py-3 px-2">${window.escapeHtml(item.effDate) || '-'}</td>
+        <td class="font-mono py-3 px-2">${window.escapeHtml(item.date) || '-'}</td>
+        <td class="font-mono font-bold text-indigo-400 py-3 px-2">${window.escapeHtml(item.fy) || '-'}</td>
+        <td class="font-mono font-bold py-3 px-2">${window.escapeHtml(item.id) || '-'}</td>
+        <td class="font-mono font-bold text-indigo-300 py-3 px-2">${window.escapeHtml(item.fyid) || '-'}</td>
+        <td class="font-bold text-slate-100 py-3 px-2">${window.escapeHtml(item.fyidName) || '-'}</td>
+        <td class="py-3 px-2">${window.escapeHtml(item.class) || '-'}</td>
+        <td class="py-3 px-2">${typeof window.formatCategoryBadgeHtml === 'function' ? window.formatCategoryBadgeHtml(item.category) : window.escapeHtml(item.category)}</td>
+        <td class="font-semibold text-slate-200 py-3 px-2">${window.escapeHtml(item.accountName) || '-'}</td>
+        <td class="font-bold text-slate-400 py-3 px-2">${window.escapeHtml(item.method) || '-'}</td>
         <td class="text-right font-mono font-bold text-rose-400 py-3 px-2">${item.debit > 0 ? Number(item.debit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
         <td class="text-right font-mono font-bold text-emerald-400 py-3 px-2">${item.credit > 0 ? Number(item.credit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
         <td class="text-right font-mono font-bold text-indigo-400 py-3 px-2">${item.autAmount > 0 ? Number(item.autAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
-        <td class="text-xs py-3 px-2">${escapeHtml(item.promo) || '-'}</td>
-        <td class="font-mono text-xs py-3 px-2">${escapeHtml(item.my) || '-'}</td>
-        <td class="font-mono text-xs text-slate-400 py-3 px-2">${escapeHtml(item.vrNo) || '-'}</td>
-        <td class="max-w-xs truncate text-xs text-slate-400 py-3 px-2" title="${escapeHtml(item.remark || '')}">${escapeHtml(item.remark) || '-'}</td>
+        <td class="text-xs py-3 px-2">${window.escapeHtml(item.promo) || '-'}</td>
+        <td class="font-mono text-xs py-3 px-2">${window.escapeHtml(item.my) || '-'}</td>
+        <td class="font-mono text-xs text-slate-400 py-3 px-2">${window.escapeHtml(item.vrNo) || '-'}</td>
+        <td class="max-w-xs truncate text-xs text-slate-400 py-3 px-2" title="${window.escapeHtml(item.remark || '')}">${window.escapeHtml(item.remark) || '-'}</td>
         <td class="text-center right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg py-3 px-2">
-          <button onclick="printInvoice('${escapeJsAttr(item.uniqueId)}')" class="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition font-bold" title="Print Receipt">
+          <button onclick="printInvoice('${window.escapeJsAttr(item.uniqueId)}')" class="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition font-bold" title="Print Receipt">
             <i class="fa-solid fa-print mr-1"></i> Print
           </button>
         </td>
@@ -406,25 +340,25 @@ function renderCashierTable() {
 
       tr.innerHTML = `
         <td class="text-center font-mono font-semibold text-slate-400 py-3 px-2">${displayNo}</td>
-        <td class="font-mono py-3 px-2">${escapeHtml(item.date) || '-'}</td>
-        <td class="font-bold text-amber-300 py-3 px-2">${escapeHtml(item.respPerson) || '-'}</td>
-        <td class="py-3 px-2">${typeof window.formatCategoryBadgeHtml === 'function' ? window.formatCategoryBadgeHtml(item.category) : escapeHtml(item.category)}</td>
-        <td class="font-bold text-slate-100 max-w-xs truncate py-3 px-2" title="${escapeHtml(item.description)}">${escapeHtml(item.description) || '-'}</td>
-        <td class="font-semibold py-3 px-2">${escapeHtml(item.method) || '-'}</td>
+        <td class="font-mono py-3 px-2">${window.escapeHtml(item.date) || '-'}</td>
+        <td class="font-bold text-amber-300 py-3 px-2">${window.escapeHtml(item.respPerson) || '-'}</td>
+        <td class="py-3 px-2">${typeof window.formatCategoryBadgeHtml === 'function' ? window.formatCategoryBadgeHtml(item.category) : window.escapeHtml(item.category)}</td>
+        <td class="font-bold text-slate-100 max-w-xs truncate py-3 px-2" title="${window.escapeHtml(item.description)}">${window.escapeHtml(item.description) || '-'}</td>
+        <td class="font-semibold py-3 px-2">${window.escapeHtml(item.method) || '-'}</td>
         <td class="text-right font-mono font-bold text-emerald-400 py-3 px-2">${item.debit > 0 ? Number(item.debit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
         <td class="text-right font-mono font-bold text-rose-400 py-3 px-2">${item.credit > 0 ? Number(item.credit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
         <td class="text-right font-mono font-bold text-indigo-400 py-3 px-2">${Number(item.balances || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-        <td class="py-3 px-2 text-indigo-400 text-xs">${escapeHtml(item.transfer) || '-'}</td>
-        <td class="font-mono text-slate-400 py-3 px-2">${escapeHtml(item.vrNo) || '-'}</td>
-        <td class="font-mono py-3 px-2">${escapeHtml(item.my) || '-'}</td>
-        <td class="font-mono font-bold text-indigo-300 py-3 px-2">${escapeHtml(item.fy) || '-'}</td>
-        <td class="py-3 px-2">${escapeHtml(item.bookName) || '-'}</td>
-        <td class="py-3 px-2">${escapeHtml(item.createdBy) || 'System'}</td>
+        <td class="py-3 px-2 text-indigo-400 text-xs">${window.escapeHtml(item.transfer) || '-'}</td>
+        <td class="font-mono text-slate-400 py-3 px-2">${window.escapeHtml(item.vrNo) || '-'}</td>
+        <td class="font-mono py-3 px-2">${window.escapeHtml(item.my) || '-'}</td>
+        <td class="font-mono font-bold text-indigo-300 py-3 px-2">${window.escapeHtml(item.fy) || '-'}</td>
+        <td class="py-3 px-2">${window.escapeHtml(item.bookName) || '-'}</td>
+        <td class="py-3 px-2">${window.escapeHtml(item.createdBy) || 'System'}</td>
         <td class="font-mono text-slate-500 py-3 px-2">${item.createdAt ? item.createdAt.slice(0,10) : '-'}</td>
         <td class="text-center right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg py-3 px-2">
           <div class="flex items-center justify-center gap-2">
-            <button onclick="editCashierEntry('${escapeJsAttr(item.uniqueId)}')" class="p-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-lg transition ${lockClass}" title="Edit ${lockTitle}" ${disabledAttr}><i class="fa-solid fa-pen-to-square"></i></button>
-            <button onclick="deleteCashierEntry('${escapeJsAttr(item.uniqueId)}')" class="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg transition btn-delete ${lockClass}" title="Delete ${lockTitle}" ${disabledAttr}><i class="fa-solid fa-trash"></i></button>
+            <button onclick="editCashierEntry('${window.escapeJsAttr(item.uniqueId)}')" class="p-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-lg transition ${lockClass}" title="Edit ${lockTitle}" ${disabledAttr}><i class="fa-solid fa-pen-to-square"></i></button>
+            <button onclick="deleteCashierEntry('${window.escapeJsAttr(item.uniqueId)}')" class="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg transition btn-delete ${lockClass}" title="Delete ${lockTitle}" ${disabledAttr}><i class="fa-solid fa-trash"></i></button>
           </div>
         </td>
       `;
@@ -544,8 +478,8 @@ async function saveCashierForm(e) {
     category: document.getElementById('ca-category')?.value || 'Income',
     method: document.getElementById('ca-method')?.value || 'Cash',
     transfer: document.getElementById('ca-transfer')?.value || '',
-    debit: parseCleanNum(document.getElementById('ca-debit')?.value || 0),
-    credit: parseCleanNum(document.getElementById('ca-credit')?.value || 0),
+    debit: window.parseCleanNum(document.getElementById('ca-debit')?.value || 0),
+    credit: window.parseCleanNum(document.getElementById('ca-credit')?.value || 0),
     description: document.getElementById('ca-description')?.value || '',
     createdBy: (window.AppState ? window.AppState.currentUser : '') || "System"
   };
@@ -634,7 +568,7 @@ async function deleteCashierEntry(uniqueId) {
 }
 
 /**
- * 💡 CONTEXT-AWARE CSV EXPORTER (Formula Injection Protected via safeCsvCell + UTF-8 BOM)
+ * 💡 CONTEXT-AWARE CSV EXPORTER (Formula Injection Protected via window.safeCsvCell + UTF-8 BOM)
  */
 function exportToCSVCashier() {
   if (!allCashierData || allCashierData.length === 0) {
@@ -649,45 +583,45 @@ function exportToCSVCashier() {
     csv = "NO,EFFECT DATE,DATE,FY,ID,FYID,FYID NAME,CLASS,CATEGORY,ACCOUNT NAME,METHOD,DEBIT,CREDIT,AUT AMOUNT,PROMO,MY,VR NO,REMARK\n";
     allCashierData.forEach((r, idx) => {
       csv += `${r.no || (idx + 1)},` +
-             `${safeCsvCell(r.effDate || r.date || '')},` +
-             `${safeCsvCell(r.date || '')},` +
-             `${safeCsvCell(r.fy || '')},` +
-             `${safeCsvCell(r.id || '')},` +
-             `${safeCsvCell(r.fyid || '')},` +
-             `${safeCsvCell(r.fyidName || '')},` +
-             `${safeCsvCell(r.class || '')},` +
-             `${safeCsvCell(r.category || '')},` +
-             `${safeCsvCell(r.accountName || '')},` +
-             `${safeCsvCell(r.method || '')},` +
+             `${window.safeCsvCell(r.effDate || r.date || '')},` +
+             `${window.safeCsvCell(r.date || '')},` +
+             `${window.safeCsvCell(r.fy || '')},` +
+             `${window.safeCsvCell(r.id || '')},` +
+             `${window.safeCsvCell(r.fyid || '')},` +
+             `${window.safeCsvCell(r.fyidName || '')},` +
+             `${window.safeCsvCell(r.class || '')},` +
+             `${window.safeCsvCell(r.category || '')},` +
+             `${window.safeCsvCell(r.accountName || '')},` +
+             `${window.safeCsvCell(r.method || '')},` +
              `${r.debit || 0},` +
              `${r.credit || 0},` +
              `${r.autAmount || 0},` +
-             `${safeCsvCell(r.promo || '')},` +
-             `${safeCsvCell(r.my || '')},` +
-             `${safeCsvCell(r.vrNo || '')},` +
-             `${safeCsvCell(r.remark || '')}\n`;
+             `${window.safeCsvCell(r.promo || '')},` +
+             `${window.safeCsvCell(r.my || '')},` +
+             `${window.safeCsvCell(r.vrNo || '')},` +
+             `${window.safeCsvCell(r.remark || '')}\n`;
     });
   } else {
     // 💡 17 Columns for Cashier Sub-Ledgers (CABank, CACash, CAOffice, etc.)
     csv = "NO,DATE,RESPONSIBILITY PERSON,CATEGORY,DESCRIPTION,METHOD,DEBIT,CREDIT,BALANCES,TRANSFER,VR NO,MY,FY,BOOK NAME,CREATED BY,CREATED AT,UNIQUEID\n";
     allCashierData.forEach((r, idx) => {
       csv += `${r.no || (idx + 1)},` +
-             `${safeCsvCell(r.date || '')},` +
-             `${safeCsvCell(r.respPerson || '')},` +
-             `${safeCsvCell(r.category || '')},` +
-             `${safeCsvCell(r.description || '')},` +
-             `${safeCsvCell(r.method || '')},` +
+             `${window.safeCsvCell(r.date || '')},` +
+             `${window.safeCsvCell(r.respPerson || '')},` +
+             `${window.safeCsvCell(r.category || '')},` +
+             `${window.safeCsvCell(r.description || '')},` +
+             `${window.safeCsvCell(r.method || '')},` +
              `${r.debit || 0},` +
              `${r.credit || 0},` +
              `${r.balances || 0},` +
-             `${safeCsvCell(r.transfer || '')},` +
-             `${safeCsvCell(r.vrNo || '')},` +
-             `${safeCsvCell(r.my || '')},` +
-             `${safeCsvCell(r.fy || '')},` +
-             `${safeCsvCell(r.bookName || '')},` +
-             `${safeCsvCell(r.createdBy || '')},` +
-             `${safeCsvCell(r.createdAt || '')},` +
-             `${safeCsvCell(r.uniqueId || '')}\n`;
+             `${window.safeCsvCell(r.transfer || '')},` +
+             `${window.safeCsvCell(r.vrNo || '')},` +
+             `${window.safeCsvCell(r.my || '')},` +
+             `${window.safeCsvCell(r.fy || '')},` +
+             `${window.safeCsvCell(r.bookName || '')},` +
+             `${window.safeCsvCell(r.createdBy || '')},` +
+             `${window.safeCsvCell(r.createdAt || '')},` +
+             `${window.safeCsvCell(r.uniqueId || '')}\n`;
     });
   }
 
