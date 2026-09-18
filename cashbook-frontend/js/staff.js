@@ -2,7 +2,8 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - STAFF DIRECTORY & MATRIX MODULE (D1 DATABASE COMPATIBLE)
  * File: js/staff.js (Location: cashbook-frontend/js/staff.js)
- * 💡 Features: Refactored with Global api.js for DRY Principle
+ * 💡 Features: Refactored with Global api.js for DRY Principle,
+ *              🎯 Phase 4: Added Date Range Filter support for API requests
  * ==============================================================================
  */
 
@@ -144,6 +145,7 @@ async function loadStaffData(useCache = false) {
     if (typeof toggleLoading === 'function') toggleLoading(true);
     renderStaffTableHead();
 
+    // 💡 Phase 4: Retrieve Data with API
     const res = await callApi('getStaffData', {
       category: gStaffCategory,
       page: 1,
