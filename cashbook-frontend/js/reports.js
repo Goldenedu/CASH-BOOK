@@ -12,13 +12,8 @@ var gFinancialReportRawData = null;
 var gMonthlyIncomeRawData = null;
 var gStaffFundRawData = null;
 
-/**
- * 💡 Dynamic Report Fiscal Year Options Generator
- */
 function getDynamicReportFiscalYears() {
-  if (window.gAvailableFys && Array.isArray(window.gAvailableFys) && window.gAvailableFys.length > 0) {
-    return window.gAvailableFys;
-  }
+  if (window.gAvailableFys && Array.isArray(window.gAvailableFys) && window.gAvailableFys.length > 0) return window.gAvailableFys;
   const d = new Date();
   let y = d.getFullYear();
   if (d.getMonth() < 3) y -= 1;
@@ -43,32 +38,22 @@ function populateReportFyDropdowns() {
 }
 
 function safeShowLoading(show) {
-  if (typeof window.toggleLoading === 'function') {
-    window.toggleLoading(show);
-  } else {
+  if (typeof window.toggleLoading === 'function') window.toggleLoading(show);
+  else {
     const overlay = document.getElementById('loading-overlay');
-    if (overlay) {
-      if (show) overlay.classList.remove('hidden');
-      else overlay.classList.add('hidden');
-    }
+    if (overlay) overlay.classList.toggle('hidden', !show);
   }
 }
 
 function safeShowToast(msg, type = 'info') {
-  if (typeof window.showToast === 'function') {
-    const toastType = (type === 'error') ? 'ERROR' : 'SUCCESS';
-    window.showToast(toastType, msg);
-  } else {
-    console.log(`[Toast ${type}]: ${msg}`);
-  }
+  if (typeof window.showToast === 'function') window.showToast((type === 'error') ? 'ERROR' : 'SUCCESS', msg);
+  else console.log(`[Toast ${type}]: ${msg}`);
 }
 
 function formatNumWithCommas(val) {
   if (val === null || val === undefined || val === '') return '0';
   let s = String(val).trim().replace(/,/g, '');
-  if (s.startsWith('(') && s.endsWith(')')) {
-    s = '-' + s.slice(1, -1).trim();
-  }
+  if (s.startsWith('(') && s.endsWith(')')) s = '-' + s.slice(1, -1).trim();
   const num = parseFloat(s);
   if (isNaN(num)) return String(val);
   return num.toLocaleString('en-US');
@@ -76,13 +61,9 @@ function formatNumWithCommas(val) {
 
 function cleanIntegerStr(val) {
   if (val === null || val === undefined) return '-';
-  const str = String(val).trim();
-  return str.replace(/\.0+$/, '');
+  return String(val).trim().replace(/\.0+$/, '');
 }
 
-/**
- * 💡 Active Tab Highlight Engine
- */
 function showReportPanel(panelId) {
   populateReportFyDropdowns();
   document.querySelectorAll('.report-panel').forEach(el => el.classList.add('hidden'));
@@ -97,33 +78,23 @@ function showReportPanel(panelId) {
 
   Object.values(tabBtnMap).forEach(cfg => {
     const btn = document.getElementById(cfg.btnId);
-    if (btn) {
-      btn.className = 'rep-sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-all bg-slate-800 text-slate-400 hover:text-white flex items-center gap-2';
-    }
+    if (btn) btn.className = 'rep-sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-all bg-slate-800 text-slate-400 hover:text-white flex items-center gap-2';
   });
 
   const activeCfg = tabBtnMap[panelId];
   if (activeCfg) {
     const btn = document.getElementById(activeCfg.btnId);
-    if (btn) {
-      btn.className = `rep-sub-tab-btn px-4 py-2 rounded-lg text-xs transition-all flex items-center gap-2 ${activeCfg.activeClass}`;
-    }
+    if (btn) btn.className = `rep-sub-tab-btn px-4 py-2 rounded-lg text-xs transition-all flex items-center gap-2 ${activeCfg.activeClass}`;
   }
 
   const targetPanel = document.getElementById(panelId);
   if (targetPanel) targetPanel.classList.remove('hidden');
 
-  if (panelId === 'panel-report-financial') {
-    loadReportFinancialData();
-  } else if (panelId === 'panel-report-income-detail') {
-    loadReportIncomeData();
-  } else if (panelId === 'panel-report-monthly-income') {
-    loadReportGeneralData();
-  } else if (panelId === 'panel-report-student') {
-    loadReportStudentData();
-  } else if (panelId === 'panel-report-staff-fund') {
-    loadReportStaffFundData();
-  }
+  if (panelId === 'panel-report-financial') loadReportFinancialData();
+  else if (panelId === 'panel-report-income-detail') loadReportIncomeData();
+  else if (panelId === 'panel-report-monthly-income') loadReportGeneralData();
+  else if (panelId === 'panel-report-student') loadReportStudentData();
+  else if (panelId === 'panel-report-staff-fund') loadReportStaffFundData();
 }
 
 // ==========================================
@@ -134,7 +105,6 @@ async function loadReportFinancialData(forceRefresh = false) {
   try {
     const fyVal = document.getElementById('report-fin-fy')?.value || '2026-2027';
     safeShowLoading(true);
-
     const res = await callApi('getFinancialReportData', { fy: fyVal, forceRefresh });
     if (res && res.success && res.data) {
       gFinancialReportRawData = res.data;
@@ -276,11 +246,9 @@ async function loadReportIncomeData(forceRefresh = false, isPageChange = false) 
     const unpaidFilterEl = document.getElementById('report-income-unpaid-filter');
     
     let unpaidMonthLabel = '';
+    // Unpaid Filter ရွေးထားပါက၊ လအမည်အတိအကျ (e.g., "Sep-26") ကို Backend သို့ လှမ်းပို့ပေးပါမည်
     if (unpaidFilterEl && unpaidFilterEl.value) {
-      const idx = parseInt(unpaidFilterEl.value, 10);
-      if (gIncomeDetailRawData && gIncomeDetailRawData.headers) {
-        unpaidMonthLabel = gIncomeDetailRawData.headers[idx];
-      }
+      unpaidMonthLabel = unpaidFilterEl.value;
     }
 
     if (!isPageChange) {
@@ -289,7 +257,6 @@ async function loadReportIncomeData(forceRefresh = false, isPageChange = false) 
 
     safeShowLoading(true);
 
-    // ⚡ FIX: Fetching Data from Server with precise Pagination & Filters
     const res = await callApi('getIncomeDetailReportData', { 
       fy: fyVal,
       page: gIncomeDetailPage,
@@ -327,12 +294,12 @@ function populateIncomeUnpaidFilter() {
   
   let html = '<option value="">-- Show All Students --</option>';
   
+  // Headers index 14 မှစ၍ (လများ) ကို ရွေးချယ်နိုင်ရန် ပြသခြင်း
   for (let i = 14; i < headers.length - 1; i++) {
-    html += `<option value="${i}">Unpaid for ${headers[i]}</option>`;
+    html += `<option value="${headers[i]}" ${headers[i] === currentVal ? 'selected' : ''}>Unpaid up to ${headers[i]}</option>`;
   }
   
   filterEl.innerHTML = html;
-  filterEl.value = currentVal || "";
 }
 
 function onSearchInputReportIncome() {
@@ -366,10 +333,8 @@ function renderIncomeDetailMatrixTable() {
   const rawData = gIncomeDetailRawData.data || [];
   const grandTotalRow = gIncomeDetailRawData.grandTotalRow || [];
   
-  // ⚡ FIX: Use Genuine Total Rows from Server Response
   const totalRows = gIncomeDetailRawData.totalRows || 0;
   
-  // Pagination Info Update
   const startIndex = (gIncomeDetailPage - 1) * gIncomeDetailLimit;
   const endIndex = Math.min(startIndex + rawData.length, totalRows); 
   
@@ -390,7 +355,6 @@ function renderIncomeDetailMatrixTable() {
   });
   headHtml += '</tr></thead>';
 
-  // ⚡ FIX: Render directly without client-side filtering/sorting
   let bodyHtml = '<tbody class="divide-y divide-slate-800/40 text-xs text-slate-300">';
   if (rawData.length === 0) {
     bodyHtml += `<tr><td colspan="${headers.length}" class="text-center py-8 text-slate-500 font-bold">ရှာဖွေမှုနှင့် ကိုက်ညီသော ဝင်ငွေ အသေးစိတ် မရှိပါ။</td></tr>`;
@@ -425,7 +389,6 @@ function renderIncomeDetailMatrixTable() {
   bodyHtml += '</tbody>';
 
   let footHtml = '';
-  // Only show grand total if we are on the first page and no filters are applied, or simply show "Page Total"
   if (grandTotalRow && grandTotalRow.length > 0 && rawData.length > 0) {
     footHtml += '<tfoot><tr class="bg-indigo-500/10 font-black text-indigo-300 border-t-2 border-indigo-500/40 text-xs">';
     grandTotalRow.forEach((cell, i) => {
