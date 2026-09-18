@@ -2,98 +2,9 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - STAFF DIRECTORY & MATRIX MODULE (D1 DATABASE COMPATIBLE)
  * File: js/staff.js (Location: cashbook-frontend/js/staff.js)
- * 💡 Features: Clean Single-Instance Module (Zero Code Duplication),
- *              True Client-Side Pagination Slicing (20 rows per page),
- *              Live Cloudflare D1 Salary Grade Matrix Sync, Auto Basic Amt Fill,
- *              Resigned Date Auto-Inactive Engine (Status & Active Force KPIs),
- *              Enhanced Myanmar & Ethnic Gender Auto-Detector (100% Accurate),
- *              Double-Submit Protection Lock & Safe CSV Export Engine
+ * 💡 Features: Refactored with Global api.js for DRY Principle
  * ==============================================================================
  */
-
-/**
- * 💡 Safe Native DOM HTML Escaper
- */
-function escapeHtml(str) {
-  if (str === null || str === undefined) return '';
-  if (typeof window.escapeHtml === 'function' && window.escapeHtml !== escapeHtml) {
-    return window.escapeHtml(str);
-  }
-  const div = document.createElement('div');
-  div.textContent = String(str);
-  return div.innerHTML;
-}
-
-/**
- * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
- */
-function escapeJsAttr(str) {
-  if (str === null || str === undefined) return '';
-  if (typeof window.escapeJsAttr === 'function' && window.escapeJsAttr !== escapeJsAttr) {
-    return window.escapeJsAttr(str);
-  }
-  const jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  return escapeHtml(jsEscaped);
-}
-
-/**
- * 🛡️ Safe CSV Cell Helper
- */
-function safeCsvCell(val) {
-  if (typeof window.safeCsvCell === 'function') {
-    return window.safeCsvCell(val);
-  }
-  if (val === null || val === undefined) return '""';
-  if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
-
-  let str = String(val).trim();
-  if (str === '') return '""';
-
-  const cleanNumStr = str.replace(/,/g, '');
-  if (!isNaN(Number(cleanNumStr)) && cleanNumStr !== '') {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-
-  if (/^[=+\-@\t\r]/.test(str)) {
-    str = "'" + str;
-  }
-
-  return `"${str.replace(/"/g, '""')}"`;
-}
-
-/**
- * 💡 Precision Gender Auto-Detector (ဆရာမ၊ ခင်၊ တီချာ၊ စော၊ နော် အပြည့်အစုံ ထည့်သွင်းထားသည်)
- */
-function autoDetectGender(nameStr) {
-  if (!nameStr) return 'Male';
-  const clean = String(nameStr).trim();
-
-  // ၁။ အမျိုးသမီး အခေါ်အဝေါ်နှင့် တိုင်းရင်းသူ အမည်များ (ဦးစားပေး စစ်ဆေးသည်)
-  if (
-    clean.startsWith('ဆရာမ') || clean.startsWith('တီချာ') || clean.startsWith('ဒေါ်') ||
-    clean.startsWith('မေ') || clean.startsWith('နန်း') || clean.startsWith('နော်') ||
-    clean.startsWith('ခင်') || clean.startsWith('နှင်း') || clean.startsWith('နွယ်') ||
-    /^(May|Daw|Nang|Naw|Khin|Hnin|Nwe|Miss|Mrs|Teacher|Sayama)\b/i.test(clean)
-  ) {
-    return 'Female';
-  }
-
-  // ၂။ 'မ' ဖြင့် စပြီး 'မောင်' သို့မဟုတ် 'မင်း' မဟုတ်ပါက Female
-  if ((clean.startsWith('မ') && !clean.startsWith('မောင်') && !clean.startsWith('မင်း')) || /^(Ma)\b/i.test(clean)) {
-    return 'Female';
-  }
-
-  // ၃။ အမျိုးသား အခေါ်အဝေါ်နှင့် တိုင်းရင်းသား အမည်များ
-  if (
-    clean.startsWith('မောင်') || clean.startsWith('ကို') || clean.startsWith('ဦး') ||
-    clean.startsWith('မင်း') || clean.startsWith('စော') || clean.startsWith('ဆရာ') ||
-    /^(Mg|Ko|U|Min|Saw|Saya|Mr)\b/i.test(clean)
-  ) {
-    return 'Male';
-  }
-
-  return 'Male';
-}
 
 var gStaffCategory = 'Full Time'; // 'Full Time' or 'Part Time'
 var gStaffPage = 1;
@@ -258,7 +169,7 @@ async function loadStaffData(useCache = false) {
           
           let g = String(item.gender || '').toLowerCase().trim();
           if (!g || g === 'non' || g === 'undefined') {
-            g = autoDetectGender(item.name || item.staffIdName || item.staff_idname).toLowerCase();
+            g = window.autoDetectGender(item.name || item.staffIdName || item.staff_idname).toLowerCase();
           }
 
           if (g === 'male' || g === 'm' || g === 'ကျား' || g.startsWith('mal')) {
@@ -387,16 +298,16 @@ function renderStaffTable(rawData) {
         ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Inactive</span>'
         : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Active</span>';
 
-      const detectedGender = item.gender || autoDetectGender(item.name || staffIdName);
+      const detectedGender = item.gender || window.autoDetectGender(item.name || staffIdName);
 
       return `
       <tr class="hover:bg-slate-800/40 transition">
         <td class="text-center text-slate-400 py-3">${displayNo}</td>
-        <td class="font-mono text-slate-300 py-3">${escapeHtml(joinDate)}</td>
-        <td class="font-bold text-white py-3">${escapeHtml(staffIdName)}</td>
-        <td class="text-slate-300 py-3">${escapeHtml(item.education || '')}</td>
-        <td class="text-indigo-300 font-semibold py-3">${escapeHtml(item.position || '')}</td>
-        <td class="font-bold text-amber-400 py-3">${escapeHtml(salaryGrade)}</td>
+        <td class="font-mono text-slate-300 py-3">${window.escapeHtml(joinDate)}</td>
+        <td class="font-bold text-white py-3">${window.escapeHtml(staffIdName)}</td>
+        <td class="text-slate-300 py-3">${window.escapeHtml(item.education || '')}</td>
+        <td class="text-indigo-300 font-semibold py-3">${window.escapeHtml(item.position || '')}</td>
+        <td class="font-bold text-amber-400 py-3">${window.escapeHtml(salaryGrade)}</td>
         <td class="text-right font-bold text-slate-200 py-3">${workingDays}</td>
         <td class="text-right font-bold text-emerald-400 py-3">${basicAmt.toLocaleString('en-US')}</td>
         <td class="text-right font-bold text-rose-400 py-3">${extraAmt.toLocaleString('en-US')}</td>
@@ -405,18 +316,18 @@ function renderStaffTable(rawData) {
         <td class="text-right font-bold text-teal-400 py-3">${fund.toLocaleString('en-US')}</td>
         <td class="text-right font-extrabold text-indigo-400 py-3">${totalNetAmt.toLocaleString('en-US')}</td>
         <td class="text-center py-3">${statusBadge}</td>
-        <td class="text-slate-300 py-3">${escapeHtml(detectedGender)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(nrcNo)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(bankAccount)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(phoneNo)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(item.email || '')}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(fundDate)}</td>
+        <td class="text-slate-300 py-3">${window.escapeHtml(detectedGender)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(nrcNo)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(bankAccount)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(phoneNo)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(item.email || '')}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(fundDate)}</td>
         <td class="text-right font-bold text-emerald-400 py-3">${unpaidBonus.toLocaleString('en-US')}</td>
         <td class="text-right font-bold text-teal-400 py-3">${unpaidFund.toLocaleString('en-US')}</td>
         <td class="text-center py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">
           <div class="flex items-center justify-center gap-2">
-            <button onclick="editStaffEntry('${escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded transition" title="Edit Profile"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
-            <button onclick="deleteStaffEntry('${escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded transition btn-delete" title="Delete Profile"><i class="fa-solid fa-trash-can text-xs"></i></button>
+            <button onclick="editStaffEntry('${window.escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded transition" title="Edit Profile"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
+            <button onclick="deleteStaffEntry('${window.escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded transition btn-delete" title="Delete Profile"><i class="fa-solid fa-trash-can text-xs"></i></button>
           </div>
         </td>
       </tr>`;
@@ -446,27 +357,27 @@ function renderStaffTable(rawData) {
         ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Inactive</span>'
         : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Active</span>';
 
-      const detectedGender = item.gender || autoDetectGender(item.name || staffIdName);
+      const detectedGender = item.gender || window.autoDetectGender(item.name || staffIdName);
 
       return `
       <tr class="hover:bg-slate-800/40 transition">
         <td class="text-center text-slate-400 py-3">${displayNo}</td>
-        <td class="font-mono text-slate-300 py-3">${escapeHtml(joinDate)}</td>
-        <td class="font-bold text-white py-3">${escapeHtml(staffIdName)}</td>
-        <td class="text-slate-300 py-3">${escapeHtml(item.education || '')}</td>
-        <td class="text-indigo-300 font-semibold py-3">${escapeHtml(item.position || '')}</td>
+        <td class="font-mono text-slate-300 py-3">${window.escapeHtml(joinDate)}</td>
+        <td class="font-bold text-white py-3">${window.escapeHtml(staffIdName)}</td>
+        <td class="text-slate-300 py-3">${window.escapeHtml(item.education || '')}</td>
+        <td class="text-indigo-300 font-semibold py-3">${window.escapeHtml(item.position || '')}</td>
         <td class="text-right font-bold text-indigo-400 py-3">${totalSalary.toLocaleString('en-US')}</td>
         <td class="text-right font-extrabold text-indigo-400 py-3">${totalNetAmt.toLocaleString('en-US')}</td>
         <td class="text-center py-3">${statusBadge}</td>
-        <td class="text-slate-300 py-3">${escapeHtml(detectedGender)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(nrcNo)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(bankAccount)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(phoneNo)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(item.email || '')}</td>
+        <td class="text-slate-300 py-3">${window.escapeHtml(detectedGender)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(nrcNo)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(bankAccount)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(phoneNo)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(item.email || '')}</td>
         <td class="text-center py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">
           <div class="flex items-center justify-center gap-2">
-            <button onclick="editStaffEntry('${escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded transition" title="Edit Profile"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
-            <button onclick="deleteStaffEntry('${escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded transition btn-delete" title="Delete Profile"><i class="fa-solid fa-trash-can text-xs"></i></button>
+            <button onclick="editStaffEntry('${window.escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded transition" title="Edit Profile"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
+            <button onclick="deleteStaffEntry('${window.escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded transition btn-delete" title="Delete Profile"><i class="fa-solid fa-trash-can text-xs"></i></button>
           </div>
         </td>
       </tr>`;
@@ -803,14 +714,14 @@ function exportToCSVStaff() {
       const cleanStaffIdName = rawStaffIdName.replace(/\.0/g, '');
 
       csv += `${displayNo},` +
-             `${safeCsvCell(r.join_date || r.joinDate || '')},` +
+             `${window.safeCsvCell(r.join_date || r.joinDate || '')},` +
              `"Full Time",` +
-             `${safeCsvCell(r.staff_id || r.staffId || '')},` +
-             `${safeCsvCell(r.name || '')},` +
-             `${safeCsvCell(cleanStaffIdName)},` +
-             `${safeCsvCell(r.education || '')},` +
-             `${safeCsvCell(r.position || '')},` +
-             `${safeCsvCell(r.salary_grade || r.salaryGrade || '')},` +
+             `${window.safeCsvCell(r.staff_id || r.staffId || '')},` +
+             `${window.safeCsvCell(r.name || '')},` +
+             `${window.safeCsvCell(cleanStaffIdName)},` +
+             `${window.safeCsvCell(r.education || '')},` +
+             `${window.safeCsvCell(r.position || '')},` +
+             `${window.safeCsvCell(r.salary_grade || r.salaryGrade || '')},` +
              `${r.working_days || r.workingDays || 26},` +
              `${r.basic_amt || r.basicAmt || 0},` +
              `${r.extra_amt || r.extraAmt || 0},` +
@@ -818,14 +729,14 @@ function exportToCSVStaff() {
              `${r.bonus || 0},` +
              `${r.fund || 0},` +
              `${r.total_net_amt || r.totalNetAmt || 0},` +
-             `${safeCsvCell(r.resigned_date || r.resignedDate || '')},` +
-             `${safeCsvCell(r.status || 'Active')},` +
-             `${safeCsvCell(r.gender || 'Male')},` +
-             `${safeCsvCell(r.nrc_no || r.nrcNo || '')},` +
-             `${safeCsvCell(r.bank_account || r.bankAccount || '')},` +
-             `${safeCsvCell(r.phone_no || r.phoneNo || '')},` +
-             `${safeCsvCell(r.email || '')},` +
-             `${safeCsvCell(r.fund_date || r.fundDate || '')},` +
+             `${window.safeCsvCell(r.resigned_date || r.resignedDate || '')},` +
+             `${window.safeCsvCell(r.status || 'Active')},` +
+             `${window.safeCsvCell(r.gender || 'Male')},` +
+             `${window.safeCsvCell(r.nrc_no || r.nrcNo || '')},` +
+             `${window.safeCsvCell(r.bank_account || r.bankAccount || '')},` +
+             `${window.safeCsvCell(r.phone_no || r.phoneNo || '')},` +
+             `${window.safeCsvCell(r.email || '')},` +
+             `${window.safeCsvCell(r.fund_date || r.fundDate || '')},` +
              `${r.unpaid_bonus || r.unpaidBonus || 0},` +
              `${r.unpaid_fund || r.unpaidFund || 0}\n`;
     });
@@ -837,22 +748,22 @@ function exportToCSVStaff() {
       const cleanStaffIdName = rawStaffIdName.replace(/\.0/g, '');
 
       csv += `${displayNo},` +
-             `${safeCsvCell(r.join_date || r.joinDate || '')},` +
+             `${window.safeCsvCell(r.join_date || r.joinDate || '')},` +
              `"Part Time",` +
-             `${safeCsvCell(r.staff_id || r.staffId || '')},` +
-             `${safeCsvCell(r.name || '')},` +
-             `${safeCsvCell(cleanStaffIdName)},` +
-             `${safeCsvCell(r.education || '')},` +
-             `${safeCsvCell(r.position || '')},` +
+             `${window.safeCsvCell(r.staff_id || r.staffId || '')},` +
+             `${window.safeCsvCell(r.name || '')},` +
+             `${window.safeCsvCell(cleanStaffIdName)},` +
+             `${window.safeCsvCell(r.education || '')},` +
+             `${window.safeCsvCell(r.position || '')},` +
              `${r.total_salary || r.totalSalary || 0},` +
              `${r.total_net_amt || r.totalNetAmt || 0},` +
-             `${safeCsvCell(r.resigned_date || r.resignedDate || '')},` +
-             `${safeCsvCell(r.status || 'Active')},` +
-             `${safeCsvCell(r.gender || 'Male')},` +
-             `${safeCsvCell(r.nrc_no || r.nrcNo || '')},` +
-             `${safeCsvCell(r.bank_account || r.bankAccount || '')},` +
-             `${safeCsvCell(r.phone_no || r.phoneNo || '')},` +
-             `${safeCsvCell(r.email || '')}\n`;
+             `${window.safeCsvCell(r.resigned_date || r.resignedDate || '')},` +
+             `${window.safeCsvCell(r.status || 'Active')},` +
+             `${window.safeCsvCell(r.gender || 'Male')},` +
+             `${window.safeCsvCell(r.nrc_no || r.nrcNo || '')},` +
+             `${window.safeCsvCell(r.bank_account || r.bankAccount || '')},` +
+             `${window.safeCsvCell(r.phone_no || r.phoneNo || '')},` +
+             `${window.safeCsvCell(r.email || '')}\n`;
     });
   }
 
@@ -881,4 +792,3 @@ window.fetchPayrollSettings = fetchPayrollSettings;
 window.renderGradeDropdownOptions = renderGradeDropdownOptions;
 window.onSalaryGradeChangeStaff = onSalaryGradeChangeStaff;
 window.calculateLiveStaffSalary = calculateLiveStaffSalary;
-window.autoDetectGender = autoDetectGender;
