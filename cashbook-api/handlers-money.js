@@ -2,41 +2,16 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - STUDENT MONEY LEDGER & WALLET HANDLER (CLOUDFLARE D1)
  * File: handlers-money.js (Location: cashbook-api/handlers-money.js)
- * 💡 Features: ⚡ QUOTA-SHIELD: O(1) Differential Row-Level Recalculation Engine,
- *              🎯 Floating Point Safe Comparison (ROUND to 2 Decimals),
- *              Fixed Wallet Balance Partition Leak (PARTITION BY student_id),
- *              Crash-Proof Student Name Extraction & Auto-Lookup,
- *              Multi-FY Dynamic Transition Safety & Grouped Wallet Summaries
+ * 💡 Features: Refactored with utils.js for DRY Principle
  * ==============================================================================
  */
 
-function normalizeFyStr(fy) {
-  if (!fy) return '2026-2027';
-  let s = String(fy).trim();
-  return s.replace(/^FY\s*/i, '');
-}
-
-function sanitizeFyidStr(fyidStr) {
-  const s = String(fyidStr || '').trim();
-  if (!s) return s;
-  if (s.indexOf('.0') === -1) return s;
-  const cleaned = s.replace(/\.0/g, '');
-  const parts = cleaned.split('-STU-');
-  if (parts.length === 2) {
-    const numPart = parseInt(parts[1], 10) || 0;
-    return `${parts[0]}-STU-${String(numPart).padStart(4, '0')}`;
-  }
-  return cleaned;
-}
-
-/**
- * 💡 Myanmar Standard Timezone Helper (UTC+6:30)
- */
-function getMyanmarDateString(inputDate = null) {
-  if (inputDate) return String(inputDate).trim().split('T')[0];
-  const now = new Date(Date.now() + (6.5 * 3600 * 1000));
-  return now.toISOString().split('T')[0];
-}
+import {
+  getMyanmarDateString,
+  normalizeFyStr,
+  sanitizeFyidStr,
+  generateUniqueId
+} from './utils.js';
 
 /**
  * ⚡ QUOTA-SHIELD: O(1) Single-Pass D1 Window Function Recalculation Engine
@@ -49,7 +24,7 @@ function getMyanmarDateString(inputDate = null) {
 async function recalculateStudentMoneyBalances(db, targetFy = null) {
   try {
     if (targetFy) {
-      const cleanFy = normalizeFyStr(targetFy);
+      const cleanFy = normalizeFyStr(targetFy).replace(/^FY\s*/i, '');
       const fyPrefixed = `FY ${cleanFy}`;
 
       await db.prepare(`
@@ -115,7 +90,7 @@ async function recalculateStudentMoneyBalances(db, targetFy = null) {
  */
 export async function getStudentMoneyData(db, body) {
   try {
-    const activeFy = normalizeFyStr(body.fy || "2026-2027");
+    const activeFy = normalizeFyStr(body.fy || "2026-2027").replace(/^FY\s*/i, '');
     const searchVal = String(body.searchVal || "").trim();
     const studentIdFilter = parseInt(body.studentId, 10) || 0;
     const page = parseInt(body.page || 1, 10);
@@ -203,7 +178,7 @@ export async function getStudentMoneyData(db, body) {
  */
 export async function getStudentMoneySummary(db, body) {
   try {
-    const activeFy = normalizeFyStr(body.fy || "2026-2027");
+    const activeFy = normalizeFyStr(body.fy || "2026-2027").replace(/^FY\s*/i, '');
     const searchVal = String(body.searchVal || "").trim();
 
     let whereClauses = [`(fy = ? OR fy = ?)`];
@@ -296,9 +271,10 @@ export async function saveStudentMoneyEntry(db, userSession, body) {
     const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(userSession?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport);
 
+    // ⚡ Refactored: Uses generateUniqueId from utils.js
     const uniqueid = (isMigration && body.uniqueId)
       ? String(body.uniqueId).trim()
-      : `STM_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      : generateUniqueId('STM');
 
     // 🎯 Transaction Date & Myanmar Timezone Safety
     const entryDate = getMyanmarDateString(body.date);
@@ -306,7 +282,7 @@ export async function saveStudentMoneyEntry(db, userSession, body) {
     let fyYear = d.getFullYear();
     if (d.getMonth() < 2) fyYear -= 1; // Align with March academic year boundary
     const computedFy = `${fyYear}-${fyYear + 1}`;
-    const cleanFy = normalizeFyStr(body.fy || computedFy);
+    const cleanFy = normalizeFyStr(body.fy || computedFy).replace(/^FY\s*/i, '');
 
     const studentId = parseInt(body.studentId || body.id, 10) || 1;
     const fyid = sanitizeFyidStr(body.fyid || '');
@@ -368,7 +344,6 @@ export async function saveStudentMoneyEntry(db, userSession, body) {
     ).run();
 
     if (!isMigration) {
-      // ⚡ Scoped O(1) Quota-Shield recalculation with partition by student
       await recalculateStudentMoneyBalances(db, cleanFy);
     }
 
@@ -394,14 +369,14 @@ export async function updateStudentMoneyEntry(db, userSession, body) {
     const existing = await db.prepare("SELECT * FROM student_money WHERE uniqueid = ?").bind(uniqueid).first();
     if (!existing) return { success: false, message: "ပြင်ဆင်မည့် ကျောင်းသားငွေစာရင်း ရှာမတွေ့ပါ။" };
 
-    const oldFy = existing?.fy ? normalizeFyStr(existing.fy) : null;
+    const oldFy = existing?.fy ? normalizeFyStr(existing.fy).replace(/^FY\s*/i, '') : null;
 
     const entryDate = getMyanmarDateString(body.date || existing.date);
     const d = new Date(entryDate);
     let fyYear = d.getFullYear();
     if (d.getMonth() < 2) fyYear -= 1;
     const computedFy = `${fyYear}-${fyYear + 1}`;
-    const cleanFy = normalizeFyStr(body.fy || computedFy);
+    const cleanFy = normalizeFyStr(body.fy || computedFy).replace(/^FY\s*/i, '');
 
     const studentId = parseInt(body.studentId || body.id, 10) || existing.student_id || 1;
     const fyid = sanitizeFyidStr(body.fyid || existing.fyid || '');
@@ -452,7 +427,6 @@ export async function updateStudentMoneyEntry(db, userSession, body) {
       uniqueid
     ).run();
 
-    // ⚡ Scoped O(1) Quota-Shield recalculation
     await recalculateStudentMoneyBalances(db, cleanFy);
 
     if (oldFy && oldFy !== cleanFy) {
@@ -480,11 +454,10 @@ export async function deleteStudentMoneyEntry(db, userSession, body) {
     const existing = await db.prepare("SELECT fy FROM student_money WHERE uniqueid = ?").bind(uniqueid).first();
     if (!existing) return { success: false, message: "ဖျက်သိမ်းမည့် ကျောင်းသားငွေစာရင်း ရှာမတွေ့ပါ။" };
 
-    const targetFy = existing?.fy ? normalizeFyStr(existing.fy) : null;
+    const targetFy = existing?.fy ? normalizeFyStr(existing.fy).replace(/^FY\s*/i, '') : null;
 
     await db.prepare("DELETE FROM student_money WHERE uniqueid = ?").bind(uniqueid).run();
 
-    // ⚡ Scoped O(1) Quota-Shield recalculation
     await recalculateStudentMoneyBalances(db, targetFy);
 
     return {
