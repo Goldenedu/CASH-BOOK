@@ -1,7 +1,9 @@
 /**
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - UNIFORM INVENTORY LEDGER MODULE (D1 DATABASE COMPATIBLE)
  * File: js/uniform.js  
- * 💡 Features: Live Cloudflare D1 SQL Sync, Auto PID Generator, Profit & Stock Value Computation, Integer NO & Real-Time Sync
+ * 💡 Features: Refactored with Global api.js for DRY Principle
+ * ==============================================================================
  */
 
 window.UniformState = {
@@ -15,30 +17,6 @@ window.UniformState = {
 
 var searchTimeoutUniform = null;
 var isUniformSubmitting = false; // 💡 Double Submit Protection Flag
-
-/**
- * 💡 Safe Native DOM HTML Escaper
- */
-function escapeHtml(str) {
-  if (str === null || str === undefined) return '';
-  if (typeof window.escapeHtml === 'function' && window.escapeHtml !== escapeHtml) {
-    return window.escapeHtml(str);
-  }
-  var div = document.createElement('div');
-  div.textContent = String(str);
-  return div.innerHTML;
-}
-
-/**
- * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
- * Escapes backslashes/quotes for the JS string literal, then HTML-escapes the
- * result so it can't break out of the surrounding double-quoted HTML attribute.
- */
-function escapeJsAttr(str) {
-  if (str === null || str === undefined) return '';
-  var jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  return escapeHtml(jsEscaped);
-}
 
 /**
  * 💡 Strict Search Filter Function for Uniform Ledger
@@ -163,10 +141,10 @@ function renderUniformTable() {
     return `
       <tr class="hover:bg-slate-800/20 text-slate-300">
         <td class="text-center font-bold text-slate-400 py-3 px-2">${displayNo}</td>
-        <td class="font-bold text-slate-200 font-mono py-3 px-2">${escapeHtml(pid)}</td>
-        <td class="font-bold text-slate-300 py-3 px-2">${escapeHtml(pname)}</td>
-        <td class="py-3 px-2"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400">${escapeHtml(row.type || '-')}</span></td>
-        <td class="font-mono font-semibold py-3 px-2">${escapeHtml(row.size || '-')}</td>
+        <td class="font-bold text-slate-200 font-mono py-3 px-2">${window.escapeHtml(pid)}</td>
+        <td class="font-bold text-slate-300 py-3 px-2">${window.escapeHtml(pname)}</td>
+        <td class="py-3 px-2"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400">${window.escapeHtml(row.type || '-')}</span></td>
+        <td class="font-mono font-semibold py-3 px-2">${window.escapeHtml(row.size || '-')}</td>
         <td class="text-right font-medium py-3 px-2">${openStock}</td>
         <td class="text-right text-rose-400 font-mono py-3 px-2">${unitPrice.toLocaleString('en-US')}</td>
         <td class="text-right font-mono py-3 px-2">${totalAmt.toLocaleString('en-US')}</td>
@@ -177,8 +155,8 @@ function renderUniformTable() {
         <td class="text-right font-bold text-indigo-400 font-mono py-3 px-2">${totStockVal.toLocaleString('en-US')}</td>
         <td class="right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg text-center py-3 px-2">
           <div class="flex items-center justify-center gap-3 ${isViewer ? 'hidden' : ''}">
-            <button onclick="editUniformEntry('${escapeJsAttr(uid)}', '${escapeJsAttr(rowId)}')" class="text-indigo-400 hover:text-indigo-300 transition" title="Edit Product"><i class="fa-solid fa-pen-to-square"></i></button>
-            <button onclick="deleteUniformEntry('${escapeJsAttr(uid)}', '${escapeJsAttr(rowId)}')" class="text-rose-400 hover:text-rose-300 transition" title="Delete Product"><i class="fa-solid fa-trash"></i></button>
+            <button onclick="editUniformEntry('${window.escapeJsAttr(uid)}', '${window.escapeJsAttr(rowId)}')" class="text-indigo-400 hover:text-indigo-300 transition" title="Edit Product"><i class="fa-solid fa-pen-to-square"></i></button>
+            <button onclick="deleteUniformEntry('${window.escapeJsAttr(uid)}', '${window.escapeJsAttr(rowId)}')" class="text-rose-400 hover:text-rose-300 transition" title="Delete Product"><i class="fa-solid fa-trash"></i></button>
           </div>
         </td>
       </tr>
@@ -375,9 +353,9 @@ function exportToCSVUniform() {
 
   let csv = "NO,PRODUCT ID,PRODUCT NAME,TYPE,SIZE,OPENING STOCK,UNIT PRICE,TOTAL AMOUNT,SELLING PRICE,PROFIT AMOUNT,SELLING UNIT,CURRENT QTY,TOTAL STOCK VALUE,UNIQUEID\n";
   data.forEach((row, idx) => {
-    let name = `"${(row.product_name || row.productName || '').replace(/"/g, '""')}"`;
-    let type = `"${(row.type || '').replace(/"/g, '""')}"`;
-    let size = `"${(row.size || '').replace(/"/g, '""')}"`;
+    let name = window.safeCsvCell(row.product_name || row.productName || '');
+    let type = window.safeCsvCell(row.type || '');
+    let size = window.safeCsvCell(row.size || '');
     const openStock = row.opening_stock ?? row.openingStock ?? 0;
     const unitPrice = row.unit_price ?? row.unitPrice ?? 0;
     const totalAmt = row.total_amount ?? row.totalAmount ?? 0;
@@ -389,7 +367,7 @@ function exportToCSVUniform() {
 
     const displayNo = (window.UniformState.page - 1) * window.UniformState.limit + idx + 1;
 
-    csv += `${displayNo},${row.product_id || row.productId || ''},${name},${type},${size},${openStock},${unitPrice},${totalAmt},${sellPrice},${profitAmt},${sellUnit},${curQty},${totStockVal},${row.uniqueid || row.uniqueId || ''}\n`;
+    csv += `${displayNo},${window.safeCsvCell(row.product_id || row.productId || '')},${name},${type},${size},${openStock},${unitPrice},${totalAmt},${sellPrice},${profitAmt},${sellUnit},${curQty},${totStockVal},${window.safeCsvCell(row.uniqueid || row.uniqueId || '')}\n`;
   });
 
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
