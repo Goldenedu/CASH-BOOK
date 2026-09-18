@@ -2,44 +2,18 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - HR PAYROLL & STAFF D1 SQL HANDLER MODULE
  * File: handlers-payroll-staff.js (Location: cashbook-api/handlers-payroll-staff.js)
- * 💡 Features: Resigned Date Auto-Inactive Engine (Status Calculation & Active Force Stats),
- *              PII & Salary Data Protection (Role-Based Redaction including uniqueid),
- *              Privilege Escalation Defense (Server-Generated UUIDs for new records),
- *              Fund Date Calculation (Join Date + 3 Years) & Idempotent Upsert Engine,
- *              ⚡ QUOTA-SHIELD: O(1) Differential Row-Level Recalculation Engine,
- *              🎯 Floating Point Safe Comparison (ROUND to 2 Decimals),
- *              🛡️ Phase 2.2: Atomic Payroll Expense & Staff Accruals Batch Rollback Guard,
- *              🎯 Phase 1.1: March Boundary Aligned Dynamic FY Auto-Detection (getMonth() < 2)
+ * 💡 Features: Refactored with utils.js for DRY Principle
  * ==============================================================================
  */
 
-/**
- * 💡 Dynamic Academic Year Helper (March Boundary: Month < 2)
- * မတ်လ ၁ ရက်မတိုင်မီ (ဇန်နဝါရီ၊ ဖေဖော်ဝါရီ) သာ ယခင်နှစ်ထဲ သတ်မှတ်ပြီး
- * မတ်လမှစ၍ နှစ်သစ်အဖြစ် အလိုအလျောက် တွက်ချက်သည်
- */
-function getCurrentAcademicYear(dateInput = null) {
-  const d = dateInput ? new Date(dateInput) : new Date(Date.now() + (6.5 * 3600 * 1000));
-  const validDate = isNaN(d.getTime()) ? new Date() : d;
-  let y = validDate.getFullYear();
-  if (validDate.getMonth() < 2) {
-    y -= 1;
-  }
-  return `${y}-${y + 1}`;
-}
-
-/**
- * 💡 100% Dynamic FY String Normalizer (Zero Hardcoded 2026-2027)
- * fy တန်ဖိုး မပါလာပါက လက်ရှိ မြန်မာစံတော်ချိန်ရက်စွဲအလိုက် စာရင်းနှစ်ကို အလိုအလျောက် တွက်ယူမည်
- */
-function normalizeFyStr(fy, dateInput = null) {
-  let s = fy ? String(fy).trim() : `FY ${getCurrentAcademicYear(dateInput)}`;
-  if (!s) s = `FY ${getCurrentAcademicYear(dateInput)}`;
-  if (!s.toUpperCase().startsWith('FY ')) {
-    s = 'FY ' + s;
-  }
-  return s;
-}
+import {
+  getCurrentAcademicYear,
+  normalizeFyStr,
+  generateVoucherNo,
+  generateFyNo,
+  recalculateLedgerBalances,
+  generateUniqueId
+} from './utils.js';
 
 /**
  * 💡 Calculate Fund Date (Join Date + 3 Years)
@@ -53,107 +27,6 @@ function calculateFundDate(joinDateStr) {
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
-}
-
-/**
- * ⚡ QUOTA-SHIELD: O(1) Differential D1 Window Function Recalculation Engine for Payroll
- * 💡 တန်ဖိုး တကယ်ပြောင်းလဲသွားသော Row များကိုသာ Update လုပ်သဖြင့်
- * D1 Row Writes အလဟဿ ကုန်ကျမှုကို အပြီးတိုင် ရပ်တန့်စေသည်
- */
-async function recalculateLedgerBalances(db, tableName, targetFy = null) {
-  if (!tableName) return;
-  try {
-    if (targetFy) {
-      const normFy = normalizeFyStr(targetFy);
-      const cleanFy = normFy.replace(/^FY\s*/i, '');
-
-      await db.prepare(`
-        WITH calculated AS (
-          SELECT id,
-                 ROW_NUMBER() OVER (
-                   ORDER BY date ASC, id ASC
-                 ) as calc_no,
-                 SUM(debit - credit) OVER (
-                   ORDER BY date ASC, id ASC 
-                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                 ) as calc_bal
-          FROM ${tableName}
-          WHERE fy = ? OR fy = ?
-        )
-        UPDATE ${tableName} 
-        SET no = calculated.calc_no,
-            balances = calculated.calc_bal
-        FROM calculated
-        WHERE ${tableName}.id = calculated.id
-          AND (
-            ${tableName}.no IS NOT calculated.calc_no OR 
-            ROUND(${tableName}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2)
-          );
-      `).bind(normFy, cleanFy).run();
-
-    } else {
-      await db.prepare(`
-        WITH calculated AS (
-          SELECT id,
-                 ROW_NUMBER() OVER (
-                   PARTITION BY fy
-                   ORDER BY date ASC, id ASC
-                 ) as calc_no,
-                 SUM(debit - credit) OVER (
-                   PARTITION BY fy
-                   ORDER BY date ASC, id ASC 
-                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                 ) as calc_bal
-          FROM ${tableName}
-        )
-        UPDATE ${tableName} 
-        SET no = calculated.calc_no,
-            balances = calculated.calc_bal
-        FROM calculated
-        WHERE ${tableName}.id = calculated.id
-          AND (
-            ${tableName}.no IS NOT calculated.calc_no OR 
-            ROUND(${tableName}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2)
-          );
-      `).run();
-    }
-  } catch (e) {
-    console.warn(`Running Balance Recalculation Warning for ${tableName}:`, e.message);
-  }
-}
-
-/**
- * 💡 Date-Based Voucher Number Generator (Format: SAL-080826-001)
- */
-async function generateVoucherNo(db, tableName, prefix, entryDate) {
-  let ddmmyy = "";
-  const parts = String(entryDate || '').split('-');
-  if (parts.length === 3) {
-    const y = parts[0].slice(-2);
-    ddmmyy = `${parts[2]}${parts[1]}${y}`;
-  } else {
-    const now = new Date(Date.now() + (6.5 * 3600 * 1000));
-    ddmmyy = `${String(now.getDate()).padStart(2, '0')}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getFullYear()).slice(-2)}`;
-  }
-
-  const pattern = `${prefix}-${ddmmyy}-%`;
-  const countRow = await db.prepare(
-    `SELECT COUNT(*) as cnt FROM ${tableName} WHERE vr_no LIKE ? OR date = ?`
-  ).bind(pattern, entryDate).first();
-
-  const seq = (countRow ? parseInt(countRow.cnt, 10) : 0) + 1;
-  return `${prefix}-${ddmmyy}-${String(seq).padStart(3, '0')}`;
-}
-
-/**
- * 💡 FY-Based Integer NO Generator
- */
-async function generateFyNo(db, tableName, fy) {
-  const normFy = normalizeFyStr(fy);
-  const lastNoRow = await db.prepare(
-    `SELECT MAX(CAST(no AS INTEGER)) as maxNo FROM ${tableName} WHERE fy = ? OR fy = ?`
-  ).bind(normFy, normFy.replace(/^FY\s*/i, '')).first();
-  return (lastNoRow && lastNoRow.maxNo ? parseInt(lastNoRow.maxNo, 10) : 0) + 1;
 }
 
 /**
@@ -298,13 +171,13 @@ export async function saveStaffEntry(db, userSession, body) {
     const table = isPartTime ? 'staff_parttime' : 'staff_fulltime';
     const prefix = isPartTime ? 'PID' : 'FID';
 
-    // 🔒 1. PRIVILEGE ESCALATION DEFENSE: Server-generated UUID only for new records
     const isPrivilegedAdmin = ['Owner', 'Admin'].includes(userSession?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport);
 
+    // ⚡ Refactored: Uses generateUniqueId from utils.js
     const uniqueid = (isMigration && body.uniqueId)
       ? String(body.uniqueId).trim()
-      : `STF_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      : generateUniqueId('STF');
 
     let staffIdNum = parseInt(body.staffId || body.id, 10);
     if (!staffIdNum || isNaN(staffIdNum)) {
@@ -368,7 +241,7 @@ export async function saveStaffEntry(db, userSession, body) {
 }
 
 /**
- * 💡 Update Staff Record (With Resigned Date Auto-Status Calculation)
+ * 💡 Update Staff Record
  */
 export async function updateStaffEntry(db, userSession, body) {
   try {
@@ -450,16 +323,18 @@ export async function deleteStaffEntry(db, userSession, body) {
 }
 
 /**
- * 💡 Save HR Payroll Entry (Phase 2.2: Atomic Batch with Staff Accruals Rollback Guard & March Boundary)
+ * 💡 Save HR Payroll Entry (With Atomic Batch Rollback Guard & March Boundary)
  */
 export async function saveHrPayrollForm(db, userSession, body) {
   try {
     const isPrivilegedAdmin = ['Owner', 'Admin'].includes(userSession?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport);
 
+    // ⚡ Refactored: Uses generateUniqueId from utils.js
     const uniqueid = (isMigration && body.uniqueId)
       ? String(body.uniqueId).trim()
-      : `SAL_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      : generateUniqueId('SAL');
+
     const dateStr = body.date || new Date().toISOString().split('T')[0];
     const category = body.category || 'Full Time Salary';
     const staffIdStr = String(body.staffId || '').trim();
@@ -470,11 +345,7 @@ export async function saveHrPayrollForm(db, userSession, body) {
     const fallbackMY = `${months[now.getMonth()]}-${String(now.getFullYear()).slice(-2)}`;
     const myVal = !isNaN(dObj.getTime()) ? `${months[dObj.getMonth()]}-${String(dObj.getFullYear()).slice(-2)}` : fallbackMY;
 
-    // 🎯 FIX (Phase 1.1): Transaction Date အလိုက် Dynamic FY ကို မတ်လအခြေခံ (Month < 2) ဖြင့် အလိုအလျောက် တွက်ချက်ခြင်း
-    let fyYear = dObj.getFullYear();
-    if (dObj.getMonth() < 2) fyYear -= 1;
-    const calculatedFy = `FY ${fyYear}-${fyYear + 1}`;
-    const fy = normalizeFyStr(body.fy || calculatedFy);
+    const fy = normalizeFyStr(body.fy, dateStr);
 
     const vrNoVal = body.vrNo || await generateVoucherNo(db, 'payroll', 'SAL', dateStr);
     const newNo = (isMigration && body.no) ? parseInt(body.no, 10) : await generateFyNo(db, 'payroll', fy);
@@ -497,7 +368,6 @@ export async function saveHrPayrollForm(db, userSession, body) {
       'HR Payroll Exp Book', userSession?.name || 'Admin', uniqueid
     );
 
-    // 🛡️ Phase 2.2: Accruals Rollback Guard via db.batch()
     const batchStatements = [expenseStmt];
 
     if (!isMigration && staffIdStr) {
@@ -508,29 +378,19 @@ export async function saveHrPayrollForm(db, userSession, body) {
         if (category === 'Full Time Salary') {
           const newUnpaidBonus = (parseFloat(staffRow.unpaid_bonus || 0)) + parseFloat(staffRow.bonus || 0);
           const newUnpaidFund = (parseFloat(staffRow.unpaid_fund || 0)) + parseFloat(staffRow.fund || 0);
-
-          batchStatements.push(
-            db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ?, unpaid_fund = ? WHERE id = ?`).bind(newUnpaidBonus, newUnpaidFund, staffRow.id)
-          );
+          batchStatements.push(db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ?, unpaid_fund = ? WHERE id = ?`).bind(newUnpaidBonus, newUnpaidFund, staffRow.id));
         } else if (category === 'Full Time Bonus') {
           const currentBonus = parseFloat(staffRow.unpaid_bonus || 0);
           const newUnpaidBonus = Math.max(0, currentBonus - creditVal);
-
-          batchStatements.push(
-            db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ? WHERE id = ?`).bind(newUnpaidBonus, staffRow.id)
-          );
+          batchStatements.push(db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ? WHERE id = ?`).bind(newUnpaidBonus, staffRow.id));
         } else if (category === 'Full Time Fund') {
           const currentFund = parseFloat(staffRow.unpaid_fund || 0);
           const newUnpaidFund = Math.max(0, currentFund - creditVal);
-
-          batchStatements.push(
-            db.prepare(`UPDATE staff_fulltime SET unpaid_fund = ? WHERE id = ?`).bind(newUnpaidFund, staffRow.id)
-          );
+          batchStatements.push(db.prepare(`UPDATE staff_fulltime SET unpaid_fund = ? WHERE id = ?`).bind(newUnpaidFund, staffRow.id));
         }
       }
     }
 
-    // Single Atomic Execution (One Fails -> All Rolled Back)
     await db.batch(batchStatements);
 
     // ⚡ Quota-Shield Recalculate
@@ -571,7 +431,7 @@ export async function getPayrollSettings(db, body) {
 }
 
 /**
- * 💡 Update Salary Grade Matrix Settings (Safe Upsert with Grade L support)
+ * 💡 Update Salary Grade Matrix Settings
  */
 export async function updatePayrollSettings(db, userSession, body) {
   try {
