@@ -2,7 +2,8 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - BANK & CASH BOOK CONTROLLER
  * File: js/bank-cash.js (Location: cashbook-frontend/js/bank-cash.js)
- * 💡 Features: Refactored with Global api.js for DRY Principle
+ * 💡 Features: Refactored with Global api.js for DRY Principle,
+ *              🎯 Auto-scaling Font Size & Header Labels update (MMK) exactly like Dashboard
  * ==============================================================================
  */
 
@@ -13,6 +14,51 @@ var bckActiveData = [];
 var currentSubBook = 'bank'; // 'bank' or 'cash'
 var searchTimeoutBck = null;
 var isBankCashSubmitting = false; // 💡 Double Submit Protection Flag
+
+/**
+ * 💡 Update Labels to include (MMK) automatically
+ */
+function updateBckKpiLabels() {
+  const labels = {
+    'bck-total-income': 'TOTAL INCOME (MMK)',
+    'bck-total-expense': 'TOTAL EXPENSE (MMK)',
+    'bck-balance': 'TOTAL BALANCES (MMK)'
+  };
+  
+  for (const [id, text] of Object.entries(labels)) {
+    const valueEl = document.getElementById(id);
+    if (valueEl) {
+      const parent = valueEl.parentElement;
+      if (parent) {
+        const labelEl = parent.querySelector('p'); 
+        if (labelEl) labelEl.textContent = text;
+      }
+    }
+  }
+}
+
+/**
+ * 💡 Auto-Scale Font Size to Prevent Truncation on Large Numbers
+ */
+function adjustBckKpiFontSizes() {
+  const kpiIds = ['bck-total-income', 'bck-total-expense', 'bck-balance', 'bck-entries-count'];
+  kpiIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    el.style.fontSize = '24px'; 
+    el.style.whiteSpace = 'nowrap';
+    
+    let currentSize = 24;
+    while (el.scrollWidth > el.clientWidth && currentSize > 12) {
+      currentSize--;
+      el.style.fontSize = currentSize + 'px';
+    }
+  });
+}
+
+// Ensure resizing works on window resize
+window.addEventListener('resize', adjustBckKpiFontSizes);
 
 /**
  * 💡 Strict Search Filter Function for Main Bank & Cash Books
@@ -91,7 +137,6 @@ async function loadBankCashKitData(isSilent, forceRefresh) {
       toggleLoading(true);
     }
 
-    // ⚡ Phase 3.2 Fix: Fetch full dataset (limit 2000) for cross-page search accuracy
     var res = await callApi('getBankCashData', {
       bookName: bookName,
       page: 1,
@@ -122,19 +167,21 @@ async function loadBankCashKitData(isSilent, forceRefresh) {
 }
 
 function renderStatsBankCashKit(stats) {
+  updateBckKpiLabels(); // Add (MMK) to titles
+
   var incTotal = document.getElementById('bck-total-income');
   var expTotal = document.getElementById('bck-total-expense');
   var balTotal = document.getElementById('bck-balance');
   var countTotal = document.getElementById('bck-entries-count');
 
+  // Removed trailing MMK from values
   if (incTotal) incTotal.textContent = Number(stats.totalIncome || 0).toLocaleString('en-US');
   if (expTotal) expTotal.textContent = Number(stats.totalExpense || 0).toLocaleString('en-US');
   if (balTotal) balTotal.textContent = Number(stats.balance || 0).toLocaleString('en-US');
   if (countTotal) countTotal.textContent = Number(bckTotalRows || bckActiveData.length || 0).toLocaleString('en-US');
   
-  if(typeof window.adjustKpiFontSizes === 'function') {
-      setTimeout(window.adjustKpiFontSizes, 50);
-  }
+  // Trigger Auto Scale
+  setTimeout(adjustBckKpiFontSizes, 50);
 }
 
 /**
@@ -279,7 +326,6 @@ function populateDropdownsBCK() {
       '<option value="Cash" ' + (currentSubBook === 'cash' ? 'selected' : '') + '>Cash</option>';
   }
 
-  // 💡 SELF-TRANSFER PREVENT: Filter out active book
   if (transferSelect) {
     var allBooks = [
       { name: "Main Bank Book", key: "bank" },
@@ -296,9 +342,6 @@ function populateDropdownsBCK() {
   }
 }
 
-/**
- * 💡 TRANSFER AUTO-DESCRIPTION ENGINE
- */
 function onCategoryChangeBCK() {
   autoFillTransferDescriptionBCK();
 }
@@ -351,7 +394,6 @@ async function saveBankCashKitForm(e) {
 
     if (res && res.success) {
       if (typeof showToast === 'function') showToast("SUCCESS", "စာရင်း သိမ်းဆည်းမှု အောင်မြင်ပါသည်။");
-      // ⚡ Phase 3.1: Wipe in-memory cache to guarantee real-time cross-book sync
       if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
       await loadBankCashKitData(true, true);
     } else {
@@ -365,9 +407,6 @@ async function saveBankCashKitForm(e) {
   }
 }
 
-/**
- * 💡 Edit Entry (Dropdown Overwrite Fixed)
- */
 function editBankCashKitEntry(uniqueId) {
   var row = bckActiveData.find(function(item) { return item.uniqueId === uniqueId; });
   if (!row) {
@@ -406,9 +445,6 @@ function editBankCashKitEntry(uniqueId) {
   if (titleEl) titleEl.innerText = "Edit Entry";
 }
 
-/**
- * 💡 Delete Entry
- */
 async function deleteBankCashKitEntry(uniqueId) {
   if (!confirm("ဤ စာရင်းအား အပြီးတိုင် ဖျက်သိမ်းလိုပါသလား။")) {
     return;
@@ -515,3 +551,5 @@ window.changePageBankCashKit = changePageBankCashKit;
 window.exportToCSVBankCashKit = exportToCSVBankCashKit;
 window.onCategoryChangeBCK = onCategoryChangeBCK;
 window.onTransferTargetChangeBCK = onTransferTargetChangeBCK;
+window.updateBckKpiLabels = updateBckKpiLabels;
+window.adjustBckKpiFontSizes = adjustBckKpiFontSizes;
