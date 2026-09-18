@@ -1,17 +1,18 @@
 /**
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - HOME DASHBOARD CONTROLLER
- * File: js/dashboard.js 
- * 💡 Features: Active FY Scoped Analytics, Daily Balances, Liabilities, Receivables,
- *              and Gender Demographic Breakdown (Male / Female / Total)
+ * File: js/dashboard.js (Location: cashbook-frontend/js/dashboard.js)
+ * 💡 Features: Refactored with Global api.js for DRY Principle
+ * ==============================================================================
  */
 
 function formatMoney(val) {
-  const num = typeof window.cleanNumber === 'function' ? window.cleanNumber(val) : Number(val) || 0;
+  const num = window.cleanNumber ? window.cleanNumber(val) : Number(val) || 0;
   return num.toLocaleString('en-US');
 }
 
 function formatNumber(val) {
-  const num = typeof window.cleanNumber === 'function' ? window.cleanNumber(val) : Number(val) || 0;
+  const num = window.cleanNumber ? window.cleanNumber(val) : Number(val) || 0;
   return num.toLocaleString('en-US');
 }
 
