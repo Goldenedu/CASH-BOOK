@@ -2,21 +2,14 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - DASHBOARD HANDLER (D1 DATABASE)
  * File: handlers-dashboard.js
- * 💡 Features: Strict Category-Based Receivables (Zero Description Pollution / No Admin Exp Mix-ups),
- *              Resigned Staff Filter (Excludes resigned staff from Active Staff Demographics),
- *              Full 17-Table System Counter (12 Transaction Books + 5 Master Lists & Inventories),
- *              Active FY Scoped Precision Analytics, Daily Balances, Liabilities & Precision Demographics Engine,
- *              ⚡ PERF #2 FIXED: 37 Parallelized Fast Queries via Promise.all (100ms Sub-second Load Time),
- *              🛡️ Enhanced Crash-Proof SQL Helper Wrappers & Refined Myanmar Gender Auto-Detection
+ * 💡 Features: Refactored with utils.js for DRY Principle & Gender Detection
+ *              Strict Category-Based Receivables, Resigned Staff Filter,
+ *              Full 17-Table System Counter, Active FY Scoped Analytics,
+ *              ⚡ PERF: 37 Parallelized Fast Queries via Promise.all
  * ==============================================================================
  */
 
-function normalizeFyStr(fy) {
-  if (!fy) return '2026-2027';
-  let s = String(fy).trim();
-  s = s.replace(/^FY\s*/i, '');
-  return s;
-}
+import { normalizeFyClean, autoDetectGender } from './utils.js';
 
 /**
  * 💡 Crash-Proof First Number SQL Helper (Handles 'total', 'bal', or dynamic first column)
@@ -31,6 +24,7 @@ async function safeFirstNum(db, sql, params = []) {
     const num = parseFloat(val);
     return isNaN(num) ? 0 : num;
   } catch (e) {
+    console.error("[Dashboard] safeFirstNum Error:", e.message);
     return 0;
   }
 }
@@ -48,6 +42,7 @@ async function safeCount(db, sql, params = []) {
     const num = parseInt(val, 10);
     return isNaN(num) ? 0 : num;
   } catch (e) {
+    console.error("[Dashboard] safeCount Error:", e.message);
     return 0;
   }
 }
@@ -62,12 +57,13 @@ async function safeAllRows(db, sql, params = []) {
     const res = await bound.all();
     return res && res.results ? res.results : [];
   } catch (e) {
+    console.error("[Dashboard] safeAllRows Error:", e.message);
     return [];
   }
 }
 
 /**
- * 💡 Precision Gender Counter Engine (100% Accurate Male vs Female with Ethnic Prefix Support)
+ * 💡 Precision Gender Counter Engine (Powered by utils.js autoDetectGender)
  */
 function parseGenderCount(rows = []) {
   let m = 0, f = 0;
@@ -85,14 +81,9 @@ function parseGenderCount(rows = []) {
     } else if (g === 'female' || g === 'f' || g === 'မ' || g.startsWith('fem')) {
       f++;
     } else {
-      // ၂။ Gender ကော်လံ လွတ်နေပါက နာမည်ရှေ့စာလုံးဖြင့် ခွဲခြားခြင်း (မြန်မာ/တိုင်းရင်းသား အမည်များပါ ထည့်သွင်းစစ်ဆေးသည်)
-      if (cleanName.startsWith('မောင်') || cleanName.startsWith('ကို') || cleanName.startsWith('ဦး') ||
-          cleanName.startsWith('မင်း') || /^(Mg|Ko|U|Min)\b/i.test(cleanName)) {
-        m++;
-      } else if (cleanName.startsWith('မေ') || cleanName.startsWith('ဒေါ်') || cleanName.startsWith('နန်း') || cleanName.startsWith('နော်') ||
-                 /^(Ma|Daw|May|Nang|Naw)\b/i.test(cleanName)) {
-        f++;
-      } else if (cleanName.startsWith('မ') && !cleanName.startsWith('မောင်') && !cleanName.startsWith('မင်း')) {
+      // ၂။ Gender ကော်လံ လွတ်နေပါက utils.js မှ Auto Detect စနစ်ကို အသုံးပြုခြင်း
+      const detectedGender = autoDetectGender(cleanName);
+      if (detectedGender === 'Female') {
         f++;
       } else {
         m++;
@@ -109,7 +100,7 @@ function parseGenderCount(rows = []) {
  */
 export async function getDashboardData(db, body) {
   try {
-    const activeFy = normalizeFyStr(body.fy || '2026-2027');
+    const activeFy = normalizeFyClean(body.fy || '2026-2027');
     const fyPrefixed = `FY ${activeFy}`;
 
     // ----------------------------------------------------
