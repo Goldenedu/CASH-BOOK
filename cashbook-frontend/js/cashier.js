@@ -7,8 +7,8 @@
  *              🛡️ Universal CSV Formula Injection Sanitizer (safeCsvCell),
  *              🎯 Context-Aware CSV Exporter (Today Income vs Cashier Sub-Books),
  *              🔢 Comma-Safe Numeric Parser & Double-Submit Lock Engine,
- *              🎯 BUG FIX: Resilient Local escapeHtml / escapeJsAttr Callbacks,
- *              🎯 BUG FIX: Cashier Categories now exactly match Main Books via getCategoryList()
+ *              🎯 Bug #2 Fixed (Resilient Local escapeHtml / escapeJsAttr Callbacks),
+ *              🎯 Category Parity: Cashier Categories now 100% match Main Books (Office, Kitchen, Payroll)
  * ==============================================================================
  */
 
@@ -454,10 +454,9 @@ function changePageCashier(delta) {
 }
 
 /**
- * 💡 Populate Dropdowns from config (Mapped to match Main Books directly)
+ * 💡 Populate Dropdowns from config (🎯 100% Mapped to EXACTLY match Main Books)
  */
 function populateDropdownsCashier() {
-  // 💡 Map Cashier Sub-Books exactly to Main Book Configuration Keys
   const mainBookMap = {
     'CABank': 'bankBook',
     'CACash': 'cashBook',
@@ -467,14 +466,25 @@ function populateDropdownsCashier() {
   };
 
   const targetDefKey = mainBookMap[currentCashierSubBook] || 'cashBook';
-  const def = (window.DROPDOWNS && window.DROPDOWNS[targetDefKey]) || window.DROPDOWNS?.cashBook || {};
+  const def = (window.DROPDOWNS && window.DROPDOWNS[targetDefKey]) || {};
 
   const catSelect = document.getElementById('ca-category');
   if (catSelect) {
     if (def.category && def.category.length > 0) {
-      catSelect.innerHTML = def.category.map(c => `<option value="${c}">${c}</option>`).join('');
+      catSelect.innerHTML = def.category.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
     } else {
-      catSelect.innerHTML = '<option value="Non">Non</option><option value="Income">Income</option><option value="Expense">Expense</option>';
+      // 💡 100% Exact Parity Fallbacks for Main Books
+      let fallbacks = [];
+      if (currentCashierSubBook === 'CAOffice') {
+        fallbacks = ["Admin Exp", "Vehicle Related Exp", "Assets Materials", "Donation & Social", "HR Staff Benefit", "Construction", "Student Refund", "Drawing Account 1", "Drawing Account 2", "Advance Capital Snack Shop", "Ferry Payment", "Advance Uniform", "Liabilities", "Opening", "Closing", "Transfer"];
+      } else if (currentCashierSubBook === 'CAKitchen') {
+        fallbacks = ["Rice & Oil", "Fish, Meat & Eggs", "Beans & Vegetables", "Others", "Home 1 Exp", "Home 2 Exp", "Liabilities", "Opening", "Closing", "Transfer"];
+      } else if (currentCashierSubBook === 'CAPayroll') {
+        fallbacks = ["Full Time Salary", "Part Time Salary", "Full Time Bonus", "Part Time Bonus", "Full Time Fund", "Part Time Fund", "Opening", "Closing", "Transfer"];
+      } else {
+        fallbacks = ["Opening", "Income", "Expense", "Transfer", "Closing"];
+      }
+      catSelect.innerHTML = fallbacks.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
     }
   }
 
@@ -594,7 +604,6 @@ function editCashierEntry(uniqueId) {
   }
 
   openAddModalCashier();
-  // Call populate again just in case, to ensure options are mapped
   populateDropdownsCashier();
 
   const uidEl = document.getElementById('ca-uniqueId');
