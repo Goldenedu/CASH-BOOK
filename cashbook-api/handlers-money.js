@@ -3,6 +3,7 @@
  * GOLDEN ERP SYSTEM - STUDENT MONEY LEDGER & WALLET HANDLER (CLOUDFLARE D1)
  * File: handlers-money.js (Location: cashbook-api/handlers-money.js)
  * 💡 Features: Refactored with utils.js for DRY Principle
+ *              🚀 OPTIMIZED: Avoided SELECT *, switched to COUNT(id) for faster scan
  * ==============================================================================
  */
 
@@ -15,11 +16,6 @@ import {
 
 /**
  * ⚡ QUOTA-SHIELD: O(1) Single-Pass D1 Window Function Recalculation Engine
- * 1. ROW_NUMBER() OVER (ORDER BY date ASC, id ASC) -> စာအုပ်၏ စဉ်နံပါတ် (no)
- * 2. SUM(debit - credit) OVER (PARTITION BY student_id ORDER BY date ASC, id ASC) 
- *    -> ကျောင်းသားတစ်ဦးချင်းစီ၏ ကိုယ်ပိုင် လက်ကျန်ငွေ (Wallet Balance)
- * 3. Quota-Shield Condition: တန်ဖိုး တကယ်ပြောင်းလဲသွားသော Row များကိုသာ Update လုပ်သဖြင့်
- *    D1 Row Writes ကုန်ကျမှုကို အပြီးတိုင် ရပ်တန့်စေသည်။
  */
 async function recalculateStudentMoneyBalances(db, targetFy = null) {
   try {
@@ -54,7 +50,6 @@ async function recalculateStudentMoneyBalances(db, targetFy = null) {
       `).bind(cleanFy, fyPrefixed, cleanFy).run();
 
     } else {
-      // FY သီးသန့်မပါပါက FY အားလုံးကို PARTITION BY fy ဖြင့် Sequential NO စီပြီး ကျောင်းသားအလိုက် Balance တွက်ခြင်း
       await db.prepare(`
         WITH calculated AS (
           SELECT id,
@@ -101,7 +96,7 @@ export async function getStudentMoneyData(db, body) {
     let params = [activeFy, `FY ${activeFy}`];
 
     if (studentIdFilter > 0) {
-      whereClauses.push(`(student_id = ? OR id = ?)`);
+      whereClauses.push(`(student_id = ? OR id = ? )`);
       params.push(studentIdFilter, studentIdFilter);
     }
 
@@ -126,11 +121,14 @@ export async function getStudentMoneyData(db, body) {
     const totalExpense = parseFloat(statsResult.totalExpense || 0);
     const balance = totalIncome - totalExpense;
 
-    const countRow = await db.prepare(`SELECT COUNT(*) as count FROM student_money ${whereSql}`).bind(...params).first();
+    // 🚀 OPTIMIZATION: COUNT(id) for faster scan
+    const countRow = await db.prepare(`SELECT COUNT(id) as count FROM student_money ${whereSql}`).bind(...params).first();
     const totalRows = countRow ? countRow.count : 0;
 
+    // 🚀 OPTIMIZATION: Explicit columns
     const dataQuery = `
-      SELECT * FROM student_money 
+      SELECT id, no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, uniqueid 
+      FROM student_money 
       ${whereSql} 
       ORDER BY id DESC 
       LIMIT ? OFFSET ?
@@ -192,6 +190,7 @@ export async function getStudentMoneySummary(db, body) {
 
     const whereSql = `WHERE ${whereClauses.join(' AND ')}`;
 
+    // 🚀 OPTIMIZATION: COUNT(student_id) instead of COUNT(*)
     const query = `
       SELECT 
         student_id as studentId,
@@ -201,7 +200,7 @@ export async function getStudentMoneySummary(db, body) {
         COALESCE(SUM(debit), 0) as totalDeposit,
         COALESCE(SUM(credit), 0) as totalWithdraw,
         COALESCE(SUM(debit - credit), 0) as netBalance,
-        COUNT(*) as transactionCount,
+        COUNT(student_id) as transactionCount,
         MAX(date) as lastDate
       FROM student_money
       ${whereSql}
@@ -271,12 +270,10 @@ export async function saveStudentMoneyEntry(db, userSession, body) {
     const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(userSession?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport);
 
-    // ⚡ Refactored: Uses generateUniqueId from utils.js
     const uniqueid = (isMigration && body.uniqueId)
       ? String(body.uniqueId).trim()
       : generateUniqueId('STM');
 
-    // 🎯 Transaction Date & Myanmar Timezone Safety
     const entryDate = getMyanmarDateString(body.date);
     const d = new Date(entryDate);
     let fyYear = d.getFullYear();
@@ -366,7 +363,7 @@ export async function updateStudentMoneyEntry(db, userSession, body) {
     const uniqueid = body.uniqueId || body.uniqueid;
     if (!uniqueid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
 
-    const existing = await db.prepare("SELECT * FROM student_money WHERE uniqueid = ?").bind(uniqueid).first();
+    const existing = await db.prepare("SELECT fy, date, student_id, fyid FROM student_money WHERE uniqueid = ?").bind(uniqueid).first();
     if (!existing) return { success: false, message: "ပြင်ဆင်မည့် ကျောင်းသားငွေစာရင်း ရှာမတွေ့ပါ။" };
 
     const oldFy = existing?.fy ? normalizeFyStr(existing.fy).replace(/^FY\s*/i, '') : null;
