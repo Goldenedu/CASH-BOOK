@@ -3,7 +3,8 @@
  * GOLDEN ERP SYSTEM - MAIN INCOME BOOK HANDLER (CLOUDFLARE D1)
  * File: handlers-income.js (Location: cashbook-api/handlers-income.js)
  * 💡 Features: Refactored with utils.js for DRY Principle,
- *              🚀 OPTIMIZED: Aggregations natively in SQL (SUM/COUNT), Avoided SELECT *
+ *              🚀 OPTIMIZED: Aggregations natively in SQL (SUM/COUNT), 
+ *              🎯 EXPLICIT SELECTS: Safely avoided SELECT * with exact DB columns
  * ==============================================================================
  */
 
@@ -308,7 +309,7 @@ export async function getIncomeData(db, body) {
 
     const activeFy = normalizeFyStr(body.fy || `FY ${getCurrentAcademicYear()}`);
 
-    // 🚀 OPTIMIZATION: Row Read Reduced drastically using direct SQL aggregation
+    // 🚀 OPTIMIZATION: SQL-side Aggregate Sums
     let statsResult;
     if (body.fy && body.fy !== 'all') {
       statsResult = await db.prepare(`
@@ -348,13 +349,13 @@ export async function getIncomeData(db, body) {
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
     
-    // 🚀 OPTIMIZATION: Count Query directly from SQL
+    // 🚀 OPTIMIZATION: COUNT(id) for faster scan
     const countRow = await db.prepare(`SELECT COUNT(id) as count FROM income ${whereSql}`).bind(...params).first();
     const totalRows = countRow ? countRow.count : 0;
 
-    // 🚀 OPTIMIZATION: Avoid SELECT * and specify required columns
+    // 🚀 OPTIMIZATION: Strict Exact Match Schema Columns only (Prevents 'no such column' error)
     const dataQuery = `
-      SELECT id, student_id, no, effect_date, effDate, date, fy, fyid, fyid_name, fyidName, class, category, account_name, accountName, method, debit, credit, aut_amount, autAmount, promo, my, vr_no, vrNo, remark, uniqueid, uniqueId, is_locked, isLocked
+      SELECT id, no, effect_date, date, fy, student_id, fyid, fyid_name, class, category, account_name, method, debit, credit, aut_amount, promo, my, vr_no, remark, uniqueid, is_locked 
       FROM income 
       ${whereSql} 
       ORDER BY id DESC 
@@ -363,11 +364,11 @@ export async function getIncomeData(db, body) {
     const rowsRes = await db.prepare(dataQuery).bind(...params, limit, offset).all();
     const rawRows = rowsRes.results || [];
 
+    // Map Exact Database Column names back to Front-end JSON format safely
     const formattedRows = rawRows.map(row => {
-      const uid = String(row.uniqueid || row.uniqueId || '');
+      const uid = String(row.uniqueid || '');
       const isAutoLocked = Boolean(
         row.is_locked || 
-        row.isLocked || 
         uid.startsWith('INCMAIN_') || 
         uid.startsWith('INCCASHIER_') || 
         uid.startsWith('DAILY_INC_')
@@ -376,21 +377,21 @@ export async function getIncomeData(db, body) {
       return {
         id: parseCleanIntId(row.student_id || row.id),
         no: Math.floor(parseFloat(row.no || row.id || 1)),
-        effDate: row.effect_date || row.effDate || row.date || '',
+        effDate: row.effect_date || row.date || '',
         date: row.date || '',
         fy: normalizeFyStr(row.fy || activeFy),
         fyid: sanitizeFyidStr(row.fyid || ''),
-        fyidName: row.fyid_name || row.fyidName || '',
+        fyidName: row.fyid_name || '',
         class: row.class || '',
         category: row.category || '',
-        accountName: row.account_name || row.accountName || '',
+        accountName: row.account_name || '',
         method: row.method || 'Cash',
         debit: parseFloat(row.debit || 0),
         credit: parseFloat(row.credit || 0),
-        autAmount: parseFloat(row.aut_amount !== undefined ? row.aut_amount : (row.autAmount || 0)),
+        autAmount: parseFloat(row.aut_amount || 0),
         promo: row.promo || '',
         my: row.my || '',
-        vrNo: row.vr_no || row.vrNo || '',
+        vrNo: row.vr_no || '',
         remark: row.remark || '',
         uniqueId: uid || `INC_${row.id}`,
         isLocked: isAutoLocked
@@ -422,7 +423,6 @@ export async function saveIncomeEntry(db, session, body) {
   const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(session?.role || '');
   const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport || body.skipAutoPost);
   
-  // ⚡ Refactored: Uses generateUniqueId from utils.js
   const uniqueid = (isMigration && body.uniqueId)
     ? String(body.uniqueId).trim()
     : generateUniqueId('INC');
@@ -581,7 +581,6 @@ export async function updateIncomeEntry(db, session, body) {
     const entryDate = getMyanmarDateString(body.date || existing.date);
     const createdBy = session?.name || 'Admin';
 
-    // 🎯 CRITICAL BUG FIX (Phase 2.1): Formally declare normFy and method in scope
     const normFy = normalizeFyStr(body.fy || calculateAcademicFyFromDate(entryDate));
     const method = body.method || existing.method || 'Cash';
 
@@ -648,7 +647,7 @@ export async function deleteIncomeEntry(db, session, body) {
 
     return {
       success: true,
-      message: "ဝင်ငွေစာရင်း အောင်မြင်စွာ ဖျက်သိမ်းပြီးပါပြီ။"
+      message: "ဝင်ငွေစာရင်း အောင်မြင်စွာ ဖျက်သိမ်းပြီးပါပြီ。"
     };
   } catch (err) {
     console.error("Error in deleteIncomeEntry handler:", err);
