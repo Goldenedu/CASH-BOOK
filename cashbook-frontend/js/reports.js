@@ -74,9 +74,6 @@ function formatNumWithCommas(val) {
   return num.toLocaleString('en-US');
 }
 
-/**
- * Clean decimal formatted IDs like "1.0" -> "1"
- */
 function cleanIntegerStr(val) {
   if (val === null || val === undefined) return '-';
   const str = String(val).trim();
@@ -230,9 +227,6 @@ function onSearchInputReportFinancial() {
   });
 }
 
-/**
- * 💡 CSV Exporter for Financial Statement (Formula Injection Protected)
- */
 function exportToCSVReportFinancial() {
   if (!gFinancialReportRawData) {
     safeShowToast('ထုတ်ယူရန် ဘဏ္ဍာရေး အစီရင်ခံစာ အချက်အလက် မရှိပါ။', 'warning');
@@ -282,7 +276,6 @@ async function loadReportIncomeData(forceRefresh = false, isPageChange = false) 
     const unpaidFilterEl = document.getElementById('report-income-unpaid-filter');
     
     let unpaidMonthLabel = '';
-    // Unpaid Filter မှ ရွေးချယ်ထားသော index ကို မူတည်ပြီး Header (လအမည် e.g. Sep-26) ကို ရှာဖွေခြင်း
     if (unpaidFilterEl && unpaidFilterEl.value) {
       const idx = parseInt(unpaidFilterEl.value, 10);
       if (gIncomeDetailRawData && gIncomeDetailRawData.headers) {
@@ -291,12 +284,12 @@ async function loadReportIncomeData(forceRefresh = false, isPageChange = false) 
     }
 
     if (!isPageChange) {
-      gIncomeDetailPage = 1; // ရှာဖွေမှု အသစ်လုပ်တိုင်း Page 1 သို့ ပြန်သွားမည်
+      gIncomeDetailPage = 1; 
     }
 
     safeShowLoading(true);
 
-    // ⚡ FIX: Server-Side သို့ page, limit, searchVal နှင့် unpaidMonthLabel များကို ပို့ဆောင်ပေးခြင်း
+    // ⚡ FIX: Fetching Data from Server with precise Pagination & Filters
     const res = await callApi('getIncomeDetailReportData', { 
       fy: fyVal,
       page: gIncomeDetailPage,
@@ -334,7 +327,6 @@ function populateIncomeUnpaidFilter() {
   
   let html = '<option value="">-- Show All Students --</option>';
   
-  // Matrix Header များမှ လအမည်များကို ဆွဲထုတ်ခြင်း (Index 14 မှ စတင်လေ့ရှိသည်)
   for (let i = 14; i < headers.length - 1; i++) {
     html += `<option value="${i}">Unpaid for ${headers[i]}</option>`;
   }
@@ -346,12 +338,12 @@ function populateIncomeUnpaidFilter() {
 function onSearchInputReportIncome() {
   clearTimeout(searchTimeoutReportIncome);
   searchTimeoutReportIncome = setTimeout(() => {
-    loadReportIncomeData(true, false); // Fetch from server
+    loadReportIncomeData(true, false); 
   }, 500);
 }
 
 function onFilterChangeReportIncome() {
-  loadReportIncomeData(true, false); // Fetch from server
+  loadReportIncomeData(true, false);
 }
 
 function changePageReportIncome(delta) {
@@ -362,7 +354,7 @@ function changePageReportIncome(delta) {
   const newPage = gIncomeDetailPage + delta;
   if (newPage >= 1 && newPage <= totalPages) {
     gIncomeDetailPage = newPage;
-    loadReportIncomeData(true, true); // ⚡ Fetch exact page from server
+    loadReportIncomeData(true, true); 
   }
 }
 
@@ -374,12 +366,12 @@ function renderIncomeDetailMatrixTable() {
   const rawData = gIncomeDetailRawData.data || [];
   const grandTotalRow = gIncomeDetailRawData.grandTotalRow || [];
   
-  // ⚡ FIX: Server မှ ပို့ပေးလိုက်သော Total Rows အစစ်အမှန်ကို အသုံးပြုခြင်း
+  // ⚡ FIX: Use Genuine Total Rows from Server Response
   const totalRows = gIncomeDetailRawData.totalRows || 0;
   
   // Pagination Info Update
   const startIndex = (gIncomeDetailPage - 1) * gIncomeDetailLimit;
-  const endIndex = Math.min(startIndex + gIncomeDetailLimit, totalRows);
+  const endIndex = Math.min(startIndex + rawData.length, totalRows); 
   
   const infoEl = document.getElementById('report-income-pagination-info');
   if (infoEl) {
@@ -398,6 +390,7 @@ function renderIncomeDetailMatrixTable() {
   });
   headHtml += '</tr></thead>';
 
+  // ⚡ FIX: Render directly without client-side filtering/sorting
   let bodyHtml = '<tbody class="divide-y divide-slate-800/40 text-xs text-slate-300">';
   if (rawData.length === 0) {
     bodyHtml += `<tr><td colspan="${headers.length}" class="text-center py-8 text-slate-500 font-bold">ရှာဖွေမှုနှင့် ကိုက်ညီသော ဝင်ငွေ အသေးစိတ် မရှိပါ။</td></tr>`;
@@ -406,7 +399,6 @@ function renderIncomeDetailMatrixTable() {
       bodyHtml += '<tr class="hover:bg-slate-800/30 transition">';
       row.forEach((cell, i) => {
         if (i === 0) {
-          // NO စဉ်နံပါတ်ကို Server မှ တွက်ချက်ပေးလိုက်သည့်အတိုင်း ပြသမည်
           bodyHtml += `<td class="px-3 py-2 border border-slate-800/60 font-bold text-center text-slate-400">${cell}</td>`;
         } else if (i === 2) {
           bodyHtml += `<td class="px-3 py-2 border border-slate-800/60 font-mono font-bold text-slate-200">${window.escapeHtml(cleanIntegerStr(cell))}</td>`;
@@ -433,6 +425,7 @@ function renderIncomeDetailMatrixTable() {
   bodyHtml += '</tbody>';
 
   let footHtml = '';
+  // Only show grand total if we are on the first page and no filters are applied, or simply show "Page Total"
   if (grandTotalRow && grandTotalRow.length > 0 && rawData.length > 0) {
     footHtml += '<tfoot><tr class="bg-indigo-500/10 font-black text-indigo-300 border-t-2 border-indigo-500/40 text-xs">';
     grandTotalRow.forEach((cell, i) => {
@@ -469,196 +462,7 @@ function exportToCSVReportIncome() {
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  // 💡 Export name updated to reflect current view pagination
   link.download = `Income_Detail_Page_${gIncomeDetailPage}_${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-}
-
-/**
- * 💡 Populate the Unpaid Month Filter Dropdown dynamically based on Matrix Headers
- */
-function populateIncomeUnpaidFilter() {
-  const filterEl = document.getElementById('report-income-unpaid-filter');
-  if (!filterEl || !gIncomeDetailRawData || !gIncomeDetailRawData.headers) return;
-
-  const headers = gIncomeDetailRawData.headers;
-  const currentVal = filterEl.value;
-  
-  let html = '<option value="">-- Show All Students --</option>';
-  
-  // Months columns usually start at index 14 and end before the "TOTAL" column
-  for (let i = 14; i < headers.length - 1; i++) {
-    html += `<option value="${i}">Unpaid for ${headers[i]}</option>`;
-  }
-  
-  filterEl.innerHTML = html;
-  filterEl.value = currentVal || "";
-}
-
-function onFilterChangeReportIncome() {
-  gIncomeDetailPage = 1; // Reset to page 1 on search or filter
-  renderIncomeDetailMatrixTable();
-}
-
-function changePageReportIncome(delta) {
-  gIncomeDetailPage += delta;
-  renderIncomeDetailMatrixTable();
-}
-
-function renderIncomeDetailMatrixTable() {
-  const table = document.getElementById('report-income-main-table');
-  if (!table || !gIncomeDetailRawData) return;
-
-  const headers = gIncomeDetailRawData.headers || [];
-  const rawData = gIncomeDetailRawData.data || [];
-  const grandTotalRow = gIncomeDetailRawData.grandTotalRow || [];
-
-  const searchVal = (document.getElementById('report-income-search')?.value || '').toLowerCase().trim();
-  const unpaidIdx = parseInt(document.getElementById('report-income-unpaid-filter')?.value, 10);
-
-  // 💡 1. Apply Search and Unpaid Filter
-  let filteredData = rawData;
-
-  if (searchVal) {
-    filteredData = filteredData.filter(row =>
-      Array.isArray(row) && row.some(cell => String(cell || '').toLowerCase().includes(searchVal))
-    );
-  }
-
-  // Filter for Active Students with 0 amount in the selected month
-  if (!isNaN(unpaidIdx) && unpaidIdx >= 14) {
-    filteredData = filteredData.filter(row => {
-      const status = String(row[8] || '').toLowerCase(); // Index 8 is Status
-      const monthPaidAmt = parseFloat(row[unpaidIdx]) || 0;
-      return status === 'active' && monthPaidAmt === 0;
-    });
-  }
-
-  // 💡 2. Apply Sorting (By Grade/Class sequentially, then by Name)
-  const classOrder = ["Pre School", "KG Student", "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6", "Grade 7", "Grade 8", "Grade 9", "Grade 10", "Grade 11", "Grade 12"];
-  
-  filteredData.sort((a, b) => {
-    const classA = String(a[9] || ''); // Index 9 is Class
-    const classB = String(b[9] || '');
-    let idxA = classOrder.indexOf(classA);
-    let idxB = classOrder.indexOf(classB);
-    
-    if (idxA === -1) idxA = 99; // Put unknown classes at the bottom
-    if (idxB === -1) idxB = 99;
-    
-    if (idxA === idxB) {
-      return String(a[4] || '').localeCompare(String(b[4] || '')); // Sort by Name if classes match
-    }
-    return idxA - idxB;
-  });
-
-  // 💡 3. Client-side Pagination (Limit to 50 rows per page to save RAM)
-  const totalEntries = filteredData.length;
-  const totalPages = Math.ceil(totalEntries / gIncomeDetailLimit) || 1;
-  if (gIncomeDetailPage > totalPages) gIncomeDetailPage = totalPages;
-
-  const startIndex = (gIncomeDetailPage - 1) * gIncomeDetailLimit;
-  const endIndex = Math.min(startIndex + gIncomeDetailLimit, totalEntries);
-  const pageItems = filteredData.slice(startIndex, endIndex);
-
-  // Update Pagination UI
-  const infoEl = document.getElementById('report-income-pagination-info');
-  if (infoEl) infoEl.innerHTML = `Showing <span class="text-sky-400 font-extrabold">${totalEntries === 0 ? 0 : startIndex + 1}</span> to <span class="text-sky-400 font-extrabold">${endIndex}</span> of <span class="text-sky-400 font-extrabold">${totalEntries}</span> entries`;
-  
-  const btnPrev = document.getElementById('report-income-btn-prev');
-  if (btnPrev) btnPrev.disabled = (gIncomeDetailPage <= 1);
-  const btnNext = document.getElementById('report-income-btn-next');
-  if (btnNext) btnNext.disabled = (endIndex >= totalEntries);
-
-  // 💡 4. Render Headers
-  let headHtml = '<thead><tr class="bg-[#0e172a] text-slate-300 text-xs uppercase font-extrabold border-b border-slate-800">';
-  headers.forEach((h, i) => {
-    const alignClass = (i >= 10) ? 'text-right' : 'text-left';
-    headHtml += `<th class="px-3 py-3 border border-slate-800 ${alignClass}">${window.escapeHtml(h || '')}</th>`;
-  });
-  headHtml += '</tr></thead>';
-
-  // 💡 5. Render Body
-  let bodyHtml = '<tbody class="divide-y divide-slate-800/40 text-xs text-slate-300">';
-  if (pageItems.length === 0) {
-    bodyHtml += `<tr><td colspan="${headers.length}" class="text-center py-8 text-slate-500 font-bold">ရှာဖွေမှုနှင့် ကိုက်ညီသော ဝင်ငွေ အသေးစိတ် မရှိပါ။</td></tr>`;
-  } else {
-    pageItems.forEach((row, rowIndex) => {
-      bodyHtml += '<tr class="hover:bg-slate-800/30 transition">';
-      row.forEach((cell, i) => {
-        if (i === 0) {
-          // Replace original NO with sequential NO for current view
-          bodyHtml += `<td class="px-3 py-2 border border-slate-800/60 font-bold text-center text-slate-400">${startIndex + rowIndex + 1}</td>`;
-        } else if (i === 2) {
-          bodyHtml += `<td class="px-3 py-2 border border-slate-800/60 font-mono font-bold text-slate-200">${window.escapeHtml(cleanIntegerStr(cell))}</td>`;
-        } else if (i === 5) {
-          let promoBadge = 'bg-slate-800 text-slate-400 border-slate-700';
-          const pStr = String(cell || '').toLowerCase();
-          if (pStr.includes('pro')) promoBadge = 'bg-teal-500/10 text-teal-300 border-teal-500/20 font-bold';
-          else if (pStr.includes('scholar')) promoBadge = 'bg-amber-500/10 text-amber-300 border-amber-500/20 font-bold';
-          bodyHtml += `<td class="px-3 py-2 border border-slate-800/60"><span class="px-2 py-0.5 rounded text-[10px] border ${promoBadge}">${window.escapeHtml(cell || '-')}</span></td>`;
-        } else if (i === 8) {
-          const isAct = String(cell || '').toLowerCase() === 'active';
-          const statBadge = isAct ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 font-bold' : 'bg-rose-500/10 text-rose-400 border-rose-500/20 font-bold';
-          bodyHtml += `<td class="px-3 py-2 border border-slate-800/60"><span class="px-2 py-0.5 rounded text-[10px] border ${statBadge}">${window.escapeHtml(cell || 'Active')}</span></td>`;
-        } else if (i >= 10) {
-          const numVal = parseFloat(cell) || 0;
-          bodyHtml += `<td class="px-3 py-2 border border-slate-800/60 text-right font-mono font-bold ${i === row.length - 1 ? 'text-emerald-300 bg-emerald-500/5' : 'text-slate-300'}">${numVal !== 0 ? formatNumWithCommas(numVal) : '-'}</td>`;
-        } else {
-          bodyHtml += `<td class="px-3 py-2 border border-slate-800/60 ${i === 4 ? 'font-bold text-slate-100' : ''}">${window.escapeHtml(cell || '-')}</td>`;
-        }
-      });
-      bodyHtml += '</tr>';
-    });
-  }
-  bodyHtml += '</tbody>';
-
-  // 💡 6. Render Footer
-  let footHtml = '';
-  // Show grand total only if not heavily filtered to avoid confusing totals (Optional depending on business rule, but we keep it here for now)
-  if (grandTotalRow && grandTotalRow.length > 0 && pageItems.length > 0 && !unpaidIdx && !searchVal) {
-    footHtml += '<tfoot><tr class="bg-indigo-500/10 font-black text-indigo-300 border-t-2 border-indigo-500/40 text-xs">';
-    grandTotalRow.forEach((cell, i) => {
-      if (i === 0) {
-        footHtml += `<td colspan="10" class="px-3 py-3 uppercase tracking-wider text-xs border border-indigo-500/20">Total</td>`;
-      } else if (i >= 10) {
-        const numVal = parseFloat(cell) || 0;
-        footHtml += `<td class="px-3 py-3 text-right font-mono border border-indigo-500/20 text-indigo-200">${formatNumWithCommas(numVal)}</td>`;
-      }
-    });
-    footHtml += '</tr></tfoot>';
-  }
-
-  table.innerHTML = headHtml + bodyHtml + footHtml;
-}
-
-
-/**
- * 💡 CSV Exporter for Income Detail (Formula Injection Protected via window.safeCsvCell)
- */
-function exportToCSVReportIncome() {
-  if (!gIncomeDetailRawData || !gIncomeDetailRawData.data) {
-    return safeShowToast('ထုတ်ယူရန် ဝင်ငွေ အသေးစိတ် အချက်အလက် မရှိပါ။', 'warning');
-  }
-
-  let csvRows = [];
-  if (gIncomeDetailRawData.headers) {
-    csvRows.push(gIncomeDetailRawData.headers.map(h => window.safeCsvCell(h || '')));
-  }
-  gIncomeDetailRawData.data.forEach(r => {
-    csvRows.push(r.map(c => window.safeCsvCell(c || '')));
-  });
-  if (gIncomeDetailRawData.grandTotalRow) {
-    csvRows.push(gIncomeDetailRawData.grandTotalRow.map(c => window.safeCsvCell(c || '')));
-  }
-
-  const csvContent = "\uFEFF" + csvRows.map(e => e.join(",")).join("\n");
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `Income_Detail_Report_${new Date().toISOString().slice(0, 10)}.csv`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -731,9 +535,6 @@ function renderInRepTable(tableId, headers, rows, totalRow, themeColor) {
   table.innerHTML = headHtml + bodyHtml + footHtml;
 }
 
-/**
- * 💡 CSV Exporter for Monthly Income (Formula Injection Protected via window.safeCsvCell)
- */
 function exportToCSVReportGeneral() {
   if (!gMonthlyIncomeRawData) {
     return safeShowToast('ထုတ်ယူရန် လအလိုက် ဝင်ငွေ အချက်အလက် မရှိပါ။', 'warning');
@@ -863,9 +664,6 @@ function onSearchInputReportStudent() {
   renderStudentReportTables();
 }
 
-/**
- * 💡 CSV Exporter for Student Demographics (Formula Injection Protected via window.safeCsvCell)
- */
 function exportToCSVReportStudent() {
   if (!gStudentReportRawData) return safeShowToast('ထုတ်ယူရန် ကျောင်းသား လူဦးရေ အချက်အလက် မရှိပါ။', 'warning');
 
@@ -971,9 +769,6 @@ function onSearchInputReportStaffFund() {
   }
 }
 
-/**
- * 💡 CSV Exporter for Staff Fund Report (Formula Injection Protected via window.safeCsvCell)
- */
 function exportToCSVReportStaffFund() {
   const list = gStaffFundRawData || [];
   if (!list || list.length === 0) {
@@ -1012,6 +807,8 @@ window.loadReportStaffFundData = loadReportStaffFundData;
 
 window.onSearchInputReportFinancial = onSearchInputReportFinancial;
 window.onSearchInputReportIncome = onSearchInputReportIncome;
+window.onFilterChangeReportIncome = onFilterChangeReportIncome;
+window.changePageReportIncome = changePageReportIncome;
 window.onSearchInputReportStudent = onSearchInputReportStudent;
 window.onSearchInputReportStaffFund = onSearchInputReportStaffFund;
 
@@ -1020,5 +817,3 @@ window.exportToCSVReportIncome = exportToCSVReportIncome;
 window.exportToCSVReportGeneral = exportToCSVReportGeneral;
 window.exportToCSVReportStudent = exportToCSVReportStudent;
 window.exportToCSVReportStaffFund = exportToCSVReportStaffFund;
-window.onFilterChangeReportIncome = onFilterChangeReportIncome;
-window.changePageReportIncome = changePageReportIncome;
