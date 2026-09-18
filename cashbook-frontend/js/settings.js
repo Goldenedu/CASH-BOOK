@@ -1,8 +1,9 @@
 /**
  * ==============================================================================
  * GOLDEN ERP SYSTEM - SYSTEM SETTINGS, BACKUP & D1 MONITOR CONTROLLER
- * File: js/settings.js 
- * 💡 Features: Refactored with Global api.js for DRY Principle
+ * File: js/settings.js (Location: cashbook-frontend/js/settings.js)
+ * 💡 Features: Refactored with Global api.js for DRY Principle,
+ *              🎯 Phase 4: Advanced Date Range Export UI Integration
  * ==============================================================================
  */
 
@@ -240,7 +241,7 @@ async function triggerGlobalRecalculateBalances() {
       if (typeof showToast === 'function') {
         showToast("SUCCESS", res.message || "Database ထဲရှိ စာအုပ်အားလုံး၏ Balance များကို အောင်မြင်စွာ ပြန်လည်ညှိယူပြီးပါပြီ။");
       }
-      if (typeof clearAllApiCache === 'function') clearAllApiCache();
+      if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
       await loadSettingsData(true);
     } else {
       if (typeof showToast === 'function') {
@@ -309,7 +310,7 @@ function renderBalancesControlTable(data) {
 }
 
 /**
- * 💡 6. Render Export Table (Tab 2: Strict 2-Line Balanced Layout & Full FY Dropdowns)
+ * 💡 6. Render Export Table (Tab 2: Phase 4 Advanced Date Range Filters)
  */
 function renderExportTable() {
   const tbody = document.getElementById('settings-export-table-body');
@@ -327,14 +328,15 @@ function renderExportTable() {
 
   const fys = (gAvailableFys && gAvailableFys.length > 0) ? gAvailableFys : dynamicFallbackFys;
 
-  const fyOptions = fys.map(fy => {
+  const fyOptions = '<option value="">-- All FY --</option>' + fys.map(fy => {
     const cleanFy = String(fy).trim().replace(/^FY\s*/i, '');
     const isSelected = (cleanFy === currentActiveFy);
     return `<option value="${cleanFy}" ${isSelected ? 'selected' : ''}>FY ${cleanFy}</option>`;
   }).join('');
 
+  // 💡 Phase 4: Added Date Picker Inputs (From & To)
   tbody.innerHTML = `
-    <!-- ROW 1: MAIN CASH BOOK (13 TABS SPLIT EVENLY INTO 2 CLEAN LINES) -->
+    <!-- ROW 1: MAIN CASH BOOK -->
     <tr class="hover:bg-slate-800/30 transition">
       <td class="py-3.5 px-2 text-center font-mono font-bold text-slate-500">1</td>
       <td class="py-3.5 px-3">
@@ -349,10 +351,16 @@ function renderExportTable() {
           13 Master Tabs
         </span>
       </td>
-      <td class="py-3.5 px-2 text-center">
-        <select id="export-fy-main" class="w-36 bg-[#0f172a] border border-slate-800 text-slate-200 text-xs font-bold rounded-lg px-2.5 py-1.5 outline-none focus:border-indigo-500 transition font-mono text-center">
-          ${fyOptions}
-        </select>
+      <td class="py-3.5 px-2">
+        <div class="flex flex-col gap-2 w-full max-w-[200px] mx-auto">
+          <select id="export-fy-main" class="w-full bg-[#0f172a] border border-slate-800 text-slate-200 text-xs font-bold rounded-lg px-2.5 py-1.5 outline-none focus:border-indigo-500 transition font-mono">
+            ${fyOptions}
+          </select>
+          <div class="flex gap-2">
+            <input type="date" id="export-from-main" class="w-1/2 bg-[#0f172a] border border-slate-800 text-slate-400 text-[10px] rounded-lg px-2 py-1 outline-none focus:border-indigo-500 transition" title="Start Date" />
+            <input type="date" id="export-to-main" class="w-1/2 bg-[#0f172a] border border-slate-800 text-slate-400 text-[10px] rounded-lg px-2 py-1 outline-none focus:border-indigo-500 transition" title="End Date" />
+          </div>
+        </div>
       </td>
       <td class="py-3.5 px-3 text-center">
         <div class="flex items-center justify-center gap-2 flex-nowrap">
@@ -366,7 +374,7 @@ function renderExportTable() {
       </td>
     </tr>
 
-    <!-- ROW 2: CASHIER CASH BOOK (5 TABS) -->
+    <!-- ROW 2: CASHIER CASH BOOK -->
     <tr class="hover:bg-slate-800/30 transition">
       <td class="py-3.5 px-2 text-center font-mono font-bold text-slate-500">2</td>
       <td class="py-3.5 px-3">
@@ -380,10 +388,16 @@ function renderExportTable() {
           5 Cashier Tabs
         </span>
       </td>
-      <td class="py-3.5 px-2 text-center">
-        <select id="export-fy-cashier" class="w-36 bg-[#0f172a] border border-slate-800 text-slate-200 text-xs font-bold rounded-lg px-2.5 py-1.5 outline-none focus:border-indigo-500 transition font-mono text-center">
-          ${fyOptions}
-        </select>
+      <td class="py-3.5 px-2">
+        <div class="flex flex-col gap-2 w-full max-w-[200px] mx-auto">
+          <select id="export-fy-cashier" class="w-full bg-[#0f172a] border border-slate-800 text-slate-200 text-xs font-bold rounded-lg px-2.5 py-1.5 outline-none focus:border-indigo-500 transition font-mono">
+            ${fyOptions}
+          </select>
+          <div class="flex gap-2">
+            <input type="date" id="export-from-cashier" class="w-1/2 bg-[#0f172a] border border-slate-800 text-slate-400 text-[10px] rounded-lg px-2 py-1 outline-none focus:border-indigo-500 transition" title="Start Date" />
+            <input type="date" id="export-to-cashier" class="w-1/2 bg-[#0f172a] border border-slate-800 text-slate-400 text-[10px] rounded-lg px-2 py-1 outline-none focus:border-indigo-500 transition" title="End Date" />
+          </div>
+        </div>
       </td>
       <td class="py-3.5 px-3 text-center">
         <div class="flex items-center justify-center gap-2 flex-nowrap">
@@ -400,10 +414,10 @@ function renderExportTable() {
 }
 
 /**
- * 💡 7. Generate SheetJS Multi-Tab Excel Workbook
+ * 💡 7. Generate SheetJS Multi-Tab Excel Workbook (Phase 4: Includes Date Filters)
  */
-async function generateMultiTabExcelWorkbook(groupKey, fy) {
-  const res = await callApi('exportGroupDataByFy', { groupKey, fy }, 'GET');
+async function generateMultiTabExcelWorkbook(groupKey, fy, fromDate, toDate) {
+  const res = await callApi('exportGroupDataByFy', { groupKey, fy, fromDate, toDate }, 'GET');
   if (!res || !res.success || !res.tables) {
     throw new Error(res?.message || "Export Data ရယူ၍ မရပါ။");
   }
@@ -436,27 +450,37 @@ async function generateMultiTabExcelWorkbook(groupKey, fy) {
     XLSX.utils.book_append_sheet(wb, ws, tabKey.slice(0, 31));
   });
 
-  return { wb, groupTitle: res.groupTitle, totalRecords: res.totalRecords };
+  return { wb, groupTitle: res.groupTitle, totalRecords: res.totalRecords, dateRangeTitle: res.dateRangeTitle };
 }
 
 /**
- * 💡 8. Download Native Multi-Tab Excel (.xlsx) File
+ * 💡 8. Download Native Multi-Tab Excel (.xlsx) File (Phase 4)
  */
 async function handleExportWorkbook(groupKey) {
   const fySelectId = groupKey === 'cashier' ? 'export-fy-cashier' : 'export-fy-main';
-  const selectedFy = document.getElementById(fySelectId)?.value || '2026-2027';
+  const fromId = groupKey === 'cashier' ? 'export-from-cashier' : 'export-from-main';
+  const toId = groupKey === 'cashier' ? 'export-to-cashier' : 'export-to-main';
+
+  const selectedFy = document.getElementById(fySelectId)?.value || '';
+  const fromDate = document.getElementById(fromId)?.value || '';
+  const toDate = document.getElementById(toId)?.value || '';
 
   try {
     if (typeof toggleLoading === 'function') toggleLoading(true);
 
-    const { wb, groupTitle, totalRecords } = await generateMultiTabExcelWorkbook(groupKey, selectedFy);
-    const cleanFyStr = selectedFy.replace(/^FY\s*/i, '');
-    const fileName = `${groupTitle.replace(/\s+/g, '_')}_FY${cleanFyStr}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    const { wb, groupTitle, totalRecords, dateRangeTitle } = await generateMultiTabExcelWorkbook(groupKey, selectedFy, fromDate, toDate);
+    
+    let dateSuffix = `FY_${selectedFy.replace(/^FY\s*/i, '') || 'ALL'}`;
+    if (fromDate && toDate) dateSuffix = `D_${fromDate}_to_${toDate}`;
+    else if (fromDate) dateSuffix = `D_From_${fromDate}`;
+    else if (toDate) dateSuffix = `D_UpTo_${toDate}`;
+
+    const fileName = `${groupTitle.replace(/\s+/g, '_')}_${dateSuffix}_${new Date().toISOString().slice(0, 10)}.xlsx`;
 
     XLSX.writeFile(wb, fileName);
 
     if (typeof showToast === 'function') {
-      showToast("SUCCESS", `"${groupTitle}" (${selectedFy}) Multi-Tab Excel ဖိုင် (Total: ${totalRecords} rows) အား အောင်မြင်စွာ ဒေါင်းလုဒ်ဆွဲပြီးပါပြီ။`);
+      showToast("SUCCESS", `"${groupTitle}" (${dateRangeTitle}) Excel ဖိုင် (Total: ${totalRecords} rows) အား အောင်မြင်စွာ ဒေါင်းလုဒ်ဆွဲပြီးပါပြီ။`);
     }
   } catch (err) {
     console.error("Export Error:", err);
@@ -467,28 +491,42 @@ async function handleExportWorkbook(groupKey) {
 }
 
 /**
- * 💡 9. Send Real Multi-Tab Excel (.xlsx) Backup to Gmail via Resend API
+ * 💡 9. Send Real Multi-Tab Excel (.xlsx) Backup to Gmail via Resend API (Phase 4)
  */
 async function handleSendEmailBackup(groupKey) {
   const fySelectId = groupKey === 'cashier' ? 'export-fy-cashier' : 'export-fy-main';
-  const selectedFy = document.getElementById(fySelectId)?.value || '2026-2027';
+  const fromId = groupKey === 'cashier' ? 'export-from-cashier' : 'export-from-main';
+  const toId = groupKey === 'cashier' ? 'export-to-cashier' : 'export-to-main';
+
+  const selectedFy = document.getElementById(fySelectId)?.value || '';
+  const fromDate = document.getElementById(fromId)?.value || '';
+  const toDate = document.getElementById(toId)?.value || '';
   const targetEmail = "goldeneduprivateschool@gmail.com";
 
-  if (!confirm(`"${groupKey === 'cashier' ? 'Cashier Cash Book' : 'Main Cash Book'}" (${selectedFy}) ၏ Multi-Tab Excel (.xlsx) Backup အား ${targetEmail} သို့ ပို့ဆောင်လိုပါသလား။`)) {
-    return;
-  }
+  let confirmMsg = `"${groupKey === 'cashier' ? 'Cashier Cash Book' : 'Main Cash Book'}" ၏ Multi-Tab Excel (.xlsx) Backup အား ${targetEmail} သို့ ပို့ဆောင်လိုပါသလား။\n`;
+  if (fromDate || toDate) confirmMsg += `(Filter: ${fromDate || 'Start'} မှ ${toDate || 'End'} အထိ)`;
+  else confirmMsg += `(Filter: FY ${selectedFy || 'ALL'})`;
+
+  if (!confirm(confirmMsg)) return;
 
   try {
     if (typeof toggleLoading === 'function') toggleLoading(true);
 
-    const { wb, groupTitle } = await generateMultiTabExcelWorkbook(groupKey, selectedFy);
+    const { wb, groupTitle } = await generateMultiTabExcelWorkbook(groupKey, selectedFy, fromDate, toDate);
     const excelBase64 = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
-    const cleanFyStr = selectedFy.replace(/^FY\s*/i, '');
-    const attachmentFileName = `${groupTitle.replace(/\s+/g, '_')}_FY${cleanFyStr}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    
+    let dateSuffix = `FY_${selectedFy.replace(/^FY\s*/i, '') || 'ALL'}`;
+    if (fromDate && toDate) dateSuffix = `D_${fromDate}_to_${toDate}`;
+    else if (fromDate) dateSuffix = `D_From_${fromDate}`;
+    else if (toDate) dateSuffix = `D_UpTo_${toDate}`;
+
+    const attachmentFileName = `${groupTitle.replace(/\s+/g, '_')}_${dateSuffix}_${new Date().toISOString().slice(0, 10)}.xlsx`;
 
     const emailRes = await callApi('sendEmailBackupByFy', {
       groupKey: groupKey,
       fy: selectedFy,
+      fromDate: fromDate,
+      toDate: toDate,
       excelBase64: excelBase64,
       fileName: attachmentFileName
     });
