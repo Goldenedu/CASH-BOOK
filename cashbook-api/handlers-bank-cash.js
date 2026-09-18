@@ -2,16 +2,19 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - MAIN BANK & CASH BOOKS HANDLER (CLOUDFLARE D1)
  * File: handlers-bank-cash.js (Location: cashbook-api/handlers-bank-cash.js)
- * 💡 Features: 🛡️ 100% ACID Compliant Atomic Transfers via Cloudflare D1 db.batch(),
- *              ⚡ QUOTA-SHIELD: O(1) Differential Row-Level Recalculation Engine,
- *              🎯 Floating Point Safe Comparison (ROUND to 2 Decimals),
- *              🎯 Zero "no such column: is_locked" Crash (Crash-Proof SELECT * Pattern),
- *              Zero Transactional Leak on Save/Update/Delete Operations,
- *              Server-Side Auto-Lock Enforcement (5-Prefix Engine & Zero Client Bypass),
- *              Myanmar Standard Time (UTC+6:30) & March Academic Year Boundary Alignment,
- *              Direct isMigration Mode (Preserves exact Column A NO & skips auto-transfers)
+ * 💡 Features: Refactored with utils.js for DRY Principle
  * ==============================================================================
  */
+
+import {
+  getMyanmarDateString,
+  calculateAcademicFyFromDate,
+  normalizeFyStr,
+  generateVoucherNo,
+  generateFyNo,
+  recalculateLedgerBalances,
+  generateUniqueId
+} from './utils.js';
 
 const BOOK_TABLE_MAP = {
   "bank": "bank",
@@ -55,151 +58,6 @@ function getBookTitle(tableName) {
     case 'payroll': return 'HR Payroll Exp Book';
     default: return tableName;
   }
-}
-
-/**
- * 💡 Academic Year Helper (March Boundary Aligned: Month < 2)
- */
-function getCurrentAcademicYear(dateInput = null) {
-  const d = dateInput ? new Date(dateInput) : new Date(Date.now() + (6.5 * 3600 * 1000));
-  const validDate = isNaN(d.getTime()) ? new Date() : d;
-  let y = validDate.getFullYear();
-  if (validDate.getMonth() < 2) {
-    y -= 1;
-  }
-  return `${y}-${y + 1}`;
-}
-
-/**
- * 💡 100% Dynamic FY String Normalizer (Zero Hardcoded 2026-2027)
- */
-function normalizeFyStr(fy, dateInput = null) {
-  let s = fy ? String(fy).trim() : `FY ${getCurrentAcademicYear(dateInput)}`;
-  if (!s) s = `FY ${getCurrentAcademicYear(dateInput)}`;
-  if (!s.toUpperCase().startsWith('FY ')) {
-    s = 'FY ' + s;
-  }
-  return s;
-}
-
-/**
- * 💡 Myanmar Standard Timezone Helper (UTC+6:30)
- */
-function getMyanmarDateString(inputDate = null) {
-  if (inputDate) return String(inputDate).trim().split('T')[0];
-  const now = new Date(Date.now() + (6.5 * 3600 * 1000));
-  return now.toISOString().split('T')[0];
-}
-
-/**
- * 💡 Academic Year Calculator (March Boundary Aligned: Month < 2)
- */
-function calculateAcademicFyFromDate(dateStr) {
-  const d = new Date(dateStr);
-  let fyYear = d.getFullYear();
-  if (d.getMonth() < 2) fyYear -= 1;
-  return `FY ${fyYear}-${fyYear + 1}`;
-}
-
-/**
- * ⚡ QUOTA-SHIELD: O(1) Differential D1 Window Function Recalculation Engine
- * 💡 တန်ဖိုး တကယ်ပြောင်းလဲသွားသော Row များကိုသာ Update လုပ်သဖြင့်
- * D1 Row Writes အလဟဿ ကုန်ကျမှုကို အပြီးတိုင် ကာကွယ်ပေးသည်
- */
-async function recalculateLedgerBalances(db, tableName, targetFy = null) {
-  if (!tableName) return;
-  try {
-    if (targetFy) {
-      const normFy = normalizeFyStr(targetFy);
-      const cleanFy = normFy.replace(/^FY\s*/i, '');
-
-      await db.prepare(`
-        WITH calculated AS (
-          SELECT id,
-                 ROW_NUMBER() OVER (
-                   ORDER BY date ASC, id ASC
-                 ) as calc_no,
-                 SUM(debit - credit) OVER (
-                   ORDER BY date ASC, id ASC 
-                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                 ) as calc_bal
-          FROM ${tableName}
-          WHERE fy = ? OR fy = ?
-        )
-        UPDATE ${tableName} 
-        SET no = calculated.calc_no,
-            balances = calculated.calc_bal
-        FROM calculated
-        WHERE ${tableName}.id = calculated.id
-          AND (
-            ${tableName}.no IS NOT calculated.calc_no OR 
-            ROUND(${tableName}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2)
-          );
-      `).bind(normFy, cleanFy).run();
-
-    } else {
-      await db.prepare(`
-        WITH calculated AS (
-          SELECT id,
-                 ROW_NUMBER() OVER (
-                   PARTITION BY fy
-                   ORDER BY date ASC, id ASC
-                 ) as calc_no,
-                 SUM(debit - credit) OVER (
-                   PARTITION BY fy
-                   ORDER BY date ASC, id ASC 
-                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                 ) as calc_bal
-          FROM ${tableName}
-        )
-        UPDATE ${tableName} 
-        SET no = calculated.calc_no,
-            balances = calculated.calc_bal
-        FROM calculated
-        WHERE ${tableName}.id = calculated.id
-          AND (
-            ${tableName}.no IS NOT calculated.calc_no OR 
-            ROUND(${tableName}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2)
-          );
-      `).run();
-    }
-  } catch (e) {
-    console.warn(`Running Balance Recalculation Warning for ${tableName}:`, e.message);
-  }
-}
-
-/**
- * 💡 Date-Based Voucher Number Generator
- */
-async function generateVoucherNo(db, tableName, prefix, entryDate) {
-  let ddmmyy = "";
-  const parts = String(entryDate || '').split('-');
-  if (parts.length === 3) {
-    const y = parts[0].slice(-2);
-    ddmmyy = `${parts[2]}${parts[1]}${y}`;
-  } else {
-    const now = new Date(Date.now() + (6.5 * 3600 * 1000));
-    ddmmyy = `${String(now.getDate()).padStart(2, '0')}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getFullYear()).slice(-2)}`;
-  }
-
-  const pattern = `${prefix}-${ddmmyy}-%`;
-  const countRow = await db.prepare(
-    `SELECT COUNT(*) as cnt FROM ${tableName} WHERE vr_no LIKE ? OR date = ?`
-  ).bind(pattern, entryDate).first();
-
-  const seq = (countRow ? parseInt(countRow.cnt, 10) : 0) + 1;
-  return `${prefix}-${ddmmyy}-${String(seq).padStart(3, '0')}`;
-}
-
-/**
- * 💡 FY-Based Integer NO Generator
- */
-async function generateFyNo(db, tableName, fy) {
-  const normFy = normalizeFyStr(fy);
-  const lastNoRow = await db.prepare(
-    `SELECT MAX(CAST(no AS INTEGER)) as maxNo FROM ${tableName} WHERE fy = ? OR fy = ?`
-  ).bind(normFy, normFy.replace(/^FY\s*/i, '')).first();
-  return (lastNoRow && lastNoRow.maxNo ? parseInt(lastNoRow.maxNo, 10) : 0) + 1;
 }
 
 /**
@@ -366,7 +224,7 @@ export async function getBankCashData(db, body) {
 }
 
 /**
- * 💡 Save Bank / Cash Entry (🛡️ 100% Atomic Batch Transaction Engine)
+ * 💡 Save Bank / Cash Entry
  */
 export async function saveBankCashEntry(db, session, body) {
   try {
@@ -386,9 +244,10 @@ export async function saveBankCashEntry(db, session, body) {
     const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(session?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport || body.skipAutoPost);
 
+    // ⚡ Refactored: Uses generateUniqueId from utils.js
     const uniqueid = (isMigration && body.uniqueId)
       ? String(body.uniqueId).trim()
-      : `BCK_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      : generateUniqueId('BCK');
 
     const newNo = (isMigration && body.no) ? parseInt(body.no, 10) : await generateFyNo(db, tableName, fy);
     const prefix = getTablePrefix(tableName);
@@ -445,7 +304,6 @@ export async function saveBankCashEntry(db, session, body) {
 
     await db.batch(batchStatements);
 
-    // ⚡ Quota-Shield Recalculate
     await recalculateLedgerBalances(db, tableName, fy);
     if (targetTable && targetTable !== tableName) {
       await recalculateLedgerBalances(db, targetTable, fy);
@@ -467,7 +325,7 @@ export async function saveBankCashEntry(db, session, body) {
 }
 
 /**
- * 💡 Update Bank / Cash Entry (🛡️ Crash-Proof SELECT * Pattern)
+ * 💡 Update Bank / Cash Entry
  */
 export async function updateBankCashEntry(db, session, body) {
   try {
@@ -549,7 +407,6 @@ export async function updateBankCashEntry(db, session, body) {
 
     await db.batch(batchStatements);
 
-    // ⚡ Quota-Shield Recalculate
     await recalculateLedgerBalances(db, tableName, fy);
     if (oldFy && oldFy !== fy) {
       await recalculateLedgerBalances(db, tableName, oldFy);
@@ -573,7 +430,7 @@ export async function updateBankCashEntry(db, session, body) {
 }
 
 /**
- * 💡 Delete Bank / Cash Entry (🛡️ Crash-Proof SELECT * Pattern)
+ * 💡 Delete Bank / Cash Entry
  */
 export async function deleteBankCashEntry(db, session, body) {
   try {
@@ -620,7 +477,6 @@ export async function deleteBankCashEntry(db, session, body) {
 
     await db.batch(batchStatements);
 
-    // ⚡ Quota-Shield Recalculate
     await recalculateLedgerBalances(db, tableName, targetFy);
 
     if (existing.transfer) {
