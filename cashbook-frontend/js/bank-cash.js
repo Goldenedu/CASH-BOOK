@@ -127,10 +127,14 @@ function renderStatsBankCashKit(stats) {
   var balTotal = document.getElementById('bck-balance');
   var countTotal = document.getElementById('bck-entries-count');
 
-  if (incTotal) incTotal.textContent = Number(stats.totalIncome || 0).toLocaleString('en-US') + ' MMK';
-  if (expTotal) expTotal.textContent = Number(stats.totalExpense || 0).toLocaleString('en-US') + ' MMK';
-  if (balTotal) balTotal.textContent = Number(stats.balance || 0).toLocaleString('en-US') + ' MMK';
+  if (incTotal) incTotal.textContent = Number(stats.totalIncome || 0).toLocaleString('en-US');
+  if (expTotal) expTotal.textContent = Number(stats.totalExpense || 0).toLocaleString('en-US');
+  if (balTotal) balTotal.textContent = Number(stats.balance || 0).toLocaleString('en-US');
   if (countTotal) countTotal.textContent = Number(bckTotalRows || bckActiveData.length || 0).toLocaleString('en-US');
+  
+  if(typeof window.adjustKpiFontSizes === 'function') {
+      setTimeout(window.adjustKpiFontSizes, 50);
+  }
 }
 
 /**
@@ -259,7 +263,7 @@ function populateDropdownsBCK() {
 
   if (catSelect) {
     if (def.category) {
-      catSelect.innerHTML = def.category.map(function(c) { return '<option value="' + c + '">' + c + '</option>'; }).join('');
+      catSelect.innerHTML = def.category.map(function(c) { return '<option value="' + window.escapeHtml(c) + '">' + window.escapeHtml(c) + '</option>'; }).join('');
     } else {
       catSelect.innerHTML = 
         '<option value="Opening">Opening</option>' +
@@ -288,7 +292,7 @@ function populateDropdownsBCK() {
     var availableBooks = allBooks.filter(function(b) { return b.key !== currentSubBook; });
 
     transferSelect.innerHTML = '<option value="">-- No Transfer --</option>' +
-      availableBooks.map(function(b) { return '<option value="' + b.name + '">' + b.name + '</option>'; }).join('');
+      availableBooks.map(function(b) { return '<option value="' + window.escapeHtml(b.name) + '">' + window.escapeHtml(b.name) + '</option>'; }).join('');
   }
 }
 
@@ -332,8 +336,8 @@ async function saveBankCashKitForm(e) {
     category: document.getElementById('bck-category')?.value || "Income",
     method: document.getElementById('bck-method')?.value || (currentSubBook === 'bank' ? 'Bank' : 'Cash'),
     transfer: document.getElementById('bck-transfer')?.value || "",
-    debit: parseFloat(document.getElementById('bck-debit')?.value) || 0,
-    credit: parseFloat(document.getElementById('bck-credit')?.value) || 0,
+    debit: window.parseCleanNum(document.getElementById('bck-debit')?.value),
+    credit: window.parseCleanNum(document.getElementById('bck-credit')?.value),
     description: document.getElementById('bck-description')?.value || "",
     uniqueId: uniqueId
   };
