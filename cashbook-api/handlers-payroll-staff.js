@@ -2,7 +2,8 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - HR PAYROLL & STAFF D1 SQL HANDLER MODULE
  * File: handlers-payroll-staff.js (Location: cashbook-api/handlers-payroll-staff.js)
- * 💡 Features: Refactored with utils.js for DRY Principle
+ * 💡 Features: Refactored with utils.js for DRY Principle,
+ *              🎯 Phase 4: Added Date Range Support (fromJoinDate/toJoinDate)
  * ==============================================================================
  */
 
@@ -30,13 +31,17 @@ function calculateFundDate(joinDateStr) {
 }
 
 /**
- * 💡 Get Staff Data & Compute KPI Stats (Resigned Staff Auto-Deducted from Active Force)
+ * 💡 Get Staff Data & Compute KPI Stats (Phase 4: Supports Join Date Range Filter)
  */
 export async function getStaffData(db, body, userSession) {
   try {
     const isPartTime = String(body.category || '').toLowerCase().includes('part');
     const table = isPartTime ? 'staff_parttime' : 'staff_fulltime';
     const searchVal = String(body.searchVal || '').trim();
+    
+    // Phase 4: Added Join Date Range Support
+    const fromJoinDate = String(body.fromDate || body.fromJoinDate || '').trim();
+    const toJoinDate = String(body.toDate || body.toJoinDate || '').trim();
 
     let whereClauses = [];
     let params = [];
@@ -45,6 +50,16 @@ export async function getStaffData(db, body, userSession) {
       whereClauses.push(`(name LIKE ? OR staff_idname LIKE ? OR CAST(staff_id AS TEXT) LIKE ? OR position LIKE ?)`);
       const p = `%${searchVal}%`;
       params.push(p, p, p, p);
+    }
+
+    if (fromJoinDate) {
+      whereClauses.push(`(join_date >= ?)`);
+      params.push(fromJoinDate);
+    }
+
+    if (toJoinDate) {
+      whereClauses.push(`(join_date <= ?)`);
+      params.push(toJoinDate);
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
