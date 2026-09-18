@@ -1,9 +1,12 @@
 /**
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - UNIFORM INVENTORY D1 SQL HANDLER MODULE
- * File: handlers-uniform.js  
- * 💡 Features: Bulletproof Delete (by uniqueid or Row ID), Protected Selling Unit Preservation on Edit,
- *              Integer Sequence NO, Live Stock & Profit Computation & Dual Property Key Normalization
+ * File: handlers-uniform.js (Location: cashbook-api/handlers-uniform.js)
+ * 💡 Features: Refactored with utils.js for DRY Principle
+ * ==============================================================================
  */
+
+import { generateUniqueId } from './utils.js';
 
 /**
  * 💡 Fetch Uniform Inventory Data
@@ -65,7 +68,8 @@ export async function getUniformData(db, body) {
  */
 export async function saveUniformEntry(db, userSession, body) {
   try {
-    const uniqueid = body.uniqueId || body.uniqueid || `UNI_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    // ⚡ Refactored: Uses generateUniqueId from utils.js
+    const uniqueid = body.uniqueId || body.uniqueid || generateUniqueId('UNI');
     const createdBy = userSession?.name || userSession?.username || body.createdBy || 'Admin';
 
     const maxNoRow = await db.prepare("SELECT MAX(CAST(no AS INTEGER)) as max_no FROM uniform_ledger").first();
