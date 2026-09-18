@@ -2,11 +2,7 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - HR PAYROLL EXP BOOK CONTROLLER (D1 DATABASE EDITION)
  * File: js/hr.js (Location: cashbook-frontend/js/hr.js)
- * 💡 Features: 🛡️ Double-Submit Protection Lock (Prevents Duplicate Payroll Posting),
- *              🎯 Universal Dynamic Academic FY (March Boundary getMonth() < 2),
- *              Bulletproof D1 Staff ID Lookup, Auto Credit (Total Salary/Bonus/Fund),
- *              Full Dataset Limit (1000 rows), Clean Stats Engine & Isolated Dual-Copy Payslip Printer,
- *              🛡️ Formula Injection Protected CSV Exporter
+ * 💡 Features: Refactored with Global api.js for DRY Principle
  * ==============================================================================
  */
 
@@ -20,37 +16,6 @@ var gHrStaffFT = []; // Full-Time Staff Cache
 var gHrStaffPT = []; // Part-Time Staff Cache
 var gHrStaffCache = []; // Fallback Cache
 var isHrPayrollSubmitting = false; // 💡 Double-Submit Protection Flag
-
-/**
- * 💡 Academic Year Calculator (March Boundary Aligned: Month < 2)
- */
-function getCurrentAcademicYearHr(dateInput = null) {
-  const d = dateInput ? new Date(dateInput) : new Date();
-  const validDate = isNaN(d.getTime()) ? new Date() : d;
-  let y = validDate.getFullYear();
-  if (validDate.getMonth() < 2) {
-    y -= 1;
-  }
-  return `${y}-${y + 1}`;
-}
-
-/**
- * 🛡️ Formula Injection Protected CSV Cell Helper
- */
-function safeCsvCellHr(val) {
-  if (val === null || val === undefined) return '""';
-  if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
-  var str = String(val).trim();
-  if (str === '') return '""';
-  var cleanNumStr = str.replace(/,/g, '');
-  if (!isNaN(Number(cleanNumStr)) && cleanNumStr !== '') {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  if (/^[=+\-@\t\r]/.test(str)) {
-    str = "'" + str;
-  }
-  return `"${str.replace(/"/g, '""')}"`;
-}
 
 async function loadHrPayrollData(useCache = true) {
   try {
@@ -216,23 +181,23 @@ function renderHrPayrollTable() {
 
     tr.innerHTML = `
       <td class="text-center font-mono font-semibold text-slate-400 py-3 px-3">${displayNo}</td>
-      <td class="font-mono py-3 px-3">${escapeHtmlHr(item.date) || '-'}</td>
-      <td class="py-3 px-3">${typeof window.formatCategoryBadgeHtml === 'function' ? window.formatCategoryBadgeHtml(item.category) : escapeHtmlHr(item.category)}</td>
-      <td class="font-bold text-slate-100 max-w-xs truncate py-3 px-3" title="${escapeHtmlHr(item.description)}">${escapeHtmlHr(item.description) || '-'}</td>
-      <td class="font-semibold py-3 px-3">${escapeHtmlHr(item.method) || '-'}</td>
+      <td class="font-mono py-3 px-3">${window.escapeHtml(item.date) || '-'}</td>
+      <td class="py-3 px-3">${typeof window.formatCategoryBadgeHtml === 'function' ? window.formatCategoryBadgeHtml(item.category) : window.escapeHtml(item.category)}</td>
+      <td class="font-bold text-slate-100 max-w-xs truncate py-3 px-3" title="${window.escapeHtml(item.description)}">${window.escapeHtml(item.description) || '-'}</td>
+      <td class="font-semibold py-3 px-3">${window.escapeHtml(item.method) || '-'}</td>
       <td class="text-right font-mono font-bold text-emerald-400 py-3 px-3">${item.debit > 0 ? Number(item.debit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
       <td class="text-right font-mono font-bold text-rose-400 py-3 px-3">${item.credit > 0 ? Number(item.credit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
       <td class="text-right font-mono font-bold text-indigo-400 py-3 px-3">${Number(item.balances || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
       <td class="text-right font-mono font-bold text-emerald-400 py-3 px-3">${unpaidBonus > 0 ? Number(unpaidBonus).toLocaleString('en-US') : '-'}</td>
       <td class="text-right font-mono font-bold text-teal-400 py-3 px-3">${unpaidFund > 0 ? Number(unpaidFund).toLocaleString('en-US') : '-'}</td>
-      <td class="font-mono text-slate-400 py-3 px-3">${escapeHtmlHr(vrNo)}</td>
-      <td class="font-mono py-3 px-3">${escapeHtmlHr(item.my) || '-'}</td>
-      <td class="font-mono font-bold text-indigo-300 py-3 px-3">${escapeHtmlHr(item.fy) || '-'}</td>
+      <td class="font-mono text-slate-400 py-3 px-3">${window.escapeHtml(vrNo)}</td>
+      <td class="font-mono py-3 px-3">${window.escapeHtml(item.my) || '-'}</td>
+      <td class="font-mono font-bold text-indigo-300 py-3 px-3">${window.escapeHtml(item.fy) || '-'}</td>
       <td class="text-center right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg py-3 px-3">
         <div class="flex items-center justify-center gap-2">
-          <button onclick="printPayslip('${escapeJsAttrHr(uid)}')" class="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition" title="Print Payslip"><i class="fa-solid fa-print"></i></button>
-          <button onclick="editHrPayrollEntry('${escapeJsAttrHr(uid)}')" class="p-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-lg transition" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>
-          <button onclick="deleteHrPayrollEntry('${escapeJsAttrHr(uid)}')" class="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg transition btn-delete" title="Delete"><i class="fa-solid fa-trash"></i></button>
+          <button onclick="printPayslip('${window.escapeJsAttr(uid)}')" class="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition" title="Print Payslip"><i class="fa-solid fa-print"></i></button>
+          <button onclick="editHrPayrollEntry('${window.escapeJsAttr(uid)}')" class="p-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-lg transition" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>
+          <button onclick="deleteHrPayrollEntry('${window.escapeJsAttr(uid)}')" class="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg transition btn-delete" title="Delete"><i class="fa-solid fa-trash"></i></button>
         </div>
       </td>
     `;
@@ -257,17 +222,6 @@ function updateHrPayrollPaginationInfo(start, end, total) {
 function changePageHrPayroll(delta) {
   gHrPayrollPage += delta;
   renderHrPayrollTable();
-}
-
-function escapeHtmlHr(str) {
-  if (!str) return '';
-  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-}
-
-function escapeJsAttrHr(str) {
-  if (str === null || str === undefined) return '';
-  var jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  return escapeHtmlHr(jsEscaped);
 }
 
 async function onStaffIdChangePayroll() {
@@ -416,7 +370,7 @@ async function saveHrPayrollForm(e) {
   }
 
   const entryDate = document.getElementById('hr-pay-date')?.value || new Date().toISOString().slice(0, 10);
-  const dynamicFy = `FY ${getCurrentAcademicYearHr(entryDate)}`;
+  const dynamicFy = `FY ${window.getCurrentAcademicYear(entryDate)}`;
 
   const payload = {
     bookName: 'HR Payroll Exp Book',
@@ -589,18 +543,18 @@ function exportToCSVHrPayroll() {
     let vrNo = r.vr_no || r.vrNo || '';
 
     csv += `${r.no || (idx + 1)},` +
-           `${safeCsvCellHr(r.date || '')},` +
-           `${safeCsvCellHr(r.category || '')},` +
-           `${safeCsvCellHr(r.description || '')},` +
-           `${safeCsvCellHr(r.method || '')},` +
+           `${window.safeCsvCell(r.date || '')},` +
+           `${window.safeCsvCell(r.category || '')},` +
+           `${window.safeCsvCell(r.description || '')},` +
+           `${window.safeCsvCell(r.method || '')},` +
            `${r.debit || 0},` +
            `${r.credit || 0},` +
            `${r.balances || 0},` +
            `${unpaidBonus},` +
            `${unpaidFund},` +
-           `${safeCsvCellHr(vrNo)},` +
-           `${safeCsvCellHr(r.my || '')},` +
-           `${safeCsvCellHr(r.fy || '')}\n`;
+           `${window.safeCsvCell(vrNo)},` +
+           `${window.safeCsvCell(r.my || '')},` +
+           `${window.safeCsvCell(r.fy || '')}\n`;
   });
 
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
