@@ -3,6 +3,7 @@
  * GOLDEN ERP SYSTEM - PROMOTION MATRIX HANDLER (CLOUDFLARE D1)
  * File: handlers-promotion.js 
  * 💡 Features: Refactored with utils.js for DRY Principle
+ *              🚀 OPTIMIZED: Explicit Column Selects (Avoided SELECT *)
  * ==============================================================================
  */
 
@@ -33,7 +34,15 @@ export async function getPromotionData(db, body) {
     }
 
     const whereSql = whereClauses.length > 0 ? ` WHERE ${whereClauses.join(' AND ')}` : '';
-    const query = `SELECT * FROM promotion ${whereSql} ORDER BY fy DESC, id ASC LIMIT 500`;
+    
+    // 🚀 OPTIMIZATION: Avoid SELECT *, fetch only necessary columns
+    const query = `
+      SELECT id, no, fy, class, category, registration, original_price, pro_a, pro_b, pro_c, pro_d, pro_e, half_scholar, full_scholar, remark, uniqueid 
+      FROM promotion 
+      ${whereSql} 
+      ORDER BY fy DESC, id ASC 
+      LIMIT 500
+    `;
 
     const rows = await db.prepare(query).bind(...params).all();
     const rawList = rows.results || [];
@@ -45,14 +54,14 @@ export async function getPromotionData(db, body) {
       class: item.class || '',
       category: item.category || '',
       registration: parseFloat(item.registration || 0),
-      originalPrice: parseFloat(item.original_price !== undefined ? item.original_price : (item.originalPrice || 0)),
-      proA: parseFloat(item.pro_a !== undefined ? item.pro_a : (item.proA || 0)),
-      proB: parseFloat(item.pro_b !== undefined ? item.pro_b : (item.proB || 0)),
-      proC: parseFloat(item.pro_c !== undefined ? item.pro_c : (item.proC || 0)),
-      proD: parseFloat(item.pro_d !== undefined ? item.pro_d : (item.proD || 0)),
-      proE: parseFloat(item.pro_e !== undefined ? item.pro_e : (item.proE || 0)),
-      halfScholar: parseFloat(item.half_scholar !== undefined ? item.half_scholar : (item.halfScholar || 0)),
-      fullScholar: parseFloat(item.full_scholar !== undefined ? item.full_scholar : (item.fullScholar || 0)),
+      originalPrice: parseFloat(item.original_price || 0),
+      proA: parseFloat(item.pro_a || 0),
+      proB: parseFloat(item.pro_b || 0),
+      proC: parseFloat(item.pro_c || 0),
+      proD: parseFloat(item.pro_d || 0),
+      proE: parseFloat(item.pro_e || 0),
+      halfScholar: parseFloat(item.half_scholar || 0),
+      fullScholar: parseFloat(item.full_scholar || 0),
       remark: item.remark || '',
       uniqueId: item.uniqueid || item.uniqueId || `PRO_${item.id}`
     }));
@@ -76,7 +85,6 @@ export async function getPromotionData(db, body) {
  */
 export async function savePromotionEntry(db, userSession, body) {
   try {
-    // ⚡ Refactored: Uses generateUniqueId from utils.js
     const uniqueid = body.uniqueId || generateUniqueId('PRO');
     const createdBy = userSession?.name || userSession?.username || body.createdBy || "Admin";
 
