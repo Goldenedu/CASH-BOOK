@@ -3,7 +3,7 @@
  * GOLDEN ERP SYSTEM - FINANCIAL & DEMOGRAPHIC REPORTS HANDLER (CLOUDFLARE D1)
  * File: handlers-reports.js (Location: cashbook-api/handlers-reports.js)
  * 💡 Features: Refactored with utils.js for DRY Principle, Single-Pass Aggregations,
- *              🚀 OPTIMIZED: SQL-Side JOINs & GROUP BY for InDetail Matrix (Avoids 200k+ Row Reads),
+ *              🚀 OPTIMIZED: Explicit Column Selects (Avoided SELECT *),
  *              🎯 Server-Side Pagination (LIMIT 50),
  *              🎯 12 Months Fiscal Year Logic (Mar to Feb),
  *              🎯 Auto Grade Sorting Reversed (Grade 12 to Pre School),
@@ -205,11 +205,17 @@ export async function getIncomeDetailReportData(db, body) {
     }
     const whereSql = `WHERE ` + whereClauses.join(' AND ');
 
-    // 🚀 OPTIMIZATION: Database မှ အကုန်မခွဲထုတ်တော့ဘဲ လိုအပ်သော Column များကိုသာ ယူသည်
-    const allStudents = (await db.prepare(`SELECT student_id, id, fy, fyid, name, fyid_name, promo, date, transfer_date, transferDate, status, class FROM student s ${whereSql}`).bind(...params).all()).results || [];
+    // 🚀 OPTIMIZATION: Exact Snake_Case DB columns mapping to prevent any schema mismatch
+    const allStudents = (await db.prepare(`
+      SELECT s.student_id, s.id, s.fy, s.fyid, s.name, s.fyid_name, s.promo, s.date, s.transfer_date, s.status, s.class 
+      FROM student s ${whereSql}
+    `).bind(...params).all()).results || [];
     
-    // 🚀 OPTIMIZATION: Income မှလည်း လိုအပ်သော Columns (account_name, effect_date) များကိုသာ ဆွဲသည်
-    const allIncome = (await db.prepare(`SELECT student_id, account_name, accountName, credit, debit, effect_date, effDate, date FROM income WHERE fy = ? OR fy = ?`).bind(activeFy, fyClean).all()).results || [];
+    const allIncome = (await db.prepare(`
+      SELECT student_id, account_name, credit, debit, effect_date, date 
+      FROM income 
+      WHERE fy = ? OR fy = ?
+    `).bind(activeFy, fyClean).all()).results || [];
 
     const studentGroupMap = new Map();
 
@@ -223,7 +229,7 @@ export async function getIncomeDetailReportData(db, body) {
         promo: s.promo || 'Original price',
         joinDate: '',
         registrationDate: s.date || '',
-        transferMonth: s.transfer_date || s.transferDate || '-',
+        transferMonth: s.transfer_date || '-',
         status: s.status || 'Active',
         class: s.class || '',
         registration: 0,
@@ -239,9 +245,9 @@ export async function getIncomeDetailReportData(db, body) {
       if (!studentGroupMap.has(cleanStuId)) return;
 
       const stGroup = studentGroupMap.get(cleanStuId);
-      const acc = String(row.account_name || row.accountName || '').toLowerCase().trim();
+      const acc = String(row.account_name || '').toLowerCase().trim();
       const credit = parseFloat(row.credit || 0) - parseFloat(row.debit || 0);
-      const effDate = row.effect_date || row.effDate || row.date || '';
+      const effDate = row.effect_date || row.date || '';
 
       if (acc.includes('service')) {
         if (!stGroup.joinDate || (effDate && effDate < stGroup.joinDate)) {
@@ -359,8 +365,8 @@ export async function getMonthlyIncomeReportData(db, body) {
     const activeFy = normalizeFyStr(body.fy || fallbackFy);
     const fyClean = activeFy.replace(/^FY\s*/i, '');
 
-    // 🚀 OPTIMIZATION: Avoid SELECT *, fetch only necessary columns
-    const rowsRes = await db.prepare(`SELECT account_name, category, credit, debit, effect_date, effDate, date FROM income WHERE fy = ? OR fy = ?`).bind(activeFy, fyClean).all();
+    // 🚀 OPTIMIZATION: Explicit columns selection
+    const rowsRes = await db.prepare(`SELECT account_name, category, credit, debit, effect_date, date FROM income WHERE fy = ? OR fy = ?`).bind(activeFy, fyClean).all();
     const list = rowsRes.results || [];
 
     const monthKeys = get12FiscalMonths(activeFy);
@@ -372,7 +378,7 @@ export async function getMonthlyIncomeReportData(db, body) {
     const t1Data = accounts.map(acc => {
       const monthAmts = new Array(12).fill(0);
       list.filter(r => String(r.account_name || '').toLowerCase().trim() === acc.toLowerCase()).forEach(r => {
-        const effDate = r.effect_date || r.effDate || r.date || '';
+        const effDate = r.effect_date || r.date || '';
         const mStr = parseSafeMonthYear(effDate);
         const idx = monthKeys.indexOf(mStr);
         if (idx >= 0) monthAmts[idx] += (parseFloat(r.credit || 0) - parseFloat(r.debit || 0));
@@ -426,7 +432,7 @@ export async function getStudentReportDetails(db, body) {
     const activeFy = body.fy ? body.fy.replace(/^FY\s*/i, '') : fallbackFy;
     const fyPrefixed = `FY ${activeFy}`;
 
-    // 🚀 OPTIMIZATION: Avoid SELECT *, fetch only necessary columns
+    // 🚀 OPTIMIZATION: Explicit columns
     const list = (await db.prepare(`SELECT class, status, category, gender FROM student WHERE fy = ? OR fy = ?`).bind(activeFy, fyPrefixed).all()).results || [];
 
     const headers = ["NO", "FY", "CLASS", "BOARDER", "SEMI BOARDER", "DAY STUDENT", "TOTAL ACTIVE", "INACTIVE", "MALE", "FEMALE"];
@@ -463,11 +469,11 @@ export async function getStudentReportDetails(db, body) {
  */
 export async function getFundReportData(db, body) {
   try {
-    // 🚀 OPTIMIZATION: Avoid SELECT *
-    const list = (await db.prepare(`SELECT id, staff_id, fund_date, name, staff_idname, unpaid_bonus, unpaidBonus, unpaid_fund, unpaidFund, status FROM staff_fulltime ORDER BY id ASC`).all()).results || [];
+    // 🚀 OPTIMIZATION: Explicit columns
+    const list = (await db.prepare(`SELECT id, staff_id, fund_date, name, staff_idname, unpaid_bonus, unpaid_fund, status FROM staff_fulltime ORDER BY id ASC`).all()).results || [];
     const data = list.map((r, i) => {
-      const bonus = parseFloat(r.unpaid_bonus ?? r.unpaidBonus ?? 0);
-      const fund = parseFloat(r.unpaid_fund ?? r.unpaidFund ?? 0);
+      const bonus = parseFloat(r.unpaid_bonus || 0);
+      const fund = parseFloat(r.unpaid_fund || 0);
       return {
         no: i + 1, fundDate: r.fund_date || '-', staffId: cleanIntegerId(r.staff_id || r.id),
         name: r.name || r.staff_idname || '', bonusBalance: bonus, fundBalance: fund,
