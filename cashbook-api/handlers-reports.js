@@ -4,7 +4,7 @@
  * File: handlers-reports.js (Location: cashbook-api/handlers-reports.js)
  * 💡 Features: Refactored with utils.js for DRY Principle, Single-Pass Aggregations,
  *              🎯 Server-Side Pagination (LIMIT 50) to massively reduce D1 Row Reads & RAM,
- *              🎯 Auto Grade Sorting (Pre School to Grade 12),
+ *              🎯 Auto Grade Sorting Reversed (Grade 12 to Pre School),
  *              🎯 Dynamic "Unpaid Month" Filter using efficient SQL Sub-Queries
  * ==============================================================================
  */
@@ -193,7 +193,6 @@ export async function getIncomeDetailReportData(db, body) {
     const searchVal = String(body.searchVal || "").trim().toLowerCase();
     
     // Unpaid Filter e.g. 14 -> "Mar-26", 15 -> "Apr-26"
-    // We expect the frontend to pass the exact Month Label string (e.g., "Sep-26")
     const unpaidMonthLabel = String(body.unpaidMonthLabel || "").trim();
 
     const monthKeys = get13FiscalMonths(activeFy);
@@ -227,31 +226,30 @@ export async function getIncomeDetailReportData(db, body) {
           GROUP BY student_id
           HAVING SUM(credit - debit) > 0
         )`);
-        // Need to push activeFy and fyClean again for the subquery
         params.push(activeFy, fyClean, `${yyyymm}-%`, `${yyyymm}-%`);
       }
     }
 
     const whereSql = `WHERE ` + whereClauses.join(' AND ');
 
-    // 🎯 2. SQL GRADE SEQUENTIAL SORTING
+    // 🎯 2. SQL GRADE REVERSED SORTING (Grade 12 down to Pre School)
     const orderSql = `
       ORDER BY 
         CASE s.class
-          WHEN 'Pre School' THEN 1
-          WHEN 'KG Student' THEN 2
-          WHEN 'Grade 1' THEN 3
-          WHEN 'Grade 2' THEN 4
-          WHEN 'Grade 3' THEN 5
-          WHEN 'Grade 4' THEN 6
-          WHEN 'Grade 5' THEN 7
-          WHEN 'Grade 6' THEN 8
-          WHEN 'Grade 7' THEN 9
-          WHEN 'Grade 8' THEN 10
-          WHEN 'Grade 9' THEN 11
-          WHEN 'Grade 10' THEN 12
-          WHEN 'Grade 11' THEN 13
-          WHEN 'Grade 12' THEN 14
+          WHEN 'Grade 12' THEN 1
+          WHEN 'Grade 11' THEN 2
+          WHEN 'Grade 10' THEN 3
+          WHEN 'Grade 9' THEN 4
+          WHEN 'Grade 8' THEN 5
+          WHEN 'Grade 7' THEN 6
+          WHEN 'Grade 6' THEN 7
+          WHEN 'Grade 5' THEN 8
+          WHEN 'Grade 4' THEN 9
+          WHEN 'Grade 3' THEN 10
+          WHEN 'Grade 2' THEN 11
+          WHEN 'Grade 1' THEN 12
+          WHEN 'KG Student' THEN 13
+          WHEN 'Pre School' THEN 14
           ELSE 99
         END ASC, CAST(s.student_id AS INTEGER) ASC
     `;
