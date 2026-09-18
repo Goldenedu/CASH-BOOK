@@ -271,6 +271,9 @@ function exportToCSVReportFinancial() {
 // 💡 2. INCOME DETAIL HANDLERS (InDetail Matrix)
 // ==========================================
 
+var gIncomeDetailPage = 1;
+var gIncomeDetailLimit = 50; // ⚡ Limit rendering to 50 rows to save RAM
+
 async function loadReportIncomeData(forceRefresh = false) {
   try {
     const fyVal = document.getElementById('report-income-fy')?.value || '2026-2027';
@@ -278,6 +281,8 @@ async function loadReportIncomeData(forceRefresh = false) {
     const res = await callApi('getIncomeDetailReportData', { fy: fyVal, forceRefresh });
     if (res && res.success) {
       gIncomeDetailRawData = res;
+      gIncomeDetailPage = 1;
+      populateIncomeUnpaidFilter();
       renderIncomeDetailMatrixTable();
     }
   } catch (err) {
@@ -285,6 +290,37 @@ async function loadReportIncomeData(forceRefresh = false) {
   } finally {
     safeShowLoading(false);
   }
+}
+
+/**
+ * 💡 Populate the Unpaid Month Filter Dropdown dynamically based on Matrix Headers
+ */
+function populateIncomeUnpaidFilter() {
+  const filterEl = document.getElementById('report-income-unpaid-filter');
+  if (!filterEl || !gIncomeDetailRawData || !gIncomeDetailRawData.headers) return;
+
+  const headers = gIncomeDetailRawData.headers;
+  const currentVal = filterEl.value;
+  
+  let html = '<option value="">-- Show All Students --</option>';
+  
+  // Months columns usually start at index 14 and end before the "TOTAL" column
+  for (let i = 14; i < headers.length - 1; i++) {
+    html += `<option value="${i}">Unpaid for ${headers[i]}</option>`;
+  }
+  
+  filterEl.innerHTML = html;
+  filterEl.value = currentVal || "";
+}
+
+function onFilterChangeReportIncome() {
+  gIncomeDetailPage = 1; // Reset to page 1 on search or filter
+  renderIncomeDetailMatrixTable();
+}
+
+function changePageReportIncome(delta) {
+  gIncomeDetailPage += delta;
+  renderIncomeDetailMatrixTable();
 }
 
 function renderIncomeDetailMatrixTable() {
@@ -296,14 +332,63 @@ function renderIncomeDetailMatrixTable() {
   const grandTotalRow = gIncomeDetailRawData.grandTotalRow || [];
 
   const searchVal = (document.getElementById('report-income-search')?.value || '').toLowerCase().trim();
+  const unpaidIdx = parseInt(document.getElementById('report-income-unpaid-filter')?.value, 10);
 
+  // 💡 1. Apply Search and Unpaid Filter
   let filteredData = rawData;
+
   if (searchVal) {
-    filteredData = rawData.filter(row =>
+    filteredData = filteredData.filter(row =>
       Array.isArray(row) && row.some(cell => String(cell || '').toLowerCase().includes(searchVal))
     );
   }
 
+  // Filter for Active Students with 0 amount in the selected month
+  if (!isNaN(unpaidIdx) && unpaidIdx >= 14) {
+    filteredData = filteredData.filter(row => {
+      const status = String(row[8] || '').toLowerCase(); // Index 8 is Status
+      const monthPaidAmt = parseFloat(row[unpaidIdx]) || 0;
+      return status === 'active' && monthPaidAmt === 0;
+    });
+  }
+
+  // 💡 2. Apply Sorting (By Grade/Class sequentially, then by Name)
+  const classOrder = ["Pre School", "KG Student", "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6", "Grade 7", "Grade 8", "Grade 9", "Grade 10", "Grade 11", "Grade 12"];
+  
+  filteredData.sort((a, b) => {
+    const classA = String(a[9] || ''); // Index 9 is Class
+    const classB = String(b[9] || '');
+    let idxA = classOrder.indexOf(classA);
+    let idxB = classOrder.indexOf(classB);
+    
+    if (idxA === -1) idxA = 99; // Put unknown classes at the bottom
+    if (idxB === -1) idxB = 99;
+    
+    if (idxA === idxB) {
+      return String(a[4] || '').localeCompare(String(b[4] || '')); // Sort by Name if classes match
+    }
+    return idxA - idxB;
+  });
+
+  // 💡 3. Client-side Pagination (Limit to 50 rows per page to save RAM)
+  const totalEntries = filteredData.length;
+  const totalPages = Math.ceil(totalEntries / gIncomeDetailLimit) || 1;
+  if (gIncomeDetailPage > totalPages) gIncomeDetailPage = totalPages;
+
+  const startIndex = (gIncomeDetailPage - 1) * gIncomeDetailLimit;
+  const endIndex = Math.min(startIndex + gIncomeDetailLimit, totalEntries);
+  const pageItems = filteredData.slice(startIndex, endIndex);
+
+  // Update Pagination UI
+  const infoEl = document.getElementById('report-income-pagination-info');
+  if (infoEl) infoEl.innerHTML = `Showing <span class="text-sky-400 font-extrabold">${totalEntries === 0 ? 0 : startIndex + 1}</span> to <span class="text-sky-400 font-extrabold">${endIndex}</span> of <span class="text-sky-400 font-extrabold">${totalEntries}</span> entries`;
+  
+  const btnPrev = document.getElementById('report-income-btn-prev');
+  if (btnPrev) btnPrev.disabled = (gIncomeDetailPage <= 1);
+  const btnNext = document.getElementById('report-income-btn-next');
+  if (btnNext) btnNext.disabled = (endIndex >= totalEntries);
+
+  // 💡 4. Render Headers
   let headHtml = '<thead><tr class="bg-[#0e172a] text-slate-300 text-xs uppercase font-extrabold border-b border-slate-800">';
   headers.forEach((h, i) => {
     const alignClass = (i >= 10) ? 'text-right' : 'text-left';
@@ -311,23 +396,24 @@ function renderIncomeDetailMatrixTable() {
   });
   headHtml += '</tr></thead>';
 
+  // 💡 5. Render Body
   let bodyHtml = '<tbody class="divide-y divide-slate-800/40 text-xs text-slate-300">';
-  if (filteredData.length === 0) {
+  if (pageItems.length === 0) {
     bodyHtml += `<tr><td colspan="${headers.length}" class="text-center py-8 text-slate-500 font-bold">ရှာဖွေမှုနှင့် ကိုက်ညီသော ဝင်ငွေ အသေးစိတ် မရှိပါ။</td></tr>`;
   } else {
-    filteredData.forEach(row => {
+    pageItems.forEach((row, rowIndex) => {
       bodyHtml += '<tr class="hover:bg-slate-800/30 transition">';
       row.forEach((cell, i) => {
-        if (i === 2) {
+        if (i === 0) {
+          // Replace original NO with sequential NO for current view
+          bodyHtml += `<td class="px-3 py-2 border border-slate-800/60 font-bold text-center text-slate-400">${startIndex + rowIndex + 1}</td>`;
+        } else if (i === 2) {
           bodyHtml += `<td class="px-3 py-2 border border-slate-800/60 font-mono font-bold text-slate-200">${window.escapeHtml(cleanIntegerStr(cell))}</td>`;
         } else if (i === 5) {
           let promoBadge = 'bg-slate-800 text-slate-400 border-slate-700';
           const pStr = String(cell || '').toLowerCase();
-          if (pStr.includes('pro')) {
-            promoBadge = 'bg-teal-500/10 text-teal-300 border-teal-500/20 font-bold';
-          } else if (pStr.includes('scholar')) {
-            promoBadge = 'bg-amber-500/10 text-amber-300 border-amber-500/20 font-bold';
-          }
+          if (pStr.includes('pro')) promoBadge = 'bg-teal-500/10 text-teal-300 border-teal-500/20 font-bold';
+          else if (pStr.includes('scholar')) promoBadge = 'bg-amber-500/10 text-amber-300 border-amber-500/20 font-bold';
           bodyHtml += `<td class="px-3 py-2 border border-slate-800/60"><span class="px-2 py-0.5 rounded text-[10px] border ${promoBadge}">${window.escapeHtml(cell || '-')}</span></td>`;
         } else if (i === 8) {
           const isAct = String(cell || '').toLowerCase() === 'active';
@@ -345,8 +431,10 @@ function renderIncomeDetailMatrixTable() {
   }
   bodyHtml += '</tbody>';
 
+  // 💡 6. Render Footer
   let footHtml = '';
-  if (grandTotalRow && grandTotalRow.length > 0 && filteredData.length > 0) {
+  // Show grand total only if not heavily filtered to avoid confusing totals (Optional depending on business rule, but we keep it here for now)
+  if (grandTotalRow && grandTotalRow.length > 0 && pageItems.length > 0 && !unpaidIdx && !searchVal) {
     footHtml += '<tfoot><tr class="bg-indigo-500/10 font-black text-indigo-300 border-t-2 border-indigo-500/40 text-xs">';
     grandTotalRow.forEach((cell, i) => {
       if (i === 0) {
@@ -362,9 +450,6 @@ function renderIncomeDetailMatrixTable() {
   table.innerHTML = headHtml + bodyHtml + footHtml;
 }
 
-function onSearchInputReportIncome() {
-  renderIncomeDetailMatrixTable();
-}
 
 /**
  * 💡 CSV Exporter for Income Detail (Formula Injection Protected via window.safeCsvCell)
@@ -751,3 +836,5 @@ window.exportToCSVReportIncome = exportToCSVReportIncome;
 window.exportToCSVReportGeneral = exportToCSVReportGeneral;
 window.exportToCSVReportStudent = exportToCSVReportStudent;
 window.exportToCSVReportStaffFund = exportToCSVReportStaffFund;
+window.onFilterChangeReportIncome = onFilterChangeReportIncome;
+window.changePageReportIncome = changePageReportIncome;
