@@ -3,7 +3,9 @@
  * GOLDEN ERP SYSTEM - MAIN BANK & CASH BOOKS HANDLER (CLOUDFLARE D1)
  * File: handlers-bank-cash.js (Location: cashbook-api/handlers-bank-cash.js)
  * 💡 Features: Refactored with utils.js for DRY Principle,
- *              🚀 OPTIMIZED: Aggregations natively in SQL (SUM/COUNT), Avoided SELECT *
+ *              🚀 OPTIMIZED: Aggregations natively in SQL (SUM/COUNT),
+ *              🎯 EXPLICIT SELECTS: Avoided SELECT *, Exact Column Mapping
+ *              🚀 ULTRA-OPTIMIZED: Prevented Full Table Scans. Replaced OR with IN().
  * ==============================================================================
  */
 
@@ -127,45 +129,106 @@ export async function getBankCashData(db, body) {
     const activeFy = normalizeFyStr(body.fy || `FY ${getCurrentAcademicYear()}`);
     const fyClean = activeFy.replace(/^FY\s*/i, '');
 
-    // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)` limits Row Scans to matching Index only.
-    const statsResult = await db.prepare(`SELECT COALESCE(SUM(debit), 0) as totalIncome, COALESCE(SUM(credit), 0) as totalExpense FROM ${tableName} WHERE fy IN (?, ?)`).bind(activeFy, fyClean).first() || { totalIncome: 0, totalExpense: 0 };
+    // 🚀 ULTRA-OPTIMIZATION: Replace `fy = ? OR fy = ?` with `fy IN (?, ?)`
+    const statsResult = await db.prepare(`
+      SELECT 
+        COALESCE(SUM(debit), 0) as totalIncome,
+        COALESCE(SUM(credit), 0) as totalExpense
+      FROM ${tableName}
+      WHERE fy IN (?, ?)
+    `).bind(activeFy, fyClean).first() || { totalIncome: 0, totalExpense: 0 };
+
     let totalIncome = parseFloat(statsResult.totalIncome || 0);
     let totalExpense = parseFloat(statsResult.totalExpense || 0);
 
     if (totalIncome === 0 && totalExpense === 0) {
-      const allStats = await db.prepare(`SELECT COALESCE(SUM(debit), 0) as totalIncome, COALESCE(SUM(credit), 0) as totalExpense FROM ${tableName}`).first() || { totalIncome: 0, totalExpense: 0 };
+      const allStats = await db.prepare(`
+        SELECT 
+          COALESCE(SUM(debit), 0) as totalIncome,
+          COALESCE(SUM(credit), 0) as totalExpense
+        FROM ${tableName}
+      `).first() || { totalIncome: 0, totalExpense: 0 };
       totalIncome = parseFloat(allStats.totalIncome || 0);
       totalExpense = parseFloat(allStats.totalExpense || 0);
     }
+
     const balance = totalIncome - totalExpense;
 
     let whereClauses = [];
     let params = [];
+
+    // Search Mode: Usually cross-FY or explicit search
     if (searchVal) {
       whereClauses.push(`(description LIKE ? OR category LIKE ? OR CAST(debit AS TEXT) LIKE ? OR CAST(credit AS TEXT) LIKE ? OR vr_no LIKE ?)`);
       const p = `%${searchVal}%`;
       params.push(p, p, p, p, p);
     }
+
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
+    // 🚀 OPTIMIZATION: COUNT(id)
     const countRow = await db.prepare(`SELECT COUNT(id) as count FROM ${tableName} ${whereSql}`).bind(...params).first();
     const totalRows = countRow ? countRow.count : 0;
 
-    const dataQuery = `SELECT id, no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, is_locked, uniqueid FROM ${tableName} ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`;
+    // 🚀 OPTIMIZATION: Explicit Columns
+    const dataQuery = `
+      SELECT id, no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, is_locked, uniqueid 
+      FROM ${tableName} 
+      ${whereSql} 
+      ORDER BY id DESC 
+      LIMIT ? OFFSET ?
+    `;
     const rowsRes = await db.prepare(dataQuery).bind(...params, limit, offset).all();
     const rawRows = rowsRes.results || [];
 
     const formattedRows = rawRows.map(row => {
       const uid = String(row.uniqueid || '');
-      const isAutoLocked = Boolean(row.is_locked || uid.startsWith('UNIPROFIT_') || uid.startsWith('UNICASHIER_') || uid.startsWith('TRANS_') || uid.startsWith('DAILY_INC_'));
+      const isAutoLocked = Boolean(
+        row.is_locked || 
+        uid.startsWith('UNIPROFIT_') || 
+        uid.startsWith('UNICASHIER_') || 
+        uid.startsWith('TRANS_') || 
+        uid.startsWith('DAILY_INC_')
+      );
+
       return {
-        id: row.id, no: Math.floor(parseFloat(row.no || row.id || 1)), date: row.date || '', category: row.category || '', description: row.description || '', method: row.method || (tableName === 'bank' ? 'Bank' : 'Cash'), debit: parseFloat(row.debit || 0), credit: parseFloat(row.credit || 0), balances: parseFloat(row.balances || 0), transfer: row.transfer || '', vrNo: row.vr_no || '', my: row.my || '', fy: normalizeFyStr(row.fy || activeFy), bookName: row.book_name || rawBook, uniqueId: uid || `ID_${row.id}`, isLocked: isAutoLocked
+        id: row.id,
+        no: Math.floor(parseFloat(row.no || row.id || 1)),
+        date: row.date || '',
+        category: row.category || '',
+        description: row.description || '',
+        method: row.method || (tableName === 'bank' ? 'Bank' : 'Cash'),
+        debit: parseFloat(row.debit || 0),
+        credit: parseFloat(row.credit || 0),
+        balances: parseFloat(row.balances || 0),
+        transfer: row.transfer || '',
+        vrNo: row.vr_no || '',
+        my: row.my || '',
+        fy: normalizeFyStr(row.fy || activeFy),
+        bookName: row.book_name || rawBook,
+        uniqueId: uid || `ID_${row.id}`,
+        isLocked: isAutoLocked
       };
     });
 
-    return { success: true, data: formattedRows, totalRows: totalRows, page: page, limit: limit, stats: { totalIncome, totalExpense, balance } };
+    return {
+      success: true,
+      data: formattedRows,
+      totalRows: totalRows,
+      page: page,
+      limit: limit,
+      stats: {
+        totalIncome: totalIncome,
+        totalExpense: totalExpense,
+        balance: balance
+      }
+    };
   } catch (err) {
-    return { success: false, message: "Bank/Cash စာရင်း ရယူရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message };
+    console.error("Error in getBankCashData handler:", err);
+    return {
+      success: false,
+      message: "Bank/Cash စာရင်း ရယူရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message
+    };
   }
 }
 
@@ -190,7 +253,6 @@ export async function saveBankCashEntry(db, session, body) {
     const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(session?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport || body.skipAutoPost);
 
-    // ⚡ Refactored: Uses generateUniqueId from utils.js
     const uniqueid = (isMigration && body.uniqueId)
       ? String(body.uniqueId).trim()
       : generateUniqueId('BCK');
@@ -284,13 +346,14 @@ export async function updateBankCashEntry(db, session, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    const existing = await db.prepare(`SELECT * FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    // 🚀 OPTIMIZATION: Avoid SELECT *
+    const existing = await db.prepare(`SELECT fy, date, is_locked, uniqueid FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ပြင်ဆင်မည့် စာရင်း ရှာမတွေ့ပါ။" };
     }
 
     const uid = String(existing.uniqueid || '');
-    const isAutoLocked = Boolean(existing.is_locked || existing.isLocked) ||
+    const isAutoLocked = Boolean(existing.is_locked) ||
       uid.startsWith('TRANS_') ||
       uid.startsWith('UNIPROFIT_') ||
       uid.startsWith('UNICASHIER_') ||
@@ -354,7 +417,6 @@ export async function updateBankCashEntry(db, session, body) {
 
     await db.batch(batchStatements);
 
-    // ⚡ Quota-Shield Recalculate
     await recalculateLedgerBalances(db, tableName, fy);
     if (oldFy && oldFy !== fy) {
       await recalculateLedgerBalances(db, tableName, oldFy);
@@ -390,13 +452,14 @@ export async function deleteBankCashEntry(db, session, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    const existing = await db.prepare(`SELECT * FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    // 🚀 OPTIMIZATION: Avoid SELECT *
+    const existing = await db.prepare(`SELECT fy, transfer, is_locked, uniqueid FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ဖျက်သိမ်းမည့် စာရင်း ရှာမတွေ့ပါ။" };
     }
 
     const uid = String(existing.uniqueid || '');
-    const isAutoLocked = Boolean(existing.is_locked || existing.isLocked) ||
+    const isAutoLocked = Boolean(existing.is_locked) ||
       uid.startsWith('TRANS_') ||
       uid.startsWith('UNIPROFIT_') ||
       uid.startsWith('UNICASHIER_') ||
