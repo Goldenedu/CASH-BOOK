@@ -5,6 +5,7 @@
  * 💡 Features: Refactored with utils.js for DRY Principle,
  *              🎯 Phase 4: Added Date Range Support (fromJoinDate/toJoinDate)
  *              🚀 OPTIMIZED: Avoided SELECT *, switched to COUNT(id) for faster scan
+ *              🚀 ULTRA-OPTIMIZED: Explicit Column Selects and targeted index lookups
  * ==============================================================================
  */
 
@@ -69,12 +70,25 @@ export async function getStaffData(db, body, userSession) {
     const countRow = await db.prepare(`SELECT COUNT(id) as count FROM ${table} ${whereSql}`).bind(...params).first();
     const totalRows = countRow ? countRow.count : 0;
 
-    // 🚀 OPTIMIZATION: Explicit columns
+    // 🚀 ULTRA-OPTIMIZATION: Explicit columns
     let dataQuery = '';
     if (isPartTime) {
-       dataQuery = `SELECT id, no, join_date, category, staff_id, name, staff_idname, education, position, total_salary, total_net_amt, resigned_date, status, gender, nrc_no, bank_account, phone_no, email, uniqueid FROM ${table} ${whereSql} ORDER BY id DESC LIMIT 1000`;
+       dataQuery = `
+         SELECT id, no, join_date, category, staff_id, name, staff_idname, education, position, 
+                total_salary, total_net_amt, resigned_date, status, gender, nrc_no, bank_account, phone_no, email, uniqueid 
+         FROM ${table} 
+         ${whereSql} 
+         ORDER BY id DESC LIMIT 1000
+       `;
     } else {
-       dataQuery = `SELECT id, no, join_date, category, staff_id, name, staff_idname, education, position, salary_grade, working_days, basic_amt, extra_amt, total_salary, bonus, fund, total_net_amt, resigned_date, status, gender, nrc_no, bank_account, phone_no, email, fund_date, unpaid_bonus, unpaid_fund, uniqueid FROM ${table} ${whereSql} ORDER BY id DESC LIMIT 1000`;
+       dataQuery = `
+         SELECT id, no, join_date, category, staff_id, name, staff_idname, education, position, 
+                salary_grade, working_days, basic_amt, extra_amt, total_salary, bonus, fund, total_net_amt, 
+                resigned_date, status, gender, nrc_no, bank_account, phone_no, email, fund_date, unpaid_bonus, unpaid_fund, uniqueid 
+         FROM ${table} 
+         ${whereSql} 
+         ORDER BY id DESC LIMIT 1000
+       `;
     }
 
     const rows = await db.prepare(dataQuery).bind(...params).all();
@@ -395,6 +409,7 @@ export async function saveHrPayrollForm(db, userSession, body) {
 
     if (!isMigration && staffIdStr) {
       const targetStaffId = parseInt(staffIdStr, 10);
+      // 🚀 ULTRA-OPTIMIZATION: Explicit Column Select
       const staffRow = await db.prepare("SELECT id, unpaid_bonus, unpaid_fund, bonus, fund FROM staff_fulltime WHERE staff_id = ? OR id = ? LIMIT 1").bind(targetStaffId, targetStaffId).first();
 
       if (staffRow) {
@@ -436,14 +451,14 @@ export async function saveHrPayrollForm(db, userSession, body) {
  */
 export async function getPayrollSettings(db, body) {
   try {
-    let matrix = await db.prepare("SELECT * FROM salary_grade_matrix WHERE id = 1").first();
+    let matrix = await db.prepare("SELECT id, grade_a, grade_b, grade_c, grade_d, grade_e, grade_f, grade_g, grade_h, grade_i, grade_j, grade_k, grade_l, bonus_rate, fund_rate FROM salary_grade_matrix WHERE id = 1").first();
     
     if (!matrix) {
       await db.prepare(`INSERT OR IGNORE INTO salary_grade_matrix (
         id, grade_a, grade_b, grade_c, grade_d, grade_e, grade_f, grade_g, grade_h, grade_i, grade_j, grade_k, grade_l, bonus_rate, fund_rate, updated_at
       ) VALUES (1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.05, datetime('now'))`).run();
       
-      matrix = await db.prepare("SELECT * FROM salary_grade_matrix WHERE id = 1").first();
+      matrix = await db.prepare("SELECT id, grade_a, grade_b, grade_c, grade_d, grade_e, grade_f, grade_g, grade_h, grade_i, grade_j, grade_k, grade_l, bonus_rate, fund_rate FROM salary_grade_matrix WHERE id = 1").first();
     }
 
     return { success: true, data: matrix || {} };
