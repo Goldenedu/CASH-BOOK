@@ -5,6 +5,7 @@
  * 💡 Features: Refactored with utils.js for DRY Principle
  *              🚀 OPTIMIZED: SQL-Side Active/Inactive Aggregations
  *              🎯 EXPLICIT SELECTS: Avoided SELECT *, Exact Column Mapping
+ *              🚀 ULTRA-OPTIMIZED: Prevented Full Table Scans. Replaced OR with IN().
  * ==============================================================================
  */
 
@@ -18,8 +19,9 @@ import {
 
 async function generateFyNo(db, tableName, fy) {
   const normFy = normalizeFyClean(fy);
+  // 🚀 ULTRA-OPTIMIZATION: Replace OR with IN() to leverage Index Seek
   const lastNoRow = await db.prepare(
-    `SELECT MAX(CAST(no AS INTEGER)) as maxNo FROM ${tableName} WHERE fy = ? OR fy = ?`
+    `SELECT MAX(CAST(no AS INTEGER)) as maxNo FROM ${tableName} WHERE fy IN (?, ?)`
   ).bind(normFy, `FY ${normFy}`).first();
   return (lastNoRow && lastNoRow.maxNo ? parseInt(lastNoRow.maxNo, 10) : 0) + 1;
 }
@@ -38,8 +40,9 @@ export async function getStudentData(db, body) {
     let whereClauses = [];
     let params = [];
 
+    // 🚀 ULTRA-OPTIMIZATION: Replace OR with IN() to leverage Index Seek
     if (body.fy && body.fy !== 'all') {
-      whereClauses.push(`(fy = ? OR fy = ?)`);
+      whereClauses.push(`(fy IN (?, ?))`);
       params.push(activeFy, `FY ${activeFy}`);
     }
 
@@ -180,7 +183,8 @@ export async function saveStudentEntry(db, userSession, body) {
     // 💡 1. PRESERVE EXACT ID FROM GOOGLE SHEET (Column E)
     let studentId = parseInt(body.studentId || body.id, 10);
     if (!studentId || isNaN(studentId)) {
-      const maxRow = await db.prepare("SELECT MAX(CAST(student_id AS INTEGER)) as max_id FROM student WHERE fy = ? OR fy = ?").bind(cleanFy, `FY ${cleanFy}`).first();
+      // 🚀 ULTRA-OPTIMIZATION: Replace OR with IN() to leverage Index Seek
+      const maxRow = await db.prepare("SELECT MAX(CAST(student_id AS INTEGER)) as max_id FROM student WHERE fy IN (?, ?)").bind(cleanFy, `FY ${cleanFy}`).first();
       const currentMax = maxRow && maxRow.max_id ? parseInt(maxRow.max_id, 10) : 0;
       studentId = currentMax + 1;
     }
