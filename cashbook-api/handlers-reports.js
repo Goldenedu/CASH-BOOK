@@ -10,7 +10,8 @@
  *              🎯 Auto Grade Sorting Reversed (Grade 12 to Pre School),
  *              🎯 Advanced "Unpaid Month" Logic (Accumulated check from Join Date),
  *              🔥 SMART LEAVE FILTER (TEXT-SCANNING ENGINE): Zero Quota Cost & Resilient,
- *              🎓 FULL SCHOLAR EXEMPTION: Automatically excludes Full Scholar students from Unpaid lists
+ *              🎓 FULL SCHOLAR EXEMPTION: Automatically excludes Full Scholar students from Unpaid lists,
+ *              ⚡ ADVANCE AUTO-ROLLOVER ENGINE: Automatically cascades lump-sum advance payments across upcoming months
  * ==============================================================================
  */
 
@@ -66,6 +67,51 @@ function get12FiscalMonths(fyStr) {
   ];
 
   return monthsDef.map(item => `${item.m}-${String(item.y).slice(-2)}`);
+}
+
+/**
+ * 💡 Helper to intelligently detect a student's regular monthly fee
+ */
+function detectStudentMonthlyFee(monthlyServices, remarksList = []) {
+  const nonZero = monthlyServices.filter(v => v > 0);
+  if (nonZero.length === 0) return 0;
+
+  const freq = new Map();
+  nonZero.forEach(v => freq.set(v, (freq.get(v) || 0) + 1));
+
+  let maxCount = 0;
+  let modeVal = nonZero[0];
+  for (const [val, count] of freq.entries()) {
+    if (count > maxCount) {
+      maxCount = count;
+      modeVal = val;
+    }
+  }
+
+  const minVal = Math.min(...nonZero);
+  const maxVal = Math.max(...nonZero);
+
+  if (minVal < maxVal && (maxVal % minVal === 0 || maxVal >= 2 * minVal)) {
+    return minVal;
+  }
+
+  if (maxCount >= 2) {
+    return modeVal;
+  }
+
+  for (const r of remarksList) {
+    const rLower = String(r || '').toLowerCase();
+    const mMatch = rLower.match(/(\d+)\s*(?:months?|လ)/);
+    if (mMatch && parseInt(mMatch[1], 10) > 1) {
+      const numMonths = parseInt(mMatch[1], 10);
+      if (maxVal % numMonths === 0) {
+        return maxVal / numMonths;
+      }
+      return Math.round(maxVal / numMonths);
+    }
+  }
+
+  return minVal;
 }
 
 export async function getFinancialReportData(db, body) {
@@ -241,11 +287,11 @@ export async function getIncomeDetailReportData(db, body) {
         nightStudy: 0,
         others: 0,
         monthlyServices: new Array(12).fill(0),
-        leaveMonths: new Set() // 💡 Store indices of exempted months
+        leaveMonths: new Set(),
+        remarksList: []
       });
     });
 
-    // 💡 Myanmar Month Mapping for Smart Text Scanner
     const myanmarMonths = {
       'mar': ['mar', 'မတ်'], 'apr': ['apr', 'ဧပြီ'], 'may': ['may', 'မေ'],
       'jun': ['jun', 'ဇွန်'], 'jul': ['jul', 'ဇူလိုင်'], 'aug': ['aug', 'သြဂုတ်', 'ဩဂုတ်'],
@@ -265,7 +311,11 @@ export async function getIncomeDetailReportData(db, body) {
       const mStr = parseSafeMonthYear(effDate);
       const mIdx = monthKeys.indexOf(mStr);
 
-      // 🔥 SMART LEAVE FILTER ENGINE (Text-Scanning from Income remark)
+      if (row.remark) {
+        stGroup.remarksList.push(row.remark);
+      }
+
+      // Smart Leave Filter
       const rText = String(row.remark || '').toLowerCase();
       if (rText.includes('leave') || rText.includes('inactive') || rText.includes('နား') || rText.includes('ခွင့်')) {
         let foundExplicitMonth = false;
@@ -302,16 +352,42 @@ export async function getIncomeDetailReportData(db, body) {
       }
     });
 
+    // ⚡ ADVANCE AUTO-ROLLOVER ENGINE (Cascading advance payments forward)
+    studentGroupMap.forEach(stGroup => {
+      const regularFee = detectStudentMonthlyFee(stGroup.monthlyServices, stGroup.remarksList);
+
+      if (regularFee > 0) {
+        for (let m = 0; m < 12; m++) {
+          if (stGroup.monthlyServices[m] >= regularFee * 1.5) {
+            const totalPaidThisMonth = stGroup.monthlyServices[m];
+            let remainingAdvance = totalPaidThisMonth - regularFee;
+            stGroup.monthlyServices[m] = regularFee;
+
+            for (let nextM = m + 1; nextM < 12 && remainingAdvance > 0; nextM++) {
+              if (stGroup.monthlyServices[nextM] <= 0 && !stGroup.leaveMonths.has(nextM)) {
+                const alloc = Math.min(remainingAdvance, regularFee);
+                stGroup.monthlyServices[nextM] = alloc;
+                remainingAdvance -= alloc;
+              }
+            }
+
+            if (remainingAdvance > 0) {
+              stGroup.monthlyServices[m] += remainingAdvance;
+            }
+          }
+        }
+      }
+    });
+
     let processedList = Array.from(studentGroupMap.values());
 
-    // 🎯 Advanced "Unpaid Month" Logic with Leave & Full Scholar Exemption
+    // Advanced "Unpaid Month" Logic with Leave & Full Scholar Exemption
     if (unpaidMonthLabel) {
       const targetIdx = monthKeys.indexOf(unpaidMonthLabel);
       if (targetIdx >= 0) {
         processedList = processedList.filter(st => {
           if (String(st.status).toLowerCase() !== 'active') return false;
 
-          // 🎓 FULL SCHOLAR EXEMPTION: ပညာသင်ဆု အပြည့်ရသူများကို Unpaid စာရင်းမှ ဖယ်ထုတ်ခြင်း
           const promoStr = String(st.promo || '').toLowerCase().trim();
           const catStr = String(st.category || '').toLowerCase().trim();
           if ((promoStr.includes('full') && promoStr.includes('scholar')) || 
@@ -333,7 +409,6 @@ export async function getIncomeDetailReportData(db, body) {
 
           let hasUnpaid = false;
           for (let i = joinIdx; i <= targetIdx; i++) {
-            // 💡 If balance is 0 but it's marked as a "Leave" month, skip it
             if (st.monthlyServices[i] <= 0 && !st.leaveMonths.has(i)) {
               hasUnpaid = true;
               break;
@@ -370,7 +445,6 @@ export async function getIncomeDetailReportData(db, body) {
       const servicesSum = st.monthlyServices.reduce((a, b) => a + b, 0);
       const rowTotal = st.registration + st.ferry + st.nightStudy + st.others + servicesSum;
 
-      // 💡 Display "Leave" text if the month is marked as leave and has 0 balance
       const finalMonthlyServices = st.monthlyServices.map((amt, idx) => {
         if (amt <= 0 && st.leaveMonths.has(idx)) return "Leave";
         return amt;
