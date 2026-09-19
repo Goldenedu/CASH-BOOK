@@ -6,7 +6,8 @@
  *              🎯 Real Calendar Date Validation (Zero 2026-02-31 JS Rollover Bug),
  *              Accounting Parentheses (1000) & Comma-Separated Number Support,
  *              Smarter Formula Injection Defense (Preserves Phone +95 & Bullet - Text),
- *              ⚡ FIX: Income & Student Money Description Bypass (Remark is optional)
+ *              ⚡ FIX: Income & Student Money Description Bypass (Remark is optional),
+ *              🚀 ARCHITECT FIX: Array Payload Crash Protection & Exact Float Rounding
  * ==============================================================================
  */
 
@@ -66,11 +67,23 @@ export function sanitizeFormulaInput(str) {
 }
 
 /**
- * 💡 RECURSIVELY SANITIZE ALL STRING FIELDS IN AN OBJECT
+ * 💡 RECURSIVELY SANITIZE ALL STRING FIELDS IN AN OBJECT (Supports Arrays)
  * Includes Prototype Pollution Defense & Maximum Depth Guard (Depth <= 6)
  */
 export function sanitizeObjectFormulas(obj, depth = 0) {
   if (!obj || typeof obj !== 'object' || depth > 6) return obj;
+
+  // 🚀 ARCHITECT FIX: Support Arrays safely
+  if (Array.isArray(obj)) {
+    for (let i = 0; i < obj.length; i++) {
+      if (typeof obj[i] === 'string') {
+        obj[i] = sanitizeFormulaInput(obj[i]);
+      } else if (typeof obj[i] === 'object' && obj[i] !== null) {
+        sanitizeObjectFormulas(obj[i], depth + 1);
+      }
+    }
+    return obj;
+  }
 
   for (const key of Object.keys(obj)) {
     // 🔒 Prototype Pollution Defense
@@ -154,7 +167,10 @@ export function validateAmount(val, fieldName = "Amount", allowNegative = false)
     return { valid: false, message: `${fieldName} သည် ၀ ထက် ငယ်၍ မရပါ။` };
   }
 
-  return { valid: true, value: Number(num.toFixed(2)) };
+  // 🚀 ARCHITECT FIX: Strict IEEE 754 float rounding to 2 decimals to prevent False Positives in D1 Recalc Engine
+  const exactValue = Math.round((num + Number.EPSILON) * 100) / 100;
+
+  return { valid: true, value: exactValue };
 }
 
 /**

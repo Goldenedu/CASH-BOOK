@@ -6,6 +6,7 @@
  *              🚀 OPTIMIZED: Aggregations natively in SQL (SUM/COUNT), 
  *              🎯 EXPLICIT SELECTS: Safely avoided SELECT * with exact DB columns
  *              🚀 ULTRA-OPTIMIZED: Prevented Full Table Scans. Replaced OR with IN().
+ *              🚀 PHASE 1 & 2 (INCREMENTAL + QUEUE): Batched O(1) Window Function Recalcs
  * ==============================================================================
  */
 
@@ -22,6 +23,32 @@ import {
   recalculateLedgerBalances,
   generateUniqueId
 } from './utils.js';
+
+// ==========================================
+// 💡 RECALCULATION QUEUE ENGINE (PHASE 2)
+// ==========================================
+function makeRecalcQueue() {
+  const targets = new Map();
+  return {
+    add(table, fy, date) {
+      if (!table || !fy || !date) return;
+      const key = `${table}|${normalizeFyStr(fy).replace(/^FY\s*/i, '')}`;
+      const existing = targets.get(key);
+      if (!existing || date < existing.date) {
+        targets.set(key, { table, fy, date });
+      }
+    },
+    async flush(db) {
+      for (const { table, fy, date } of targets.values()) {
+        await recalculateLedgerBalances(db, table, fy, date);
+      }
+    }
+  };
+}
+
+// ==========================================
+// 💡 UTILITY FUNCTIONS
+// ==========================================
 
 function formatDDMMYY(entryDate) {
   const parts = String(entryDate || '').split('-');
@@ -117,9 +144,9 @@ async function cleanLinkedIncomeEntries(db, uniqueid) {
 }
 
 /**
- * ⚡ FIX: Safe SELECT -> UPDATE/INSERT (Zero ON CONFLICT Errors & Targeted Recalculate)
+ * ⚡ FIX: Safe SELECT -> UPDATE/INSERT (Zero ON CONFLICT Errors & Queued Recalculate)
  */
-async function postCashierIndividualLine(db, targetMethod, amount, body, entryDate, my, fy, createdBy, uidSuffix) {
+async function postCashierIndividualLine(db, targetMethod, amount, body, entryDate, my, fy, createdBy, uidSuffix, recalcQueue) {
   if (amount <= 0) return;
 
   const normFy = normalizeFyStr(fy);
@@ -152,21 +179,20 @@ async function postCashierIndividualLine(db, targetMethod, amount, body, entryDa
     ).run();
   }
 
-  await recalculateLedgerBalances(db, caTable, normFy);
+  recalcQueue?.add(caTable, normFy, entryDate);
 }
 
 /**
- * ⚡ FIX: Safe Daily Income Rollup (Zero ON CONFLICT Errors)
+ * ⚡ FIX: Safe Daily Income Rollup (Zero ON CONFLICT Errors & Queued Recalculate)
  */
-async function upsertDailyIncomeRollup(db, tableName, entryDate, fy, createdBy) {
+async function upsertDailyIncomeRollup(db, tableName, entryDate, fy, createdBy, recalcQueue) {
   const normFy = normalizeFyStr(fy);
   const isBank = tableName === 'bank';
   const prefix = isBank ? 'BNK' : 'CAH';
   const methodLabel = isBank ? 'Bank' : 'Cash';
   const uniqueid = `DAILY_INC_${tableName.toUpperCase()}_${entryDate}`;
 
-  // 🚀 ULTRA-OPTIMIZATION: Reduced OR logic scanning by checking specific values
-  // By using UNION ALL or separating logic, we avoid table full scans.
+  // 🚀 ULTRA-OPTIMIZATION: Check specific methods directly to utilize Index
   const stats = await db.prepare(`
     SELECT 
       COALESCE(SUM(credit - debit), 0) as netAmount,
@@ -180,7 +206,7 @@ async function upsertDailyIncomeRollup(db, tableName, entryDate, fy, createdBy) 
 
   if (count <= 0 || netAmount <= 0) {
     await db.prepare(`DELETE FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).run();
-    await recalculateLedgerBalances(db, tableName, normFy);
+    recalcQueue?.add(tableName, normFy, entryDate);
     return;
   }
 
@@ -212,32 +238,32 @@ async function upsertDailyIncomeRollup(db, tableName, entryDate, fy, createdBy) 
     ).run();
   }
 
-  await recalculateLedgerBalances(db, tableName, normFy);
+  recalcQueue?.add(tableName, normFy, entryDate);
 }
 
-async function syncDailyIncomeRollupForDate(db, entryDate, fy, createdBy, targetMethod = null) {
+async function syncDailyIncomeRollupForDate(db, entryDate, fy, createdBy, targetMethod = null, recalcQueue) {
   if (!entryDate) return;
 
   if (targetMethod) {
     const m = String(targetMethod).toLowerCase();
     if (m === 'cash') {
-      await upsertDailyIncomeRollup(db, 'cash', entryDate, fy, createdBy);
+      await upsertDailyIncomeRollup(db, 'cash', entryDate, fy, createdBy, recalcQueue);
     } else if (m === 'bank') {
-      await upsertDailyIncomeRollup(db, 'bank', entryDate, fy, createdBy);
+      await upsertDailyIncomeRollup(db, 'bank', entryDate, fy, createdBy, recalcQueue);
     } else {
-      await upsertDailyIncomeRollup(db, 'cash', entryDate, fy, createdBy);
-      await upsertDailyIncomeRollup(db, 'bank', entryDate, fy, createdBy);
+      await upsertDailyIncomeRollup(db, 'cash', entryDate, fy, createdBy, recalcQueue);
+      await upsertDailyIncomeRollup(db, 'bank', entryDate, fy, createdBy, recalcQueue);
     }
   } else {
-    await upsertDailyIncomeRollup(db, 'cash', entryDate, fy, createdBy);
-    await upsertDailyIncomeRollup(db, 'bank', entryDate, fy, createdBy);
+    await upsertDailyIncomeRollup(db, 'cash', entryDate, fy, createdBy, recalcQueue);
+    await upsertDailyIncomeRollup(db, 'bank', entryDate, fy, createdBy, recalcQueue);
   }
 }
 
 /**
- * ⚡ FIX: Post Linked Refund Auto Entries (Zero ON CONFLICT Errors)
+ * ⚡ FIX: Post Linked Refund Auto Entries (Zero ON CONFLICT Errors & Queued Recalculate)
  */
-async function postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdBy, uniqueid) {
+async function postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdBy, uniqueid, recalcQueue) {
   const normFy = normalizeFyStr(fy);
   const method = String(body.method || 'Cash').toLowerCase();
   const debit = parseFloat(body.debit || 0);
@@ -292,11 +318,11 @@ async function postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdB
       ).run();
     }
 
-    await recalculateLedgerBalances(db, refundTable, normFy);
-    await recalculateLedgerBalances(db, caTable, normFy);
+    recalcQueue?.add(refundTable, normFy, entryDate);
+    recalcQueue?.add(caTable, normFy, entryDate);
   }
 
-  await syncDailyIncomeRollupForDate(db, entryDate, normFy, createdBy);
+  await syncDailyIncomeRollupForDate(db, entryDate, normFy, createdBy, null, recalcQueue);
 }
 
 /**
@@ -429,13 +455,20 @@ export async function saveIncomeEntry(db, session, body) {
     ? String(body.uniqueId).trim()
     : generateUniqueId('INC');
 
-  return _saveIncomeEntryCore(db, session, body, uniqueid, isMigration);
+  // 🚀 Initialize Recalc Queue
+  const recalcQueue = makeRecalcQueue();
+  const res = await _saveIncomeEntryCore(db, session, body, uniqueid, isMigration, recalcQueue);
+  
+  // 🚀 Flush Recalc Queue ONCE at the end
+  await recalcQueue.flush(db);
+
+  return res;
 }
 
 /**
  * 💡 Phase 2.1: Internal upsert core with Atomic db.batch() for Split Payments
  */
-async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration) {
+async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration, recalcQueue) {
   try {
     const createdBy = session?.name || body.createdBy || "Admin";
 
@@ -491,12 +524,14 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration) {
         await db.batch(batchStmts);
       }
 
+      recalcQueue?.add('income', fy, entryDate);
+
       if (!isMigration) {
         if (cashAmt > 0) {
-          await postCashierIndividualLine(db, 'Cash', cashAmt, body, entryDate, my, fy, createdBy, `${uniqueid}_CASH`);
+          await postCashierIndividualLine(db, 'Cash', cashAmt, body, entryDate, my, fy, createdBy, `${uniqueid}_CASH`, recalcQueue);
         }
         if (bankAmt > 0) {
-          await postCashierIndividualLine(db, 'Bank', bankAmt, body, entryDate, my, fy, createdBy, `${uniqueid}_BANK`);
+          await postCashierIndividualLine(db, 'Bank', bankAmt, body, entryDate, my, fy, createdBy, `${uniqueid}_BANK`, recalcQueue);
         }
       }
     } else {
@@ -513,10 +548,11 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration) {
       }, isMigration);
 
       await singleStmt.run();
+      recalcQueue?.add('income', fy, entryDate);
 
       const netAmount = credit - debit;
       if (!isMigration && netAmount > 0) {
-        await postCashierIndividualLine(db, body.method || 'Cash', netAmount, body, entryDate, my, fy, createdBy, uniqueid);
+        await postCashierIndividualLine(db, body.method || 'Cash', netAmount, body, entryDate, my, fy, createdBy, uniqueid, recalcQueue);
       }
     }
 
@@ -529,7 +565,7 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration) {
     }
 
     // Live Operational Mode
-    await postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdBy, uniqueid);
+    await postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdBy, uniqueid, recalcQueue);
 
     return {
       success: true,
@@ -577,8 +613,17 @@ export async function updateIncomeEntry(db, session, body) {
     const oldDate = existing?.date || null;
     const oldFy = existing?.fy || null;
 
+    const recalcQueue = makeRecalcQueue();
     const cleanResults = await cleanLinkedIncomeEntries(db, uniqueid);
-    const res = await _saveIncomeEntryCore(db, session, body, uniqueid, false);
+
+    // Queue up the old records' tables for recalculation to clear balances
+    if (cleanResults.ca_cash) recalcQueue.add('ca_cash', oldFy || body.fy, oldDate || body.date);
+    if (cleanResults.ca_bank) recalcQueue.add('ca_bank', oldFy || body.fy, oldDate || body.date);
+    if (cleanResults.cash) recalcQueue.add('cash', oldFy || body.fy, oldDate || body.date);
+    if (cleanResults.bank) recalcQueue.add('bank', oldFy || body.fy, oldDate || body.date);
+    recalcQueue.add('income', oldFy || body.fy, oldDate || body.date);
+
+    const res = await _saveIncomeEntryCore(db, session, body, uniqueid, false, recalcQueue);
 
     const entryDate = getMyanmarDateString(body.date || existing.date);
     const createdBy = session?.name || 'Admin';
@@ -586,15 +631,13 @@ export async function updateIncomeEntry(db, session, body) {
     const normFy = normalizeFyStr(body.fy || calculateAcademicFyFromDate(entryDate));
     const method = body.method || existing.method || 'Cash';
 
-    if (cleanResults.ca_cash) await recalculateLedgerBalances(db, 'ca_cash', oldFy || body.fy);
-    if (cleanResults.ca_bank) await recalculateLedgerBalances(db, 'ca_bank', oldFy || body.fy);
-
+    // Handle Rollup shifting if the date was changed
     if (oldDate && oldDate !== entryDate) {
-      await syncDailyIncomeRollupForDate(db, entryDate, normFy, createdBy, method);
-      if (oldDate) {
-        await syncDailyIncomeRollupForDate(db, oldDate, oldFy || normFy, createdBy, method);
-      }
+      await syncDailyIncomeRollupForDate(db, oldDate, oldFy || normFy, createdBy, method, recalcQueue);
     }
+
+    // Flush all batched recalcs at the end
+    await recalcQueue.flush(db);
 
     return res;
   } catch (err) {
@@ -638,14 +681,21 @@ export async function deleteIncomeEntry(db, session, body) {
     const entryDate = existing?.date || null;
     const fy = existing?.fy || null;
 
+    const recalcQueue = makeRecalcQueue();
     const cleanResults = await cleanLinkedIncomeEntries(db, uniqueid);
 
-    if (cleanResults.ca_cash) await recalculateLedgerBalances(db, 'ca_cash', fy);
-    if (cleanResults.ca_bank) await recalculateLedgerBalances(db, 'ca_bank', fy);
+    if (cleanResults.ca_cash) recalcQueue.add('ca_cash', fy, entryDate);
+    if (cleanResults.ca_bank) recalcQueue.add('ca_bank', fy, entryDate);
+    if (cleanResults.cash) recalcQueue.add('cash', fy, entryDate);
+    if (cleanResults.bank) recalcQueue.add('bank', fy, entryDate);
+    recalcQueue.add('income', fy, entryDate);
 
     if (entryDate) {
-      await syncDailyIncomeRollupForDate(db, entryDate, fy, session?.name || 'Admin');
+      await syncDailyIncomeRollupForDate(db, entryDate, fy, session?.name || 'Admin', null, recalcQueue);
     }
+
+    // Flush all batched recalcs at the end
+    await recalcQueue.flush(db);
 
     return {
       success: true,

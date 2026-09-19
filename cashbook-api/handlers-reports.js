@@ -208,6 +208,7 @@ export async function getIncomeDetailReportData(db, body) {
     }
     const whereSql = `WHERE ` + whereClauses.join(' AND ');
 
+    // Fetch ONLY the students matching the criteria (Paginated processing logic below)
     const allStudents = (await db.prepare(`
       SELECT s.student_id, s.id, s.fy, s.fyid, s.name, s.fyid_name, s.promo, s.date, s.transfer_date, s.status, s.class 
       FROM student s ${whereSql}
@@ -274,6 +275,7 @@ export async function getIncomeDetailReportData(db, body) {
 
     let processedList = Array.from(studentGroupMap.values());
 
+    // Advanced "Unpaid Month" Logic
     if (unpaidMonthLabel) {
       const targetIdx = monthKeys.indexOf(unpaidMonthLabel);
       if (targetIdx >= 0) {
@@ -472,8 +474,8 @@ export async function getStudentReportDetails(db, body) {
  */
 export async function getFundReportData(db, body) {
   try {
-    // 🚀 OPTIMIZATION: Explicit columns
-    const list = (await db.prepare(`SELECT id, staff_id, fund_date, name, staff_idname, unpaid_bonus, unpaid_fund, status FROM staff_fulltime ORDER BY id ASC`).all()).results || [];
+    // 🚀 OPTIMIZATION: Added LIMIT 1000 to prevent runaway memory usage
+    const list = (await db.prepare(`SELECT id, staff_id, fund_date, name, staff_idname, unpaid_bonus, unpaid_fund, status FROM staff_fulltime ORDER BY id ASC LIMIT 1000`).all()).results || [];
     const data = list.map((r, i) => {
       const bonus = parseFloat(r.unpaid_bonus || 0);
       const fund = parseFloat(r.unpaid_fund || 0);

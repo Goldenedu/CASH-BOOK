@@ -9,23 +9,42 @@
  *              13-Tab Main & 5-Tab Cashier Grouped Export Engine (.xlsx & CSV) &
  *              Resend Email Backup Dispatcher with Native .xlsx Base64 Attachment Support,
  *              📊 Precision Calibrated D1 Storage Engine (Matches Cloudflare 20 Tables & 6.22 MB),
- *              🎯 Phase 4: Advanced Date Range Export Filter Engine Support,
+ *              🎯 Phase 3 & 4: Active FY Scoped Balances & Advanced Date Range Export,
  *              🚀 OPTIMIZED: Explicit Column Selects (Avoided SELECT *)
  *              🚀 ULTRA-OPTIMIZED: Prevented Full Table Scans. Replaced OR with IN().
  * ==============================================================================
  */
 
+import { getCurrentAcademicYear, normalizeFyClean } from './utils.js';
+
 /**
- * 💡 Safe Sum Balances Helper (Prevents 500 Server Crash if table doesn't exist)
+ * 💡 Phase 3: Safe Sum Balances Helper (Scoped to FY to prevent Full Table Scan)
  */
-async function safeSumBal(db, tableName) {
+async function safeSumBal(db, tableName, activeFyFilter = null) {
   try {
-    const res = await db.prepare(`SELECT COALESCE(SUM(debit - credit), 0) as bal FROM ${tableName}`).first('bal');
+    let query = `SELECT COALESCE(SUM(debit - credit), 0) as bal FROM ${tableName}`;
+    let params = [];
+
+    // 🚀 ULTRA-OPTIMIZATION: Filter by Active FY
+    if (activeFyFilter) {
+      const fyClean = normalizeFyClean(activeFyFilter);
+      query += ` WHERE fy IN (?, ?)`;
+      params.push(fyClean, `FY ${fyClean}`);
+    }
+
+    const res = await db.prepare(query).bind(...params).first('bal');
     return parseFloat(res || 0);
   } catch (e) {
     try {
       const altName = tableName.replace('_', '');
-      const res = await db.prepare(`SELECT COALESCE(SUM(debit - credit), 0) as bal FROM ${altName}`).first('bal');
+      let altQuery = `SELECT COALESCE(SUM(debit - credit), 0) as bal FROM ${altName}`;
+      let altParams = [];
+      if (activeFyFilter) {
+        const fyClean = normalizeFyClean(activeFyFilter);
+        altQuery += ` WHERE fy IN (?, ?)`;
+        altParams.push(fyClean, `FY ${fyClean}`);
+      }
+      const res = await db.prepare(altQuery).bind(...altParams).first('bal');
       return parseFloat(res || 0);
     } catch (e2) {
       return 0;
@@ -42,7 +61,6 @@ async function safeCountTable(db, tbl) {
     const val = res ? (res.cnt !== undefined ? res.cnt : Object.values(res)[0]) : 0;
     return parseInt(val || 0, 10);
   } catch (e) {
-    // Some tables like uniform_ledger might use product_id as Pk logic or no id, fallback to count(*)
     try {
        const altRes = await db.prepare(`SELECT COUNT(*) as cnt FROM ${tbl}`).first();
        const altVal = altRes ? (altRes.cnt !== undefined ? altRes.cnt : Object.values(altRes)[0]) : 0;
@@ -107,23 +125,17 @@ function safeBase64Encode(str) {
  */
 export async function getD1DatabaseUsage(db) {
   try {
-    // 💡 1. Measure Exact Database Size via SQLite Function PRAGMA
     let pageCount = 0;
-    let pageSize = 4096; // Standard SQLite page size (4KB)
+    let pageSize = 4096;
 
     try {
-      // Method A: Modern Table-Valued PRAGMA function
-      const pragmaRes = await db.prepare(
-        "SELECT page_count, page_size FROM pragma_page_count(), pragma_page_size()"
-      ).first();
-
+      const pragmaRes = await db.prepare("SELECT page_count, page_size FROM pragma_page_count(), pragma_page_size()").first();
       if (pragmaRes) {
         pageCount = Number(pragmaRes.page_count || 0);
         pageSize = Number(pragmaRes.page_size || 4096);
       }
     } catch (e1) {
       try {
-        // Method B: Classic PRAGMA fallback
         const pcRes = await db.prepare("PRAGMA page_count").first();
         const psRes = await db.prepare("PRAGMA page_size").first();
         pageCount = pcRes ? Number(Object.values(pcRes)[0] || 0) : 0;
@@ -133,7 +145,6 @@ export async function getD1DatabaseUsage(db) {
 
     let exactBytes = pageCount * pageSize;
 
-    // 💡 2. Exact 20 Tables (Matching Cloudflare Dashboard 20 Tables 100%)
     const tablesTracked = [
       { name: "Income Book", key: "income" },
       { name: "Cashier Cash Book", key: "ca_cash" },
@@ -164,34 +175,25 @@ export async function getD1DatabaseUsage(db) {
     const tableBreakdown = tablesTracked.map((t, idx) => {
       const rowCount = counts[idx] || 0;
       totalRows += rowCount;
-      return {
-        tableName: t.name,
-        tableKey: t.key,
-        rowCount: rowCount
-      };
+      return { tableName: t.name, tableKey: t.key, rowCount: rowCount };
     });
 
-    // Sort tables by row count descending
     tableBreakdown.sort((a, b) => b.rowCount - a.rowCount);
 
-    // 💡 Calibrated SQLite B-tree disk footprint (~343 bytes/row matching Cloudflare's exact 6.22 MB)
     if (exactBytes <= 0 && totalRows > 0) {
       exactBytes = (totalRows * 338) + (tablesTracked.length * 4096);
     }
 
-    // 💡 3. Unit Conversions
     const sizeKB = Number((exactBytes / 1024).toFixed(2));
     const sizeMB = Number((exactBytes / (1024 * 1024)).toFixed(2));
     
-    // Cloudflare D1 Free Tier Quota Limits
-    const MAX_STORAGE_MB = 5000; // 5 GB Free Storage
+    const MAX_STORAGE_MB = 5000;
     const MAX_STORAGE_GB = 5.0;
-    const DAILY_READS_LIMIT = 5000000; // 5 Million Reads / Day
-    const DAILY_WRITES_LIMIT = 100000;  // 100k Writes / Day
+    const DAILY_READS_LIMIT = 5000000;
+    const DAILY_WRITES_LIMIT = 100000;
 
     const usagePercent = Number(((sizeMB / MAX_STORAGE_MB) * 100).toFixed(2));
 
-    // Health Evaluation
     let healthStatus = "HEALTHY";
     let statusMessage = "Free Plan သတ်မှတ်ချက်အတွင်း လုံလောက်စွာ သုံးစွဲနိုင်သော အခြေအနေ ဖြစ်ပါသည်။";
 
@@ -204,29 +206,10 @@ export async function getD1DatabaseUsage(db) {
     }
 
     return {
-      storage: {
-        usedBytes: exactBytes,
-        usedKB: sizeKB,
-        usedMB: sizeMB,
-        maxMB: MAX_STORAGE_MB,
-        maxGB: MAX_STORAGE_GB,
-        usagePercentage: usagePercent
-      },
-      records: {
-        totalRows: totalRows,
-        totalTables: tablesTracked.length, // Exactly 20 Tables
-        breakdown: tableBreakdown
-      },
-      limits: {
-        dailyReadsLimit: DAILY_READS_LIMIT,
-        dailyWritesLimit: DAILY_WRITES_LIMIT,
-        maxStorageGB: MAX_STORAGE_GB
-      },
-      health: {
-        status: healthStatus,
-        message: statusMessage,
-        isFreePlan: true
-      }
+      storage: { usedBytes: exactBytes, usedKB: sizeKB, usedMB: sizeMB, maxMB: MAX_STORAGE_MB, maxGB: MAX_STORAGE_GB, usagePercentage: usagePercent },
+      records: { totalRows: totalRows, totalTables: tablesTracked.length, breakdown: tableBreakdown },
+      limits: { dailyReadsLimit: DAILY_READS_LIMIT, dailyWritesLimit: DAILY_WRITES_LIMIT, maxStorageGB: MAX_STORAGE_GB },
+      health: { status: healthStatus, message: statusMessage, isFreePlan: true }
     };
   } catch (err) {
     console.error("Error in getD1DatabaseUsage:", err);
@@ -243,21 +226,21 @@ export async function getD1DatabaseUsage(db) {
  */
 export async function getSettingsData(db, body) {
   try {
-    // Safe Accountant Balances (Main Books)
-    const bAcc = await safeSumBal(db, 'bank');
-    const cAcc = await safeSumBal(db, 'cash');
-    const oAcc = await safeSumBal(db, 'office');
-    const kAcc = await safeSumBal(db, 'kitchen');
-    const pAcc = await safeSumBal(db, 'payroll');
+    const activeFy = normalizeFyClean(body.fy || getCurrentAcademicYear());
 
-    // Safe Cashier Balances (Cashier Sub-Ledger)
-    const bCas = await safeSumBal(db, 'ca_bank');
-    const cCas = await safeSumBal(db, 'ca_cash');
-    const oCas = await safeSumBal(db, 'ca_office');
-    const kCas = await safeSumBal(db, 'ca_kitchen');
-    const pCas = await safeSumBal(db, 'ca_payroll');
+    // 🚀 OPTIMIZED Phase 3: Scoped Balances to Current FY
+    const bAcc = await safeSumBal(db, 'bank', activeFy);
+    const cAcc = await safeSumBal(db, 'cash', activeFy);
+    const oAcc = await safeSumBal(db, 'office', activeFy);
+    const kAcc = await safeSumBal(db, 'kitchen', activeFy);
+    const pAcc = await safeSumBal(db, 'payroll', activeFy);
 
-    // Build Balances Control Data Rows
+    const bCas = await safeSumBal(db, 'ca_bank', activeFy);
+    const cCas = await safeSumBal(db, 'ca_cash', activeFy);
+    const oCas = await safeSumBal(db, 'ca_office', activeFy);
+    const kCas = await safeSumBal(db, 'ca_kitchen', activeFy);
+    const pCas = await safeSumBal(db, 'ca_payroll', activeFy);
+
     const dataRows = [
       ["Bank Book", bAcc, bCas, bAcc - bCas],
       ["Cash Book", cAcc, cCas, cAcc - cCas],
@@ -270,7 +253,6 @@ export async function getSettingsData(db, body) {
     const totCas = bCas + cCas + oCas + kCas + pCas;
     const totalRow = ["Total", totAcc, totCas, totAcc - totCas];
 
-    // Concurrently fetch Dynamic FY List & D1 Usage Statistics
     const [availableFys, d1Usage] = await Promise.all([
       getAvailableFysFromD1(db),
       getD1DatabaseUsage(db)
@@ -278,10 +260,7 @@ export async function getSettingsData(db, body) {
 
     return {
       success: true,
-      balancesControl: {
-        data: dataRows,
-        total: totalRow
-      },
+      balancesControl: { data: dataRows, total: totalRow },
       availableFys: availableFys,
       d1Usage: d1Usage
     };
@@ -297,9 +276,7 @@ export async function getSettingsData(db, body) {
 export async function exportGroupDataByFy(db, body, userSession = null) {
   try {
     const groupKey = String(body.groupKey || body.bookKey || 'main').toLowerCase().trim();
-    
-    // 💡 Phase 4: Fetch Filter Inputs (FY, fromDate, toDate)
-    const fyFilter = String(body.fy || '').trim();
+    const fyFilter = normalizeFyClean(body.fy || '');
     const fromDate = String(body.fromDate || '').trim();
     const toDate = String(body.toDate || '').trim();
 
@@ -309,13 +286,11 @@ export async function exportGroupDataByFy(db, body, userSession = null) {
     let groupTitle = "Main Cash Book";
     let tableDefs = [];
 
-    // Date Column Configuration for SQL Builder 
     const getDateColumnName = (tblKey) => {
       if (['staff_fulltime', 'staff_parttime'].includes(tblKey)) return 'join_date';
       return 'date';
     };
 
-    // 🚀 ULTRA-OPTIMIZATION: Explicit SELECT lists for exports (Avoided SELECT *)
     if (groupKey === 'cashier' || groupKey.startsWith('ca_') || groupKey.startsWith('ca')) {
       groupTitle = "Cashier Cash Book";
       tableDefs = [
@@ -348,7 +323,6 @@ export async function exportGroupDataByFy(db, body, userSession = null) {
     let grandTotalRecords = 0;
     let tablesDict = {};
 
-    // 💡 Phase 4: Construct Output Title based on Date Range
     let dateRangeTitleText = `All FY`;
     if (fyFilter && !fromDate && !toDate) {
       dateRangeTitleText = `FY: ${fyFilter}`;
@@ -364,18 +338,17 @@ export async function exportGroupDataByFy(db, body, userSession = null) {
       let rows = [];
       const dateCol = getDateColumnName(tDef.key);
 
-      // 💡 Helper to build SQL query with Date Filters
       const fetchTableRows = async (tableName) => {
         let conditions = [];
         let params = [];
 
-        // 1. FY Condition - 🚀 ULTRA-OPTIMIZATION: Replaced OR with IN()
+        // 🚀 ULTRA-OPTIMIZATION: Replace OR with IN()
         if (fyFilter && tDef.hasFy) {
           conditions.push(`(fy IN (?, ?))`);
           params.push(fyFilter, `FY ${fyFilter}`);
         }
 
-        // 2. Date Range Conditions (If table supports date)
+        // 💡 Phase 4: Date Range Conditions mapped to Database Indexes
         if (tDef.key !== 'uniform_ledger' && tDef.key !== 'promotion' && tDef.key !== 'salary_grade_matrix') {
           if (fromDate) {
             conditions.push(`(${dateCol} >= ?)`);
@@ -387,7 +360,6 @@ export async function exportGroupDataByFy(db, body, userSession = null) {
           }
         }
 
-        // 🚀 ULTRA-OPTIMIZATION: Explicit Column Select
         let q = `SELECT ${tDef.columns} FROM ${tableName}`;
         if (conditions.length > 0) {
           q += ` WHERE ` + conditions.join(' AND ');
@@ -409,7 +381,6 @@ export async function exportGroupDataByFy(db, body, userSession = null) {
 
       grandTotalRecords += rows.length;
 
-      // 💡 Salary Data Redaction Logic
       const isStaffTable = (tDef.key === 'staff_fulltime' || tDef.key === 'staff_parttime');
       const sanitizedRows = rows.map(r => {
         if (!isStaffTable || canSeeSensitive) return r;
@@ -502,7 +473,6 @@ export async function sendGroupEmailBackupByFy(db, userSession, body, env) {
     let groupTitle = groupKey === 'cashier' ? "Cashier Cash Book" : "Main Cash Book";
     let fileFormatName = "Excel (.xlsx)";
 
-    // 💡 Phase 4: Construct Output Title based on Date Range
     let dateSuffix = `FY${fyFilter || 'ALL'}`;
     if (fromDate && toDate) dateSuffix = `D_${fromDate}_to_${toDate}`;
     else if (fromDate) dateSuffix = `D_From_${fromDate}`;
