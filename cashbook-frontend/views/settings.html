@@ -40,7 +40,7 @@
     </button>
   </div>
 
-  <!-- 💡 2. Settings Sub-Tab Navigation Bar (Tab ၃ ခု ခွဲဝေမှု - Zero-Fail Event Handlers) -->
+  <!-- 💡 2. Settings Sub-Tab Navigation Bar -->
   <div class="flex flex-wrap items-center gap-2.5 pb-1 border-b border-slate-800/80">
     <!-- Tab 1 Button -->
     <button id="btn-settings-tab-balances" 
@@ -207,9 +207,8 @@
         </div>
       </div>
       
-      <!-- 🎯 Cloudflare Live Direct Buttons (Metrics & Studio) -->
+      <!-- Cloudflare Live Direct Buttons -->
       <div class="flex items-center gap-2 flex-wrap">
-        <!-- 1. D1 Metrics Link (Primary: Storage, Reads & Writes ကြည့်ရန်) -->
         <a href="https://dash.cloudflare.com/f051f81312c3864d88da827491c2e19e/workers/d1/databases/945c2d8b-f2ac-496a-a7bd-018c18be84bf/metrics" 
            target="_blank" rel="noopener noreferrer"
            class="px-3.5 py-2 rounded-xl text-xs font-black transition-all bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 flex items-center gap-2 whitespace-nowrap shadow-md"
@@ -218,7 +217,6 @@
           <span>D1 Metrics & Quota</span>
         </a>
 
-        <!-- 2. D1 Studio Link (Secondary: Database Tables တိုက်ရိုက် စစ်ဆေးရန်) -->
         <a href="https://dash.cloudflare.com/f051f81312c3864d88da827491c2e19e/workers/d1/databases/945c2d8b-f2ac-496a-a7bd-018c18be84bf/studio" 
            target="_blank" rel="noopener noreferrer"
            class="px-3 py-2 rounded-xl text-xs font-bold transition-all bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700/60 flex items-center gap-1.5 whitespace-nowrap"
@@ -229,7 +227,7 @@
       </div>
     </div>
 
-    <!-- 2. Top 3 KPI Cards Grid -->
+    <!-- 2. Top 3 KPI Cards Grid (Card 3 Has Real Live Quota Trackers) -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
       
       <!-- Card 1: Storage Size & Progress Bar -->
@@ -264,24 +262,51 @@
         <p class="text-[10px] text-slate-500 leading-relaxed">ကျောင်းလခ၊ ရုံးသုံးစရိတ်၊ ကျောင်းသားနှင့် ဝန်ထမ်း မှတ်တမ်းများအားလုံး ပါဝင်သည်။</p>
       </div>
 
-      <!-- Card 3: Free Plan Daily Limits Policy -->
-      <div class="p-5 rounded-2xl shadow-xl bg-[#0c1322] border border-slate-800 space-y-2.5">
+      <!-- Card 3: Free Plan Daily Limits & Live Real-Time Usage -->
+      <div class="p-5 rounded-2xl shadow-xl bg-[#0c1322] border border-slate-800 space-y-3">
         <div class="flex justify-between items-center text-xs">
-          <span class="font-bold text-slate-400 uppercase tracking-wider text-[10px]">Cloudflare Free Quota</span>
-          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20">Daily Policy</span>
+          <span class="font-bold text-slate-400 uppercase tracking-wider text-[10px]">Daily Read / Write Quota</span>
+          <span id="d1-quota-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20 flex items-center gap-1">
+            <span id="d1-quota-status-dot" class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+            <span id="d1-quota-badge-text">Daily Live</span>
+          </span>
         </div>
-        <div class="space-y-1.5 text-xs font-mono pt-1">
-          <div class="flex justify-between items-center py-1 border-b border-slate-800/60">
-            <span class="text-slate-400 text-[11px]">Rows Read:</span>
-            <span class="font-bold text-slate-200">5,000,000 / day</span>
+
+        <div class="space-y-2.5 pt-0.5 text-xs">
+          <!-- Rows Read -->
+          <div class="space-y-1">
+            <div class="flex justify-between items-center font-mono">
+              <span class="text-slate-400 text-[11px]">Rows Read:</span>
+              <div class="flex items-center gap-1.5">
+                <span id="d1-reads-used" class="font-bold text-white">0</span>
+                <span class="text-slate-500 text-[10px]">/ 5M</span>
+                <span id="d1-reads-percent" class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">0.00%</span>
+              </div>
+            </div>
+            <div class="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden border border-slate-700/50">
+              <div id="d1-reads-bar" class="h-full bg-sky-400 rounded-full transition-all duration-700" style="width: 0%;"></div>
+            </div>
           </div>
-          <div class="flex justify-between items-center py-1 border-b border-slate-800/60">
-            <span class="text-slate-400 text-[11px]">Rows Write:</span>
-            <span class="font-bold text-slate-200">100,000 / day</span>
+
+          <!-- Rows Write -->
+          <div class="space-y-1">
+            <div class="flex justify-between items-center font-mono">
+              <span class="text-slate-400 text-[11px]">Rows Write:</span>
+              <div class="flex items-center gap-1.5">
+                <span id="d1-writes-used" class="font-bold text-white">0</span>
+                <span class="text-slate-500 text-[10px]">/ 100K</span>
+                <span id="d1-writes-percent" class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">0.00%</span>
+              </div>
+            </div>
+            <div class="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden border border-slate-700/50">
+              <div id="d1-writes-bar" class="h-full bg-amber-400 rounded-full transition-all duration-700" style="width: 0%;"></div>
+            </div>
           </div>
-          <div class="flex justify-between items-center py-1">
-            <span class="text-slate-400 text-[11px]">Max Storage:</span>
-            <span class="font-bold text-emerald-400">5 GB (5,000 MB)</span>
+
+          <!-- Storage Cap -->
+          <div class="flex justify-between items-center pt-1 border-t border-slate-800/60 font-mono text-[11px]">
+            <span class="text-slate-400">Max Cap:</span>
+            <span class="text-slate-400">5M Reads • 100K Writes • 5GB</span>
           </div>
         </div>
       </div>

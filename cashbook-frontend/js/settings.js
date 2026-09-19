@@ -3,7 +3,8 @@
  * GOLDEN ERP SYSTEM - SYSTEM SETTINGS, BACKUP & D1 MONITOR CONTROLLER
  * File: js/settings.js (Location: cashbook-frontend/js/settings.js)
  * 💡 Features: Refactored with Global api.js for DRY Principle,
- *              🎯 Phase 4: Advanced Date Range Export UI Integration
+ *              🎯 Phase 4: Advanced Date Range Export UI Integration,
+ *              ⚡ Live Daily Read / Write Quota Progress Bars & Telemetry Rendering
  * ==============================================================================
  */
 
@@ -46,7 +47,6 @@ function switchSettingsSubTab(tabName) {
     if (panelD1) panelD1.classList.remove('hidden');
     if (tabBtnD1) tabBtnD1.className = activeBtnClass;
   } else {
-    // Default to Balances Tab
     if (panelBalances) panelBalances.classList.remove('hidden');
     if (tabBtnBalances) tabBtnBalances.className = activeBtnClass;
   }
@@ -96,6 +96,8 @@ function renderD1UsageMonitor(usageData) {
   const records = usageData.records || {};
   const health = usageData.health || {};
   const breakdown = records.breakdown || [];
+  const limits = usageData.limits || {};
+  const dailyQuota = usageData.dailyQuota || {};
 
   const usedMB = Number(storage.usedMB || 0);
   const maxMB = Number(storage.maxMB || 5000);
@@ -118,7 +120,7 @@ function renderD1UsageMonitor(usageData) {
     elProgressBar.style.width = `${Math.min(100, Math.max(0.5, pct))}%`;
   }
 
-  // 2. Color Shifting based on Quota Percentage (Healthy / Warning / Critical)
+  // 2. Color Shifting based on Quota Percentage
   let statusColor = 'emerald';
   if (pct >= 90 || health.status === 'CRITICAL') {
     statusColor = 'rose';
@@ -187,7 +189,61 @@ function renderD1UsageMonitor(usageData) {
   if (elTotalRows) elTotalRows.textContent = totalRows.toLocaleString('en-US');
   if (elTotalTables) elTotalTables.textContent = totalTables;
 
-  // 5. Table-by-Table Data Breakdown Rows
+  // ⚡ 5. Daily Read / Write Live Quota Rendering
+  const readsUsed = Number(limits.dailyReadsUsed ?? dailyQuota.rowsReadUsed ?? 0);
+  const writesUsed = Number(limits.dailyWritesUsed ?? dailyQuota.rowsWrittenUsed ?? 0);
+  const readsLimit = Number(limits.dailyReadsLimit || 5000000);
+  const writesLimit = Number(limits.dailyWritesLimit || 100000);
+
+  const readsPct = Number(limits.dailyReadsPercent ?? dailyQuota.readsPercentage ?? ((readsUsed / readsLimit) * 100));
+  const writesPct = Number(limits.dailyWritesPercent ?? dailyQuota.writesPercentage ?? ((writesUsed / writesLimit) * 100));
+  const isLive = Boolean(limits.isLiveQuota || dailyQuota.isConfigured);
+
+  const elReadsUsed = document.getElementById('d1-reads-used');
+  const elReadsPercent = document.getElementById('d1-reads-percent');
+  const elReadsBar = document.getElementById('d1-reads-bar');
+
+  const elWritesUsed = document.getElementById('d1-writes-used');
+  const elWritesPercent = document.getElementById('d1-writes-percent');
+  const elWritesBar = document.getElementById('d1-writes-bar');
+
+  const elQuotaBadge = document.getElementById('d1-quota-badge');
+  const elQuotaBadgeText = document.getElementById('d1-quota-badge-text');
+  const elQuotaDot = document.getElementById('d1-quota-status-dot');
+
+  if (elReadsUsed) elReadsUsed.textContent = readsUsed.toLocaleString('en-US');
+  if (elReadsPercent) {
+    elReadsPercent.textContent = `${readsPct.toFixed(2)}%`;
+    let rColor = readsPct >= 90 ? 'rose' : (readsPct >= 75 ? 'amber' : 'emerald');
+    elReadsPercent.className = `text-[9px] px-1.5 py-0.2 rounded font-bold font-mono bg-${rColor}-500/10 text-${rColor}-400 border border-${rColor}-500/20`;
+  }
+  if (elReadsBar) {
+    elReadsBar.style.width = `${Math.min(100, Math.max(readsUsed > 0 ? 0.5 : 0, readsPct))}%`;
+    elReadsBar.className = `h-full rounded-full transition-all duration-700 ${readsPct >= 90 ? 'bg-rose-500' : (readsPct >= 75 ? 'bg-amber-500' : 'bg-sky-400')}`;
+  }
+
+  if (elWritesUsed) elWritesUsed.textContent = writesUsed.toLocaleString('en-US');
+  if (elWritesPercent) {
+    elWritesPercent.textContent = `${writesPct.toFixed(2)}%`;
+    let wColor = writesPct >= 90 ? 'rose' : (writesPct >= 75 ? 'amber' : 'emerald');
+    elWritesPercent.className = `text-[9px] px-1.5 py-0.2 rounded font-bold font-mono bg-${wColor}-500/10 text-${wColor}-400 border border-${wColor}-500/20`;
+  }
+  if (elWritesBar) {
+    elWritesBar.style.width = `${Math.min(100, Math.max(writesUsed > 0 ? 0.5 : 0, writesPct))}%`;
+    elWritesBar.className = `h-full rounded-full transition-all duration-700 ${writesPct >= 90 ? 'bg-rose-500' : (writesPct >= 75 ? 'bg-amber-500' : 'bg-amber-400')}`;
+  }
+
+  if (elQuotaBadgeText) {
+    elQuotaBadgeText.textContent = isLive ? 'Live Tracked' : 'Daily Policy';
+  }
+  if (elQuotaDot) {
+    elQuotaDot.className = `w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-400 animate-pulse' : 'bg-sky-400'}`;
+  }
+  if (elQuotaBadge) {
+    elQuotaBadge.className = `px-2 py-0.5 rounded text-[10px] font-bold border flex items-center gap-1 ${isLive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-sky-500/10 text-sky-400 border-sky-500/20'}`;
+  }
+
+  // 6. Table-by-Table Data Breakdown Rows
   const tbodyBreakdown = document.getElementById('d1-table-breakdown-body');
   if (!tbodyBreakdown) return;
 
@@ -334,7 +390,6 @@ function renderExportTable() {
     return `<option value="${cleanFy}" ${isSelected ? 'selected' : ''}>FY ${cleanFy}</option>`;
   }).join('');
 
-  // 💡 Phase 4: Added Date Picker Inputs (From & To)
   tbody.innerHTML = `
     <!-- ROW 1: MAIN CASH BOOK -->
     <tr class="hover:bg-slate-800/30 transition">
@@ -414,7 +469,7 @@ function renderExportTable() {
 }
 
 /**
- * 💡 7. Generate SheetJS Multi-Tab Excel Workbook (Phase 4: Includes Date Filters)
+ * 💡 7. Generate SheetJS Multi-Tab Excel Workbook
  */
 async function generateMultiTabExcelWorkbook(groupKey, fy, fromDate, toDate) {
   const res = await callApi('exportGroupDataByFy', { groupKey, fy, fromDate, toDate }, 'GET');
@@ -454,7 +509,7 @@ async function generateMultiTabExcelWorkbook(groupKey, fy, fromDate, toDate) {
 }
 
 /**
- * 💡 8. Download Native Multi-Tab Excel (.xlsx) File (Phase 4)
+ * 💡 8. Download Native Multi-Tab Excel (.xlsx) File
  */
 async function handleExportWorkbook(groupKey) {
   const fySelectId = groupKey === 'cashier' ? 'export-fy-cashier' : 'export-fy-main';
@@ -491,7 +546,7 @@ async function handleExportWorkbook(groupKey) {
 }
 
 /**
- * 💡 9. Send Real Multi-Tab Excel (.xlsx) Backup to Gmail via Resend API (Phase 4)
+ * 💡 9. Send Real Multi-Tab Excel (.xlsx) Backup to Gmail via Resend API
  */
 async function handleSendEmailBackup(groupKey) {
   const fySelectId = groupKey === 'cashier' ? 'export-fy-cashier' : 'export-fy-main';
