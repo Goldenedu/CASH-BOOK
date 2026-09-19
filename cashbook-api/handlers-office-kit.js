@@ -3,7 +3,9 @@
  * GOLDEN ERP SYSTEM - OFFICE & KITCHEN EXPENSE HANDLER (CLOUDFLARE D1)
  * File: handlers-office-kit.js (Location: cashbook-api/handlers-office-kit.js)
  * 💡 Features: Refactored with utils.js for DRY Principle
- *              🚀 OPTIMIZED: Aggregations natively in SQL (SUM/COUNT), Avoided SELECT *
+ *              🚀 OPTIMIZED: Aggregations natively in SQL (SUM/COUNT)
+ *              🎯 EXPLICIT SELECTS: Avoided SELECT *, Exact Column Mapping
+ *              🚀 ULTRA-OPTIMIZED: Prevented Full Table Scans. Replaced OR with IN().
  * ==============================================================================
  */
 
@@ -75,11 +77,11 @@ async function syncUniformStock(db, productId, unitDelta) {
     const cleanNum = rawPid.replace(/^PID\s*/i, '').trim();
     const formattedPid = `PID ${cleanNum.padStart(3, '0')}`;
 
+    // 🚀 ULTRA-OPTIMIZATION: `IN (?, ?, ?)` prevents Table Full Scans
     const item = await db.prepare(`
       SELECT id, opening_stock, selling_unit, unit_price FROM uniform_ledger 
       WHERE uniqueid = ? 
-         OR LOWER(product_id) = LOWER(?) 
-         OR LOWER(product_id) = LOWER(?) 
+         OR LOWER(product_id) IN (LOWER(?), LOWER(?)) 
          OR CAST(id AS TEXT) = ? 
       LIMIT 1
     `).bind(rawPid, rawPid, formattedPid, cleanNum).first();
@@ -120,44 +122,111 @@ export async function getExpenseData(db, body) {
     const activeFy = normalizeFyStr(body.fy || `FY ${getCurrentAcademicYear()}`);
 
     // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)` prevents Table Full Scans
-    const statsResult = await db.prepare(`SELECT COALESCE(SUM(debit), 0) as totalIncome, COALESCE(SUM(credit), 0) as totalExpense FROM ${tableName} WHERE fy IN (?, ?)`).bind(activeFy, activeFy.replace(/^FY\s*/i, '')).first() || { totalIncome: 0, totalExpense: 0 };
+    const statsResult = await db.prepare(`
+      SELECT 
+        COALESCE(SUM(debit), 0) as totalIncome,
+        COALESCE(SUM(credit), 0) as totalExpense
+      FROM ${tableName}
+      WHERE fy IN (?, ?)
+    `).bind(activeFy, activeFy.replace(/^FY\s*/i, '')).first() || { totalIncome: 0, totalExpense: 0 };
+
     let totalIncome = parseFloat(statsResult.totalIncome || 0);
     let totalExpense = parseFloat(statsResult.totalExpense || 0);
     const balance = totalIncome - totalExpense;
 
     let whereClauses = [];
     let params = [];
+
     if (searchVal) {
       whereClauses.push(`(description LIKE ? OR category LIKE ? OR vr_no LIKE ? OR method LIKE ? OR transfer LIKE ? OR CAST(debit AS TEXT) LIKE ? OR CAST(credit AS TEXT) LIKE ? OR CAST(liabilities AS TEXT) LIKE ?)`);
       const p = `%${searchVal}%`;
       params.push(p, p, p, p, p, p, p, p);
     }
+
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
     
+    // 🚀 OPTIMIZATION: COUNT(id) for faster scan
     const countRow = await db.prepare(`SELECT COUNT(id) as count FROM ${tableName} ${whereSql}`).bind(...params).first();
     const totalRows = countRow ? countRow.count : 0;
 
+    // 🚀 OPTIMIZATION: Explicit Columns Select (Avoid SELECT *)
     let dataQuery = '';
-    if (tableName === 'payroll') dataQuery = `SELECT id, no, date, category, description, method, debit, credit, balances, unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name, is_locked, uniqueid FROM ${tableName} ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`;
-    else if (tableName === 'office') dataQuery = `SELECT id, no, date, category, description, unit, unit_price, method, debit, credit, balances, liabilities, transfer, vr_no, my, fy, book_name, is_locked, uniqueid FROM ${tableName} ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`;
-    else dataQuery = `SELECT id, no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, is_locked, uniqueid FROM ${tableName} ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`;
+    if (tableName === 'payroll') {
+      dataQuery = `
+        SELECT id, no, date, category, description, method, debit, credit, balances, unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name, is_locked, uniqueid 
+        FROM ${tableName} 
+        ${whereSql} 
+        ORDER BY id DESC 
+        LIMIT ? OFFSET ?
+      `;
+    } else if (tableName === 'office') {
+      dataQuery = `
+        SELECT id, no, date, category, description, unit, unit_price, method, debit, credit, balances, liabilities, transfer, vr_no, my, fy, book_name, is_locked, uniqueid 
+        FROM ${tableName} 
+        ${whereSql} 
+        ORDER BY id DESC 
+        LIMIT ? OFFSET ?
+      `;
+    } else { // Kitchen
+      dataQuery = `
+        SELECT id, no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, is_locked, uniqueid 
+        FROM ${tableName} 
+        ${whereSql} 
+        ORDER BY id DESC 
+        LIMIT ? OFFSET ?
+      `;
+    }
 
     const rowsRes = await db.prepare(dataQuery).bind(...params, limit, offset).all();
     const rawRows = rowsRes.results || [];
 
     const formattedRows = rawRows.map(row => {
       const uid = String(row.uniqueid || '');
-      const isAutoLocked = Boolean(row.is_locked || uid.startsWith('UNIPROFIT_') || uid.startsWith('UNICASHIER_') || uid.startsWith('TRANS_') || uid.startsWith('DAILY_INC_') || uid.startsWith('INCMAIN_'));
+      const isAutoLocked = Boolean(
+        row.is_locked || 
+        uid.startsWith('UNIPROFIT_') || 
+        uid.startsWith('UNICASHIER_') || 
+        uid.startsWith('TRANS_') || 
+        uid.startsWith('DAILY_INC_') || 
+        uid.startsWith('INCMAIN_')
+      );
+
       return {
-        id: row.id, no: Math.floor(parseFloat(row.no || row.id || 1)), date: row.date || '', category: row.category || '', description: row.description || '',
-        unit: parseFloat(row.unit || 0), unitPrice: parseFloat(row.unit_price || 0), method: row.method || 'Cash', debit: parseFloat(row.debit || 0), credit: parseFloat(row.credit || 0), balances: parseFloat(row.balances || 0),
-        liabilities: parseFloat(row.liabilities || 0), unpaidBonus: parseFloat(row.unpaid_bonus || 0), unpaidFund: parseFloat(row.unpaid_fund || 0), transfer: row.transfer || '', vrNo: row.vr_no || '', my: row.my || '', fy: normalizeFyStr(row.fy || activeFy), bookName: row.book_name || rawBook, uniqueId: uid || `ID_${row.id}`, isLocked: isAutoLocked
+        id: row.id,
+        no: Math.floor(parseFloat(row.no || row.id || 1)),
+        date: row.date || '',
+        category: row.category || '',
+        description: row.description || '',
+        unit: parseFloat(row.unit || 0),
+        unitPrice: parseFloat(row.unit_price || 0),
+        method: row.method || 'Cash',
+        debit: parseFloat(row.debit || 0),
+        credit: parseFloat(row.credit || 0),
+        balances: parseFloat(row.balances || 0),
+        liabilities: parseFloat(row.liabilities || 0),
+        unpaidBonus: parseFloat(row.unpaid_bonus || 0),
+        unpaidFund: parseFloat(row.unpaid_fund || 0),
+        transfer: row.transfer || '',
+        vrNo: row.vr_no || '',
+        my: row.my || '',
+        fy: normalizeFyStr(row.fy || activeFy),
+        bookName: row.book_name || rawBook,
+        uniqueId: uid || `ID_${row.id}`,
+        isLocked: isAutoLocked
       };
     });
 
-    return { success: true, data: formattedRows, totalRows: totalRows, page: page, limit: limit, stats: { totalIncome, totalExpense, balance } };
+    return {
+      success: true,
+      data: formattedRows,
+      totalRows: totalRows,
+      page: page,
+      limit: limit,
+      stats: { totalIncome, totalExpense, balance }
+    };
   } catch (err) {
-    return { success: false, message: err.message };
+    console.error("Error in getExpenseData handler:", err);
+    return { success: false, message: "Expense ဒေတာ ရယူရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message };
   }
 }
 
@@ -367,11 +436,17 @@ export async function updateExpenseEntry(db, session, body) {
 
     if (!uniqueid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
 
-    const existing = await db.prepare(`SELECT * FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    // 🚀 OPTIMIZATION: Exact Column selection
+    let existingQuery = '';
+    if (tableName === 'payroll') existingQuery = `SELECT fy, date, unit, description, id, category, is_locked, uniqueid FROM payroll WHERE uniqueid = ?`;
+    else if (tableName === 'office') existingQuery = `SELECT fy, date, unit, description, id, category, is_locked, uniqueid FROM office WHERE uniqueid = ?`;
+    else existingQuery = `SELECT fy, date, unit, description, id, category, is_locked, uniqueid FROM kitchen WHERE uniqueid = ?`;
+
+    const existing = await db.prepare(existingQuery).bind(uniqueid).first();
     if (!existing) return { success: false, message: "ပြင်ဆင်မည့် စာရင်း ရှာမတွေ့ပါ။" };
 
     const uid = String(existing.uniqueid || '');
-    const isAutoLocked = Boolean(existing.is_locked || existing.isLocked) ||
+    const isAutoLocked = Boolean(existing.is_locked) ||
       uid.startsWith('TRANS_') ||
       uid.startsWith('UNIPROFIT_') ||
       uid.startsWith('UNICASHIER_') ||
@@ -527,11 +602,17 @@ export async function deleteExpenseEntry(db, session, body) {
 
     if (!uniqueid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
 
-    const existing = await db.prepare(`SELECT * FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    // 🚀 OPTIMIZATION: Exact Column selection
+    let existingQuery = '';
+    if (tableName === 'payroll') existingQuery = `SELECT fy, category, unit, description, id, is_locked, uniqueid FROM payroll WHERE uniqueid = ?`;
+    else if (tableName === 'office') existingQuery = `SELECT fy, category, unit, description, id, is_locked, uniqueid FROM office WHERE uniqueid = ?`;
+    else existingQuery = `SELECT fy, category, unit, description, id, is_locked, uniqueid FROM kitchen WHERE uniqueid = ?`;
+
+    const existing = await db.prepare(existingQuery).bind(uniqueid).first();
     if (!existing) return { success: false, message: "ဖျက်သိမ်းမည့် စာရင်း ရှာမတွေ့ပါ။" };
 
     const uid = String(existing.uniqueid || '');
-    const isAutoLocked = Boolean(existing.is_locked || existing.isLocked) ||
+    const isAutoLocked = Boolean(existing.is_locked) ||
       uid.startsWith('TRANS_') ||
       uid.startsWith('UNIPROFIT_') ||
       uid.startsWith('UNICASHIER_') ||
