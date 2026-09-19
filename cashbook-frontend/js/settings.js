@@ -211,36 +211,49 @@ function renderD1UsageMonitor(usageData) {
   const elQuotaBadgeText = document.getElementById('d1-quota-badge-text');
   const elQuotaDot = document.getElementById('d1-quota-status-dot');
 
-  if (elReadsUsed) elReadsUsed.textContent = readsUsed.toLocaleString('en-US');
-  if (elReadsPercent) {
-    elReadsPercent.textContent = `${readsPct.toFixed(2)}%`;
-    let rColor = readsPct >= 90 ? 'rose' : (readsPct >= 75 ? 'amber' : 'emerald');
-    elReadsPercent.className = `text-[9px] px-1.5 py-0.2 rounded font-bold font-mono bg-${rColor}-500/10 text-${rColor}-400 border border-${rColor}-500/20`;
-  }
-  if (elReadsBar) {
-    elReadsBar.style.width = `${Math.min(100, Math.max(readsUsed > 0 ? 0.5 : 0, readsPct))}%`;
-    elReadsBar.className = `h-full rounded-full transition-all duration-700 ${readsPct >= 90 ? 'bg-rose-500' : (readsPct >= 75 ? 'bg-amber-500' : 'bg-sky-400')}`;
-  }
+  if (isLive) {
+    // 🎯 Live Mode Active (Cloudflare Metrics Fetched)
+    if (elReadsUsed) elReadsUsed.textContent = readsUsed.toLocaleString('en-US');
+    if (elReadsPercent) {
+      elReadsPercent.textContent = `${readsPct.toFixed(2)}%`;
+      let rColor = readsPct >= 90 ? 'rose' : (readsPct >= 75 ? 'amber' : 'emerald');
+      elReadsPercent.className = `text-[9px] px-1.5 py-0.2 rounded font-bold font-mono bg-${rColor}-500/10 text-${rColor}-400 border border-${rColor}-500/20`;
+    }
+    if (elReadsBar) {
+      elReadsBar.style.width = `${Math.min(100, Math.max(readsUsed > 0 ? 1 : 0, readsPct))}%`;
+      elReadsBar.className = `h-full rounded-full transition-all duration-700 ${readsPct >= 90 ? 'bg-rose-500' : (readsPct >= 75 ? 'bg-amber-500' : 'bg-sky-400')}`;
+    }
 
-  if (elWritesUsed) elWritesUsed.textContent = writesUsed.toLocaleString('en-US');
-  if (elWritesPercent) {
-    elWritesPercent.textContent = `${writesPct.toFixed(2)}%`;
-    let wColor = writesPct >= 90 ? 'rose' : (writesPct >= 75 ? 'amber' : 'emerald');
-    elWritesPercent.className = `text-[9px] px-1.5 py-0.2 rounded font-bold font-mono bg-${wColor}-500/10 text-${wColor}-400 border border-${wColor}-500/20`;
-  }
-  if (elWritesBar) {
-    elWritesBar.style.width = `${Math.min(100, Math.max(writesUsed > 0 ? 0.5 : 0, writesPct))}%`;
-    elWritesBar.className = `h-full rounded-full transition-all duration-700 ${writesPct >= 90 ? 'bg-rose-500' : (writesPct >= 75 ? 'bg-amber-500' : 'bg-amber-400')}`;
-  }
+    if (elWritesUsed) elWritesUsed.textContent = writesUsed.toLocaleString('en-US');
+    if (elWritesPercent) {
+      elWritesPercent.textContent = `${writesPct.toFixed(2)}%`;
+      let wColor = writesPct >= 90 ? 'rose' : (writesPct >= 75 ? 'amber' : 'emerald');
+      elWritesPercent.className = `text-[9px] px-1.5 py-0.2 rounded font-bold font-mono bg-${wColor}-500/10 text-${wColor}-400 border border-${wColor}-500/20`;
+    }
+    if (elWritesBar) {
+      elWritesBar.style.width = `${Math.min(100, Math.max(writesUsed > 0 ? 1 : 0, writesPct))}%`;
+      elWritesBar.className = `h-full rounded-full transition-all duration-700 ${writesPct >= 90 ? 'bg-rose-500' : (writesPct >= 75 ? 'bg-amber-500' : 'bg-amber-400')}`;
+    }
 
-  if (elQuotaBadgeText) {
-    elQuotaBadgeText.textContent = isLive ? 'Live Tracked' : 'Daily Policy';
-  }
-  if (elQuotaDot) {
-    elQuotaDot.className = `w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-400 animate-pulse' : 'bg-sky-400'}`;
-  }
-  if (elQuotaBadge) {
-    elQuotaBadge.className = `px-2 py-0.5 rounded text-[10px] font-bold border flex items-center gap-1 ${isLive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-sky-500/10 text-sky-400 border-sky-500/20'}`;
+    if (elQuotaBadgeText) elQuotaBadgeText.textContent = 'Live Tracked';
+    if (elQuotaDot) elQuotaDot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse';
+    if (elQuotaBadge) elQuotaBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold border flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+  } else {
+    // ⚠️ Setup Required Mode (Guides user to configure CF_API_TOKEN)
+    if (elReadsUsed) elReadsUsed.textContent = 'Setup Required';
+    if (elReadsPercent) {
+      elReadsPercent.textContent = 'CF_API_TOKEN Needed';
+      elReadsPercent.className = 'text-[9px] px-1.5 py-0.2 rounded font-bold font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20';
+    }
+    if (elWritesUsed) elWritesUsed.textContent = 'Setup Required';
+    if (elWritesPercent) {
+      elWritesPercent.textContent = 'CF_API_TOKEN Needed';
+      elWritesPercent.className = 'text-[9px] px-1.5 py-0.2 rounded font-bold font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20';
+    }
+
+    if (elQuotaBadgeText) elQuotaBadgeText.textContent = 'Token Setup Required';
+    if (elQuotaDot) elQuotaDot.className = 'w-1.5 h-1.5 rounded-full bg-amber-400';
+    if (elQuotaBadge) elQuotaBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold border flex items-center gap-1 bg-amber-500/10 text-amber-400 border-amber-500/20 cursor-pointer';
   }
 
   // 6. Table-by-Table Data Breakdown Rows
