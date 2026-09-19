@@ -9,6 +9,7 @@
  *              🎯 12 Months Fiscal Year Logic (Mar to Feb),
  *              🎯 Auto Grade Sorting Reversed (Grade 12 to Pre School),
  *              🎯 Advanced "Unpaid Month" Logic (Accumulated check from Join Date),
+ *              🎯 SMART LEAVE FILTER: Exempts months with 'leave', 'inactive', 'နား', 'ခွင့်' in remark.
  *              🎯 ZERO HARDCODING: Dynamic Fiscal Year Fallbacks via getCurrentAcademicYear
  * ==============================================================================
  */
@@ -214,9 +215,9 @@ export async function getIncomeDetailReportData(db, body) {
       FROM student s ${whereSql}
     `).bind(...params).all()).results || [];
     
-    // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)` prevents Table Full Scans
+    // 🚀 ULTRA-OPTIMIZATION: Fetching `remark` to support "Leave/Inactive" Logic
     const allIncome = (await db.prepare(`
-      SELECT student_id, account_name, credit, debit, effect_date, date 
+      SELECT student_id, account_name, credit, debit, effect_date, date, remark 
       FROM income 
       WHERE fy IN (?, ?)
     `).bind(activeFy, fyClean).all()).results || [];
@@ -240,9 +241,16 @@ export async function getIncomeDetailReportData(db, body) {
         ferry: 0,
         nightStudy: 0,
         others: 0,
-        monthlyServices: new Array(12).fill(0)
+        monthlyServices: new Array(12).fill(0),
+        leaveMonths: new Set() // 💡 Store indices of months that are marked as leave/inactive
       });
     });
+
+    // 💡 Helper function to detect leave/inactive remarks
+    const isLeaveRemark = (remark) => {
+      const r = String(remark || '').toLowerCase();
+      return r.includes('leave') || r.includes('inactive') || r.includes('နား') || r.includes('ခွင့်');
+    };
 
     allIncome.forEach(row => {
       const cleanStuId = parseInt(row.student_id, 10);
@@ -260,7 +268,12 @@ export async function getIncomeDetailReportData(db, body) {
         const mStr = parseSafeMonthYear(effDate);
         const mIdx = monthKeys.indexOf(mStr);
         if (mIdx >= 0) {
-          stGroup.monthlyServices[mIdx] += credit;
+          // 💡 If amount is 0 and remark contains "leave/inactive", mark this month as Exempt
+          if (credit <= 0 && isLeaveRemark(row.remark)) {
+            stGroup.leaveMonths.add(mIdx);
+          } else {
+            stGroup.monthlyServices[mIdx] += credit;
+          }
         }
       } else if (acc.includes('registration')) {
         stGroup.registration += credit;
@@ -275,7 +288,7 @@ export async function getIncomeDetailReportData(db, body) {
 
     let processedList = Array.from(studentGroupMap.values());
 
-    // Advanced "Unpaid Month" Logic
+    // 🎯 Advanced "Unpaid Month" Logic with Leave Exemption
     if (unpaidMonthLabel) {
       const targetIdx = monthKeys.indexOf(unpaidMonthLabel);
       if (targetIdx >= 0) {
@@ -296,7 +309,8 @@ export async function getIncomeDetailReportData(db, body) {
 
           let hasUnpaid = false;
           for (let i = joinIdx; i <= targetIdx; i++) {
-            if (st.monthlyServices[i] <= 0) {
+            // 💡 If balance is 0 but it's marked as a "Leave" month, skip it (Don't mark as unpaid)
+            if (st.monthlyServices[i] <= 0 && !st.leaveMonths.has(i)) {
               hasUnpaid = true;
               break;
             }
@@ -331,16 +345,25 @@ export async function getIncomeDetailReportData(db, body) {
     paginatedList.forEach(st => {
       const servicesSum = st.monthlyServices.reduce((a, b) => a + b, 0);
       const rowTotal = st.registration + st.ferry + st.nightStudy + st.others + servicesSum;
+      
+      // 💡 Display "Leave" text instead of 0 if the month was marked as leave
+      const finalMonthlyServices = st.monthlyServices.map((amt, idx) => {
+        if (amt <= 0 && st.leaveMonths.has(idx)) return "Leave";
+        return amt;
+      });
 
       const rowArr = [
         seqNo++, st.fy, st.id, st.fyid, st.name, st.promo,
         st.joinDate || '-', st.transferMonth || '-', st.status, st.class,
         st.registration, st.ferry, st.nightStudy, st.others,
-        ...st.monthlyServices, rowTotal
+        ...finalMonthlyServices, rowTotal
       ];
 
       for (let c = 10; c < rowArr.length; c++) {
-        pageTotals[c] += parseFloat(rowArr[c] || 0);
+        // Skip summing strings like "Leave"
+        if (typeof rowArr[c] === 'number') {
+           pageTotals[c] += parseFloat(rowArr[c] || 0);
+        }
       }
       dataMatrix.push(rowArr);
     });
