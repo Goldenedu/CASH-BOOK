@@ -4,6 +4,7 @@
  * File: handlers-promotion.js 
  * 💡 Features: Refactored with utils.js for DRY Principle
  *              🚀 OPTIMIZED: Explicit Column Selects (Avoided SELECT *)
+ *              🚀 ULTRA-OPTIMIZED: Prevented Full Table Scans. Replaced OR with IN().
  * ==============================================================================
  */
 
@@ -20,9 +21,9 @@ export async function getPromotionData(db, body) {
     let whereClauses = [];
     let params = [];
 
-    // 💡 Explicit FY Filter
+    // 🚀 ULTRA-OPTIMIZATION: Replace OR with IN() to leverage Index Seek
     if (fyFilter) {
-      whereClauses.push(`(fy = ? OR fy = ?)`);
+      whereClauses.push(`(fy IN (?, ?))`);
       params.push(fyFilter, `FY ${fyFilter}`);
     }
 
@@ -93,9 +94,10 @@ export async function savePromotionEntry(db, userSession, body) {
     const category = String(body.category || '').trim();
 
     // 💡 Duplicate Check: Prevent identical FY + Class + Category rate rows
+    // 🚀 ULTRA-OPTIMIZATION: Replace OR with IN() to leverage Index Seek
     if (className && category) {
       const existing = await db.prepare(
-        `SELECT id FROM promotion WHERE (fy = ? OR fy = ?) AND LOWER(class) = LOWER(?) AND LOWER(category) = LOWER(?)`
+        `SELECT id FROM promotion WHERE fy IN (?, ?) AND LOWER(class) = LOWER(?) AND LOWER(category) = LOWER(?)`
       ).bind(fy, `FY ${fy}`, className, category).first();
 
       if (existing) {
@@ -106,8 +108,9 @@ export async function savePromotionEntry(db, userSession, body) {
       }
     }
 
+    // 🚀 ULTRA-OPTIMIZATION: Replace OR with IN()
     const maxNoRow = await db.prepare(
-      "SELECT MAX(CAST(no AS INTEGER)) as maxNo FROM promotion WHERE fy = ? OR fy = ?"
+      "SELECT MAX(CAST(no AS INTEGER)) as maxNo FROM promotion WHERE fy IN (?, ?)"
     ).bind(fy, `FY ${fy}`).first();
     const nextNo = (maxNoRow && maxNoRow.maxNo ? parseInt(maxNoRow.maxNo, 10) : 0) + 1;
 
