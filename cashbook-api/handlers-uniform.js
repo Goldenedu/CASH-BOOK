@@ -3,7 +3,8 @@
  * GOLDEN ERP SYSTEM - UNIFORM INVENTORY D1 SQL HANDLER MODULE
  * File: handlers-uniform.js (Location: cashbook-api/handlers-uniform.js)
  * 💡 Features: Refactored with utils.js for DRY Principle
- *              🚀 OPTIMIZED: Aggregations natively in SQL (SUM/COUNT), Avoided SELECT *
+ *              🚀 OPTIMIZED: Aggregations natively in SQL (SUM/COUNT)
+ *              🎯 EXPLICIT SELECTS: Avoided SELECT *, Exact Column Mapping
  * ==============================================================================
  */
 
@@ -31,14 +32,19 @@ export async function getUniformData(db, body) {
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
     // 🚀 OPTIMIZATION 1: Fetch Aggregate Totals directly from SQL (Avoids iterating all rows in JS)
-    const statsRow = await db.prepare(`
+    const statsRowQuery = `
       SELECT 
         COUNT(id) as count,
         COALESCE(SUM(selling_unit), 0) as sellingUnit,
         COALESCE(SUM(current_qty), 0) as currentQty,
         COALESCE(SUM(total_stock_value), 0) as totalStockValue
       FROM uniform_ledger ${whereSql}
-    `).bind(...params).first();
+    `;
+    
+    // 🚀 ULTRA-OPTIMIZATION: Conditional binding based on search to speed up direct queries
+    const statsRow = params.length > 0 
+      ? await db.prepare(statsRowQuery).bind(...params).first()
+      : await db.prepare(statsRowQuery).first();
 
     const totalRows = statsRow ? statsRow.count : 0;
     const sellingUnit = statsRow ? parseFloat(statsRow.sellingUnit || 0) : 0;
@@ -53,7 +59,11 @@ export async function getUniformData(db, body) {
       ORDER BY id ASC 
       LIMIT ? OFFSET ?
     `;
-    const rows = await db.prepare(query).bind(...params, limit, offset).all();
+
+    const rows = params.length > 0
+      ? await db.prepare(query).bind(...params, limit, offset).all()
+      : await db.prepare(query).bind(limit, offset).all();
+      
     const list = rows.results || [];
 
     return {
@@ -149,6 +159,7 @@ export async function updateUniformEntry(db, userSession, body) {
     }
 
     // 1. Fetch Existing Record to prevent wiping selling_unit
+    // 🚀 OPTIMIZATION: Explicit columns
     const existing = await db.prepare(
       `SELECT opening_stock, selling_unit, unit_price, selling_price, product_id, product_name, type, size FROM uniform_ledger WHERE uniqueid = ? OR id = ? LIMIT 1`
     ).bind(uniqueid || '', rowId || 0).first();
