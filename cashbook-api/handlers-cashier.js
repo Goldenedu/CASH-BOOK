@@ -4,6 +4,7 @@
  * File: handlers-cashier.js  
  * 💡 Features: Refactored with utils.js for DRY Principle,
  *              🚀 OPTIMIZED: Aggregations natively in SQL (SUM/COUNT), Avoided SELECT *
+ *              🚀 ULTRA-OPTIMIZED: Prevented Full Table Scans. Replaced OR with IN().
  * ==============================================================================
  */
 
@@ -14,7 +15,8 @@ import {
   generateVoucherNo,
   generateFyNo,
   recalculateLedgerBalances,
-  generateUniqueId
+  generateUniqueId,
+  getCurrentAcademicYear
 } from './utils.js';
 
 const CASHIER_TABLE_MAP = {
@@ -105,24 +107,23 @@ export async function getCashierData(db, body) {
     const { tableName, bookTitle } = getCashierMeta(rawBook);
     const searchVal = String(body.searchVal || "").trim();
     const page = parseInt(body.page || 1, 10);
-    const limit = parseInt(body.limit || 50, 10); // Default pagination limit, though FE requests 2000
+    const limit = parseInt(body.limit || 50, 10);
     const offset = (page - 1) * limit;
 
-    const activeFy = normalizeFyStr(body.fy || "FY 2026-2027");
+    const activeFy = normalizeFyStr(body.fy || `FY ${getCurrentAcademicYear()}`);
 
-    // 🚀 OPTIMIZATION 1: Fetch Aggregate Totals directly from SQL
+    // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)` limits Row Scans to matching Index only
     const statsResult = await db.prepare(`
       SELECT 
         COALESCE(SUM(debit), 0) as totalIncome,
         COALESCE(SUM(credit), 0) as totalExpense
       FROM ${tableName}
-      WHERE fy = ? OR fy = ?
+      WHERE fy IN (?, ?)
     `).bind(activeFy, activeFy.replace(/^FY\s*/i, '')).first() || { totalIncome: 0, totalExpense: 0 };
 
     let totalIncome = parseFloat(statsResult.totalIncome || 0);
     let totalExpense = parseFloat(statsResult.totalExpense || 0);
 
-    // Fallback logic if FY is empty (Legacy Mode Support)
     if (totalIncome === 0 && totalExpense === 0) {
       const allStats = await db.prepare(`
         SELECT 
@@ -147,11 +148,11 @@ export async function getCashierData(db, body) {
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-    // 🚀 OPTIMIZATION 2: Row Count explicitly via SQL
+    // 🚀 OPTIMIZATION: Count Query directly from SQL
     const countRow = await db.prepare(`SELECT COUNT(id) as count FROM ${tableName} ${whereSql}`).bind(...params).first();
     const totalRows = countRow ? countRow.count : 0;
 
-    // 🚀 OPTIMIZATION 3: Explicit Columns Select (Avoid SELECT *)
+    // 🚀 OPTIMIZATION: Explicit Columns Select (Avoid SELECT *)
     const dataQuery = `
       SELECT id, no, date, responsibility_person as respPerson, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, is_locked, uniqueid 
       FROM ${tableName} 
@@ -163,10 +164,9 @@ export async function getCashierData(db, body) {
     const rawRows = rowsRes.results || [];
 
     const formattedRows = rawRows.map(row => {
-      const uid = String(row.uniqueid || row.uniqueId || '');
+      const uid = String(row.uniqueid || '');
       const isAutoLocked = Boolean(
         row.is_locked || 
-        row.isLocked || 
         uid.startsWith('UNIPROFIT_') || 
         uid.startsWith('UNICASHIER_') || 
         uid.startsWith('INCCASHIER_') || 
@@ -186,7 +186,7 @@ export async function getCashierData(db, body) {
         credit: parseFloat(row.credit || 0),
         balances: parseFloat(row.balances || 0),
         transfer: row.transfer || '',
-        vrNo: row.vr_no || row.vrNo || '',
+        vrNo: row.vr_no || '',
         my: row.my || '',
         fy: normalizeFyStr(row.fy || activeFy),
         bookName: row.book_name || bookTitle,
@@ -228,7 +228,7 @@ export async function getTodayIncomeForCashier(db, body) {
     const limit = parseInt(body.limit || 500, 10);
     const offset = (page - 1) * limit;
 
-    // 🚀 OPTIMIZATION 4: Explicit Select for Today Income
+    // 🚀 OPTIMIZATION: Explicit Select for Today Income
     const rowsRes = await db.prepare(
       `SELECT student_id, id, no, effect_date, date, fy, fyid, fyid_name, class, category, account_name, method, debit, credit, aut_amount, promo, my, vr_no, remark, uniqueid, is_locked 
        FROM income 
@@ -257,7 +257,7 @@ export async function getTodayIncomeForCashier(db, body) {
       my: row.my || '',
       vrNo: row.vr_no || '',
       remark: row.remark || '',
-      uniqueId: row.uniqueid || row.uniqueId || `INC_${row.id}`,
+      uniqueId: row.uniqueid || `INC_${row.id}`,
       isLocked: Boolean(row.is_locked)
     }));
 
@@ -395,14 +395,14 @@ export async function updateCashierEntry(db, session, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT & Capture Existing Data (Crash-Proof SELECT * Pattern)
+    // 🚀 OPTIMIZATION: Avoid SELECT *
     const existing = await db.prepare(`SELECT fy, is_locked, uniqueid FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ပြင်ဆင်မည့် စာရင်း ရှာမတွေ့ပါ။" };
     }
 
     const uid = String(existing.uniqueid || '');
-    const isAutoLocked = Boolean(existing.is_locked || existing.isLocked) ||
+    const isAutoLocked = Boolean(existing.is_locked) ||
       uid.startsWith('TRANS_') ||
       uid.startsWith('UNIPROFIT_') ||
       uid.startsWith('UNICASHIER_') ||
@@ -430,9 +430,6 @@ export async function updateCashierEntry(db, session, body) {
     const credit = parseFloat(body.credit || 0);
     const respPersonVal = body.respPerson || body.responsibility_person || '';
 
-    // ⚡ ATOMIC BATCH RECONCILIATION:
-    // စာအုပ် ၅ အုပ်လုံးရှိ ချိတ်ဆက်ထားသော Transfer စာရင်းဟောင်း ဖျက်ခြင်း၊ မူရင်းစာအုပ် Update လုပ်ခြင်းနှင့်
-    // Transfer အသစ်ပြန်ထည့်ခြင်းတို့ကို Single Transaction အဖြစ် တစ်ပေါင်းတည်း Run ပါသည်
     const batchStatements = [];
 
     // ၁။ Cashier Sub-books ၅ အုပ်လုံးမှ Linked Transfer အဟောင်းများ ဖျက်ရန် Statements
@@ -510,14 +507,14 @@ export async function deleteCashierEntry(db, session, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    // 🔒 1. SERVER-SIDE LOCK ENFORCEMENT & Capture Target Data (Crash-Proof SELECT * Pattern)
+    // 🚀 OPTIMIZATION: Avoid SELECT *
     const existing = await db.prepare(`SELECT fy, transfer, is_locked, uniqueid FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ဖျက်သိမ်းမည့် စာရင်း ရှာမတွေ့ပါ။" };
     }
 
     const uid = String(existing.uniqueid || '');
-    const isAutoLocked = Boolean(existing.is_locked || existing.isLocked) ||
+    const isAutoLocked = Boolean(existing.is_locked) ||
       uid.startsWith('TRANS_') ||
       uid.startsWith('UNIPROFIT_') ||
       uid.startsWith('UNICASHIER_') ||
