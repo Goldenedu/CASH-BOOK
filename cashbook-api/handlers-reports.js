@@ -9,8 +9,7 @@
  *              🎯 12 Months Fiscal Year Logic (Mar to Feb),
  *              🎯 Auto Grade Sorting Reversed (Grade 12 to Pre School),
  *              🎯 Advanced "Unpaid Month" Logic (Accumulated check from Join Date),
- *              🎯 SMART LEAVE FILTER: Exempts months with 'leave', 'inactive', 'နား', 'ခွင့်' in remark.
- *              🎯 ZERO HARDCODING: Dynamic Fiscal Year Fallbacks via getCurrentAcademicYear
+ *              🔥 SMART LEAVE FILTER (ZERO QUOTA COST): Reads directly from Income Book remarks
  * ==============================================================================
  */
 
@@ -74,7 +73,6 @@ export async function getFinancialReportData(db, body) {
     const activeFy = normalizeFyStr(body.fy || fallbackFy);
     const fyClean = activeFy.replace(/^FY\s*/i, '');
 
-    // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)` prevents Table Full Scans
     const incAgg = await db.prepare(`
       SELECT 
         COALESCE(SUM(CASE WHEN LOWER(category) LIKE '%boarder%' AND LOWER(category) NOT LIKE '%semi%' THEN (credit - debit) ELSE 0 END), 0) as boarder,
@@ -173,7 +171,7 @@ export async function getFinancialReportData(db, body) {
 }
 
 /**
- * 💡 2. Income Detail Report (InDetail Matrix) - 🚀 SQL OPTIMIZED
+ * 💡 2. Income Detail Report (InDetail Matrix) - 🚀 SQL OPTIMIZED & ZERO QUOTA COST LEAVE FILTER
  */
 export async function getIncomeDetailReportData(db, body) {
   try {
@@ -198,7 +196,6 @@ export async function getIncomeDetailReportData(db, body) {
       "TOTAL"
     ];
 
-    // 🚀 ULTRA-OPTIMIZATION: `s.fy IN (?, ?)` prevents Table Full Scans
     let whereClauses = [`(s.fy IN (?, ?))`];
     let params = [activeFy, fyClean];
 
@@ -209,13 +206,13 @@ export async function getIncomeDetailReportData(db, body) {
     }
     const whereSql = `WHERE ` + whereClauses.join(' AND ');
 
-    // Fetch ONLY the students matching the criteria (Paginated processing logic below)
+    // Fetch ONLY the students matching the criteria
     const allStudents = (await db.prepare(`
       SELECT s.student_id, s.id, s.fy, s.fyid, s.name, s.fyid_name, s.promo, s.date, s.transfer_date, s.status, s.class 
       FROM student s ${whereSql}
     `).bind(...params).all()).results || [];
     
-    // 🚀 ULTRA-OPTIMIZATION: Fetching `remark` to support "Leave/Inactive" Logic
+    // 🚀 ULTRA-OPTIMIZATION: Fetching `remark` directly from existing Income query (0 Extra Quota)
     const allIncome = (await db.prepare(`
       SELECT student_id, account_name, credit, debit, effect_date, date, remark 
       FROM income 
@@ -261,19 +258,20 @@ export async function getIncomeDetailReportData(db, body) {
       const credit = parseFloat(row.credit || 0) - parseFloat(row.debit || 0);
       const effDate = row.effect_date || row.date || '';
 
+      const mStr = parseSafeMonthYear(effDate);
+      const mIdx = monthKeys.indexOf(mStr);
+
+      // 🔥 SMART LEAVE FILTER: Read directly from Income records
+      if (mIdx >= 0 && isLeaveRemark(row.remark)) {
+        stGroup.leaveMonths.add(mIdx);
+      }
+
       if (acc.includes('service')) {
         if (!stGroup.joinDate || (effDate && effDate < stGroup.joinDate)) {
           stGroup.joinDate = effDate;
         }
-        const mStr = parseSafeMonthYear(effDate);
-        const mIdx = monthKeys.indexOf(mStr);
         if (mIdx >= 0) {
-          // 💡 If amount is 0 and remark contains "leave/inactive", mark this month as Exempt
-          if (credit <= 0 && isLeaveRemark(row.remark)) {
-            stGroup.leaveMonths.add(mIdx);
-          } else {
-            stGroup.monthlyServices[mIdx] += credit;
-          }
+          stGroup.monthlyServices[mIdx] += credit;
         }
       } else if (acc.includes('registration')) {
         stGroup.registration += credit;
@@ -345,7 +343,7 @@ export async function getIncomeDetailReportData(db, body) {
     paginatedList.forEach(st => {
       const servicesSum = st.monthlyServices.reduce((a, b) => a + b, 0);
       const rowTotal = st.registration + st.ferry + st.nightStudy + st.others + servicesSum;
-      
+
       // 💡 Display "Leave" text instead of 0 if the month was marked as leave
       const finalMonthlyServices = st.monthlyServices.map((amt, idx) => {
         if (amt <= 0 && st.leaveMonths.has(idx)) return "Leave";
@@ -360,10 +358,10 @@ export async function getIncomeDetailReportData(db, body) {
       ];
 
       for (let c = 10; c < rowArr.length; c++) {
-        // Skip summing strings like "Leave"
-        if (typeof rowArr[c] === 'number') {
-           pageTotals[c] += parseFloat(rowArr[c] || 0);
-        }
+         // Skip summing strings like "Leave"
+         if (typeof rowArr[c] === 'number') {
+            pageTotals[c] += parseFloat(rowArr[c] || 0);
+         }
       }
       dataMatrix.push(rowArr);
     });
@@ -393,7 +391,6 @@ export async function getMonthlyIncomeReportData(db, body) {
     const activeFy = normalizeFyStr(body.fy || fallbackFy);
     const fyClean = activeFy.replace(/^FY\s*/i, '');
 
-    // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)` prevents Table Full Scans
     const rowsRes = await db.prepare(`SELECT account_name, category, credit, debit, effect_date, date FROM income WHERE fy IN (?, ?)`).bind(activeFy, fyClean).all();
     const list = rowsRes.results || [];
 
@@ -460,7 +457,6 @@ export async function getStudentReportDetails(db, body) {
     const activeFy = body.fy ? body.fy.replace(/^FY\s*/i, '') : fallbackFy;
     const fyPrefixed = `FY ${activeFy}`;
 
-    // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)` prevents Table Full Scans
     const list = (await db.prepare(`SELECT class, status, category, gender FROM student WHERE fy IN (?, ?)`).bind(activeFy, fyPrefixed).all()).results || [];
 
     const headers = ["NO", "FY", "CLASS", "BOARDER", "SEMI BOARDER", "DAY STUDENT", "TOTAL ACTIVE", "INACTIVE", "MALE", "FEMALE"];
@@ -497,7 +493,6 @@ export async function getStudentReportDetails(db, body) {
  */
 export async function getFundReportData(db, body) {
   try {
-    // 🚀 OPTIMIZATION: Added LIMIT 1000 to prevent runaway memory usage
     const list = (await db.prepare(`SELECT id, staff_id, fund_date, name, staff_idname, unpaid_bonus, unpaid_fund, status FROM staff_fulltime ORDER BY id ASC LIMIT 1000`).all()).results || [];
     const data = list.map((r, i) => {
       const bonus = parseFloat(r.unpaid_bonus || 0);
