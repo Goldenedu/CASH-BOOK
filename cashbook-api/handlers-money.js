@@ -4,6 +4,7 @@
  * File: handlers-money.js (Location: cashbook-api/handlers-money.js)
  * 💡 Features: Refactored with utils.js for DRY Principle
  *              🚀 OPTIMIZED: Avoided SELECT *, switched to COUNT(id) for faster scan
+ *              🚀 ULTRA-OPTIMIZED: Prevented Full Table Scans. Replaced OR with IN().
  * ==============================================================================
  */
 
@@ -23,6 +24,7 @@ async function recalculateStudentMoneyBalances(db, targetFy = null) {
       const cleanFy = normalizeFyStr(targetFy).replace(/^FY\s*/i, '');
       const fyPrefixed = `FY ${cleanFy}`;
 
+      // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)` limits Row Scans to matching Index only
       await db.prepare(`
         WITH calculated AS (
           SELECT id,
@@ -35,7 +37,7 @@ async function recalculateStudentMoneyBalances(db, targetFy = null) {
                    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
                  ) as calc_bal
           FROM student_money
-          WHERE fy = ? OR fy = ?
+          WHERE fy IN (?, ?)
         )
         UPDATE student_money 
         SET no = calculated.calc_no,
@@ -92,10 +94,12 @@ export async function getStudentMoneyData(db, body) {
     const limit = parseInt(body.limit || 50, 10);
     const offset = (page - 1) * limit;
 
-    let whereClauses = [`(fy = ? OR fy = ?)`];
+    // 🚀 ULTRA-OPTIMIZATION: Replace `fy = ? OR fy = ?` with `fy IN (?, ?)`
+    let whereClauses = [`(fy IN (?, ?))`];
     let params = [activeFy, `FY ${activeFy}`];
 
     if (studentIdFilter > 0) {
+      // ဤနေရာတွင် ကော်လံ မတူသောကြောင့် OR အသုံးပြုရန် လိုအပ်သည်
       whereClauses.push(`(student_id = ? OR id = ? )`);
       params.push(studentIdFilter, studentIdFilter);
     }
@@ -114,7 +118,7 @@ export async function getStudentMoneyData(db, body) {
         COALESCE(SUM(debit), 0) as totalIncome,
         COALESCE(SUM(credit), 0) as totalExpense
       FROM student_money
-      WHERE fy = ? OR fy = ?
+      WHERE fy IN (?, ?)
     `).bind(activeFy, `FY ${activeFy}`).first() || { totalIncome: 0, totalExpense: 0 };
 
     const totalIncome = parseFloat(statsResult.totalIncome || 0);
@@ -179,7 +183,8 @@ export async function getStudentMoneySummary(db, body) {
     const activeFy = normalizeFyStr(body.fy || "2026-2027").replace(/^FY\s*/i, '');
     const searchVal = String(body.searchVal || "").trim();
 
-    let whereClauses = [`(fy = ? OR fy = ?)`];
+    // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)`
+    let whereClauses = [`(fy IN (?, ?))`];
     let params = [activeFy, `FY ${activeFy}`];
 
     if (searchVal) {
@@ -314,7 +319,7 @@ export async function saveStudentMoneyEntry(db, userSession, body) {
     const credit = parseFloat(body.credit || 0);
 
     const lastNoRow = await db.prepare(
-      "SELECT MAX(CAST(no AS INTEGER)) as maxNo FROM student_money WHERE fy = ? OR fy = ?"
+      "SELECT MAX(CAST(no AS INTEGER)) as maxNo FROM student_money WHERE fy IN (?, ?)"
     ).bind(cleanFy, `FY ${cleanFy}`).first();
     const nextNo = (isMigration && body.no) ? parseInt(body.no, 10) : ((lastNoRow && lastNoRow.maxNo ? parseInt(lastNoRow.maxNo, 10) : 0) + 1);
 
