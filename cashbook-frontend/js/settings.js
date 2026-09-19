@@ -5,6 +5,7 @@
  * 💡 Features: Refactored with Global api.js for DRY Principle,
  *              🎯 Phase 4: Advanced Date Range Export UI Integration,
  *              ⚡ Live Daily Read / Write Quota Progress Bars & Telemetry Rendering
+ *              🛠️ BUGFIX: Corrected API Response Data Mapping to accurately display Live Quota
  * ==============================================================================
  */
 
@@ -96,6 +97,8 @@ function renderD1UsageMonitor(usageData) {
   const records = usageData.records || {};
   const health = usageData.health || {};
   const breakdown = records.breakdown || [];
+  
+  // 🛠️ BUGFIX: Safely extract limits and dailyQuota from Backend Response
   const limits = usageData.limits || {};
   const dailyQuota = usageData.dailyQuota || {};
 
@@ -189,15 +192,17 @@ function renderD1UsageMonitor(usageData) {
   if (elTotalRows) elTotalRows.textContent = totalRows.toLocaleString('en-US');
   if (elTotalTables) elTotalTables.textContent = totalTables;
 
-  // ⚡ 5. Daily Read / Write Live Quota Rendering
-  const readsUsed = Number(limits.dailyReadsUsed ?? dailyQuota.rowsReadUsed ?? 0);
-  const writesUsed = Number(limits.dailyWritesUsed ?? dailyQuota.rowsWrittenUsed ?? 0);
+  // ⚡ 5. Daily Read / Write Live Quota Rendering (BUGFIX: Safe Fallback Extraction)
+  let readsUsed = Number(limits.dailyReadsUsed ?? dailyQuota.rowsReadUsed ?? 0);
+  let writesUsed = Number(limits.dailyWritesUsed ?? dailyQuota.rowsWrittenUsed ?? 0);
   const readsLimit = Number(limits.dailyReadsLimit || 5000000);
   const writesLimit = Number(limits.dailyWritesLimit || 100000);
 
-  const readsPct = Number(limits.dailyReadsPercent ?? dailyQuota.readsPercentage ?? ((readsUsed / readsLimit) * 100));
-  const writesPct = Number(limits.dailyWritesPercent ?? dailyQuota.writesPercentage ?? ((writesUsed / writesLimit) * 100));
-  const isLive = Boolean(limits.isLiveQuota || dailyQuota.isConfigured);
+  let readsPct = Number(limits.dailyReadsPercent ?? dailyQuota.readsPercentage ?? ((readsUsed / readsLimit) * 100));
+  let writesPct = Number(limits.dailyWritesPercent ?? dailyQuota.writesPercentage ?? ((writesUsed / writesLimit) * 100));
+  
+  // Strict Boolean Check to ensure UI updates correctly
+  const isLive = (limits.isLiveQuota === true) || (dailyQuota.isConfigured === true);
 
   const elReadsUsed = document.getElementById('d1-reads-used');
   const elReadsPercent = document.getElementById('d1-reads-percent');
@@ -212,7 +217,7 @@ function renderD1UsageMonitor(usageData) {
   const elQuotaDot = document.getElementById('d1-quota-status-dot');
 
   if (isLive) {
-    // 🎯 Live Mode Active (Cloudflare Metrics Fetched)
+    // 🎯 Live Mode Active (Cloudflare Metrics Fetched Successfully)
     if (elReadsUsed) elReadsUsed.textContent = readsUsed.toLocaleString('en-US');
     if (elReadsPercent) {
       elReadsPercent.textContent = `${readsPct.toFixed(2)}%`;
@@ -220,7 +225,7 @@ function renderD1UsageMonitor(usageData) {
       elReadsPercent.className = `text-[9px] px-1.5 py-0.2 rounded font-bold font-mono bg-${rColor}-500/10 text-${rColor}-400 border border-${rColor}-500/20`;
     }
     if (elReadsBar) {
-      elReadsBar.style.width = `${Math.min(100, Math.max(readsUsed > 0 ? 1 : 0, readsPct))}%`;
+      elReadsBar.style.width = `${Math.min(100, Math.max(readsUsed > 0 ? 0.5 : 0, readsPct))}%`;
       elReadsBar.className = `h-full rounded-full transition-all duration-700 ${readsPct >= 90 ? 'bg-rose-500' : (readsPct >= 75 ? 'bg-amber-500' : 'bg-sky-400')}`;
     }
 
@@ -231,7 +236,7 @@ function renderD1UsageMonitor(usageData) {
       elWritesPercent.className = `text-[9px] px-1.5 py-0.2 rounded font-bold font-mono bg-${wColor}-500/10 text-${wColor}-400 border border-${wColor}-500/20`;
     }
     if (elWritesBar) {
-      elWritesBar.style.width = `${Math.min(100, Math.max(writesUsed > 0 ? 1 : 0, writesPct))}%`;
+      elWritesBar.style.width = `${Math.min(100, Math.max(writesUsed > 0 ? 0.5 : 0, writesPct))}%`;
       elWritesBar.className = `h-full rounded-full transition-all duration-700 ${writesPct >= 90 ? 'bg-rose-500' : (writesPct >= 75 ? 'bg-amber-500' : 'bg-amber-400')}`;
     }
 
@@ -239,7 +244,7 @@ function renderD1UsageMonitor(usageData) {
     if (elQuotaDot) elQuotaDot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse';
     if (elQuotaBadge) elQuotaBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold border flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
   } else {
-    // ⚠️ Setup Required Mode (Guides user to configure CF_API_TOKEN)
+    // ⚠️ Setup Required Mode (Guides user to configure Token if fetch failed)
     if (elReadsUsed) elReadsUsed.textContent = 'Setup Required';
     if (elReadsPercent) {
       elReadsPercent.textContent = 'CF_API_TOKEN Needed';
