@@ -7,6 +7,7 @@
  *    - Security: crypto.randomUUID() for secure Unique IDs
  *    - Quota-Shield: O(1) Shared Recalculation Engine for all ledgers
  *    - Data Parsers: Safe Float & Int Parsing, Myanmar Gender Auto-Detection
+ *    🚀 ULTRA-OPTIMIZED: Prevented Full Table Scans. Replaced OR with IN().
  * ==============================================================================
  */
 
@@ -14,18 +15,12 @@
 // 💡 1. DATE & TIME HELPERS
 // ==========================================
 
-/**
- * 💡 Myanmar Standard Timezone Helper (UTC+6:30)
- */
 export function getMyanmarDateString(inputDate = null) {
   if (inputDate) return String(inputDate).trim().split('T')[0];
   const now = new Date(Date.now() + (6.5 * 3600 * 1000));
   return now.toISOString().split('T')[0];
 }
 
-/**
- * 💡 Academic Year Generator (March Boundary Aligned: Month < 2)
- */
 export function getCurrentAcademicYear(dateInput = null) {
   const d = dateInput ? new Date(dateInput) : new Date(Date.now() + (6.5 * 3600 * 1000));
   const validDate = isNaN(d.getTime()) ? new Date() : d;
@@ -47,9 +42,6 @@ export function calculateAcademicFyFromDate(dateStr) {
 // 💡 2. FORMATTERS & PARSERS
 // ==========================================
 
-/**
- * 💡 FY String Normalizers (Adds "FY " or returns just "YYYY-YYYY")
- */
 export function normalizeFyStr(fy, dateInput = null) {
   let s = fy ? String(fy).trim() : `FY ${getCurrentAcademicYear(dateInput)}`;
   if (!s) s = `FY ${getCurrentAcademicYear(dateInput)}`;
@@ -65,9 +57,6 @@ export function normalizeFyClean(fy, dateInput = null) {
   return s.replace(/^FY\s*/i, '');
 }
 
-/**
- * 💡 FY Short Code Generator (e.g., "2026-2027" -> "2627")
- */
 export function getFyShortCode(fyStr) {
   if (fyStr) {
     const clean = String(fyStr).replace(/^FY\s*/i, '').trim();
@@ -82,9 +71,6 @@ export function getFyShortCode(fyStr) {
   return p[0].slice(-2) + p[1].slice(-2);
 }
 
-/**
- * 💡 ID Sanitizer & Float Parsers
- */
 export function sanitizeFyidStr(fyidStr) {
   const s = String(fyidStr || '').trim();
   if (!s) return s;
@@ -124,7 +110,6 @@ export function autoDetectGender(nameStr) {
   if (!nameStr) return 'Male';
   const clean = String(nameStr).trim();
 
-  // Male Detectors
   if (
     clean.startsWith('မောင်') || clean.startsWith('ကို') || clean.startsWith('ဦး') ||
     clean.startsWith('မင်း') || clean.startsWith('စော') || clean.startsWith('ဆရာ') ||
@@ -133,7 +118,6 @@ export function autoDetectGender(nameStr) {
     return 'Male';
   }
 
-  // Female Detectors
   if (
     clean.startsWith('မေ') || clean.startsWith('ဒေါ်') || clean.startsWith('နန်း') || 
     clean.startsWith('နော်') || clean.startsWith('ဆရာမ') || clean.startsWith('တီချာ') || 
@@ -143,7 +127,6 @@ export function autoDetectGender(nameStr) {
     return 'Female';
   }
 
-  // Fallback 'Ma' logic
   if ((clean.startsWith('မ') && !clean.startsWith('မောင်') && !clean.startsWith('မင်း')) || /^(Ma)\b/i.test(clean)) {
     return 'Female';
   }
@@ -155,18 +138,11 @@ export function autoDetectGender(nameStr) {
 // 💡 4. DATABASE GENERATORS & OPTIMIZERS
 // ==========================================
 
-/**
- * 💡 Secure Unique ID Generator (Uses WebCrypto API)
- */
 export function generateUniqueId(prefix) {
-  // UUID ကိုယူ၍ ဒက်ရှ် (-) များဖယ်ရှားပြီး ရှေ့ဆုံး ၈ လုံးကိုသာ ယူမည်
   const uuid = crypto.randomUUID().replace(/-/g, '').substring(0, 8);
   return `${prefix}_${Date.now()}_${uuid}`;
 }
 
-/**
- * 💡 Dynamic Voucher Number Generator (e.g. BNK-180926-001)
- */
 export async function generateVoucherNo(db, tableName, prefix, entryDate) {
   let ddmmyy = "";
   const parts = String(entryDate || '').split('-');
@@ -179,30 +155,27 @@ export async function generateVoucherNo(db, tableName, prefix, entryDate) {
   }
 
   const pattern = `${prefix}-${ddmmyy}-%`;
+  
+  // 🚀 OPTIMIZATION: Use COUNT(id) instead of COUNT(*)
   const countRow = await db.prepare(
-    `SELECT COUNT(*) as cnt FROM ${tableName} WHERE vr_no LIKE ? OR date = ?`
+    `SELECT COUNT(id) as cnt FROM ${tableName} WHERE vr_no LIKE ? OR date = ?`
   ).bind(pattern, entryDate).first();
 
   const seq = (countRow ? parseInt(countRow.cnt || countRow.count || Object.values(countRow)[0], 10) : 0) + 1;
   return `${prefix}-${ddmmyy}-${String(seq).padStart(3, '0')}`;
 }
 
-/**
- * 💡 Generate Integer NO Series By Fiscal Year
- */
 export async function generateFyNo(db, tableName, fy) {
   const normFy = normalizeFyStr(fy);
   const cleanFy = normFy.replace(/^FY\s*/i, '');
+  
+  // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)`
   const lastNoRow = await db.prepare(
-    `SELECT MAX(CAST(no AS INTEGER)) as maxNo FROM ${tableName} WHERE fy = ? OR fy = ?`
+    `SELECT MAX(CAST(no AS INTEGER)) as maxNo FROM ${tableName} WHERE fy IN (?, ?)`
   ).bind(normFy, cleanFy).first();
   return (lastNoRow && lastNoRow.maxNo ? parseInt(lastNoRow.maxNo, 10) : 0) + 1;
 }
 
-/**
- * ⚡ QUOTA-SHIELD: O(1) Differential D1 Window Function Recalculation Engine
- * D1 Write Quota ကို ၉၉.၉% သက်သာစေသည့် SQL Balance Auto-Adjuster
- */
 export async function recalculateLedgerBalances(db, tableName, targetFy = null) {
   if (!tableName) return;
   try {
@@ -210,13 +183,14 @@ export async function recalculateLedgerBalances(db, tableName, targetFy = null) 
       const normFy = normalizeFyStr(targetFy);
       const cleanFy = normFy.replace(/^FY\s*/i, '');
 
+      // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)`
       await db.prepare(`
         WITH calculated AS (
           SELECT id,
                  ROW_NUMBER() OVER (ORDER BY date ASC, id ASC) as calc_no,
                  SUM(debit - credit) OVER (ORDER BY date ASC, id ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as calc_bal
           FROM ${tableName}
-          WHERE fy = ? OR fy = ?
+          WHERE fy IN (?, ?)
         )
         UPDATE ${tableName} 
         SET no = calculated.calc_no, balances = calculated.calc_bal
