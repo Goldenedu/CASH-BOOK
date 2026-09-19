@@ -309,23 +309,12 @@ export async function getIncomeData(db, body) {
 
     const activeFy = normalizeFyStr(body.fy || `FY ${getCurrentAcademicYear()}`);
 
-    // 🚀 OPTIMIZATION: SQL-side Aggregate Sums
     let statsResult;
     if (body.fy && body.fy !== 'all') {
-      statsResult = await db.prepare(`
-        SELECT 
-          COALESCE(SUM(credit), 0) as totalIncome,
-          COALESCE(SUM(debit), 0) as totalExpense
-        FROM income
-        WHERE fy = ? OR fy = ?
-      `).bind(activeFy, activeFy.replace(/^FY\s*/i, '')).first();
+      // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)` prevents Table Full Scans
+      statsResult = await db.prepare(`SELECT COALESCE(SUM(credit), 0) as totalIncome, COALESCE(SUM(debit), 0) as totalExpense FROM income WHERE fy IN (?, ?)`).bind(activeFy, activeFy.replace(/^FY\s*/i, '')).first();
     } else {
-      statsResult = await db.prepare(`
-        SELECT 
-          COALESCE(SUM(credit), 0) as totalIncome,
-          COALESCE(SUM(debit), 0) as totalExpense
-        FROM income
-      `).first();
+      statsResult = await db.prepare(`SELECT COALESCE(SUM(credit), 0) as totalIncome, COALESCE(SUM(debit), 0) as totalExpense FROM income`).first();
     }
     statsResult = statsResult || { totalIncome: 0, totalExpense: 0 };
 
@@ -337,7 +326,7 @@ export async function getIncomeData(db, body) {
     let params = [];
 
     if (body.fy && body.fy !== 'all') {
-      whereClauses.push(`(fy = ? OR fy = ?)`);
+      whereClauses.push(`(fy IN (?, ?))`);
       params.push(activeFy, activeFy.replace(/^FY\s*/i, ''));
     }
 
@@ -349,73 +338,24 @@ export async function getIncomeData(db, body) {
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
     
-    // 🚀 OPTIMIZATION: COUNT(id) for faster scan
     const countRow = await db.prepare(`SELECT COUNT(id) as count FROM income ${whereSql}`).bind(...params).first();
     const totalRows = countRow ? countRow.count : 0;
 
-    // 🚀 OPTIMIZATION: Strict Exact Match Schema Columns only (Prevents 'no such column' error)
-    const dataQuery = `
-      SELECT id, no, effect_date, date, fy, student_id, fyid, fyid_name, class, category, account_name, method, debit, credit, aut_amount, promo, my, vr_no, remark, uniqueid, is_locked 
-      FROM income 
-      ${whereSql} 
-      ORDER BY id DESC 
-      LIMIT ? OFFSET ?
-    `;
+    const dataQuery = `SELECT id, student_id, no, effect_date, date, fy, fyid, fyid_name, class, category, account_name, method, debit, credit, aut_amount, promo, my, vr_no, remark, is_locked, uniqueid FROM income ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`;
     const rowsRes = await db.prepare(dataQuery).bind(...params, limit, offset).all();
     const rawRows = rowsRes.results || [];
 
-    // Map Exact Database Column names back to Front-end JSON format safely
     const formattedRows = rawRows.map(row => {
       const uid = String(row.uniqueid || '');
-      const isAutoLocked = Boolean(
-        row.is_locked || 
-        uid.startsWith('INCMAIN_') || 
-        uid.startsWith('INCCASHIER_') || 
-        uid.startsWith('DAILY_INC_')
-      );
-
+      const isAutoLocked = Boolean(row.is_locked || uid.startsWith('INCMAIN_') || uid.startsWith('INCCASHIER_') || uid.startsWith('DAILY_INC_'));
       return {
-        id: parseCleanIntId(row.student_id || row.id),
-        no: Math.floor(parseFloat(row.no || row.id || 1)),
-        effDate: row.effect_date || row.date || '',
-        date: row.date || '',
-        fy: normalizeFyStr(row.fy || activeFy),
-        fyid: sanitizeFyidStr(row.fyid || ''),
-        fyidName: row.fyid_name || '',
-        class: row.class || '',
-        category: row.category || '',
-        accountName: row.account_name || '',
-        method: row.method || 'Cash',
-        debit: parseFloat(row.debit || 0),
-        credit: parseFloat(row.credit || 0),
-        autAmount: parseFloat(row.aut_amount || 0),
-        promo: row.promo || '',
-        my: row.my || '',
-        vrNo: row.vr_no || '',
-        remark: row.remark || '',
-        uniqueId: uid || `INC_${row.id}`,
-        isLocked: isAutoLocked
+        id: parseCleanIntId(row.student_id || row.id), no: Math.floor(parseFloat(row.no || row.id || 1)), effDate: row.effect_date || row.date || '', date: row.date || '', fy: normalizeFyStr(row.fy || activeFy), fyid: sanitizeFyidStr(row.fyid || ''), fyidName: row.fyid_name || '', class: row.class || '', category: row.category || '', accountName: row.account_name || '', method: row.method || 'Cash', debit: parseFloat(row.debit || 0), credit: parseFloat(row.credit || 0), autAmount: parseFloat(row.aut_amount || 0), promo: row.promo || '', my: row.my || '', vrNo: row.vr_no || '', remark: row.remark || '', uniqueId: uid || `INC_${row.id}`, isLocked: isAutoLocked
       };
     });
 
-    return {
-      success: true,
-      data: formattedRows,
-      totalRows: totalRows,
-      page: page,
-      limit: limit,
-      stats: {
-        totalIncome: totalIncome,
-        totalExpense: totalExpense,
-        balance: balance
-      }
-    };
+    return { success: true, data: formattedRows, totalRows: totalRows, page: page, limit: limit, stats: { totalIncome, totalExpense, balance } };
   } catch (err) {
-    console.error("Error in getIncomeData handler:", err);
-    return {
-      success: false,
-      message: "Income ဒေတာ ရယူရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message
-    };
+    return { success: false, message: err.message };
   }
 }
 
