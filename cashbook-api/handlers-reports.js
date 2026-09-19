@@ -9,7 +9,7 @@
  *              🎯 12 Months Fiscal Year Logic (Mar to Feb),
  *              🎯 Auto Grade Sorting Reversed (Grade 12 to Pre School),
  *              🎯 Advanced "Unpaid Month" Logic (Accumulated check from Join Date),
- *              🔥 SMART LEAVE FILTER (ZERO QUOTA COST): Reads directly from Income Book remarks
+ *              🔥 SMART LEAVE FILTER (TEXT-SCANNING ENGINE): Zero Quota Cost & Resilient
  * ==============================================================================
  */
 
@@ -171,7 +171,7 @@ export async function getFinancialReportData(db, body) {
 }
 
 /**
- * 💡 2. Income Detail Report (InDetail Matrix) - 🚀 SQL OPTIMIZED & ZERO QUOTA COST LEAVE FILTER
+ * 💡 2. Income Detail Report (InDetail Matrix)
  */
 export async function getIncomeDetailReportData(db, body) {
   try {
@@ -212,7 +212,7 @@ export async function getIncomeDetailReportData(db, body) {
       FROM student s ${whereSql}
     `).bind(...params).all()).results || [];
     
-    // 🚀 ULTRA-OPTIMIZATION: Fetching `remark` directly from existing Income query (0 Extra Quota)
+    // Fetch Income Data including remark
     const allIncome = (await db.prepare(`
       SELECT student_id, account_name, credit, debit, effect_date, date, remark 
       FROM income 
@@ -239,14 +239,16 @@ export async function getIncomeDetailReportData(db, body) {
         nightStudy: 0,
         others: 0,
         monthlyServices: new Array(12).fill(0),
-        leaveMonths: new Set() // 💡 Store indices of months that are marked as leave/inactive
+        leaveMonths: new Set() // 💡 Store indices of exempted months
       });
     });
 
-    // 💡 Helper function to detect leave/inactive remarks
-    const isLeaveRemark = (remark) => {
-      const r = String(remark || '').toLowerCase();
-      return r.includes('leave') || r.includes('inactive') || r.includes('နား') || r.includes('ခွင့်');
+    // 💡 Myanmar Month Mapping for Smart Text Scanner
+    const myanmarMonths = {
+      'mar': ['mar', 'မတ်'], 'apr': ['apr', 'ဧပြီ'], 'may': ['may', 'မေ'],
+      'jun': ['jun', 'ဇွန်'], 'jul': ['jul', 'ဇူလိုင်'], 'aug': ['aug', 'သြဂုတ်', 'ဩဂုတ်'],
+      'sep': ['sep', 'စက်တင်ဘာ'], 'oct': ['oct', 'အောက်တိုဘာ'], 'nov': ['nov', 'နိုဝင်ဘာ'],
+      'dec': ['dec', 'ဒီဇင်ဘာ'], 'jan': ['jan', 'ဇန်နဝါရီ'], 'feb': ['feb', 'ဖေဖော်ဝါရီ']
     };
 
     allIncome.forEach(row => {
@@ -261,9 +263,25 @@ export async function getIncomeDetailReportData(db, body) {
       const mStr = parseSafeMonthYear(effDate);
       const mIdx = monthKeys.indexOf(mStr);
 
-      // 🔥 SMART LEAVE FILTER: Read directly from Income records
-      if (mIdx >= 0 && isLeaveRemark(row.remark)) {
-        stGroup.leaveMonths.add(mIdx);
+      // 🔥 SMART LEAVE FILTER ENGINE (Text-Scanning)
+      const rText = String(row.remark || '').toLowerCase();
+      if (rText.includes('leave') || rText.includes('inactive') || rText.includes('နား') || rText.includes('ခွင့်')) {
+        let foundExplicitMonth = false;
+        
+        // စာသားထဲမှာ လနာမည် အတိအကျ (e.g., Jun, ဇွန်) ပါသလား လိုက်စစ်ပါမည်
+        monthKeys.forEach((mKey, idx) => {
+          const shortMonth = mKey.split('-')[0].toLowerCase();
+          const keywords = myanmarMonths[shortMonth] || [shortMonth];
+          if (keywords.some(kw => rText.includes(kw))) {
+            stGroup.leaveMonths.add(idx);
+            foundExplicitMonth = true;
+          }
+        });
+        
+        // အကယ်၍ စာသားထဲမှာ လနာမည် မပါခဲ့ရင် (ဥပမာ- "Leave" လို့ပဲ ရေးခဲ့ရင်) Effect Date က လကိုပဲ ယူပါမည်
+        if (!foundExplicitMonth && mIdx >= 0) {
+          stGroup.leaveMonths.add(mIdx);
+        }
       }
 
       if (acc.includes('service')) {
@@ -344,7 +362,7 @@ export async function getIncomeDetailReportData(db, body) {
       const servicesSum = st.monthlyServices.reduce((a, b) => a + b, 0);
       const rowTotal = st.registration + st.ferry + st.nightStudy + st.others + servicesSum;
 
-      // 💡 Display "Leave" text instead of 0 if the month was marked as leave
+      // 💡 Display "Leave" text if the month is marked as leave and has 0 balance
       const finalMonthlyServices = st.monthlyServices.map((amt, idx) => {
         if (amt <= 0 && st.leaveMonths.has(idx)) return "Leave";
         return amt;
@@ -358,7 +376,7 @@ export async function getIncomeDetailReportData(db, body) {
       ];
 
       for (let c = 10; c < rowArr.length; c++) {
-         // Skip summing strings like "Leave"
+         // Prevent NaN from strings like "Leave"
          if (typeof rowArr[c] === 'number') {
             pageTotals[c] += parseFloat(rowArr[c] || 0);
          }
