@@ -10,7 +10,7 @@
  *              Resend Email Backup Dispatcher with Native .xlsx Base64 Attachment Support,
  *              📊 Precision Calibrated D1 Storage Engine (Matches Cloudflare 20 Tables & 6.31 MB),
  *              🎯 Phase 3 & 4: Active FY Scoped Balances & Advanced Date Range Export,
- *              ⚡ ZERO-QUOTA DAILY TELEMETRY: Cloudflare GraphQL Analytics API Engine
+ *              ⚡ ZERO-QUOTA DAILY TELEMETRY: Cloudflare GraphQL Analytics API Engine (Fixed String! Syntax)
  *              🛡️ 5-MINUTE IN-MEMORY CACHING: Slashes Settings Page Read Quota by 99%
  * ==============================================================================
  */
@@ -22,54 +22,62 @@ let cachedLiveQuota = { timestamp: 0, data: null };
 let cachedD1Usage = { timestamp: 0, data: null };
 let cachedAvailableFys = { timestamp: 0, data: null };
 
-// 🎯 Known Cloudflare IDs from Dashboard
+// 🎯 Cloudflare Account & D1 Database IDs from your dashboard
 const DEFAULT_CF_ACCOUNT_ID = "f051f81312c3864d88da827491c2e19e";
 const DEFAULT_D1_DATABASE_ID = "945c2d8b-f2ac-496a-a7bd-018c18be84bf";
 
+// 💡 အကယ်၍ Cloudflare Worker Environment Variable မှ မဖတ်မိပါက ဤနေရာတွင် Token ကို တိုက်ရိုက် ထည့်သွင်းနိုင်ပါသည်
+const HARDCODED_CF_API_TOKEN = "cfut_tl5oyRCqHubAPTylOMUQjrlOUhcv3EDojCT2FEJvffb5253a"; 
+
 /**
  * ⚡ Live Daily Quota Fetcher (Zero D1 Read / Zero D1 Write)
- * Fetches real metrics from Cloudflare GraphQL Analytics API (Matches Cloudflare Dashboard GMT+6:30)
+ * Fetches real metrics from Cloudflare GraphQL Analytics API (Matches Cloudflare Dashboard GMT+6:30 & UTC)
  */
 async function getLiveCloudflareQuota(env) {
   const now = Date.now();
-  if (cachedLiveQuota.data && (now - cachedLiveQuota.timestamp < 180000)) { // 3 min cache
+  if (cachedLiveQuota.data && (now - cachedLiveQuota.timestamp < 120000)) { // 2 min cache
     return cachedLiveQuota.data;
   }
 
-  const apiToken = env?.CF_API_TOKEN || env?.CLOUDFLARE_API_TOKEN;
+  const apiToken = HARDCODED_CF_API_TOKEN || env?.CF_API_TOKEN || env?.CLOUDFLARE_API_TOKEN || (typeof CF_API_TOKEN !== 'undefined' ? CF_API_TOKEN : null);
   const accountId = env?.CF_ACCOUNT_ID || env?.CLOUDFLARE_ACCOUNT_ID || DEFAULT_CF_ACCOUNT_ID;
   const databaseId = env?.D1_DATABASE_ID || env?.DATABASE_ID || DEFAULT_D1_DATABASE_ID;
 
-  // Myanmar Time (GMT+6:30) Date calculation
+  // Cover both UTC date and Myanmar date (GMT+6:30) so midnight rollover never misses data
+  const nowUtc = new Date();
+  const dateUtc = nowUtc.toISOString().slice(0, 10);
   const nowMm = new Date(Date.now() + (6.5 * 3600 * 1000));
-  const todayMm = nowMm.toISOString().slice(0, 10);
+  const dateMm = nowMm.toISOString().slice(0, 10);
+
+  const startDate = dateUtc < dateMm ? dateUtc : dateMm;
+  const endDate = dateUtc > dateMm ? dateUtc : dateMm;
 
   if (!apiToken) {
     const fallback = {
-      date: todayMm,
+      date: dateMm,
       rowsRead: 0,
       rowsWritten: 0,
       readQueries: 0,
       writeQueries: 0,
       isConfigured: false,
-      message: "CF_API_TOKEN ထည့်သွင်းရန် လိုအပ်ပါသည် (Cloudflare Dashboard > API Tokens)"
+      message: "CF_API_TOKEN ထည့်သွင်းရန် လိုအပ်ပါသည်"
     };
     cachedLiveQuota = { timestamp: now, data: fallback };
     return fallback;
   }
 
-  // Cloudflare Official GraphQL Analytics Query for D1
+  // 🛠️ BUGFIX: Capitalized String! and Date! types for Cloudflare GraphQL Engine
   const graphqlQuery = {
     query: `
-      query GetD1DailyUsage($accountTag: string!, $databaseId: string, $start: Date, $end: Date) {
+      query GetD1DailyUsage($accountTag: String!, $databaseId: String!, $dateGeq: Date!, $dateLeq: Date!) {
         viewer {
           accounts(filter: { accountTag: $accountTag }) {
             d1AnalyticsAdaptiveGroups(
-              limit: 1000
+              limit: 100
               filter: {
                 databaseId: $databaseId
-                date_geq: $start
-                date_leq: $end
+                date_geq: $dateGeq
+                date_leq: $dateLeq
               }
             ) {
               sum {
@@ -86,8 +94,8 @@ async function getLiveCloudflareQuota(env) {
     variables: {
       accountTag: accountId,
       databaseId: databaseId,
-      start: todayMm,
-      end: todayMm
+      dateGeq: startDate,
+      dateLeq: endDate
     }
   };
 
@@ -95,7 +103,7 @@ async function getLiveCloudflareQuota(env) {
     const res = await fetch("https://api.cloudflare.com/client/v4/graphql", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${apiToken}`,
+        "Authorization": `Bearer ${apiToken.trim()}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify(graphqlQuery)
@@ -103,13 +111,13 @@ async function getLiveCloudflareQuota(env) {
 
     if (!res.ok) {
       console.warn("Cloudflare GraphQL Analytics HTTP Status:", res.status);
-      return cachedLiveQuota.data || { date: todayMm, rowsRead: 0, rowsWritten: 0, isConfigured: false };
+      return cachedLiveQuota.data || { date: dateMm, rowsRead: 0, rowsWritten: 0, isConfigured: false };
     }
 
     const json = await res.json();
     if (json.errors && json.errors.length > 0) {
       console.warn("Cloudflare GraphQL Errors:", json.errors);
-      return cachedLiveQuota.data || { date: todayMm, rowsRead: 0, rowsWritten: 0, isConfigured: false };
+      return cachedLiveQuota.data || { date: dateMm, rowsRead: 0, rowsWritten: 0, isConfigured: false };
     }
 
     const groups = json?.data?.viewer?.accounts?.[0]?.d1AnalyticsAdaptiveGroups || [];
@@ -127,7 +135,7 @@ async function getLiveCloudflareQuota(env) {
     }
 
     const result = {
-      date: todayMm,
+      date: dateMm,
       rowsRead: totalRowsRead,
       rowsWritten: totalRowsWritten,
       readQueries: totalReadQueries,
@@ -139,7 +147,7 @@ async function getLiveCloudflareQuota(env) {
     return result;
   } catch (err) {
     console.warn("Failed to fetch Cloudflare D1 GraphQL analytics:", err);
-    return cachedLiveQuota.data || { date: todayMm, rowsRead: 0, rowsWritten: 0, isConfigured: false };
+    return cachedLiveQuota.data || { date: dateMm, rowsRead: 0, rowsWritten: 0, isConfigured: false };
   }
 }
 
@@ -253,7 +261,7 @@ export async function getD1DatabaseUsage(db, env = null) {
     const now = Date.now();
     const liveQuota = await getLiveCloudflareQuota(env);
 
-    if (cachedD1Usage.data && (now - cachedD1Usage.timestamp < 180000)) {
+    if (cachedD1Usage.data && (now - cachedD1Usage.timestamp < 120000)) {
       return {
         ...cachedD1Usage.data,
         limits: {
@@ -400,7 +408,6 @@ export async function getD1DatabaseUsage(db, env = null) {
 
 /**
  * 💡 1. Fetch Live Balances Control, Dynamic FY List & D1 Usage
- * Flexible argument handling (Accepts any order from router)
  */
 export async function getSettingsData(db, arg2 = {}, arg3 = null, arg4 = null) {
   try {
