@@ -9,7 +9,8 @@
  *              🎯 12 Months Fiscal Year Logic (Mar to Feb),
  *              🎯 Auto Grade Sorting Reversed (Grade 12 to Pre School),
  *              🎯 Advanced "Unpaid Month" Logic (Accumulated check from Join Date),
- *              🔥 SMART LEAVE FILTER (TEXT-SCANNING ENGINE): Zero Quota Cost & Resilient
+ *              🔥 SMART LEAVE FILTER (TEXT-SCANNING ENGINE): Zero Quota Cost & Resilient,
+ *              🎓 FULL SCHOLAR EXEMPTION: Automatically excludes Full Scholar students from Unpaid lists
  * ==============================================================================
  */
 
@@ -120,7 +121,7 @@ export async function getFinancialReportData(db, body) {
         COALESCE(SUM(CASE WHEN LOWER(category) LIKE '%beans%' THEN credit ELSE 0 END), 0) as beansVegetables,
         COALESCE(SUM(CASE WHEN LOWER(category) LIKE '%home%1%' THEN credit ELSE 0 END), 0) as home1Exp,
         COALESCE(SUM(CASE WHEN LOWER(category) LIKE '%home%2%' THEN credit ELSE 0 END), 0) as home2Exp,
-        COALESCE(SUM(CASE WHEN LOWER(category) LIKE '%others%' THEN credit ELSE 0 END), 0) as kitchenOthers,
+        COALESCE(SUM(credit), 0) as kitchenOthers,
         COALESCE(SUM(credit), 0) as totalKitchen
       FROM kitchen 
       WHERE fy IN (?, ?)
@@ -212,7 +213,7 @@ export async function getIncomeDetailReportData(db, body) {
       FROM student s ${whereSql}
     `).bind(...params).all()).results || [];
     
-    // Fetch Income Data including remark
+    // Fetch Income Data including remark (Zero extra query)
     const allIncome = (await db.prepare(`
       SELECT student_id, account_name, credit, debit, effect_date, date, remark 
       FROM income 
@@ -234,6 +235,7 @@ export async function getIncomeDetailReportData(db, body) {
         transferMonth: s.transfer_date || '-',
         status: s.status || 'Active',
         class: s.class || '',
+        category: s.category || '',
         registration: 0,
         ferry: 0,
         nightStudy: 0,
@@ -263,12 +265,11 @@ export async function getIncomeDetailReportData(db, body) {
       const mStr = parseSafeMonthYear(effDate);
       const mIdx = monthKeys.indexOf(mStr);
 
-      // 🔥 SMART LEAVE FILTER ENGINE (Text-Scanning)
+      // 🔥 SMART LEAVE FILTER ENGINE (Text-Scanning from Income remark)
       const rText = String(row.remark || '').toLowerCase();
       if (rText.includes('leave') || rText.includes('inactive') || rText.includes('နား') || rText.includes('ခွင့်')) {
         let foundExplicitMonth = false;
         
-        // စာသားထဲမှာ လနာမည် အတိအကျ (e.g., Jun, ဇွန်) ပါသလား လိုက်စစ်ပါမည်
         monthKeys.forEach((mKey, idx) => {
           const shortMonth = mKey.split('-')[0].toLowerCase();
           const keywords = myanmarMonths[shortMonth] || [shortMonth];
@@ -278,7 +279,6 @@ export async function getIncomeDetailReportData(db, body) {
           }
         });
         
-        // အကယ်၍ စာသားထဲမှာ လနာမည် မပါခဲ့ရင် (ဥပမာ- "Leave" လို့ပဲ ရေးခဲ့ရင်) Effect Date က လကိုပဲ ယူပါမည်
         if (!foundExplicitMonth && mIdx >= 0) {
           stGroup.leaveMonths.add(mIdx);
         }
@@ -304,12 +304,20 @@ export async function getIncomeDetailReportData(db, body) {
 
     let processedList = Array.from(studentGroupMap.values());
 
-    // 🎯 Advanced "Unpaid Month" Logic with Leave Exemption
+    // 🎯 Advanced "Unpaid Month" Logic with Leave & Full Scholar Exemption
     if (unpaidMonthLabel) {
       const targetIdx = monthKeys.indexOf(unpaidMonthLabel);
       if (targetIdx >= 0) {
         processedList = processedList.filter(st => {
           if (String(st.status).toLowerCase() !== 'active') return false;
+
+          // 🎓 FULL SCHOLAR EXEMPTION: ပညာသင်ဆု အပြည့်ရသူများကို Unpaid စာရင်းမှ ဖယ်ထုတ်ခြင်း
+          const promoStr = String(st.promo || '').toLowerCase().trim();
+          const catStr = String(st.category || '').toLowerCase().trim();
+          if ((promoStr.includes('full') && promoStr.includes('scholar')) || 
+              (catStr.includes('full') && catStr.includes('scholar'))) {
+            return false;
+          }
 
           let joinDateStr = st.joinDate || st.registrationDate;
           let joinYYYYMM = '';
@@ -325,7 +333,7 @@ export async function getIncomeDetailReportData(db, body) {
 
           let hasUnpaid = false;
           for (let i = joinIdx; i <= targetIdx; i++) {
-            // 💡 If balance is 0 but it's marked as a "Leave" month, skip it (Don't mark as unpaid)
+            // 💡 If balance is 0 but it's marked as a "Leave" month, skip it
             if (st.monthlyServices[i] <= 0 && !st.leaveMonths.has(i)) {
               hasUnpaid = true;
               break;
@@ -376,7 +384,6 @@ export async function getIncomeDetailReportData(db, body) {
       ];
 
       for (let c = 10; c < rowArr.length; c++) {
-         // Prevent NaN from strings like "Leave"
          if (typeof rowArr[c] === 'number') {
             pageTotals[c] += parseFloat(rowArr[c] || 0);
          }
