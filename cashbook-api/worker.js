@@ -8,7 +8,7 @@
  *              Fail-Closed WebCrypto JWT & PBKDF2 Password Security (100k Iterations),
  *              Server-Side Brute-Force Lockout Defense,
  *              🛡️ Standalone Zero-Dependency D1 Audit Logger (No Missing Module Error),
- *              🎯 Phase 3: Added Scheduled Cron Trigger for Auto Audit Logs Cleanup
+ *              🚀 ULTRA-OPTIMIZED: Prevented Full Table Scans. Replaced OR with IN().
  * ==============================================================================
  */
 
@@ -124,7 +124,6 @@ async function hmacKey(secret) {
   return crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
 }
 
-// 🎯 DYNAMIC JWT EXPIRE FROM ENV
 async function createJwtToken(payload, secret, env) {
   const header = { alg: "HS256", typ: "JWT" };
   const encodedHeader = base64UrlEncode(JSON.stringify(header));
@@ -254,6 +253,7 @@ async function executeAutoRecalculateAll(db, body = {}) {
     try {
       if (tbl === 'student_money') {
         if (targetFy) {
+          // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)`
           await db.prepare(`
             WITH calculated AS (
               SELECT id, 
@@ -264,7 +264,7 @@ async function executeAutoRecalculateAll(db, body = {}) {
                        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
                      ) as calc_bal
               FROM student_money
-              WHERE fy = ? OR fy = ?
+              WHERE fy IN (?, ?)
             )
             UPDATE student_money 
             SET no = calculated.new_no, balances = calculated.calc_bal 
@@ -299,11 +299,12 @@ async function executeAutoRecalculateAll(db, body = {}) {
         }
       } else if (tbl === 'income') {
         if (targetFy) {
+          // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)`
           await db.prepare(`
             WITH calculated AS (
               SELECT id, ROW_NUMBER() OVER (ORDER BY date ASC, id ASC) as new_no 
               FROM income
-              WHERE fy = ? OR fy = ?
+              WHERE fy IN (?, ?)
             )
             UPDATE income 
             SET no = calculated.new_no 
@@ -326,6 +327,7 @@ async function executeAutoRecalculateAll(db, body = {}) {
         }
       } else {
         if (targetFy) {
+          // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)`
           await db.prepare(`
             WITH calculated AS (
               SELECT id, 
@@ -335,7 +337,7 @@ async function executeAutoRecalculateAll(db, body = {}) {
                        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
                      ) as calc_bal
               FROM ${tbl}
-              WHERE fy = ? OR fy = ?
+              WHERE fy IN (?, ?)
             )
             UPDATE ${tbl} 
             SET no = calculated.new_no, balances = calculated.calc_bal 
@@ -449,7 +451,8 @@ export default {
             await writeAuditLog(db, username, 'loginBlocked', body, `Locked out, ${lockoutStatus.remainingMinutes} min remaining`);
             return new Response(JSON.stringify({ success: false, message: `ကြိုးစားမှု အကြိမ်များစွာ မှားယွင်းသဖြင့် ${lockoutStatus.remainingMinutes} မိနစ်အကြာတွင် ပြန်လည် ကြိုးစားပါ။` }), { status: 429, headers: corsHeaders });
           }
-          const user = await db.prepare("SELECT * FROM users WHERE LOWER(username) = LOWER(?)").bind(username).first();
+          // 🚀 OPTIMIZATION: Avoid SELECT *, fetch exact columns for memory efficiency
+          const user = await db.prepare("SELECT username, password_hash, role, name FROM users WHERE LOWER(username) = LOWER(?)").bind(username).first();
           if (user) {
             const { ok, needsRehash } = await verifyPassword(password, user.password_hash);
             if (ok) {
