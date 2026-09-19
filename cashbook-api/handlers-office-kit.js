@@ -4,9 +4,11 @@
  * File: handlers-office-kit.js (Location: cashbook-api/handlers-office-kit.js)
  * 💡 Features: Refactored with utils.js for DRY Principle
  *              🚀 OPTIMIZED: Aggregations natively in SQL (SUM/COUNT)
- *              🎯 EXPLICIT SELECTS: Avoided SELECT *, Exact Column Mapping
+ *              🎯 EXPLICIT SELECTS: Exact Column Mapping per table
  *              🚀 ULTRA-OPTIMIZED: Prevented Full Table Scans. Replaced OR with IN().
  *              🚀 PHASE 1 (INCREMENTAL RECALC): Passed fromDate to cut 95% of row reads
+ *              🛠️ STRICT SCHEMA AUDIT: Completely removed non-existent 'unit' from kitchen/payroll
+ *              ⚡ QUOTA-SHIELD: Eliminated redundant DELETE & Recalculate queries
  * ==============================================================================
  */
 
@@ -50,7 +52,7 @@ function getTablePrefix(tableName) {
 }
 
 /**
- * 💡 Resilient Product ID Extractor
+ * 💡 Resilient Product ID Extractor (Uniform Inventory)
  */
 function extractProductId(body = {}, description = '', fallbackId = null) {
   if (body.id) return String(body.id).trim();
@@ -69,7 +71,7 @@ function extractProductId(body = {}, description = '', fallbackId = null) {
 }
 
 /**
- * 💡 Uniform Stock Synchronizer
+ * 💡 Uniform Stock Synchronizer (Strictly for Office Uniform Ledger)
  */
 async function syncUniformStock(db, productId, unitDelta) {
   if (!productId || unitDelta === 0) return;
@@ -78,7 +80,6 @@ async function syncUniformStock(db, productId, unitDelta) {
     const cleanNum = rawPid.replace(/^PID\s*/i, '').trim();
     const formattedPid = `PID ${cleanNum.padStart(3, '0')}`;
 
-    // 🚀 ULTRA-OPTIMIZATION: `IN (?, ?, ?)` prevents Table Full Scans
     const item = await db.prepare(`
       SELECT id, opening_stock, selling_unit, unit_price FROM uniform_ledger 
       WHERE uniqueid = ? 
@@ -109,7 +110,7 @@ async function syncUniformStock(db, productId, unitDelta) {
 }
 
 /**
- * 💡 Fetch Expense Data
+ * 💡 Fetch Expense Data (Table-Specific Strict Column Selection)
  */
 export async function getExpenseData(db, body) {
   try {
@@ -122,7 +123,6 @@ export async function getExpenseData(db, body) {
     
     const activeFy = normalizeFyStr(body.fy || `FY ${getCurrentAcademicYear()}`);
 
-    // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)` prevents Table Full Scans
     const statsResult = await db.prepare(`
       SELECT 
         COALESCE(SUM(debit), 0) as totalIncome,
@@ -139,23 +139,21 @@ export async function getExpenseData(db, body) {
     let params = [];
 
     if (searchVal) {
-      whereClauses.push(`(description LIKE ? OR category LIKE ? OR vr_no LIKE ? OR method LIKE ? OR transfer LIKE ? OR CAST(debit AS TEXT) LIKE ? OR CAST(credit AS TEXT) LIKE ? OR CAST(liabilities AS TEXT) LIKE ?)`);
+      whereClauses.push(`(description LIKE ? OR category LIKE ? OR vr_no LIKE ? OR method LIKE ? OR transfer LIKE ? OR CAST(debit AS TEXT) LIKE ? OR CAST(credit AS TEXT) LIKE ?)`);
       const p = `%${searchVal}%`;
-      params.push(p, p, p, p, p, p, p, p);
+      params.push(p, p, p, p, p, p, p);
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
     
-    // 🚀 OPTIMIZATION: COUNT(id) for faster scan
     const countRow = await db.prepare(`SELECT COUNT(id) as count FROM ${tableName} ${whereSql}`).bind(...params).first();
     const totalRows = countRow ? countRow.count : 0;
 
-    // 🚀 OPTIMIZATION: Explicit Columns Select (Avoid SELECT *)
     let dataQuery = '';
     if (tableName === 'payroll') {
       dataQuery = `
         SELECT id, no, date, category, description, method, debit, credit, balances, unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name, is_locked, uniqueid 
-        FROM ${tableName} 
+        FROM payroll 
         ${whereSql} 
         ORDER BY id DESC 
         LIMIT ? OFFSET ?
@@ -163,15 +161,15 @@ export async function getExpenseData(db, body) {
     } else if (tableName === 'office') {
       dataQuery = `
         SELECT id, no, date, category, description, unit, unit_price, method, debit, credit, balances, liabilities, transfer, vr_no, my, fy, book_name, is_locked, uniqueid 
-        FROM ${tableName} 
+        FROM office 
         ${whereSql} 
         ORDER BY id DESC 
         LIMIT ? OFFSET ?
       `;
-    } else { // Kitchen
+    } else { // kitchen
       dataQuery = `
         SELECT id, no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, is_locked, uniqueid 
-        FROM ${tableName} 
+        FROM kitchen 
         ${whereSql} 
         ORDER BY id DESC 
         LIMIT ? OFFSET ?
@@ -232,7 +230,7 @@ export async function getExpenseData(db, body) {
 }
 
 /**
- * 💡 Save New Expense Entry (🛡️ Atomic Batch Transaction Engine & Full 'my' Binding)
+ * 💡 Save New Expense Entry (Zero Waste Atomic Transaction)
  */
 export async function saveExpenseEntry(db, session, body) {
   try {
@@ -255,7 +253,6 @@ export async function saveExpenseEntry(db, session, body) {
     const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(session?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport || body.skipAutoPost);
 
-    // ⚡ Refactored: Uses generateUniqueId from utils.js
     const uniqueid = (isMigration && body.uniqueId)
       ? String(body.uniqueId).trim()
       : generateUniqueId('EXP');
@@ -264,7 +261,7 @@ export async function saveExpenseEntry(db, session, body) {
     const bookPrefix = getTablePrefix(tableName);
     const vrNo = body.vrNo || await generateVoucherNo(db, tableName, bookPrefix, entryDate);
 
-    // ⚡ MIGRATION DIRECT IMPORT MODE
+    // ⚡ DIRECT IMPORT / MIGRATION MODE
     if (isMigration) {
       if (tableName === 'kitchen') {
         await db.prepare(`
@@ -347,7 +344,8 @@ export async function saveExpenseEntry(db, session, body) {
       );
     }
 
-    const isUniform = (body.category === "Advance Uniform" || body.category === "Advance Unifrom");
+    // 🛡️ Uniform Logic is Strictly Constrained to Office Book Only
+    const isUniform = (tableName === 'office') && (body.category === "Advance Uniform" || body.category === "Advance Unifrom");
     const method = String(body.method || 'Cash').toLowerCase();
     const profit = parseFloat(body.profit || 0);
     const costDebit = parseFloat(body.debit || 0);
@@ -409,7 +407,7 @@ export async function saveExpenseEntry(db, session, body) {
       }
     }
 
-    // ⚡ Quota-Shield Recalculate - Incremental (Phase 1)
+    // ⚡ Quota-Shield Incremental Recalculate
     await recalculateLedgerBalances(db, tableName, fy, entryDate);
     if (hasLinkedMain) await recalculateLedgerBalances(db, mainTable, fy, entryDate);
     if (hasLinkedCashier) await recalculateLedgerBalances(db, caTable, fy, entryDate);
@@ -427,7 +425,7 @@ export async function saveExpenseEntry(db, session, body) {
 }
 
 /**
- * 💡 Update Expense Entry (🛡️ Atomic Batch Clean & Update Engine)
+ * 💡 Update Expense Entry (Strict Table Audit & Minimal Quota Writes)
  */
 export async function updateExpenseEntry(db, session, body) {
   try {
@@ -437,11 +435,15 @@ export async function updateExpenseEntry(db, session, body) {
 
     if (!uniqueid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
 
-    // 🚀 OPTIMIZATION: Exact Column selection and FETCH `date` for Incremental Recalc
+    // 🛠️ BUGFIX: Query exact columns per table schema (No 'unit' on kitchen/payroll)
     let existingQuery = '';
-    if (tableName === 'payroll') existingQuery = `SELECT fy, date, unit, description, id, category, is_locked, uniqueid FROM payroll WHERE uniqueid = ?`;
-    else if (tableName === 'office') existingQuery = `SELECT fy, date, unit, description, id, category, is_locked, uniqueid FROM office WHERE uniqueid = ?`;
-    else existingQuery = `SELECT fy, date, unit, description, id, category, is_locked, uniqueid FROM kitchen WHERE uniqueid = ?`;
+    if (tableName === 'payroll') {
+      existingQuery = `SELECT fy, date, description, id, category, is_locked, uniqueid FROM payroll WHERE uniqueid = ?`;
+    } else if (tableName === 'office') {
+      existingQuery = `SELECT fy, date, unit, description, id, category, is_locked, uniqueid FROM office WHERE uniqueid = ?`;
+    } else { // kitchen
+      existingQuery = `SELECT fy, date, description, id, category, is_locked, uniqueid FROM kitchen WHERE uniqueid = ?`;
+    }
 
     const existing = await db.prepare(existingQuery).bind(uniqueid).first();
     if (!existing) return { success: false, message: "ပြင်ဆင်မည့် စာရင်း ရှာမတွေ့ပါ။" };
@@ -463,10 +465,13 @@ export async function updateExpenseEntry(db, session, body) {
     }
 
     const oldFy = existing.fy ? normalizeFyStr(existing.fy) : null;
-    const oldDate = existing.date || '9999-12-31'; // Safe default
+    const oldDate = existing.date || '9999-12-31';
     const oldUnit = parseFloat(existing.unit || 0);
     const oldPid = extractProductId(existing, existing.description, existing.id);
-    const wasUniform = (existing.category === "Advance Uniform" || existing.category === "Advance Unifrom");
+    
+    // Uniform check is strictly constrained to Office only
+    const wasUniform = (tableName === 'office') && (existing.category === "Advance Uniform" || existing.category === "Advance Unifrom");
+    const isUniform = (tableName === 'office') && (body.category === "Advance Uniform" || body.category === "Advance Unifrom");
 
     const entryDate = getMyanmarDateString(body.date || existing.date);
     const d = new Date(entryDate);
@@ -474,7 +479,6 @@ export async function updateExpenseEntry(db, session, body) {
     const my = `${monthNames[d.getMonth()]}-${d.getFullYear()}`;
     const fy = normalizeFyStr(body.fy || calculateAcademicFyFromDate(entryDate));
 
-    // Determine the earliest date between old and new for Incremental Recalc
     const recalcDate = (entryDate < oldDate) ? entryDate : oldDate;
 
     const debit = parseAccountingNum(body.debit);
@@ -483,7 +487,6 @@ export async function updateExpenseEntry(db, session, body) {
     const unitPrice = parseFloat(body.unitPrice || 0);
     const liabilities = parseAccountingNum(body.liabilities);
 
-    const isUniform = (body.category === "Advance Uniform" || body.category === "Advance Unifrom");
     const method = String(body.method || 'Cash').toLowerCase();
     const profit = parseFloat(body.profit || 0);
     const costDebit = parseFloat(body.debit || 0);
@@ -496,10 +499,15 @@ export async function updateExpenseEntry(db, session, body) {
 
     const batchStatements = [];
 
-    batchStatements.push(db.prepare(`DELETE FROM cash WHERE uniqueid = ?`).bind(profitUid));
-    batchStatements.push(db.prepare(`DELETE FROM bank WHERE uniqueid = ?`).bind(profitUid));
-    batchStatements.push(db.prepare(`DELETE FROM ca_cash WHERE uniqueid = ?`).bind(cashierUid));
-    batchStatements.push(db.prepare(`DELETE FROM ca_bank WHERE uniqueid = ?`).bind(cashierUid));
+    // ⚡ Quota-Shield: Only execute linked uniform deletes if the record actually was or is uniform
+    if (wasUniform || isUniform) {
+      batchStatements.push(
+        db.prepare(`DELETE FROM cash WHERE uniqueid = ?`).bind(profitUid),
+        db.prepare(`DELETE FROM bank WHERE uniqueid = ?`).bind(profitUid),
+        db.prepare(`DELETE FROM ca_cash WHERE uniqueid = ?`).bind(cashierUid),
+        db.prepare(`DELETE FROM ca_bank WHERE uniqueid = ?`).bind(cashierUid)
+      );
+    }
 
     if (tableName === 'kitchen') {
       batchStatements.push(
@@ -513,7 +521,7 @@ export async function updateExpenseEntry(db, session, body) {
           UPDATE payroll SET date=?, category=?, description=?, method=?, debit=?, credit=?, unpaid_bonus=?, unpaid_fund=?, transfer=?, my=?, fy=? WHERE uniqueid=?
         `).bind(entryDate, body.category || 'Full Time Salary', body.description || '', body.method || 'Cash', debit, credit, parseFloat(body.unpaidBonus || 0), parseFloat(body.unpaidFund || 0), body.transfer || '', my, fy, uniqueid)
       );
-    } else {
+    } else { // office
       batchStatements.push(
         db.prepare(`
           UPDATE office SET date=?, category=?, description=?, unit=?, unit_price=?, method=?, debit=?, credit=?, liabilities=?, transfer=?, my=?, fy=? WHERE uniqueid=?
@@ -576,17 +584,16 @@ export async function updateExpenseEntry(db, session, body) {
       }
     }
 
-    // ⚡ Quota-Shield Recalculate - Incremental (Phase 1)
+    // ⚡ Recalculate target book with incremental date
     await recalculateLedgerBalances(db, tableName, fy, recalcDate);
     if (oldFy && oldFy !== fy) {
       await recalculateLedgerBalances(db, tableName, oldFy, oldDate);
     }
 
+    // ⚡ Quota-Shield: Recalculate linked tables ONLY when uniform was involved
     if (wasUniform || isUniform) {
-      await recalculateLedgerBalances(db, 'cash', fy, recalcDate);
-      await recalculateLedgerBalances(db, 'bank', fy, recalcDate);
-      await recalculateLedgerBalances(db, 'ca_cash', fy, recalcDate);
-      await recalculateLedgerBalances(db, 'ca_bank', fy, recalcDate);
+      if (hasLinkedMain) await recalculateLedgerBalances(db, mainTable, fy, recalcDate);
+      if (hasLinkedCashier) await recalculateLedgerBalances(db, caTable, fy, recalcDate);
     }
 
     return { success: true, message: "စာရင်း အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။" };
@@ -597,7 +604,7 @@ export async function updateExpenseEntry(db, session, body) {
 }
 
 /**
- * 💡 Delete Expense Entry (🛡️ Atomic Batch Delete Engine)
+ * 💡 Delete Expense Entry (Strict Table Audit & Zero Waste Single-Statement Execution)
  */
 export async function deleteExpenseEntry(db, session, body) {
   try {
@@ -607,11 +614,15 @@ export async function deleteExpenseEntry(db, session, body) {
 
     if (!uniqueid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
 
-    // 🚀 OPTIMIZATION: Exact Column selection and FETCH `date` for Incremental Recalc
+    // 🛠️ BUGFIX: Precise existing record query (NO 'unit' on kitchen/payroll)
     let existingQuery = '';
-    if (tableName === 'payroll') existingQuery = `SELECT fy, date, category, unit, description, id, is_locked, uniqueid FROM payroll WHERE uniqueid = ?`;
-    else if (tableName === 'office') existingQuery = `SELECT fy, date, category, unit, description, id, is_locked, uniqueid FROM office WHERE uniqueid = ?`;
-    else existingQuery = `SELECT fy, date, category, unit, description, id, is_locked, uniqueid FROM kitchen WHERE uniqueid = ?`;
+    if (tableName === 'payroll') {
+      existingQuery = `SELECT fy, date, category, description, id, transfer, is_locked, uniqueid FROM payroll WHERE uniqueid = ?`;
+    } else if (tableName === 'office') {
+      existingQuery = `SELECT fy, date, category, unit, description, id, transfer, is_locked, uniqueid FROM office WHERE uniqueid = ?`;
+    } else { // kitchen
+      existingQuery = `SELECT fy, date, category, description, id, transfer, is_locked, uniqueid FROM kitchen WHERE uniqueid = ?`;
+    }
 
     const existing = await db.prepare(existingQuery).bind(uniqueid).first();
     if (!existing) return { success: false, message: "ဖျက်သိမ်းမည့် စာရင်း ရှာမတွေ့ပါ။" };
@@ -638,19 +649,36 @@ export async function deleteExpenseEntry(db, session, body) {
     const cashierUid = `UNICASHIER_${uniqueid}`;
     const transferUid = `TRANS_${uniqueid}`;
 
+    // ⚡ Quota-Shield: Start with ONLY the primary table delete
     const batchStatements = [
-      db.prepare(`DELETE FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid),
-      db.prepare(`DELETE FROM cash WHERE uniqueid = ?`).bind(profitUid),
-      db.prepare(`DELETE FROM bank WHERE uniqueid = ?`).bind(profitUid),
-      db.prepare(`DELETE FROM ca_cash WHERE uniqueid = ?`).bind(cashierUid),
-      db.prepare(`DELETE FROM ca_bank WHERE uniqueid = ?`).bind(cashierUid),
-      db.prepare(`DELETE FROM bank WHERE uniqueid = ?`).bind(transferUid),
-      db.prepare(`DELETE FROM cash WHERE uniqueid = ?`).bind(transferUid)
+      db.prepare(`DELETE FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid)
     ];
+
+    const wasUniform = (tableName === 'office') && (existing.category === "Advance Uniform" || existing.category === "Advance Unifrom");
+    
+    // Only delete linked uniform records if it actually was uniform
+    if (wasUniform) {
+      batchStatements.push(
+        db.prepare(`DELETE FROM cash WHERE uniqueid = ?`).bind(profitUid),
+        db.prepare(`DELETE FROM bank WHERE uniqueid = ?`).bind(profitUid),
+        db.prepare(`DELETE FROM ca_cash WHERE uniqueid = ?`).bind(cashierUid),
+        db.prepare(`DELETE FROM ca_bank WHERE uniqueid = ?`).bind(cashierUid)
+      );
+    }
+
+    // Only delete linked transfer records if it actually was a transfer
+    if (existing.transfer || uid.startsWith('TRANS_')) {
+      batchStatements.push(
+        db.prepare(`DELETE FROM bank WHERE uniqueid = ?`).bind(transferUid),
+        db.prepare(`DELETE FROM cash WHERE uniqueid = ?`).bind(transferUid),
+        db.prepare(`DELETE FROM office WHERE uniqueid = ?`).bind(transferUid),
+        db.prepare(`DELETE FROM kitchen WHERE uniqueid = ?`).bind(transferUid),
+        db.prepare(`DELETE FROM payroll WHERE uniqueid = ?`).bind(transferUid)
+      );
+    }
 
     await db.batch(batchStatements);
 
-    const wasUniform = (existing.category === "Advance Uniform" || existing.category === "Advance Unifrom");
     if (wasUniform) {
       const oldUnit = parseFloat(existing.unit || 0);
       const oldPid = extractProductId(existing, existing.description, existing.id);
@@ -659,9 +687,10 @@ export async function deleteExpenseEntry(db, session, body) {
       }
     }
 
-    // ⚡ Quota-Shield Recalculate - Incremental (Phase 1)
+    // ⚡ Recalculate target book with incremental date
     await recalculateLedgerBalances(db, tableName, targetFy, oldDate);
 
+    // ⚡ Quota-Shield: Recalculate linked uniform tables ONLY if it was uniform
     if (wasUniform) {
       await recalculateLedgerBalances(db, 'cash', targetFy, oldDate);
       await recalculateLedgerBalances(db, 'bank', targetFy, oldDate);
