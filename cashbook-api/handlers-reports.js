@@ -4,6 +4,7 @@
  * File: handlers-reports.js (Location: cashbook-api/handlers-reports.js)
  * 💡 Features: Refactored with utils.js for DRY Principle, Single-Pass Aggregations,
  *              🚀 OPTIMIZED: Explicit Column Selects (Avoided SELECT *),
+ *              🚀 ULTRA-OPTIMIZED: Prevented Full Table Scans. Replaced OR with IN().
  *              🎯 Server-Side Pagination (LIMIT 50),
  *              🎯 12 Months Fiscal Year Logic (Mar to Feb),
  *              🎯 Auto Grade Sorting Reversed (Grade 12 to Pre School),
@@ -72,6 +73,7 @@ export async function getFinancialReportData(db, body) {
     const activeFy = normalizeFyStr(body.fy || fallbackFy);
     const fyClean = activeFy.replace(/^FY\s*/i, '');
 
+    // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)` prevents Table Full Scans
     const incAgg = await db.prepare(`
       SELECT 
         COALESCE(SUM(CASE WHEN LOWER(category) LIKE '%boarder%' AND LOWER(category) NOT LIKE '%semi%' THEN (credit - debit) ELSE 0 END), 0) as boarder,
@@ -83,7 +85,7 @@ export async function getFinancialReportData(db, body) {
         COALESCE(SUM(CASE WHEN LOWER(account_name) LIKE '%night%' THEN (credit - debit) ELSE 0 END), 0) as nightStudy,
         COALESCE(SUM(CASE WHEN LOWER(account_name) NOT LIKE '%registration%' AND LOWER(account_name) NOT LIKE '%services%' AND LOWER(account_name) NOT LIKE '%ferry%' AND LOWER(account_name) NOT LIKE '%night%' THEN (credit - debit) ELSE 0 END), 0) as others
       FROM income 
-      WHERE fy = ? OR fy = ?
+      WHERE fy IN (?, ?)
     `).bind(activeFy, fyClean).first() || {};
 
     const boarder = parseFloat(incAgg.boarder || 0);
@@ -109,7 +111,7 @@ export async function getFinancialReportData(db, body) {
         COALESCE(SUM(CASE WHEN LOWER(category) LIKE '%drawing%2%' THEN credit ELSE 0 END), 0) as drawingAcc2,
         COALESCE(SUM(credit), 0) as totalOffice
       FROM office 
-      WHERE fy = ? OR fy = ?
+      WHERE fy IN (?, ?)
     `).bind(activeFy, fyClean).first() || {};
 
     const kitAgg = await db.prepare(`
@@ -122,7 +124,7 @@ export async function getFinancialReportData(db, body) {
         COALESCE(SUM(CASE WHEN LOWER(category) LIKE '%others%' THEN credit ELSE 0 END), 0) as kitchenOthers,
         COALESCE(SUM(credit), 0) as totalKitchen
       FROM kitchen 
-      WHERE fy = ? OR fy = ?
+      WHERE fy IN (?, ?)
     `).bind(activeFy, fyClean).first() || {};
 
     const payAgg = await db.prepare(`
@@ -133,7 +135,7 @@ export async function getFinancialReportData(db, body) {
         COALESCE(SUM(CASE WHEN LOWER(category) LIKE '%full%time%fund%' THEN credit ELSE 0 END), 0) as fullTimeFund,
         COALESCE(SUM(credit), 0) as totalPayroll
       FROM payroll 
-      WHERE fy = ? OR fy = ?
+      WHERE fy IN (?, ?)
     `).bind(activeFy, fyClean).first() || {};
 
     return {
@@ -195,7 +197,8 @@ export async function getIncomeDetailReportData(db, body) {
       "TOTAL"
     ];
 
-    let whereClauses = [`(s.fy = ? OR s.fy = ?)`];
+    // 🚀 ULTRA-OPTIMIZATION: `s.fy IN (?, ?)` prevents Table Full Scans
+    let whereClauses = [`(s.fy IN (?, ?))`];
     let params = [activeFy, fyClean];
 
     if (searchVal) {
@@ -205,16 +208,16 @@ export async function getIncomeDetailReportData(db, body) {
     }
     const whereSql = `WHERE ` + whereClauses.join(' AND ');
 
-    // 🚀 OPTIMIZATION: Exact Snake_Case DB columns mapping to prevent any schema mismatch
     const allStudents = (await db.prepare(`
       SELECT s.student_id, s.id, s.fy, s.fyid, s.name, s.fyid_name, s.promo, s.date, s.transfer_date, s.status, s.class 
       FROM student s ${whereSql}
     `).bind(...params).all()).results || [];
     
+    // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)` prevents Table Full Scans
     const allIncome = (await db.prepare(`
       SELECT student_id, account_name, credit, debit, effect_date, date 
       FROM income 
-      WHERE fy = ? OR fy = ?
+      WHERE fy IN (?, ?)
     `).bind(activeFy, fyClean).all()).results || [];
 
     const studentGroupMap = new Map();
@@ -365,8 +368,8 @@ export async function getMonthlyIncomeReportData(db, body) {
     const activeFy = normalizeFyStr(body.fy || fallbackFy);
     const fyClean = activeFy.replace(/^FY\s*/i, '');
 
-    // 🚀 OPTIMIZATION: Explicit columns selection
-    const rowsRes = await db.prepare(`SELECT account_name, category, credit, debit, effect_date, date FROM income WHERE fy = ? OR fy = ?`).bind(activeFy, fyClean).all();
+    // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)` prevents Table Full Scans
+    const rowsRes = await db.prepare(`SELECT account_name, category, credit, debit, effect_date, date FROM income WHERE fy IN (?, ?)`).bind(activeFy, fyClean).all();
     const list = rowsRes.results || [];
 
     const monthKeys = get12FiscalMonths(activeFy);
@@ -432,8 +435,8 @@ export async function getStudentReportDetails(db, body) {
     const activeFy = body.fy ? body.fy.replace(/^FY\s*/i, '') : fallbackFy;
     const fyPrefixed = `FY ${activeFy}`;
 
-    // 🚀 OPTIMIZATION: Explicit columns
-    const list = (await db.prepare(`SELECT class, status, category, gender FROM student WHERE fy = ? OR fy = ?`).bind(activeFy, fyPrefixed).all()).results || [];
+    // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)` prevents Table Full Scans
+    const list = (await db.prepare(`SELECT class, status, category, gender FROM student WHERE fy IN (?, ?)`).bind(activeFy, fyPrefixed).all()).results || [];
 
     const headers = ["NO", "FY", "CLASS", "BOARDER", "SEMI BOARDER", "DAY STUDENT", "TOTAL ACTIVE", "INACTIVE", "MALE", "FEMALE"];
     const classes = ["Pre School", "KG Student", "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6", "Grade 7", "Grade 8", "Grade 9", "Grade 10", "Grade 11", "Grade 12"];
