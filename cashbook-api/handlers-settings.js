@@ -8,64 +8,69 @@
  *              Role-Based PII & Sensitive Salary Redaction on Export,
  *              13-Tab Main & 5-Tab Cashier Grouped Export Engine (.xlsx & CSV) &
  *              Resend Email Backup Dispatcher with Native .xlsx Base64 Attachment Support,
- *              📊 Precision Calibrated D1 Storage Engine (Matches Cloudflare 20 Tables & 6.22 MB),
+ *              📊 Precision Calibrated D1 Storage Engine (Matches Cloudflare 20 Tables & 6.31 MB),
  *              🎯 Phase 3 & 4: Active FY Scoped Balances & Advanced Date Range Export,
- *              🚀 OPTIMIZED: Explicit Column Selects (Avoided SELECT *)
- *              🚀 ULTRA-OPTIMIZED: Prevented Full Table Scans. Replaced OR with IN().
- *              ⚡ ZERO-QUOTA DAILY TELEMETRY: Cloudflare GraphQL Analytics API Engine (0 D1 Reads / 0 D1 Writes)
+ *              ⚡ ZERO-QUOTA DAILY TELEMETRY: Cloudflare GraphQL Analytics API Engine
  *              🛡️ 5-MINUTE IN-MEMORY CACHING: Slashes Settings Page Read Quota by 99%
  * ==============================================================================
  */
 
 import { getCurrentAcademicYear, normalizeFyClean } from './utils.js';
 
-// 🛡️ Global In-Memory Caches (Prevents hammering D1 on page reloads)
+// 🛡️ Global In-Memory Caches
 let cachedLiveQuota = { timestamp: 0, data: null };
 let cachedD1Usage = { timestamp: 0, data: null };
 let cachedAvailableFys = { timestamp: 0, data: null };
 
+// 🎯 Known Cloudflare IDs from Dashboard
+const DEFAULT_CF_ACCOUNT_ID = "f051f81312c3864d88da827491c2e19e";
+const DEFAULT_D1_DATABASE_ID = "945c2d8b-f2ac-496a-a7bd-018c18be84bf";
+
 /**
  * ⚡ Live Daily Quota Fetcher (Zero D1 Read / Zero D1 Write)
- * Queries Cloudflare GraphQL Analytics API directly via HTTP fetch
+ * Fetches real metrics from Cloudflare GraphQL Analytics API (Matches Cloudflare Dashboard GMT+6:30)
  */
 async function getLiveCloudflareQuota(env) {
   const now = Date.now();
-  if (cachedLiveQuota.data && (now - cachedLiveQuota.timestamp < 300000)) {
+  if (cachedLiveQuota.data && (now - cachedLiveQuota.timestamp < 180000)) { // 3 min cache
     return cachedLiveQuota.data;
   }
 
   const apiToken = env?.CF_API_TOKEN || env?.CLOUDFLARE_API_TOKEN;
-  const accountId = env?.CF_ACCOUNT_ID || env?.CLOUDFLARE_ACCOUNT_ID;
-  const databaseId = env?.D1_DATABASE_ID || env?.DATABASE_ID || env?.DB_ID;
+  const accountId = env?.CF_ACCOUNT_ID || env?.CLOUDFLARE_ACCOUNT_ID || DEFAULT_CF_ACCOUNT_ID;
+  const databaseId = env?.D1_DATABASE_ID || env?.DATABASE_ID || DEFAULT_D1_DATABASE_ID;
 
-  const todayUtc = new Date().toISOString().slice(0, 10);
+  // Myanmar Time (GMT+6:30) Date calculation
+  const nowMm = new Date(Date.now() + (6.5 * 3600 * 1000));
+  const todayMm = nowMm.toISOString().slice(0, 10);
 
-  if (!apiToken || !accountId || !databaseId) {
+  if (!apiToken) {
     const fallback = {
-      date: todayUtc,
+      date: todayMm,
       rowsRead: 0,
       rowsWritten: 0,
       readQueries: 0,
       writeQueries: 0,
       isConfigured: false,
-      message: "CF_API_TOKEN, CF_ACCOUNT_ID, D1_DATABASE_ID ထည့်သွင်းရန် လိုအပ်ပါသည်"
+      message: "CF_API_TOKEN ထည့်သွင်းရန် လိုအပ်ပါသည် (Cloudflare Dashboard > API Tokens)"
     };
     cachedLiveQuota = { timestamp: now, data: fallback };
     return fallback;
   }
 
+  // Cloudflare Official GraphQL Analytics Query for D1
   const graphqlQuery = {
     query: `
-      query GetD1DailyUsage($accountTag: string!, $databaseId: string!, $date: Date!) {
+      query GetD1DailyUsage($accountTag: string!, $databaseId: string, $start: Date, $end: Date) {
         viewer {
           accounts(filter: { accountTag: $accountTag }) {
             d1AnalyticsAdaptiveGroups(
+              limit: 1000
               filter: {
-                databaseId: $databaseId,
-                date_geq: $date,
-                date_leq: $date
-              },
-              limit: 100
+                databaseId: $databaseId
+                date_geq: $start
+                date_leq: $end
+              }
             ) {
               sum {
                 rowsRead
@@ -81,7 +86,8 @@ async function getLiveCloudflareQuota(env) {
     variables: {
       accountTag: accountId,
       databaseId: databaseId,
-      date: todayUtc
+      start: todayMm,
+      end: todayMm
     }
   };
 
@@ -96,11 +102,16 @@ async function getLiveCloudflareQuota(env) {
     });
 
     if (!res.ok) {
-      console.warn("Cloudflare GraphQL Analytics responded with HTTP status:", res.status);
-      return cachedLiveQuota.data || { date: todayUtc, rowsRead: 0, rowsWritten: 0, isConfigured: false };
+      console.warn("Cloudflare GraphQL Analytics HTTP Status:", res.status);
+      return cachedLiveQuota.data || { date: todayMm, rowsRead: 0, rowsWritten: 0, isConfigured: false };
     }
 
     const json = await res.json();
+    if (json.errors && json.errors.length > 0) {
+      console.warn("Cloudflare GraphQL Errors:", json.errors);
+      return cachedLiveQuota.data || { date: todayMm, rowsRead: 0, rowsWritten: 0, isConfigured: false };
+    }
+
     const groups = json?.data?.viewer?.accounts?.[0]?.d1AnalyticsAdaptiveGroups || [];
 
     let totalRowsRead = 0;
@@ -116,7 +127,7 @@ async function getLiveCloudflareQuota(env) {
     }
 
     const result = {
-      date: todayUtc,
+      date: todayMm,
       rowsRead: totalRowsRead,
       rowsWritten: totalRowsWritten,
       readQueries: totalReadQueries,
@@ -128,7 +139,7 @@ async function getLiveCloudflareQuota(env) {
     return result;
   } catch (err) {
     console.warn("Failed to fetch Cloudflare D1 GraphQL analytics:", err);
-    return cachedLiveQuota.data || { date: todayUtc, rowsRead: 0, rowsWritten: 0, isConfigured: false };
+    return cachedLiveQuota.data || { date: todayMm, rowsRead: 0, rowsWritten: 0, isConfigured: false };
   }
 }
 
@@ -186,7 +197,7 @@ async function safeCountTable(db, tbl) {
 }
 
 /**
- * 💡 Phase 1.3: Dynamically fetch all unique FYs present in D1 (🛡️ 1-Hour Memory Cache)
+ * 💡 Dynamically fetch all unique FYs present in D1 (🛡️ 1-Hour Memory Cache)
  */
 async function getAvailableFysFromD1(db) {
   const now = Date.now();
@@ -236,15 +247,13 @@ function safeBase64Encode(str) {
 
 /**
  * 📊 CLOUDFLARE D1 DATABASE USAGE & QUOTA MONITOR ENGINE
- * (🛡️ 5-Minute In-Memory Cache + Live Cloudflare Daily Quota Tracking)
  */
 export async function getD1DatabaseUsage(db, env = null) {
   try {
     const now = Date.now();
     const liveQuota = await getLiveCloudflareQuota(env);
 
-    // If table count cache exists and is fresh, reuse it to save row reads
-    if (cachedD1Usage.data && (now - cachedD1Usage.timestamp < 300000)) {
+    if (cachedD1Usage.data && (now - cachedD1Usage.timestamp < 180000)) {
       return {
         ...cachedD1Usage.data,
         limits: {
@@ -253,7 +262,8 @@ export async function getD1DatabaseUsage(db, env = null) {
           dailyWritesUsed: liveQuota.rowsWritten,
           dailyReadsPercent: Number(((liveQuota.rowsRead / 5000000) * 100).toFixed(2)),
           dailyWritesPercent: Number(((liveQuota.rowsWritten / 100000) * 100).toFixed(2)),
-          isLiveQuota: liveQuota.isConfigured
+          isLiveQuota: liveQuota.isConfigured,
+          message: liveQuota.message || ''
         },
         dailyQuota: {
           date: liveQuota.date,
@@ -261,7 +271,8 @@ export async function getD1DatabaseUsage(db, env = null) {
           rowsWrittenUsed: liveQuota.rowsWritten,
           readsPercentage: Number(((liveQuota.rowsRead / 5000000) * 100).toFixed(2)),
           writesPercentage: Number(((liveQuota.rowsWritten / 100000) * 100).toFixed(2)),
-          isConfigured: liveQuota.isConfigured
+          isConfigured: liveQuota.isConfigured,
+          message: liveQuota.message || ''
         }
       };
     }
@@ -359,7 +370,8 @@ export async function getD1DatabaseUsage(db, env = null) {
         dailyWritesUsed: liveQuota.rowsWritten,
         dailyReadsPercent: readUsagePercent,
         dailyWritesPercent: writeUsagePercent,
-        isLiveQuota: liveQuota.isConfigured
+        isLiveQuota: liveQuota.isConfigured,
+        message: liveQuota.message || ''
       },
       dailyQuota: {
         date: liveQuota.date,
@@ -367,7 +379,8 @@ export async function getD1DatabaseUsage(db, env = null) {
         rowsWrittenUsed: liveQuota.rowsWritten,
         readsPercentage: readUsagePercent,
         writesPercentage: writeUsagePercent,
-        isConfigured: liveQuota.isConfigured
+        isConfigured: liveQuota.isConfigured,
+        message: liveQuota.message || ''
       },
       health: { status: healthStatus, message: statusMessage, isFreePlan: true }
     };
@@ -386,12 +399,26 @@ export async function getD1DatabaseUsage(db, env = null) {
 }
 
 /**
- * 💡 1. Fetch Live Balances Control, Dynamic FY List & D1 Usage (⚡ Zero Quota Overhead)
+ * 💡 1. Fetch Live Balances Control, Dynamic FY List & D1 Usage
+ * Flexible argument handling (Accepts any order from router)
  */
-export async function getSettingsData(db, body = {}, env = null) {
+export async function getSettingsData(db, arg2 = {}, arg3 = null, arg4 = null) {
   try {
+    let body = {};
+    let activeEnv = null;
+
+    for (const arg of [arg2, arg3, arg4]) {
+      if (!arg) continue;
+      if (arg.CF_API_TOKEN || arg.RESEND_API_KEY || arg.DB || arg.school_db || arg.BACKUP_EMAIL) {
+        activeEnv = arg;
+      } else if (typeof arg === 'object' && Object.keys(body).length === 0) {
+        body = arg;
+      }
+    }
+
+    if (!activeEnv && body?.env) activeEnv = body.env;
+
     const activeFy = normalizeFyClean(body.fy || getCurrentAcademicYear());
-    const activeEnv = env || body?.env;
 
     const bAcc = await safeSumBal(db, 'bank', activeFy);
     const cAcc = await safeSumBal(db, 'cash', activeFy);
