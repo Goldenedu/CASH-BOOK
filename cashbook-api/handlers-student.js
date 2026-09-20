@@ -6,6 +6,7 @@
  *              🚀 OPTIMIZED: SQL-Side Active/Inactive Aggregations
  *              🎯 EXPLICIT SELECTS: Avoided SELECT *, Exact Column Mapping
  *              🚀 ULTRA-OPTIMIZED: Prevented Full Table Scans. Replaced OR with IN().
+ *              ⚡ MULTI-FILTER: Fully Supports both FY & Grade/Class Filters
  * ==============================================================================
  */
 
@@ -19,7 +20,6 @@ import {
 
 async function generateFyNo(db, tableName, fy) {
   const normFy = normalizeFyClean(fy);
-  // 🚀 ULTRA-OPTIMIZATION: Replace OR with IN() to leverage Index Seek
   const lastNoRow = await db.prepare(
     `SELECT MAX(CAST(no AS INTEGER)) as maxNo FROM ${tableName} WHERE fy IN (?, ?)`
   ).bind(normFy, `FY ${normFy}`).first();
@@ -27,25 +27,33 @@ async function generateFyNo(db, tableName, fy) {
 }
 
 /**
- * 💡 Get Student Data (⚡ 1-Query Combined Stats Optimization & Explicit Columns)
+ * 💡 Get Student Data (⚡ Multi-Filter Indexed Query Support)
  */
 export async function getStudentData(db, body) {
   try {
     const activeFy = normalizeFyClean(body.fy);
+    const classFilter = String(body.class || body.grade || "").trim();
     const searchVal = String(body.searchVal || "").trim();
     const page = parseInt(body.page || 1, 10);
-    const limit = parseInt(body.limit || 5000, 10); // Supports full dataset
+    const limit = parseInt(body.limit || 5000, 10);
     const offset = (page - 1) * limit;
 
     let whereClauses = [];
     let params = [];
 
-    // 🚀 ULTRA-OPTIMIZATION: Replace OR with IN() to leverage Index Seek
+    // 1. Fiscal Year Filter
     if (body.fy && body.fy !== 'all') {
       whereClauses.push(`(fy IN (?, ?))`);
       params.push(activeFy, `FY ${activeFy}`);
     }
 
+    // 2. Class / Grade Filter (SQL Level Seek)
+    if (classFilter && classFilter !== 'all') {
+      whereClauses.push(`class = ?`);
+      params.push(classFilter);
+    }
+
+    // 3. Search Query
     if (searchVal) {
       whereClauses.push(`(name LIKE ? OR fyid LIKE ? OR fyid_name LIKE ? OR CAST(student_id AS TEXT) LIKE ? OR class LIKE ? OR category LIKE ? OR phone_no LIKE ?)`);
       const p = `%${searchVal}%`;
@@ -54,7 +62,6 @@ export async function getStudentData(db, body) {
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-    // ⚡ OPTIMIZED: Single Combined Query for Total, Active and Inactive Counts
     const statsQuery = `
       SELECT 
         COUNT(id) as totalCount,
@@ -68,7 +75,6 @@ export async function getStudentData(db, body) {
     const totalActive = statsRow.activeCount || 0;
     const totalInactive = statsRow.inactiveCount || 0;
 
-    // 🚀 OPTIMIZATION: Explicit columns using exact DB Schema names
     const dataQuery = `
       SELECT id, student_id, no, stu_status, date, fy, fyid, name, fyid_name, class, category, promo, status, transfer_date, gender, parents_name, phone_no, address, uniqueid 
       FROM student 
@@ -123,9 +129,6 @@ export async function getStudentData(db, body) {
   }
 }
 
-/**
- * 💡 Lookup Student by ID
- */
 export async function lookupStudentById(db, body) {
   try {
     const studentId = parseInt(body.studentId || body.id, 10);
@@ -133,7 +136,6 @@ export async function lookupStudentById(db, body) {
       return { success: false, message: "Student ID မမှန်ကန်ပါ။" };
     }
 
-    // 🚀 OPTIMIZATION: Explicit columns
     const row = await db.prepare(
       `SELECT student_id, id, name, class, category, promo, status, parents_name, phone_no, address, fyid FROM student WHERE student_id = ? OR id = ? ORDER BY id DESC LIMIT 1`
     ).bind(studentId, studentId).first();
@@ -164,9 +166,6 @@ export async function lookupStudentById(db, body) {
   }
 }
 
-/**
- * 💡 Save Student Entry (Preserves exact Column A NO, Column E ID, Column F FYID from Google Sheets)
- */
 export async function saveStudentEntry(db, userSession, body) {
   try {
     const entryDate = body.date || new Date().toISOString().split('T')[0];
@@ -180,16 +179,13 @@ export async function saveStudentEntry(db, userSession, body) {
       ? String(body.uniqueId).trim()
       : generateUniqueId('STU');
 
-    // 💡 1. PRESERVE EXACT ID FROM GOOGLE SHEET (Column E)
     let studentId = parseInt(body.studentId || body.id, 10);
     if (!studentId || isNaN(studentId)) {
-      // 🚀 ULTRA-OPTIMIZATION: Replace OR with IN() to leverage Index Seek
       const maxRow = await db.prepare("SELECT MAX(CAST(student_id AS INTEGER)) as max_id FROM student WHERE fy IN (?, ?)").bind(cleanFy, `FY ${cleanFy}`).first();
       const currentMax = maxRow && maxRow.max_id ? parseInt(maxRow.max_id, 10) : 0;
       studentId = currentMax + 1;
     }
 
-    // 💡 2. PRESERVE EXACT FYID FROM GOOGLE SHEET (Column F)
     const paddedId = String(studentId).padStart(4, '0');
     const fyid = (body.fyid && String(body.fyid).trim())
       ? sanitizeFyidStr(body.fyid)
@@ -199,11 +195,9 @@ export async function saveStudentEntry(db, userSession, body) {
     const fyidName = body.fyidName || `[${fyid}] ${studentName}`;
     const detectedGender = body.gender || autoDetectGender(studentName);
 
-    // 💡 3. TRANSFER DATE STATUS GUARD: Transfer date ပါပါက Status အား Inactive အဖြစ် တိုက်ရိုက်သတ်မှတ်သည်
     const transferDateVal = body.transferDate || body.transfer_date || '';
     const finalStatus = transferDateVal ? 'Inactive' : (body.status || 'Active');
 
-    // 💡 4. PRESERVE EXACT NO FROM GOOGLE SHEET (Column A) or GENERATE PROPER FY NO
     const assignedNo = (isMigration && body.no)
       ? parseInt(body.no, 10)
       : (parseInt(body.no, 10) || await generateFyNo(db, 'student', cleanFy));
@@ -240,9 +234,6 @@ export async function saveStudentEntry(db, userSession, body) {
   }
 }
 
-/**
- * 💡 Update Student Entry (With Server-side Transfer Status Enforcement)
- */
 export async function updateStudentEntry(db, userSession, body) {
   try {
     const uniqueid = body.uniqueId || body.uniqueid;
@@ -260,7 +251,6 @@ export async function updateStudentEntry(db, userSession, body) {
     const fyidName = `[${fyid}] ${studentName}`;
     const detectedGender = body.gender || autoDetectGender(studentName);
 
-    // 💡 TRANSFER DATE STATUS GUARD: Transfer date ပါပါက Status အား Inactive အဖြစ် တိုက်ရိုက်သတ်မှတ်သည်
     const transferDateVal = body.transferDate || body.transfer_date || '';
     const finalStatus = transferDateVal ? 'Inactive' : (body.status || 'Active');
 
@@ -289,9 +279,6 @@ export async function updateStudentEntry(db, userSession, body) {
   }
 }
 
-/**
- * 💡 Delete Student Entry
- */
 export async function deleteStudentEntry(db, userSession, body) {
   try {
     const uniqueid = body.uniqueId || body.uniqueid;

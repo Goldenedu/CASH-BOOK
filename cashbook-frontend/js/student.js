@@ -2,7 +2,9 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - STUDENT LIST & DEMOGRAPHICS MODULE (D1 DATABASE COMPATIBLE)
  * File: js/student.js (Location: cashbook-frontend/js/student.js)
- * 💡 Features: Refactored with Global api.js for DRY Principle
+ * 💡 Features: Refactored with Global api.js for DRY Principle,
+ *              ⚡ ZERO-QUOTA FILTERING: In-Memory Multi-Filtering (FY + Grade + Search),
+ *              🎯 Live Dynamic KPI Synchronization for Class & Year Selections
  * ==============================================================================
  */
 
@@ -13,6 +15,7 @@ window.StudentState = {
   activeData: [],
   searchVal: '',
   fyFilter: '',
+  gradeFilter: '', // 💡 Grade / Class Filter State
   stats: { totalActive: 0, totalInactive: 0, total: 0 }
 };
 
@@ -37,14 +40,25 @@ const CLASS_PROMOTION_MAP = {
   'Grade 12': 'Grade 12'
 };
 
-function filterStudentData(list = [], searchVal = '', fyFilter = '') {
+/**
+ * ⚡ Multi-Parameter In-Memory Filtering (0 D1 Quota Used)
+ */
+function filterStudentData(list = [], searchVal = '', fyFilter = '', gradeFilter = '') {
   let filtered = list;
 
+  // 1. Fiscal Year Filter
   if (fyFilter && fyFilter.trim()) {
     const fyQ = fyFilter.trim().toLowerCase();
     filtered = filtered.filter(row => String(row.fy || '').trim().toLowerCase() === fyQ);
   }
 
+  // 2. Grade / Class Filter
+  if (gradeFilter && gradeFilter.trim()) {
+    const gradeQ = gradeFilter.trim().toLowerCase();
+    filtered = filtered.filter(row => String(row.class || '').trim().toLowerCase() === gradeQ);
+  }
+
+  // 3. Search Query Filter
   if (searchVal && searchVal.trim()) {
     const q = searchVal.trim().toLowerCase();
     filtered = filtered.filter(row => {
@@ -57,7 +71,7 @@ function filterStudentData(list = [], searchVal = '', fyFilter = '') {
     });
   }
 
-  // 💡 Strict NO Sequential Sorting (အမြဲတမ်း NO အကြီးဆုံးမှ အငယ်သို့ အစဉ်လိုက် စီပေးခြင်း)
+  // Strict NO Sequential Sorting
   filtered.sort((a, b) => {
     const noA = parseInt(a.no, 10) || 0;
     const noB = parseInt(b.no, 10) || 0;
@@ -84,7 +98,7 @@ async function loadStudentData(isSilent = false) {
       state.totalRows = response.totalRows || response.data.length || 0;
 
       populateMainFYFilterStudent();
-      updateStatsStudent(response.stats);
+      updateStatsStudent();
       renderStudentTable();
     }
   } catch (err) {
@@ -129,20 +143,39 @@ function onFyFilterChangeStudent() {
   }
 }
 
-function updateStatsStudent(serverStats) {
-  const rawData = window.StudentState.activeData || [];
-  const selectedFy = document.getElementById('student-filter-fy')?.value;
-  const targetFyForKpi = selectedFy || '';
+/**
+ * 💡 Grade / Class Filter Handler (Instant In-Memory Update)
+ */
+function onGradeFilterChangeStudent() {
+  const select = document.getElementById('student-filter-grade');
+  if (select) {
+    window.StudentState.gradeFilter = select.value;
+    window.StudentState.page = 1;
+    updateStatsStudent();
+    renderStudentTable();
+  }
+}
 
-  let fyList = rawData;
-  if (targetFyForKpi && targetFyForKpi.trim()) {
-    fyList = rawData.filter(r => String(r.fy || '').trim().toLowerCase().includes(targetFyForKpi.trim().toLowerCase()));
+/**
+ * ⚡ Live Synchronized KPI Cards (Calculates based on Active Filter Selection)
+ */
+function updateStatsStudent() {
+  const rawData = window.StudentState.activeData || [];
+  const selectedFy = document.getElementById('student-filter-fy')?.value || window.StudentState.fyFilter || '';
+  const selectedGrade = document.getElementById('student-filter-grade')?.value || window.StudentState.gradeFilter || '';
+
+  let list = rawData;
+  if (selectedFy && selectedFy.trim()) {
+    list = list.filter(r => String(r.fy || '').trim().toLowerCase() === selectedFy.trim().toLowerCase());
+  }
+  if (selectedGrade && selectedGrade.trim()) {
+    list = list.filter(r => String(r.class || '').trim().toLowerCase() === selectedGrade.trim().toLowerCase());
   }
 
   let actCount = 0;
   let inactCount = 0;
 
-  fyList.forEach(r => {
+  list.forEach(r => {
     const transDate = r.transfer_date || r.transferDate || "";
     const stat = (r.status || "").toLowerCase();
     if (transDate || stat === "inactive") {
@@ -162,7 +195,7 @@ function updateStatsStudent(serverStats) {
   if (totEl) totEl.innerText = Number(actCount + inactCount).toLocaleString('en-US');
 
   const countEl = document.getElementById('stu-entries-count');
-  if (countEl) countEl.innerText = Number(fyList.length).toLocaleString('en-US');
+  if (countEl) countEl.innerText = Number(list.length).toLocaleString('en-US');
 }
 
 function renderStudentTable() {
@@ -174,8 +207,9 @@ function renderStudentTable() {
   const searchInput = document.getElementById('student-search');
   const searchVal = searchInput ? searchInput.value.trim() : (state.searchVal || '');
   const fyFilter = document.getElementById('student-filter-fy')?.value || state.fyFilter || '';
+  const gradeFilter = document.getElementById('student-filter-grade')?.value || state.gradeFilter || '';
 
-  const filteredData = filterStudentData(rawData, searchVal, fyFilter);
+  const filteredData = filterStudentData(rawData, searchVal, fyFilter, gradeFilter);
 
   updatePaginationStudent(filteredData.length);
 
@@ -272,7 +306,7 @@ function updatePaginationStudent(currentCount) {
 
 function changePageStudent(dir) {
   const state = window.StudentState;
-  const totalFiltered = filterStudentData(state.activeData, state.searchVal, state.fyFilter).length;
+  const totalFiltered = filterStudentData(state.activeData, state.searchVal, state.fyFilter, state.gradeFilter).length;
   
   if (dir === -1 && state.page > 1) {
     state.page--;
@@ -392,9 +426,6 @@ function onOldStudentIdLookup() {
   }, 400);
 }
 
-/**
- * 💡 Save Student Form (With Phase 3.1 Inter-Module State Synchronization Hooks)
- */
 async function saveStudentForm(e) {
   if (e && e.preventDefault) e.preventDefault();
 
@@ -448,8 +479,6 @@ async function saveStudentForm(e) {
         showToast("SUCCESS", isAdd ? "ကျောင်းသားသစ် မှတ်တမ်း အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။" : "ကျောင်းသား မှတ်တမ်း ပြင်ဆင်ခြင်း အောင်မြင်ပါသည်။");
       }
       
-      // ⚡ Phase 3.1: Inter-Module Invalidation Hook
-      // ကျောင်းသားအသစ်အား Income နှင့် Student Money Module တွင် ချက်ချင်း ရှာတွေ့စေရန် Cache များကို အလိုအလျောက် Purge လုပ်သည်
       if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
       window.studentsByFyCache = {};
       window.gStudentCacheForMoney = {};
@@ -575,9 +604,6 @@ async function deleteStudentEntry(uniqueId) {
   }
 }
 
-/**
- * 💡 FULL CSV EXPORTER (Formula Injection Protected via safeCsvCell + UTF-8 BOM)
- */
 function exportToCSVStudent() {
   const data = window.StudentState.activeData;
   if (!data || data.length === 0) {
@@ -638,3 +664,4 @@ window.changePageStudent = changePageStudent;
 window.onStudentStatusChange = onStudentStatusChange;
 window.onOldStudentIdLookup = onOldStudentIdLookup;
 window.onFyFilterChangeStudent = onFyFilterChangeStudent;
+window.onGradeFilterChangeStudent = onGradeFilterChangeStudent; // 💡 NEW EXPOSURE
