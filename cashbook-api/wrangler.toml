@@ -13,7 +13,7 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "school-db-dev"
-database_id = "cb3cc9ab-413e-455b-9f60-1abac992eb20"
+database_id = "cb3cc9ab-413e-455b-9f60-1abac992bf32"
 
 # 💡 2. ENVIRONMENT VARIABLES (Development CORS Whitelist)
 [vars]
