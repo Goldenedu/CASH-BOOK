@@ -12,10 +12,10 @@
  * ==============================================================================
  */
 
-// 💡 Corrected Worker URL matching Cloudflare Service Name (cashbook-app-api)
+// 💡 Development Worker URL matching Cloudflare Secondary Account (cashbook-app-api-dev)
 const API_WORKER_URL = (typeof window !== 'undefined' && window.CONFIG?.API_URL) 
   ? window.CONFIG.API_URL 
-  : "https://cashbook-app-api.goldeneduprivateschool.workers.dev/";
+  : "https://cashbook-app-api-dev.thantoeaung734.workers.dev/";
 
 // 💡 Global AppState
 window.AppState = window.AppState || {
@@ -160,12 +160,10 @@ window.autoDetectGender = function(nameStr) {
 // ==============================================================================
 
 window.getApiCache = function(cacheKey) {
-  // 1. Check Fast In-Memory Cache first (0ms)
   if (window.gDataCache[cacheKey]) {
     return window.gDataCache[cacheKey];
   }
   
-  // 2. Fallback to localStorage cache for small persistent data
   try {
     const persistedCache = localStorage.getItem('api_cache_' + cacheKey);
     if (persistedCache) {
@@ -187,11 +185,8 @@ window.getApiCache = function(cacheKey) {
 
 window.setApiCache = function(cacheKey, data) {
   if (data && data.success) {
-    // In-memory cache တွင် အမြဲသိမ်းဆည်းသည် (Storage Quota မရှိပါ)
     window.gDataCache[cacheKey] = data;
 
-    // ⚡ FIX: 80KB ထက်ကြီးသော Data (ကျောင်းသား ၅,၀၀၀၊ Cashier ၂,၀၀၀) များကို localStorage ထဲ မထည့်ဘဲ
-    // Browser ၏ 5MB Quota ပြည့်ကာ App Crash ဖြစ်သွားခြင်းကို ၁၀၀% ကာကွယ်သည်
     try {
       const serialized = JSON.stringify({ timestamp: Date.now(), data: data });
       if (serialized.length < 80000) {
@@ -247,7 +242,7 @@ window.invalidateApiCache = function(actionPrefix = '') {
 // ==============================================================================
 
 window.ErrorLogger = {
-  maxLogs: 20, // ⚡ Cap at 20 logs to prevent localStorage bloat
+  maxLogs: 20,
   
   logError: function(context, error, additionalInfo = {}) {
     const errorEntry = {
@@ -275,7 +270,6 @@ window.ErrorLogger = {
     try {
       localStorage.setItem('error_logs', JSON.stringify(logs));
     } catch (e) {
-      // If quota exceeded, purge old logs
       localStorage.removeItem('error_logs');
     }
     
@@ -320,7 +314,6 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
 
   const isReadAction = action.startsWith('get') || action.startsWith('check') || action.startsWith('lookup');
   
-  // ⚡ FIX: 'export' နှင့် 'send' သည် Database မပြောင်းလဲသဖြင့် Cache အားလုံးကို မဖျက်စေဘဲ အမှန်တကယ် Mutation များသာ စာရင်းဖျက်စေသည်
   const isActualMutation = action.startsWith('save') || 
                            action.startsWith('update') || 
                            action.startsWith('delete') || 
@@ -332,7 +325,6 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
 
   const cacheKey = `${action}_${JSON.stringify(serverPayload)}`;
 
-  // 1. FAST OFFLINE CHECK FOR WRITES: If strictly offline, enqueue immediately
   if (isActualMutation && !navigator.onLine && window.OfflineSync) {
     console.warn(`[OfflineSync] Offline detected. Enqueueing ${action} immediately...`);
     await window.OfflineSync.enqueue(action, serverPayload, method);
@@ -386,7 +378,6 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
 
     const response = await fetch(url, options);
 
-    // ⚡ FIX: 401 Session Expiry Cleanup (Auth Keys ၅ ခုစလုံးကို အပြီးတိုင် ရှင်းလင်းသည်)
     if (response.status === 401) {
       console.warn(`[API 401] Unauthorized access for action: ${action}`);
 
@@ -433,7 +424,6 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
       window.setApiCache(cacheKey, result);
     }
 
-    // စာရင်းအမှန်တကယ် ပြောင်းလဲသွားမှသာ Cache များကို ဖျက်ဆီးသည်
     if (isActualMutation && result && result.success) {
       window.clearAllApiCache();
     }
@@ -450,7 +440,6 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
                            err.message.includes('network')
                          ));
 
-    // Offline Write Interceptor
     if (isActualMutation && isNetworkErr && window.OfflineSync) {
       console.warn(`[OfflineSync Interceptor] Network error during ${action}. Diverting to IndexedDB Outbox...`);
       await window.OfflineSync.enqueue(action, serverPayload, method);
@@ -465,7 +454,6 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
       };
     }
 
-    // Offline Read Fallback to Cache
     if (isReadAction && isNetworkErr) {
       const staleCache = window.getApiCache(cacheKey);
       if (staleCache) {
@@ -492,17 +480,12 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
 };
 
 // ==============================================================================
-// 💡 6. BACKGROUND PREFETCHING ENGINE (Phase 1.2 Syntax Fix Applied)
+// 💡 6. BACKGROUND PREFETCHING ENGINE
 // ==============================================================================
 
-/**
- * 💡 Light-Weight Background Prefetching Engine
- * ⚡ FIX: Syntax error ဖြစ်စေသော trailing code ပိုများကို ဖယ်ရှားပြီး သန့်ရှင်းစွာ ပိတ်ထားသည်
- */
 window.prefetchCoreModules = function() {
   window.viewCache = window.viewCache || {};
   
-  // HTML Template များကိုသာ ကြိုတင်ဆွဲထားမည် (Network Data များကို အတင်းမဆွဲတော့ပါ)
   const views = [
     'dashboard', 'bank-cash', 'income', 'office-kit', 'hr', 'staff',
     'cashier', 'student', 'student-money', 'uniform', 'promotion', 'reports',
@@ -558,9 +541,6 @@ window.cleanNumber = function(val) {
   return isNegative ? -num : num;
 };
 
-/**
- * 💡 Resilient Calendar Date Parser (ISO DateTime & Standard String Support)
- */
 window.parseIsoDate = function(dStr) {
   if (!dStr) return null;
   var str = String(dStr).split('T')[0].trim();
