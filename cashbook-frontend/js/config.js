@@ -52,15 +52,21 @@ window.MAGIC_NUMBERS = {
 };
 
 // 💡 Environment Detection for API URL Configuration
+// 💡 Environment Detection for API URL Configuration
 function getApiUrl() {
   const hostname = window.location.hostname;
   
-  // Development environment (localhost)
+  // 1. Localhost စမ်းသပ်မှု
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
     return localStorage.getItem('dev_api_url') || 'http://localhost:8787';
   }
   
-  // Production environment
+  // 2. Secondary Development Pages စမ်းသပ်မှု
+  if (hostname.includes('cash-book-dev.pages.dev') || hostname.includes('-dev')) {
+    return 'https://cashbook-app-api-dev.thantoeaung734.workers.dev';
+  }
+  
+  // 3. Main Production စနစ်
   return localStorage.getItem('prod_api_url') || 'https://cashbook-app-api.goldeneduprivateschool.workers.dev';
 }
 
