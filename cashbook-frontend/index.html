@@ -56,44 +56,47 @@
 
       <form id="login-form" onsubmit="handleLoginSubmit(event)" class="space-y-4 text-xs text-left">
   
-  <!-- 💡 ၁။ SYSTEM TYPE SELECTOR -->
-  <div>
-    <label class="block font-bold text-[11px] text-slate-300 uppercase tracking-widest mb-1.5">Select System Type</label>
-    <select id="login-system-type" onchange="onSystemTypeChange()" required class="w-full p-3 bg-[#070a12]/80 border border-slate-700/60 rounded-xl text-xs text-amber-300 font-extrabold outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20 transition">
-      <option value="finance" selected>Finance Management (ERP)</option>
-      <option value="pos">Canteen POS System</option>
-    </select>
-  </div>
+        <!-- 💡 ၁။ SYSTEM TYPE SELECTOR -->
+        <div>
+          <label class="block font-bold text-[11px] text-slate-300 uppercase tracking-widest mb-1.5">Select System Type</label>
+          <select id="login-system-type" onchange="onSystemTypeChange()" required class="w-full p-3 bg-[#070a12]/80 border border-slate-700/60 rounded-xl text-xs text-amber-300 font-extrabold outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20 transition">
+            <option value="finance" selected>Finance Management (ERP)</option>
+            <option value="pos">Canteen POS System</option>
+          </select>
+        </div>
 
-  <!-- 💡 ၂။ USERNAME / ROLE SELECTOR (auth.js မှ Dynamic Render ပြုလုပ်မည်) -->
-  <div>
-    <label class="block font-bold text-[11px] text-slate-300 uppercase tracking-widest mb-1.5">Select Username / Role</label>
-    <select id="login-username" required class="w-full p-3 bg-[#070a12]/80 border border-slate-700/60 rounded-xl text-xs text-slate-100 font-bold outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20 transition">
-      <!-- auth.js ရှိ onSystemTypeChange() မှ ချက်ချင်း ဖြည့်စွက်ပေးမည် -->
-    </select>
-  </div>
+        <!-- 💡 ၂။ USERNAME / ROLE SELECTOR -->
+        <div>
+          <label class="block font-bold text-[11px] text-slate-300 uppercase tracking-widest mb-1.5">Select Username / Role</label>
+          <select id="login-username" required class="w-full p-3 bg-[#070a12]/80 border border-slate-700/60 rounded-xl text-xs text-slate-100 font-bold outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20 transition">
+            <!-- auth.js မှ ဖြည့်စွက်ပေးမည် -->
+          </select>
+        </div>
 
-  <!-- 💡 ၃။ PASSWORD INPUT -->
-  <div>
-    <label class="block font-bold text-[11px] text-slate-300 uppercase tracking-widest mb-1.5">Password</label>
-    <input type="password" id="login-password" required placeholder="Type password..." class="w-full p-3 bg-[#070a12]/80 border border-slate-700/60 rounded-xl text-xs text-slate-100 placeholder:text-slate-600 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20 transition">
-  </div>
+        <!-- 💡 ၃။ PASSWORD INPUT -->
+        <div>
+          <label class="block font-bold text-[11px] text-slate-300 uppercase tracking-widest mb-1.5">Password</label>
+          <input type="password" id="login-password" required placeholder="Type password..." class="w-full p-3 bg-[#070a12]/80 border border-slate-700/60 rounded-xl text-xs text-slate-100 placeholder:text-slate-600 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20 transition">
+        </div>
 
-  <div id="login-error" class="hidden text-rose-400 font-semibold text-[11px] bg-rose-500/10 border border-rose-500/20 p-2.5 rounded-xl text-center"></div>
+        <div id="login-error" class="hidden text-rose-400 font-semibold text-[11px] bg-rose-500/10 border border-rose-500/20 p-2.5 rounded-xl text-center"></div>
 
-  <button type="submit" class="w-full py-3.5 mt-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold rounded-xl transition shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 text-xs tracking-wider active:scale-[0.99] cursor-pointer">
-    <span>Enter System</span>
-    <i class="fa-solid fa-arrow-right-to-bracket text-sm"></i>
-  </button>
-</form>
+        <button type="submit" class="w-full py-3.5 mt-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold rounded-xl transition shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 text-xs tracking-wider active:scale-[0.99] cursor-pointer">
+          <span>Enter System</span>
+          <i class="fa-solid fa-arrow-right-to-bracket text-sm"></i>
+        </button>
+      </form>
 
-<div class="pt-4 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
-  <div class="flex items-center gap-2">
-    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-    <span class="font-medium text-slate-400">System Ready</span>
-  </div>
-  <span class="font-mono text-slate-500">v2.4 Secured</span>
-</div>
+      <div class="pt-4 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span class="font-medium text-slate-400">System Ready</span>
+        </div>
+        <span class="font-mono text-slate-500">v2.4 Secured</span>
+      </div>
+
+    </div> <!-- 👈 ဤ div ပိတ် tag သည် max-w-md container အတွက် မဖြစ်မနေ လိုအပ်ပါသည် -->
+  </div>   <!-- 👈 ဤ div ပိတ် tag သည် #login-overlay overlay အတွက် ဖြစ်ပါသည် -->
 
   <!-- ==================== 2. MAIN WORKSPACE ==================== -->
   <div id="erp-workspace" class="hidden h-full w-full">
