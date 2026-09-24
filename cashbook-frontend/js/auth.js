@@ -18,6 +18,7 @@ function onSystemTypeChange() {
     // POS ရွေးထားချိန် ပေါ်မည့် Role များ
     const posRoles = [
       { value: 'canteen_admin', label: 'canteen_admin' },
+      { value : 'pm_cashier', label : 'pm_cashier'},
       { value: 'canteen_cashier', label: 'canteen_cashier' },
       { value: 'counter1', label: 'counter1' },
       { value: 'counter2', label: 'counter2' },
