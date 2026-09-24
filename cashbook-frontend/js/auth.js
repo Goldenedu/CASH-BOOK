@@ -5,6 +5,39 @@
  */
 
 /**
+ * 💡 Switch Role Dropdown Options based on Selected System Type
+ */
+function onSystemTypeChange() {
+  const systemTypeEl = document.getElementById('login-system-type');
+  const roleSelect = document.getElementById('login-username');
+  if (!systemTypeEl || !roleSelect) return;
+
+  const systemType = systemTypeEl.value;
+
+  if (systemType === 'pos') {
+    // POS ရွေးထားချိန် ပေါ်မည့် Role များ
+    const posRoles = [
+      { value: 'canteen_admin', label: 'canteen_admin' },
+      { value: 'canteen_cashier', label: 'canteen_cashier' },
+      { value: 'counter1', label: 'counter1' },
+      { value: 'counter2', label: 'counter2' },
+      { value: 'counter3', label: 'counter3' }
+    ];
+
+    roleSelect.innerHTML = '<option value="">-- Select POS Role / Counter --</option>' +
+      posRoles.map(r => `<option value="${r.value}">${r.label}</option>`).join('');
+  } else {
+    // Finance ရွေးထားချိန် ပုံမှန် ERP Role များ
+    const financeRoles = [
+      'Owner', 'Admin', 'Finance', 'HR', 'Accountant', 'Cashier', 'Staff', 'Viewer'
+    ];
+
+    roleSelect.innerHTML = '<option value="">-- Select Username --</option>' +
+      financeRoles.map(r => `<option value="${r}">${r}</option>`).join('');
+  }
+}
+
+/**
  * 💡 Central Role-Based Access Control (RBAC) Permission Verifier
  * @param {string} permissionName - 'can_delete' | 'can_edit' | 'can_manage_grades' | 'can_backup'
  * @returns {boolean}
