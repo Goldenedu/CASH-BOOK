@@ -12,56 +12,68 @@ function onSystemTypeChange() {
   const roleSelect = document.getElementById('login-username');
   if (!systemTypeEl || !roleSelect) return;
 
-  const systemType = systemTypeEl.value;
+  const isPos = systemTypeEl.value === 'pos';
 
-  if (systemType === 'pos') {
-    // POS ရွေးထားချိန် ပေါ်မည့် Role များ
-    const posRoles = [
-      { value: 'canteen_admin', label: 'canteen_admin' },
-      { value : 'pm_cashier', label : 'pm_cashier'},
-      { value: 'canteen_cashier', label: 'canteen_cashier' },
-      { value: 'counter1', label: 'counter1' },
-      { value: 'counter2', label: 'counter2' },
-      { value: 'counter3', label: 'counter3' }
-    ];
+  const roles = isPos ? [
+    { value: 'canteen_admin', label: 'canteen_admin' },
+    { value: 'canteen_cashier', label: 'canteen_cashier' },
+    { value: 'counter1', label: 'counter1' },
+    { value: 'counter2', label: 'counter2' },
+    { value: 'counter3', label: 'counter3' },
+    { value: 'pm_cashier1', label: 'pm_cashier1' },
+    { value: 'pm_cashier2', label: 'pm_cashier2' }
+  ] : [
+    'Owner', 'Admin', 'Finance', 'HR', 'Accountant', 'Cashier', 'Staff', 'Viewer'
+  ].map(r => ({ value: r, label: r }));
 
-    roleSelect.innerHTML = '<option value="">-- Select POS Role / Counter --</option>' +
-      posRoles.map(r => `<option value="${r.value}">${r.label}</option>`).join('');
-  } else {
-    // Finance ရွေးထားချိန် ပုံမှန် ERP Role များ
-    const financeRoles = [
-      'Owner', 'Admin', 'Finance', 'HR', 'Accountant', 'Cashier', 'Staff', 'Viewer'
-    ];
-
-    roleSelect.innerHTML = '<option value="">-- Select Username --</option>' +
-      financeRoles.map(r => `<option value="${r}">${r}</option>`).join('');
-  }
+  const defaultOption = `<option value="">-- Select ${isPos ? 'POS Role / Counter' : 'Username'} --</option>`;
+  roleSelect.innerHTML = defaultOption + roles.map(r => `<option value="${r.value}">${r.label}</option>`).join('');
 }
 
 /**
  * 💡 Central Role-Based Access Control (RBAC) Permission Verifier
- * @param {string} permissionName - 'can_delete' | 'can_edit' | 'can_manage_grades' | 'can_backup'
- * @returns {boolean}
  */
 function hasPermission(permissionName) {
-  const rawRole = (window.AppState?.currentUserRole || localStorage.getItem('golden_user_role') || 'Viewer').trim();
-  const role = rawRole.replace(/\s+/g, ' ');
+  const role = (window.AppState?.currentUserRole || localStorage.getItem('golden_user_role') || 'Viewer')
+    .trim()
+    .replace(/\s+/g, ' ');
 
-  const matrix = {
-    'Owner': { can_view: true, can_add: true, can_edit: true, can_delete: true, can_manage_grades: true, can_backup: true },
-    'Admin': { can_view: true, can_add: true, can_edit: true, can_delete: true, can_manage_grades: true, can_backup: true },
-    'Finance': { can_view: true, can_add: true, can_edit: true, can_delete: true, can_manage_grades: false, can_backup: true },
-    'Accountant': { can_view: true, can_add: true, can_edit: true, can_delete: true, can_manage_grades: false, can_backup: true },
-    'HR': { can_view: true, can_add: true, can_edit: true, can_delete: true, can_manage_grades: true, can_backup: false }, // ✅ Added 'HR'
-    'HR Staff': { can_view: true, can_add: true, can_edit: true, can_delete: true, can_manage_grades: true, can_backup: false },
-    'Cashier': { can_view: true, can_add: true, can_edit: true, can_delete: true, can_manage_grades: false, can_backup: false },
-    'Staff': { can_view: true, can_add: true, can_edit: false, can_delete: false, can_manage_grades: false, can_backup: false },
-    'Viewer': { can_view: true, can_add: false, can_edit: false, can_delete: false, can_manage_grades: false, can_backup: false }
+  // Role တစ်ခုချင်းစီ ရရှိမည့် Permission အမည်များကိုသာ Array ဖြင့် သတ်မှတ်ခြင်း
+  const PERM_GROUPS = {
+    FULL_ACCESS: ['can_view', 'can_add', 'can_edit', 'can_delete', 'can_manage_grades', 'can_backup'],
+    FINANCE: ['can_view', 'can_add', 'can_edit', 'can_delete', 'can_backup'],
+    HR: ['can_view', 'can_add', 'can_edit', 'can_delete', 'can_manage_grades'],
+    OPERATOR: ['can_view', 'can_add', 'can_edit', 'can_delete'], // Cashiers & Counters
+    STAFF: ['can_view', 'can_add'],
+    VIEW_ONLY: ['can_view']
   };
 
-  const userPerms = matrix[role] || matrix['Viewer'];
-  return !!userPerms[permissionName];
+  const ROLE_MAP = {
+    'Owner': PERM_GROUPS.FULL_ACCESS,
+    'Admin': PERM_GROUPS.FULL_ACCESS,
+    'canteen_admin': PERM_GROUPS.FULL_ACCESS,
+    'Finance': PERM_GROUPS.FINANCE,
+    'Accountant': PERM_GROUPS.FINANCE,
+    'HR': PERM_GROUPS.HR,
+    'HR Staff': PERM_GROUPS.HR,
+    'Cashier': PERM_GROUPS.OPERATOR,
+    'canteen_cashier': PERM_GROUPS.OPERATOR,
+    'counter1': PERM_GROUPS.OPERATOR,
+    'counter2': PERM_GROUPS.OPERATOR,
+    'counter3': PERM_GROUPS.OPERATOR,
+    'pm_cashier1': PERM_GROUPS.OPERATOR,
+    'pm_cashier2': PERM_GROUPS.OPERATOR,
+    'Staff': PERM_GROUPS.STAFF,
+    'Viewer': PERM_GROUPS.VIEW_ONLY
+  };
+
+  const allowedPermissions = ROLE_MAP[role] || PERM_GROUPS.VIEW_ONLY;
+  return allowedPermissions.includes(permissionName);
 }
+
+// Global scope သို့ expose လုပ်ခြင်း
+window.onSystemTypeChange = onSystemTypeChange;
+window.hasPermission = hasPermission;
 
 /**
  * 💡 Verify JWT Token or Local Session Expiration with Robust Base64 Padding
@@ -346,6 +358,17 @@ function checkExistingSession() {
   } else {
     showLogin();
   }
+}
+
+// ==============================================================================
+// 💡 AUTO-INITIALIZE DEFAULT ROLES ON PAGE LOAD
+// ==============================================================================
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', function() {
+    if (typeof onSystemTypeChange === 'function' && document.getElementById('login-system-type')) {
+      onSystemTypeChange();
+    }
+  });
 }
 
 // 💡 EXPOSE GLOBALLY
