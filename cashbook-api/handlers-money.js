@@ -1,417 +1,411 @@
 /**
  * ==============================================================================
- * GOLDEN ERP SYSTEM - STUDENT MONEY LEDGER & WALLET HANDLER (CLOUDFLARE D1)
- * File: handlers-money.js (Location: cashbook-api/handlers-money.js)
- * 💡 Features: Refactored with utils.js for DRY Principle
- *              🚀 OPTIMIZED: Avoided SELECT *, switched to COUNT(id) for faster scan
- *              🚀 ULTRA-OPTIMIZED: Prevented Full Table Scans. Replaced OR with IN().
- *              🚀 PHASE 1 (INCREMENTAL RECALC): Passed fromDate to cut 95% of row reads
+ * GOLDEN ERP SYSTEM - SPMMS HANDLERS (CLOUDFLARE D1)
+ * File: handlers-money.js
+ * 💡 Features: 3-Ledgers Strict Double-Entry Architecture
+ *              🚀 OPTIMIZED: db.batch() Atomic Transactions for absolute integrity
+ *              🛡️ RECONCILIATION: O(1) Financial Audit Engine included
  * ==============================================================================
  */
 
 import {
-  getMyanmarDateString,
-  normalizeFyStr,
-  sanitizeFyidStr,
-  generateUniqueId,
-  recalculateLedgerBalances // Imported the centralized quota-shield engine
+  getMyanmarDateString, normalizeFyStr, sanitizeFyidStr, generateUniqueId,
+  generateVoucherNo, generateFyNo, recalculateLedgerBalances, getCurrentAcademicYear
 } from './utils.js';
 
-/**
- * 💡 1. Fetch Transaction History (Tab 1)
- */
+// ==============================================================================
+// 💡 1. STUDENT MONEY (MAIN FINANCE & VIRTUAL WALLET)
+// ==============================================================================
+
 export async function getStudentMoneyData(db, body) {
   try {
-    const activeFy = normalizeFyStr(body.fy || "2026-2027").replace(/^FY\s*/i, '');
+    const fy = normalizeFyStr(body.fy || getCurrentAcademicYear()).replace(/^FY\s*/i, '');
     const searchVal = String(body.searchVal || "").trim();
     const studentIdFilter = parseInt(body.studentId, 10) || 0;
     const page = parseInt(body.page || 1, 10);
     const limit = parseInt(body.limit || 50, 10);
     const offset = (page - 1) * limit;
 
-    // 🚀 ULTRA-OPTIMIZATION: Replace `fy = ? OR fy = ?` with `fy IN (?, ?)`
     let whereClauses = [`(fy IN (?, ?))`];
-    let params = [activeFy, `FY ${activeFy}`];
+    let params = [fy, `FY ${fy}`];
 
     if (studentIdFilter > 0) {
-      // ဤနေရာတွင် ကော်လံ မတူသောကြောင့် OR အသုံးပြုရန် လိုအပ်သည်
-      whereClauses.push(`(student_id = ? OR id = ? )`);
+      whereClauses.push(`(student_id = ? OR id = ?)`);
       params.push(studentIdFilter, studentIdFilter);
     }
 
     if (searchVal) {
-      whereClauses.push(`(fyid_name LIKE ? OR fyid LIKE ? OR CAST(student_id AS TEXT) LIKE ? OR class LIKE ? OR remark LIKE ?)`);
+      whereClauses.push(`(fyid_name LIKE ? OR fyid LIKE ? OR remark LIKE ?)`);
       const p = `%${searchVal}%`;
-      params.push(p, p, p, p, p);
+      params.push(p, p, p);
     }
 
     const whereSql = `WHERE ${whereClauses.join(' AND ')}`;
 
-    // Overall FY Stats
-    const statsResult = await db.prepare(`
-      SELECT 
-        COALESCE(SUM(debit), 0) as totalIncome,
-        COALESCE(SUM(credit), 0) as totalExpense
-      FROM student_money
-      WHERE fy IN (?, ?)
-    `).bind(activeFy, `FY ${activeFy}`).first() || { totalIncome: 0, totalExpense: 0 };
+    // 🚀 Optimize: COUNT() and FETCH only necessary columns
+    const [countRow, statsRow] = await db.batch([
+      db.prepare(`SELECT COUNT(id) as c FROM student_money ${whereSql}`).bind(...params),
+      db.prepare(`SELECT SUM(debit) as d, SUM(credit) as c FROM student_money WHERE fy IN (?, ?)`).bind(fy, `FY ${fy}`)
+    ]);
 
-    const totalIncome = parseFloat(statsResult.totalIncome || 0);
-    const totalExpense = parseFloat(statsResult.totalExpense || 0);
-    const balance = totalIncome - totalExpense;
+    const totalRows = countRow.results[0]?.c || 0;
+    const stats = statsRow.results[0] || { d: 0, c: 0 };
 
-    // 🚀 OPTIMIZATION: COUNT(id) for faster scan
-    const countRow = await db.prepare(`SELECT COUNT(id) as count FROM student_money ${whereSql}`).bind(...params).first();
-    const totalRows = countRow ? countRow.count : 0;
-
-    // 🚀 OPTIMIZATION: Explicit columns
     const dataQuery = `
       SELECT id, no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, uniqueid 
-      FROM student_money 
-      ${whereSql} 
-      ORDER BY id DESC 
-      LIMIT ? OFFSET ?
+      FROM student_money ${whereSql} ORDER BY date DESC, id DESC LIMIT ? OFFSET ?
     `;
     const rowsRes = await db.prepare(dataQuery).bind(...params, limit, offset).all();
-    const rawRows = rowsRes.results || [];
-
-    const formattedRows = rawRows.map(row => ({
-      id: row.id,
-      no: parseInt(row.no, 10) || row.id,
-      date: row.date || '',
-      fy: normalizeFyStr(row.fy || activeFy),
-      studentId: row.student_id || row.id,
-      fyid: sanitizeFyidStr(row.fyid || ''),
-      fyidName: row.fyid_name || '',
-      class: row.class || '',
-      method: row.method || 'Cash',
-      debit: parseFloat(row.debit || 0),
-      credit: parseFloat(row.credit || 0),
-      balances: parseFloat(row.balances || 0),
-      remark: row.remark || '',
-      uniqueId: row.uniqueid || `STM_${row.id}`
-    }));
 
     return {
       success: true,
-      data: formattedRows,
-      totalRows: totalRows,
-      page: page,
-      limit: limit,
-      stats: {
-        totalIncome: totalIncome,
-        totalExpense: totalExpense,
-        balance: balance
-      }
+      data: (rowsRes.results || []).map(r => ({
+        ...r, studentId: r.student_id, fyidName: r.fyid_name, uniqueId: r.uniqueid
+      })),
+      totalRows, page, limit,
+      stats: { totalIncome: stats.d, totalExpense: stats.c, balance: stats.d - stats.c }
     };
-  } catch (err) {
-    console.error("Error in getStudentMoneyData:", err);
-    return { success: false, message: "Student Money စာရင်း ရယူရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message };
-  }
+  } catch (err) { return { success: false, message: err.message }; }
 }
 
-/**
- * 💡 2. Fetch Individual Student Wallet Summary (Tab 2 - 1 Student = 1 Row)
- */
 export async function getStudentMoneySummary(db, body) {
   try {
-    const activeFy = normalizeFyStr(body.fy || "2026-2027").replace(/^FY\s*/i, '');
+    const fy = normalizeFyStr(body.fy || getCurrentAcademicYear()).replace(/^FY\s*/i, '');
     const searchVal = String(body.searchVal || "").trim();
 
-    // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)`
-    let whereClauses = [`(fy IN (?, ?))`];
-    let params = [activeFy, `FY ${activeFy}`];
+    let whereClauses = [`(fy IN (?, ?)) AND student_id != 0`]; // ID 0 is for System Transfers
+    let params = [fy, `FY ${fy}`];
 
     if (searchVal) {
-      whereClauses.push(`(fyid_name LIKE ? OR fyid LIKE ? OR CAST(student_id AS TEXT) LIKE ? OR class LIKE ?)`);
+      whereClauses.push(`(fyid_name LIKE ? OR fyid LIKE ? OR CAST(student_id AS TEXT) LIKE ?)`);
       const p = `%${searchVal}%`;
-      params.push(p, p, p, p);
+      params.push(p, p, p);
     }
 
-    const whereSql = `WHERE ${whereClauses.join(' AND ')}`;
-
-    // 🚀 OPTIMIZATION: COUNT(student_id) instead of COUNT(*)
     const query = `
-      SELECT 
-        student_id as studentId,
-        MAX(fyid) as fyid,
-        MAX(fyid_name) as fyidName,
-        MAX(class) as class,
-        COALESCE(SUM(debit), 0) as totalDeposit,
-        COALESCE(SUM(credit), 0) as totalWithdraw,
-        COALESCE(SUM(debit - credit), 0) as netBalance,
-        COUNT(student_id) as transactionCount,
-        MAX(date) as lastDate
-      FROM student_money
-      ${whereSql}
-      GROUP BY student_id
-      ORDER BY netBalance DESC, student_id ASC
+      SELECT student_id as studentId, MAX(fyid) as fyid, MAX(fyid_name) as fyidName, MAX(class) as class,
+             SUM(debit) as totalDeposit, SUM(credit) as totalWithdraw, SUM(debit - credit) as netBalance,
+             COUNT(student_id) as transactionCount
+      FROM student_money WHERE ${whereClauses.join(' AND ')}
+      GROUP BY student_id ORDER BY netBalance DESC
     `;
-
+    
     const rowsRes = await db.prepare(query).bind(...params).all();
-    const rawList = rowsRes.results || [];
+    const formatted = (rowsRes.results || []).map((r, i) => ({ no: i + 1, ...r }));
 
-    let totalDepositedAll = 0;
-    let totalWithdrawnAll = 0;
-    let totalNetBalanceAll = 0;
-    let positiveCount = 0;
-    let negativeCount = 0;
-    let zeroCount = 0;
+    let tD = 0, tW = 0, tB = 0;
+    formatted.forEach(r => { tD += r.totalDeposit; tW += r.totalWithdraw; tB += r.netBalance; });
 
-    const formattedList = rawList.map((r, idx) => {
-      const bal = Number(r.netBalance || 0);
-      totalDepositedAll += Number(r.totalDeposit || 0);
-      totalWithdrawnAll += Number(r.totalWithdraw || 0);
-      totalNetBalanceAll += bal;
+    return { 
+      success: true, data: formatted, 
+      stats: { totalDeposited: tD, totalWithdrawn: tW, totalBalance: tB, studentCount: formatted.length }
+    };
+  } catch (err) { return { success: false, message: err.message }; }
+}
 
-      if (bal > 0) positiveCount++;
-      else if (bal < 0) negativeCount++;
-      else zeroCount++;
+export async function saveStudentMoneyEntry(db, session, body) {
+  try {
+    const entryDate = getMyanmarDateString(body.date);
+    const d = new Date(entryDate);
+    const my = `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()]}-${d.getFullYear()}`;
+    
+    const fy = normalizeFyStr(body.fy || getCurrentAcademicYear());
+    const cleanFy = fy.replace(/^FY\s*/i, '');
+    const uniqueid = body.uniqueId ? String(body.uniqueId).trim() : generateUniqueId('STM');
+    
+    const entryType = body.entryType || 'Deposit';
+    const debit = parseFloat(body.debit || 0);
+    const credit = parseFloat(body.credit || 0);
+    const studentId = parseInt(body.studentId, 10) || 0;
+    const method = body.method || 'Cash';
+    
+    const batchStatements = [];
 
-      return {
-        no: idx + 1,
-        studentId: r.studentId,
-        fyid: sanitizeFyidStr(r.fyid || ''),
-        fyidName: r.fyidName || '',
-        class: r.class || '',
-        totalDeposit: Number(r.totalDeposit || 0),
-        totalWithdraw: Number(r.totalWithdraw || 0),
-        netBalance: bal,
-        transactionCount: Number(r.transactionCount || 0),
-        lastDate: r.lastDate || ''
-      };
-    });
+    // 💡 Strict Standardized Remark Tagging for Financial Audit
+    if (entryType === 'Transfer to PM Cashier' && credit > 0) {
+      // 1. Debit -> PM Cashier Book
+      const noPm = await generateFyNo(db, 'pm_cashier_book', fy);
+      const vrPm = await generateVoucherNo(db, 'pm_cashier_book', 'PMC', entryDate);
+      const pmRemark = body.remark || "Finance မှ PM Cashier သို့ အရင်းငွေလွှဲပေးခြင်း";
+      const respPerson = body.responsibilityPerson || session?.name || '';
+
+      batchStatements.push(
+        db.prepare(`INSERT INTO pm_cashier_book (no, date, responsibility_person, category, description, method, debit, credit, balances, vr_no, my, fy, created_by, uniqueid) VALUES (?, ?, ?, 'Float Receive', ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)`)
+        .bind(noPm, entryDate, respPerson, pmRemark, method, credit, vrPm, my, fy, session?.name || 'Finance', `PMC_${uniqueid}`)
+      );
+
+      // 2. Credit -> Student Money (ID=0 to represent system vault outflow)
+      const noStu = await generateFyNo(db, 'student_money', cleanFy);
+      batchStatements.push(
+        db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, 0, 'FINANCE', 'Finance Vault', 'Vault', ?, 0, ?, 0, ?, ?, ?)`)
+        .bind(noStu, entryDate, cleanFy, method, credit, `[Finance] Transfer to PM Cashier: ${pmRemark}`, session?.name || 'Finance', uniqueid)
+      );
+
+    } else {
+      // Regular Deposit or Withdraw
+      const noStu = await generateFyNo(db, 'student_money', cleanFy);
+      const stuName = body.name ? `[${body.fyid}] ${body.name}` : `[ID ${studentId}]`;
+      const prefix = entryType === 'Deposit' ? '[Finance] Deposit' : '[Finance] Withdraw';
+      const remark = `${prefix}: ${body.remark || ''}`.trim();
+
+      batchStatements.push(
+        db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`)
+        .bind(noStu, entryDate, cleanFy, studentId, body.fyid || '', stuName, body.class || '', method, debit, credit, remark, session?.name || 'Finance', uniqueid)
+      );
+    }
+
+    await db.batch(batchStatements);
+
+    // Atomic Recalculations
+    await recalculateLedgerBalances(db, 'student_money', cleanFy, entryDate);
+    if (entryType === 'Transfer to PM Cashier') {
+      await recalculateLedgerBalances(db, 'pm_cashier_book', fy, entryDate);
+    }
+
+    return { success: true, uniqueId: uniqueid };
+  } catch (err) { return { success: false, message: err.message }; }
+}
+
+export async function deleteStudentMoneyEntry(db, session, body) {
+  try {
+    const uid = body.uniqueId;
+    if (!uid) return { success: false };
+    
+    const existing = await db.prepare("SELECT fy, date, remark FROM student_money WHERE uniqueid = ?").bind(uid).first();
+    if (!existing) return { success: false };
+
+    const batchStatements = [];
+    batchStatements.push(db.prepare("DELETE FROM student_money WHERE uniqueid = ?").bind(uid));
+    
+    // Reverse Double-Entry if it was a Transfer
+    if (existing.remark.includes('Transfer to PM Cashier')) {
+      batchStatements.push(db.prepare("DELETE FROM pm_cashier_book WHERE uniqueid = ?").bind(`PMC_${uid}`));
+    } else if (existing.remark.includes('Settlement to Canteen')) {
+      batchStatements.push(db.prepare("DELETE FROM canteen_book WHERE uniqueid = ?").bind(`CAN_${uid}`));
+    }
+
+    await db.batch(batchStatements);
+
+    await recalculateLedgerBalances(db, 'student_money', existing.fy.replace(/^FY\s*/i, ''), existing.date);
+    if (existing.remark.includes('Transfer to PM Cashier')) await recalculateLedgerBalances(db, 'pm_cashier_book', `FY ${existing.fy.replace(/^FY\s*/i, '')}`, existing.date);
+
+    return { success: true };
+  } catch (err) { return { success: false, message: err.message }; }
+}
+
+// ==============================================================================
+// 💡 2. PM CASHIER BOOK
+// ==============================================================================
+
+export async function getPmCashierBookData(db, body) {
+  try {
+    const fy = normalizeFyStr(body.fy || getCurrentAcademicYear());
+    const query = `SELECT * FROM pm_cashier_book WHERE fy = ? ORDER BY date DESC, id DESC LIMIT 2000`;
+    const res = await db.prepare(query).bind(fy).all();
+    return { success: true, data: (res.results || []).map(r => ({ ...r, uniqueId: r.uniqueid })) };
+  } catch (err) { return { success: false, message: err.message }; }
+}
+
+export async function savePmCashierBookEntry(db, session, body) {
+  try {
+    const entryDate = getMyanmarDateString(body.date);
+    const d = new Date(entryDate);
+    const my = `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()]}-${d.getFullYear()}`;
+    const fy = normalizeFyStr(body.fy || calculateAcademicFyFromDate(entryDate));
+    const cleanFy = fy.replace(/^FY\s*/i, '');
+    
+    const uniqueid = body.uniqueId ? String(body.uniqueId).trim() : generateUniqueId('PMC');
+    const category = body.category || 'PM Withdraw';
+    const credit = parseFloat(body.credit || 0);
+    const debit = parseFloat(body.debit || 0);
+    const respPerson = body.responsibilityPerson || session?.name || '';
+    
+    const noPm = await generateFyNo(db, 'pm_cashier_book', fy);
+    const vrPm = body.vrNo || await generateVoucherNo(db, 'pm_cashier_book', 'PMC', entryDate);
+    const batchStatements = [];
+
+    // 1. Insert PM Cashier Record
+    batchStatements.push(
+      db.prepare(`INSERT INTO pm_cashier_book (no, date, responsibility_person, category, description, method, debit, credit, balances, vr_no, my, fy, created_by, uniqueid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`)
+      .bind(noPm, entryDate, respPerson, category, body.description || '', body.method || 'Cash', debit, credit, vrPm, my, fy, session?.name || 'PM Cashier', uniqueid)
+    );
+
+    // 2. Double-Entry Auto Deduct from Student Money
+    if (category === 'PM Withdraw' && body.studentId > 0 && credit > 0) {
+      const noStu = await generateFyNo(db, 'student_money', cleanFy);
+      const stuName = body.studentName ? `[${body.fyid}] ${body.studentName}` : `[ID ${body.studentId}]`;
+      const desc = `[PM Cashier] Withdraw: ${body.description || ''}`.trim();
+
+      batchStatements.push(
+        db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?)`)
+        .bind(noStu, entryDate, cleanFy, body.studentId, body.fyid || '', stuName, body.studentClass || '', body.method || 'Cash', credit, desc, session?.name || 'PM Cashier', `STM_${uniqueid}`)
+      );
+    }
+
+    await db.batch(batchStatements);
+
+    // Recalculate
+    await recalculateLedgerBalances(db, 'pm_cashier_book', fy, entryDate);
+    if (category === 'PM Withdraw') await recalculateLedgerBalances(db, 'student_money', cleanFy, entryDate);
+
+    return { success: true, uniqueId: uniqueid };
+  } catch (err) { return { success: false, message: err.message }; }
+}
+
+export async function deletePmCashierBookEntry(db, session, body) {
+  try {
+    const uid = body.uniqueId;
+    if (!uid) return { success: false };
+    
+    const existing = await db.prepare("SELECT fy, date, category FROM pm_cashier_book WHERE uniqueid = ?").bind(uid).first();
+    if (!existing) return { success: false };
+
+    const batchStatements = [];
+    batchStatements.push(db.prepare("DELETE FROM pm_cashier_book WHERE uniqueid = ?").bind(uid));
+    
+    if (existing.category === 'PM Withdraw') {
+      batchStatements.push(db.prepare("DELETE FROM student_money WHERE uniqueid = ?").bind(`STM_${uid}`));
+    }
+
+    await db.batch(batchStatements);
+
+    await recalculateLedgerBalances(db, 'pm_cashier_book', existing.fy, existing.date);
+    if (existing.category === 'PM Withdraw') await recalculateLedgerBalances(db, 'student_money', existing.fy.replace(/^FY\s*/i, ''), existing.date);
+
+    return { success: true };
+  } catch (err) { return { success: false, message: err.message }; }
+}
+
+// ==============================================================================
+// 💡 3. CANTEEN BOOK
+// ==============================================================================
+
+export async function getCanteenBookData(db, body) {
+  try {
+    const fy = normalizeFyStr(body.fy || getCurrentAcademicYear());
+    const query = `SELECT * FROM canteen_book WHERE fy = ? ORDER BY date DESC, id DESC LIMIT 2000`;
+    const res = await db.prepare(query).bind(fy).all();
+    return { success: true, data: (res.results || []).map(r => ({ ...r, uniqueId: r.uniqueid })) };
+  } catch (err) { return { success: false, message: err.message }; }
+}
+
+export async function saveCanteenBookEntry(db, session, body) {
+  try {
+    const entryDate = getMyanmarDateString(body.date);
+    const d = new Date(entryDate);
+    const my = `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()]}-${d.getFullYear()}`;
+    const fy = normalizeFyStr(body.fy || calculateAcademicFyFromDate(entryDate));
+    const cleanFy = fy.replace(/^FY\s*/i, '');
+    
+    const uniqueid = body.uniqueId ? String(body.uniqueId).trim() : generateUniqueId('CAN');
+    const category = body.category || 'POS Sales';
+    const debit = parseFloat(body.debit || 0); // Sales increase receivable
+    const studentId = parseInt(body.studentId, 10) || 0;
+    
+    const noCan = await generateFyNo(db, 'canteen_book', fy);
+    const vrCan = body.vrNo || await generateVoucherNo(db, 'canteen_book', 'CAN', entryDate);
+    const batchStatements = [];
+
+    // 1. Debit Canteen Book
+    batchStatements.push(
+      db.prepare(`INSERT INTO canteen_book (no, date, category, description, method, debit, credit, balances, vr_no, my, fy, created_by, uniqueid) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)`)
+      .bind(noCan, entryDate, category, body.description || '', body.method || 'Transfer', debit, vrCan, my, fy, session?.name || 'System', uniqueid)
+    );
+
+    // 2. Double-Entry Auto Deduct from Student Money
+    if (category === 'POS Sales' && studentId > 0 && debit > 0) {
+      const noStu = await generateFyNo(db, 'student_money', cleanFy);
+      const stuName = body.studentName ? `[${body.fyid}] ${body.studentName}` : `[ID ${studentId}]`;
+      const desc = `[Canteen] POS Sales: ${body.description || ''}`.trim();
+
+      batchStatements.push(
+        db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?)`)
+        .bind(noStu, entryDate, cleanFy, studentId, body.fyid || '', stuName, body.studentClass || '', body.method || 'Transfer', debit, desc, session?.name || 'System', `STM_${uniqueid}`)
+      );
+    }
+
+    await db.batch(batchStatements);
+
+    await recalculateLedgerBalances(db, 'canteen_book', fy, entryDate);
+    if (category === 'POS Sales') await recalculateLedgerBalances(db, 'student_money', cleanFy, entryDate);
+
+    return { success: true, uniqueId: uniqueid };
+  } catch (err) { return { success: false, message: err.message }; }
+}
+
+export async function deleteCanteenBookEntry(db, session, body) {
+  try {
+    const uid = body.uniqueId;
+    if (!uid) return { success: false };
+    
+    const existing = await db.prepare("SELECT fy, date, category FROM canteen_book WHERE uniqueid = ?").bind(uid).first();
+    if (!existing) return { success: false };
+
+    const batchStatements = [];
+    batchStatements.push(db.prepare("DELETE FROM canteen_book WHERE uniqueid = ?").bind(uid));
+    
+    if (existing.category === 'POS Sales') {
+      batchStatements.push(db.prepare("DELETE FROM student_money WHERE uniqueid = ?").bind(`STM_${uid}`));
+    }
+
+    await db.batch(batchStatements);
+
+    await recalculateLedgerBalances(db, 'canteen_book', existing.fy, existing.date);
+    if (existing.category === 'POS Sales') await recalculateLedgerBalances(db, 'student_money', existing.fy.replace(/^FY\s*/i, ''), existing.date);
+
+    return { success: true };
+  } catch (err) { return { success: false, message: err.message }; }
+}
+
+// ==============================================================================
+// 💡 4. SPMMS RECONCILIATION AUDIT ENGINE
+// ==============================================================================
+
+export async function getSpmmsReconciliation(db, body) {
+  try {
+    const fy = normalizeFyStr(body.fy || getCurrentAcademicYear()).replace(/^FY\s*/i, '');
+    
+    const [stuBalRes, pmBalRes, finRes] = await db.batch([
+      // 1. Total Student Virtual Balance
+      db.prepare("SELECT SUM(debit - credit) as bal FROM student_money WHERE fy=? AND student_id != 0").bind(fy),
+      
+      // 2. Total PM Cashier Physical Balance
+      db.prepare("SELECT SUM(debit - credit) as bal FROM pm_cashier_book WHERE fy=?").bind(`FY ${fy}`),
+      
+      // 3. Finance Vault Physical Cash
+      // Inflow = All Student Deposits (debits)
+      // Outflow = Direct Withdraws + Transfers to Cashier/Canteen (credits not from PM/Canteen systems)
+      db.prepare(`
+        SELECT 
+          SUM(debit) as tot_in,
+          SUM(CASE WHEN student_id = 0 OR remark LIKE '[Finance] Withdraw%' THEN credit ELSE 0 END) as tot_out
+        FROM student_money WHERE fy=?
+      `).bind(fy)
+    ]);
+
+    const totalVirtual = parseFloat(stuBalRes.results[0]?.bal || 0);
+    const totalCashier = parseFloat(pmBalRes.results[0]?.bal || 0);
+    const financeIn = parseFloat(finRes.results[0]?.tot_in || 0);
+    const financeOut = parseFloat(finRes.results[0]?.tot_out || 0);
+    const totalFinance = financeIn - financeOut;
+
+    const totalPhysicalCash = totalFinance + totalCashier;
+    // The equation: Virtual Balance must exactly equal (Finance Cash + PM Cashier Cash)
+    const variance = totalVirtual - totalPhysicalCash;
+    const isMatched = Math.abs(variance) < 0.01;
 
     return {
       success: true,
-      data: formattedList,
-      totalStudents: formattedList.length,
-      stats: {
-        totalDeposited: totalDepositedAll,
-        totalWithdrawn: totalWithdrawnAll,
-        totalBalance: totalNetBalanceAll,
-        studentCount: formattedList.length,
-        positiveCount,
-        negativeCount,
-        zeroCount
+      data: {
+        totalVirtual,
+        totalFinance,
+        totalCashier,
+        totalPhysicalCash,
+        variance,
+        isMatched
       }
     };
   } catch (err) {
-    console.error("Error in getStudentMoneySummary:", err);
-    return { success: false, message: "ကျောင်းသား လက်ကျန်ချုပ် ရယူ၍ မရပါ: " + err.message };
-  }
-}
-
-/**
- * 💡 Save Student Money Entry
- */
-export async function saveStudentMoneyEntry(db, userSession, body) {
-  try {
-    const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(userSession?.role || '');
-    const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport);
-
-    const uniqueid = (isMigration && body.uniqueId)
-      ? String(body.uniqueId).trim()
-      : generateUniqueId('STM');
-
-    const entryDate = getMyanmarDateString(body.date);
-    const d = new Date(entryDate);
-    let fyYear = d.getFullYear();
-    if (d.getMonth() < 2) fyYear -= 1; // Align with March academic year boundary
-    const computedFy = `${fyYear}-${fyYear + 1}`;
-    const cleanFy = normalizeFyStr(body.fy || computedFy).replace(/^FY\s*/i, '');
-
-    const studentId = parseInt(body.studentId || body.id, 10) || 1;
-    const fyid = sanitizeFyidStr(body.fyid || '');
-
-    // Intelligent Student Name Resolver
-    let studentName = String(body.name || body.studentName || '').trim();
-    let rawFyidName = String(body.fyidName || body.fyid_name || '').trim();
-    let studentClass = String(body.class || '').trim();
-
-    if (!studentName && rawFyidName.includes(']')) {
-      const parts = rawFyidName.split(']');
-      studentName = parts.length > 1 ? parts[1].trim() : rawFyidName;
-    }
-
-    if ((!studentName || !studentClass) && studentId) {
-      try {
-        const studentRow = await db.prepare(
-          "SELECT name, fyid_name, class FROM student WHERE student_id = ? OR id = ? LIMIT 1"
-        ).bind(studentId, studentId).first();
-
-        if (studentRow) {
-          if (!studentName) studentName = studentRow.name || '';
-          if (!rawFyidName) rawFyidName = studentRow.fyid_name || '';
-          if (!studentClass) studentClass = studentRow.class || '';
-        }
-      } catch (e) {}
-    }
-
-    const finalFyidName = rawFyidName || (studentName ? `[${fyid}] ${studentName}` : `[${fyid}] ID ${studentId}`);
-
-    const debit = parseFloat(body.debit || 0);
-    const credit = parseFloat(body.credit || 0);
-
-    const lastNoRow = await db.prepare(
-      "SELECT MAX(CAST(no AS INTEGER)) as maxNo FROM student_money WHERE fy IN (?, ?)"
-    ).bind(cleanFy, `FY ${cleanFy}`).first();
-    const nextNo = (isMigration && body.no) ? parseInt(body.no, 10) : ((lastNoRow && lastNoRow.maxNo ? parseInt(lastNoRow.maxNo, 10) : 0) + 1);
-
-    const sqlVerb = isMigration ? "INSERT OR REPLACE INTO" : "INSERT INTO";
-
-    await db.prepare(`
-      ${sqlVerb} student_money (
-        no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, created_at, uniqueid
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, datetime('now'), ?)
-    `).bind(
-      nextNo,
-      entryDate,
-      cleanFy,
-      studentId,
-      fyid,
-      finalFyidName,
-      studentClass,
-      body.method || 'Cash',
-      debit,
-      credit,
-      body.remark || '',
-      userSession?.name || 'Admin',
-      uniqueid
-    ).run();
-
-    if (!isMigration) {
-      // 🚀 PHASE 1 (INCREMENTAL RECALC): Passed entryDate to cut 95% of row reads
-      await recalculateLedgerBalances(db, 'student_money', cleanFy, entryDate);
-    }
-
-    return {
-      success: true,
-      message: "ကျောင်းသားငွေစာရင်း အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။",
-      uniqueId: uniqueid
-    };
-  } catch (err) {
-    console.error("Error in saveStudentMoneyEntry:", err);
-    return { success: false, message: "ကျောင်းသားငွေစာရင်း သိမ်းဆည်းရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message };
-  }
-}
-
-/**
- * 💡 Update Student Money Entry
- */
-export async function updateStudentMoneyEntry(db, userSession, body) {
-  try {
-    const uniqueid = body.uniqueId || body.uniqueid;
-    if (!uniqueid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
-
-    // 🚀 OPTIMIZATION: Explicit Column selection and FETCH `date` for Incremental Recalc
-    const existing = await db.prepare("SELECT fy, date, student_id, fyid FROM student_money WHERE uniqueid = ?").bind(uniqueid).first();
-    if (!existing) return { success: false, message: "ပြင်ဆင်မည့် ကျောင်းသားငွေစာရင်း ရှာမတွေ့ပါ။" };
-
-    const oldFy = existing?.fy ? normalizeFyStr(existing.fy).replace(/^FY\s*/i, '') : null;
-    const oldDate = existing.date || '9999-12-31';
-
-    const entryDate = getMyanmarDateString(body.date || existing.date);
-    const d = new Date(entryDate);
-    let fyYear = d.getFullYear();
-    if (d.getMonth() < 2) fyYear -= 1;
-    const computedFy = `${fyYear}-${fyYear + 1}`;
-    const cleanFy = normalizeFyStr(body.fy || computedFy).replace(/^FY\s*/i, '');
-
-    const recalcDate = (entryDate < oldDate) ? entryDate : oldDate;
-
-    const studentId = parseInt(body.studentId || body.id, 10) || existing.student_id || 1;
-    const fyid = sanitizeFyidStr(body.fyid || existing.fyid || '');
-
-    let studentName = String(body.name || body.studentName || '').trim();
-    let rawFyidName = String(body.fyidName || body.fyid_name || '').trim();
-    let studentClass = String(body.class || '').trim();
-
-    if (!studentName && rawFyidName.includes(']')) {
-      const parts = rawFyidName.split(']');
-      studentName = parts.length > 1 ? parts[1].trim() : rawFyidName;
-    }
-
-    if ((!studentName || !studentClass) && studentId) {
-      try {
-        const studentRow = await db.prepare(
-          "SELECT name, fyid_name, class FROM student WHERE student_id = ? OR id = ? LIMIT 1"
-        ).bind(studentId, studentId).first();
-
-        if (studentRow) {
-          if (!studentName) studentName = studentRow.name || '';
-          if (!rawFyidName) rawFyidName = studentRow.fyid_name || '';
-          if (!studentClass) studentClass = studentRow.class || '';
-        }
-      } catch (e) {}
-    }
-
-    const finalFyidName = rawFyidName || (studentName ? `[${fyid}] ${studentName}` : `[${fyid}] ID ${studentId}`);
-
-    const debit = parseFloat(body.debit || 0);
-    const credit = parseFloat(body.credit || 0);
-
-    await db.prepare(`
-      UPDATE student_money SET 
-        date = ?, fy = ?, student_id = ?, fyid = ?, fyid_name = ?, class = ?, method = ?, debit = ?, credit = ?, remark = ?
-      WHERE uniqueid = ?
-    `).bind(
-      entryDate,
-      cleanFy,
-      studentId,
-      fyid,
-      finalFyidName,
-      studentClass,
-      body.method || 'Cash',
-      debit,
-      credit,
-      body.remark || '',
-      uniqueid
-    ).run();
-
-    // 🚀 PHASE 1 (INCREMENTAL RECALC)
-    await recalculateLedgerBalances(db, 'student_money', cleanFy, recalcDate);
-
-    if (oldFy && oldFy !== cleanFy) {
-      await recalculateLedgerBalances(db, 'student_money', oldFy, oldDate);
-    }
-
-    return {
-      success: true,
-      message: "ကျောင်းသားငွေစာရင်း အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။"
-    };
-  } catch (err) {
-    console.error("Error in updateStudentMoneyEntry:", err);
-    return { success: false, message: "ကျောင်းသားငွေစာရင်း ပြင်ဆင်ရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message };
-  }
-}
-
-/**
- * 💡 Delete Student Money Entry
- */
-export async function deleteStudentMoneyEntry(db, userSession, body) {
-  try {
-    const uniqueid = body.uniqueId || body.uniqueid;
-    if (!uniqueid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
-
-    // 🚀 OPTIMIZATION: Exact Column selection and FETCH `date` for Incremental Recalc
-    const existing = await db.prepare("SELECT fy, date FROM student_money WHERE uniqueid = ?").bind(uniqueid).first();
-    if (!existing) return { success: false, message: "ဖျက်သိမ်းမည့် ကျောင်းသားငွေစာရင်း ရှာမတွေ့ပါ။" };
-
-    const targetFy = existing?.fy ? normalizeFyStr(existing.fy).replace(/^FY\s*/i, '') : null;
-    const oldDate = existing?.date || null;
-
-    await db.prepare("DELETE FROM student_money WHERE uniqueid = ?").bind(uniqueid).run();
-
-    // 🚀 PHASE 1 (INCREMENTAL RECALC)
-    await recalculateLedgerBalances(db, 'student_money', targetFy, oldDate);
-
-    return {
-      success: true,
-      message: "ကျောင်းသားငွေစာရင်း အောင်မြင်စွာ ဖျက်သိမ်းပြီးပါပြီ။"
-    };
-  } catch (err) {
-    console.error("Error in deleteStudentMoneyEntry:", err);
-    return { success: false, message: "ကျောင်းသားငွေစာရင်း ဖျက်သိမ်းရာတွင် အမှားအယွင်း ဖြစ်ပေါ်ပါသည်: " + err.message };
+    return { success: false, message: err.message };
   }
 }

@@ -1,25 +1,38 @@
 <!-- views/student-money.html -->
 <div class="space-y-5">
 
-  <!-- 💡 ၁။ Sub-Tab Navigation Bar (Dual Mode Toggle) -->
-  <div class="flex items-center justify-between bg-[#0c1322] border border-slate-800 p-2 rounded-xl">
+  <!-- 💡 ၁။ Sub-Tab Navigation Bar (4 Core Tabs) -->
+  <div class="flex items-center justify-between bg-[#0c1322] border border-slate-800 p-2 rounded-xl overflow-x-auto whitespace-nowrap scrollbar-hide">
     <div class="flex items-center gap-2">
-      <button id="stm-tab-history" onclick="switchStudentMoneySubTab('history')" class="px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 bg-indigo-600 text-white shadow-lg shadow-indigo-600/20">
-        <i class="fa-solid fa-list-check"></i> 1. Transaction History (နေ့စဉ် အသွင်း/အထုတ်)
+      <!-- Tab 1: Student Money Book (Main Finance & Virtual Wallets) -->
+      <button id="stm-tab-main" onclick="switchStudentMoneySubTab('main')" class="px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 bg-indigo-600 text-white shadow-lg shadow-indigo-600/20">
+        <i class="fa-solid fa-wallet"></i> 1. Student Money Book (ပင်မငွေစာရင်း)
       </button>
-      <button id="stm-tab-summary" onclick="switchStudentMoneySubTab('summary')" class="px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 bg-slate-800 text-slate-400 hover:text-white border border-slate-700/50">
-        <i class="fa-solid fa-wallet text-amber-400"></i> 2. Student Wallet Balances (ကျောင်းသားတစ်ဦးချင်း လက်ကျန်ချုပ်)
+
+      <!-- Tab 2: Canteen Book (POS Sales & Settlement) -->
+      <button id="stm-tab-canteen" onclick="switchStudentMoneySubTab('canteen')" class="px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 bg-slate-800 text-slate-400 hover:text-white border border-slate-700/50">
+        <i class="fa-solid fa-utensils text-emerald-400"></i> 2. Canteen Book (ကန်တင်းအရောင်း)
+      </button>
+
+      <!-- Tab 3: PM Cashier Book (Cash Counter with Responsibility Person) -->
+      <button id="stm-tab-cashier" onclick="switchStudentMoneySubTab('cashier')" class="px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 bg-slate-800 text-slate-400 hover:text-white border border-slate-700/50">
+        <i class="fa-solid fa-cash-register text-sky-400"></i> 3. PM Cashier Book (မုန့်ဖိုးငွေကိုင်)
+      </button>
+
+      <!-- Tab 4: Audit & Reconciliation (စာရင်းကိုက်စစ်ဆေးချက်) -->
+      <button id="stm-tab-reconcile" onclick="switchStudentMoneySubTab('reconcile')" class="px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 bg-slate-800 text-slate-400 hover:text-white border border-slate-700/50">
+        <i class="fa-solid fa-scale-balanced text-amber-400"></i> 4. Audit & Reconciliation (စာရင်းကိုက်)
       </button>
     </div>
 
-    <div class="hidden sm:flex items-center gap-2 px-3 text-[11px] font-mono font-bold text-slate-400">
-      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Trust Account Engine
+    <div class="hidden xl:flex items-center gap-2 px-3 text-[11px] font-mono font-bold text-slate-400">
+      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> SPMMS 3-Ledger Engine
     </div>
   </div>
 
-  <!-- 💡 ၂။ Top KPI Stats Cards Grid -->
+  <!-- 💡 ၂။ Top KPI Stats Cards Grid (Active Tab ပေါ်မူတည်၍ ပြောင်းလဲမည်) -->
   <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-    <!-- Total Inflow / Deposited -->
+    <!-- Card 1: Inflow / Deposit / Sales -->
     <div class="stats-card p-5 rounded-xl flex items-start gap-4">
       <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400"><i class="fa-solid fa-circle-arrow-down text-xl"></i></div>
       <div>
@@ -28,7 +41,7 @@
       </div>
     </div>
 
-    <!-- Total Outflow / Withdrawn -->
+    <!-- Card 2: Outflow / Withdrawn / Settled -->
     <div class="stats-card p-5 rounded-xl flex items-start gap-4">
       <div class="p-3.5 rounded-lg bg-rose-500/10 text-rose-400"><i class="fa-solid fa-circle-arrow-up text-xl"></i></div>
       <div>
@@ -37,18 +50,18 @@
       </div>
     </div>
 
-    <!-- Net Fund in Trust / Balance -->
+    <!-- Card 3: Balance / Net Position -->
     <div class="stats-card p-5 rounded-xl flex items-start gap-4">
       <div class="p-3.5 rounded-lg bg-indigo-500/10 text-indigo-400"><i class="fa-solid fa-vault text-xl"></i></div>
       <div>
-        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">CURRENT TRUST BALANCE</p>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500" id="stm-kpi-3-label">CURRENT TRUST BALANCE</p>
         <h3 id="stm-balance" class="text-base font-extrabold text-white mt-1">0 MMK</h3>
       </div>
     </div>
 
-    <!-- Total Count -->
+    <!-- Card 4: Total Entries / Students -->
     <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-amber-500/10 text-amber-400"><i class="fa-solid fa-users text-xl"></i></div>
+      <div class="p-3.5 rounded-lg bg-amber-500/10 text-amber-400"><i class="fa-solid fa-receipt text-xl"></i></div>
       <div>
         <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500" id="stm-kpi-4-label">TOTAL ENTRIES</p>
         <h3 id="stm-entries-count" class="text-base font-extrabold text-amber-400 mt-1">0</h3>
@@ -56,9 +69,11 @@
     </div>
   </div>
 
-  <!-- ==================== TAB 1: TRANSACTION HISTORY VIEW ==================== -->
-  <div id="stm-history-view" class="space-y-4">
-    <!-- Control Search & Action Bar -->
+  <!-- ============================================================================== -->
+  <!-- 💡 TAB 1: STUDENT MONEY BOOK (MAIN FINANCE & VIRTUAL WALLETS)                   -->
+  <!-- ============================================================================== -->
+  <div id="stm-main-view" class="space-y-4">
+    <!-- Search & Action Toolbar -->
     <div class="flex flex-col lg:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
       <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
         <div class="relative w-full sm:w-72">
@@ -76,7 +91,7 @@
       </div>
 
       <div class="flex items-center gap-2.5 w-full lg:w-auto justify-end">
-        <button onclick="loadStudentMoneyData(false)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all" title="Refresh Data">
+        <button onclick="loadStudentMoneyData(false)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
           <i class="fa-solid fa-rotate text-xs"></i> Refresh
         </button>
 
@@ -85,12 +100,12 @@
         </button>
 
         <button onclick="openAddModalStudentMoney()" class="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/10 transition-all">
-          <i class="fa-solid fa-plus text-xs"></i> Add Entry
+          <i class="fa-solid fa-plus text-xs"></i> Add Entry / Transfer
         </button>
       </div>
     </div>
 
-    <!-- 13-Column Visual Table Grid -->
+    <!-- Student Money Table -->
     <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
       <table class="w-full text-left border-collapse min-w-[1400px]">
         <thead>
@@ -101,22 +116,20 @@
             <th scope="col" class="w-20 text-slate-400 text-xs py-3">ID</th>
             <th scope="col" class="w-32 text-slate-400 text-xs py-3">FYID</th>
             <th scope="col" class="min-w-[200px] text-slate-400 text-xs py-3">FYID NAME</th>
-            <th scope="col" class="w-28 text-slate-400 text-xs py-3">CLASS</th>
+            <th scope="col" class="w-24 text-slate-400 text-xs py-3">CLASS</th>
             <th scope="col" class="w-24 text-slate-400 text-xs py-3">METHOD</th>
             <th scope="col" class="w-32 text-right text-emerald-400 text-xs py-3">DEBIT (အပ်ငွေ)</th>
             <th scope="col" class="w-32 text-right text-rose-400 text-xs py-3">CREDIT (ထုတ်ငွေ)</th>
             <th scope="col" class="w-36 text-right text-indigo-400 text-xs py-3">BALANCES</th>
-            <th scope="col" class="min-w-[180px] text-slate-400 text-xs py-3">REMARK</th>
+            <th scope="col" class="min-w-[200px] text-slate-400 text-xs py-3">REMARK</th>
             <th scope="col" class="w-24 text-center text-slate-400 text-xs py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">ACTION</th>
           </tr>
         </thead>
-        <tbody id="stm-table-body" class="divide-y divide-slate-800/40 text-slate-300">
-          <!-- Dynamic Rows generated by js/student-money.js -->
-        </tbody>
+        <tbody id="stm-table-body" class="divide-y divide-slate-800/40 text-slate-300"></tbody>
       </table>
     </div>
 
-    <!-- Pagination Controller Tray -->
+    <!-- Pagination Controller -->
     <div class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
       <div id="stm-pagination-info" class="text-xs font-semibold text-slate-400 tracking-wide">Showing entries...</div>
       <div class="flex items-center gap-2">
@@ -130,105 +143,337 @@
     </div>
   </div>
 
-  <!-- ==================== TAB 2: STUDENT WALLET SUMMARY VIEW (1 Student = 1 Row) ==================== -->
-  <div id="stm-summary-view" class="space-y-4 hidden">
-    <div class="flex flex-col sm:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
-      <div class="relative w-full sm:w-80">
-        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
-        <input type="text" id="stm-summary-search" oninput="onSearchInputStudentMoneySummary()" placeholder="Search student name, ID, class, FYID..." class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white focus:outline-none focus:border-amber-500 transition-all">
+  <!-- ============================================================================== -->
+  <!-- 💡 TAB 2: CANTEEN BOOK (WITH TODAY QUICK KPI & REACTIVE FILTERS)               -->
+  <!-- ============================================================================== -->
+  <div id="stm-canteen-view" class="space-y-4 hidden">
+    <!-- Canteen Quick Insight Strip -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div class="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-between">
+        <div>
+          <p class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">TODAY SALES (ဒီနေ့ ရောင်းရငွေ)</p>
+          <h4 id="canteen-today-sales" class="text-lg font-black text-emerald-300 font-mono mt-0.5">0 MMK</h4>
+        </div>
+        <div class="p-2.5 rounded-lg bg-emerald-500/20 text-emerald-400"><i class="fa-solid fa-calendar-day text-lg"></i></div>
+      </div>
+      <div class="p-4 bg-sky-500/10 border border-sky-500/20 rounded-xl flex items-center justify-between">
+        <div>
+          <p class="text-[10px] font-bold text-sky-400 uppercase tracking-wider">FILTERED TOTAL (ရွေးချယ်ထားသော ရက်စွဲ ရောင်းရငွေ)</p>
+          <h4 id="canteen-filtered-sales" class="text-lg font-black text-sky-300 font-mono mt-0.5">0 MMK</h4>
+        </div>
+        <div class="p-2.5 rounded-lg bg-sky-500/20 text-sky-400"><i class="fa-solid fa-chart-line text-lg"></i></div>
+      </div>
+      <div class="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center justify-between">
+        <div>
+          <p class="text-[10px] font-bold text-amber-400 uppercase tracking-wider">TOTAL INVOICES / TRANSACTIONS</p>
+          <h4 id="canteen-filtered-count" class="text-lg font-black text-amber-300 font-mono mt-0.5">0</h4>
+        </div>
+        <div class="p-2.5 rounded-lg bg-amber-500/20 text-amber-400"><i class="fa-solid fa-receipt text-lg"></i></div>
+      </div>
+    </div>
+
+    <!-- Filter & Action Toolbar -->
+    <div class="flex flex-col lg:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
+      <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
+        <!-- 💡 Today Button Quick Filter -->
+        <button onclick="setFilterCanteenToday()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-black transition flex items-center gap-1.5 shadow-sm whitespace-nowrap">
+          <i class="fa-solid fa-calendar-day"></i> Today (ဒီနေ့)
+        </button>
+
+        <div class="relative w-full sm:w-60">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
+          <input type="text" id="canteen-search" oninput="onSearchInputCanteenBook()" placeholder="Search description, VR No..." class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white focus:outline-none focus:border-emerald-500 transition-all">
+        </div>
+
+        <div class="flex items-center gap-1.5 w-full sm:w-auto bg-[#0f172a] border border-slate-800 p-1 rounded-lg text-xs">
+          <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">From:</span>
+          <input type="date" id="canteen-date-from" onchange="onSearchInputCanteenBook()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
+          <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">To:</span>
+          <input type="date" id="canteen-date-to" onchange="onSearchInputCanteenBook()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
+          <button onclick="clearDateFilterCanteenBook()" class="p-1 text-slate-400 hover:text-rose-400 transition" title="Clear Date Filter"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
+        </div>
       </div>
 
-      <div class="flex items-center gap-2.5 w-full sm:w-auto justify-end">
-        <button onclick="loadStudentMoneySummaryData(false)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
+      <div class="flex items-center gap-2.5 w-full lg:w-auto justify-end">
+        <button onclick="loadCanteenBookData(false)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
           <i class="fa-solid fa-rotate text-xs"></i> Refresh
         </button>
-        <button onclick="exportStudentMoneySummaryToCSV()" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
-          <i class="fa-solid fa-file-excel text-emerald-400 text-xs"></i> Export Wallet CSV
+        <button onclick="exportToCSVCanteenBook()" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
+          <i class="fa-solid fa-file-export text-xs"></i> Export CSV
         </button>
       </div>
     </div>
 
-    <!-- Student Wallet Summary Table Grid -->
+    <!-- Canteen Table -->
     <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
-      <table class="w-full text-left border-collapse min-w-[1100px]">
+      <table class="w-full text-left border-collapse min-w-[1300px]">
         <thead>
-          <tr class="bg-[#0e172a] text-slate-400 text-xs">
-            <th scope="col" class="w-12 text-center py-3">NO</th>
-            <th scope="col" class="w-20 py-3">ID</th>
-            <th scope="col" class="w-32 py-3">FYID</th>
-            <th scope="col" class="min-w-[220px] py-3">STUDENT NAME</th>
-            <th scope="col" class="w-28 py-3">CLASS</th>
-            <th scope="col" class="w-36 text-right text-emerald-400 py-3">TOTAL DEPOSITED (အပ်ငွေ)</th>
-            <th scope="col" class="w-36 text-right text-rose-400 py-3">TOTAL WITHDRAWN (ထုတ်ငွေ)</th>
-            <th scope="col" class="w-36 text-right text-amber-300 py-3">WALLET BALANCE (လက်ကျန်)</th>
-            <th scope="col" class="w-28 text-center py-3">STATUS</th>
-            <th scope="col" class="w-28 text-center py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">STATEMENT</th>
+          <tr class="bg-[#0e172a]">
+            <th scope="col" class="w-12 text-center text-slate-400 text-xs py-3">NO</th>
+            <th scope="col" class="w-28 text-slate-400 text-xs py-3">DATE</th>
+            <th scope="col" class="w-40 text-slate-400 text-xs py-3">CATEGORY</th>
+            <th scope="col" class="min-w-[280px] text-slate-400 text-xs py-3">DESCRIPTION</th>
+            <th scope="col" class="w-24 text-slate-400 text-xs py-3">METHOD</th>
+            <th scope="col" class="w-36 text-right text-emerald-400 text-xs py-3">DEBIT (POS ရောင်းရငွေ)</th>
+            <th scope="col" class="w-36 text-right text-rose-400 text-xs py-3">CREDIT (ထုတ်ပေး/ညှိနှိုင်း)</th>
+            <th scope="col" class="w-36 text-right text-indigo-400 text-xs py-3">BALANCES (ရရန်ကျန်ငွေ)</th>
+            <th scope="col" class="w-32 text-slate-400 text-xs py-3">VR NO</th>
+            <th scope="col" class="w-24 text-slate-400 text-xs py-3">FY</th>
+            <th scope="col" class="w-20 text-center text-slate-400 text-xs py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">ACTION</th>
           </tr>
         </thead>
-        <tbody id="stm-summary-table-body" class="divide-y divide-slate-800/40 text-slate-300 text-xs">
-          <!-- Dynamic Rows generated by js/student-money.js -->
-        </tbody>
+        <tbody id="canteen-table-body" class="divide-y divide-slate-800/40 text-slate-300"></tbody>
       </table>
+    </div>
+
+    <!-- Canteen Pagination -->
+    <div class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
+      <div id="canteen-pagination-info" class="text-xs font-semibold text-slate-400 tracking-wide">Showing entries...</div>
+      <div class="flex items-center gap-2">
+        <button onclick="changePageCanteenBook(-1)" id="canteen-btn-prev" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+          <i class="fa-solid fa-chevron-left text-[10px]"></i> Previous
+        </button>
+        <button onclick="changePageCanteenBook(1)" id="canteen-btn-next" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+          Next <i class="fa-solid fa-chevron-right text-[10px]"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================================== -->
+  <!-- 💡 TAB 3: PM CASHIER BOOK (WITH RESPONSIBILITY PERSON FILTER & ID SEARCH)      -->
+  <!-- ============================================================================== -->
+  <div id="stm-cashier-view" class="space-y-4 hidden">
+    <!-- PM Cashier Toolbar -->
+    <div class="flex flex-col lg:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
+      <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
+        <div class="relative w-full sm:w-60">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
+          <input type="text" id="pm-cashier-search" oninput="onSearchInputPmCashierBook()" placeholder="Search description, student ID..." class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white focus:outline-none focus:border-sky-500 transition-all">
+        </div>
+
+        <!-- 💡 Filter by Responsibility Person -->
+        <select id="pm-cashier-resp-filter" onchange="onPmCashierFilterChange()" class="w-full sm:w-44 bg-[#0f172a] border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-2 outline-none focus:border-sky-500 font-bold">
+          <option value="">All Cashiers (ငွေကိုင်အားလုံး)</option>
+          <option value="Cashier 1">Cashier 1 (ငွေကိုင် ၁)</option>
+          <option value="Cashier 2">Cashier 2 (ငွေကိုင် ၂)</option>
+        </select>
+
+        <div class="flex items-center gap-1.5 w-full sm:w-auto bg-[#0f172a] border border-slate-800 p-1 rounded-lg text-xs">
+          <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">From:</span>
+          <input type="date" id="pm-cashier-date-from" onchange="onSearchInputPmCashierBook()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
+          <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">To:</span>
+          <input type="date" id="pm-cashier-date-to" onchange="onSearchInputPmCashierBook()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
+          <button onclick="clearDateFilterPmCashierBook()" class="p-1 text-slate-400 hover:text-rose-400 transition" title="Clear Date Filter"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2.5 w-full lg:w-auto justify-end">
+        <button onclick="loadPmCashierBookData(false)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
+          <i class="fa-solid fa-rotate text-xs"></i> Refresh
+        </button>
+        <button onclick="exportToCSVPmCashierBook()" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
+          <i class="fa-solid fa-file-export text-xs"></i> Export CSV
+        </button>
+        <button onclick="openAddModalPmCashierBook()" class="p-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-sky-600/10 transition-all">
+          <i class="fa-solid fa-hand-holding-dollar text-xs"></i> PM Withdraw (မုန့်ဖိုးထုတ်ပေးရန်)
+        </button>
+      </div>
+    </div>
+
+    <!-- PM Cashier Table Grid (Debit အရင်းအဝင်, Credit မုန့်ဖိုးထုတ်ပေးငွေ) -->
+    <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
+      <table class="w-full text-left border-collapse min-w-[1350px]">
+        <thead>
+          <tr class="bg-[#0e172a]">
+            <th scope="col" class="w-12 text-center text-slate-400 text-xs py-3">NO</th>
+            <th scope="col" class="w-28 text-slate-400 text-xs py-3">DATE</th>
+            <th scope="col" class="w-36 text-sky-400 text-xs py-3">CASHIER (တာဝန်ခံ)</th>
+            <th scope="col" class="w-36 text-slate-400 text-xs py-3">CATEGORY</th>
+            <th scope="col" class="min-w-[280px] text-slate-400 text-xs py-3">DESCRIPTION</th>
+            <th scope="col" class="w-24 text-slate-400 text-xs py-3">METHOD</th>
+            <th scope="col" class="w-36 text-right text-emerald-400 text-xs py-3">DEBIT (အရင်းအဝင်ငွေ)</th>
+            <th scope="col" class="w-36 text-right text-rose-400 text-xs py-3">CREDIT (မုန့်ဖိုးထုတ်ပေးငွေ)</th>
+            <th scope="col" class="w-36 text-right text-indigo-400 text-xs py-3">BALANCES (ငွေသားလက်ကျန်)</th>
+            <th scope="col" class="w-32 text-slate-400 text-xs py-3">VR NO</th>
+            <th scope="col" class="w-24 text-slate-400 text-xs py-3">FY</th>
+            <th scope="col" class="w-20 text-center text-slate-400 text-xs py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">ACTION</th>
+          </tr>
+        </thead>
+        <tbody id="pm-cashier-table-body" class="divide-y divide-slate-800/40 text-slate-300"></tbody>
+      </table>
+    </div>
+
+    <!-- PM Cashier Pagination -->
+    <div class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
+      <div id="pm-cashier-pagination-info" class="text-xs font-semibold text-slate-400 tracking-wide">Showing entries...</div>
+      <div class="flex items-center gap-2">
+        <button onclick="changePagePmCashierBook(-1)" id="pm-cashier-btn-prev" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+          <i class="fa-solid fa-chevron-left text-[10px]"></i> Previous
+        </button>
+        <button onclick="changePagePmCashierBook(1)" id="pm-cashier-btn-next" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+          Next <i class="fa-solid fa-chevron-right text-[10px]"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================================== -->
+  <!-- 💡 TAB 4: AUDIT & RECONCILIATION (FINANCIAL INTEGRITY BALANCING ENGINE)         -->
+  <!-- ============================================================================== -->
+  <div id="stm-reconcile-view" class="space-y-5 hidden">
+    <!-- Audit Headline Banner -->
+    <div class="p-6 bg-[#0c1322] border border-slate-800 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
+      <div>
+        <h3 class="text-base font-black text-white flex items-center gap-2">
+          <i class="fa-solid fa-scale-balanced text-amber-400"></i> SPMMS Automatic Reconciliation Engine
+        </h3>
+        <p class="text-xs text-slate-400 mt-1">
+          ဗဟိုဘဏ္ဍာ (Finance Vault) ရှိ ငွေသားနှင့် PM Cashiers များထံရှိ ငွေသားပေါင်းလဒ်သည် ကျောင်းသားများ၏ Virtual Wallet စုစုပေါင်းနှင့် အတိအကျ ကိုက်ညီရပါမည်။
+        </p>
+      </div>
+      <button onclick="loadSpmmsReconciliationData()" class="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-black shadow-lg shadow-amber-600/10 transition flex items-center gap-2 shrink-0">
+        <i class="fa-solid fa-arrows-rotate"></i> Recalculate & Verify
+      </button>
+    </div>
+
+    <!-- Reconciliation Formula Equation Cards Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <!-- Card A: Total Virtual Liability -->
+      <div class="p-5 bg-[#0e172a] border border-slate-800 rounded-xl space-y-2">
+        <div class="flex items-center justify-between text-xs font-bold text-slate-400 uppercase">
+          <span>A. Total Student Wallets</span>
+          <span class="text-amber-400 font-mono">VIRTUAL LIABILITY</span>
+        </div>
+        <h3 id="rec-total-virtual" class="text-xl font-black text-white font-mono">0 MMK</h3>
+        <p class="text-[11px] text-slate-500">ကျောင်းသားတစ်ဦးချင်းစီ၏ စာရင်းအရ လက်ကျန်ငွေများ စုစုပေါင်း</p>
+      </div>
+
+      <!-- Card B: Physical Cash in Hand -->
+      <div class="p-5 bg-[#0e172a] border border-slate-800 rounded-xl space-y-2">
+        <div class="flex items-center justify-between text-xs font-bold text-slate-400 uppercase">
+          <span>B. Total Physical Cash</span>
+          <span class="text-emerald-400 font-mono">ACTUAL ASSETS</span>
+        </div>
+        <h3 id="rec-total-physical" class="text-xl font-black text-emerald-400 font-mono">0 MMK</h3>
+        <div class="text-[11px] text-slate-400 space-y-0.5">
+          <div class="flex justify-between"><span>Finance Vault Cash:</span><span id="rec-finance-cash" class="font-mono font-bold text-slate-300">0 MMK</span></div>
+          <div class="flex justify-between"><span>PM Cashiers Cash:</span><span id="rec-cashier-cash" class="font-mono font-bold text-slate-300">0 MMK</span></div>
+        </div>
+      </div>
+
+      <!-- Card C: Variance & Audit Status -->
+      <div class="p-5 bg-[#0e172a] border border-slate-800 rounded-xl space-y-2">
+        <div class="flex items-center justify-between text-xs font-bold text-slate-400 uppercase">
+          <span>C. Variance (ကွာဟချက်)</span>
+          <span id="rec-status-badge" class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">MATCHED</span>
+        </div>
+        <h3 id="rec-variance" class="text-xl font-black text-white font-mono">0.00 MMK</h3>
+        <p id="rec-status-desc" class="text-[11px] text-emerald-400">စာရင်းနှင့် လက်ကျန်ငွေသား အတိအကျ ကိုက်ညီနေပါသည်။</p>
+      </div>
+    </div>
+
+    <!-- Reconciliation Verification Equation Visualizer -->
+    <div class="p-5 bg-[#080e1c] border border-slate-800/80 rounded-xl flex flex-col md:flex-row items-center justify-around gap-4 text-center">
+      <div class="space-y-1">
+        <span class="text-[10px] text-slate-500 uppercase font-bold">Total Virtual Wallets</span>
+        <div id="rec-eq-virtual" class="text-sm font-mono font-black text-amber-300">0 MMK</div>
+      </div>
+      <div class="text-lg text-slate-600 font-black">=</div>
+      <div class="space-y-1">
+        <span class="text-[10px] text-slate-500 uppercase font-bold">Finance Vault Cash</span>
+        <div id="rec-eq-finance" class="text-sm font-mono font-black text-sky-400">0 MMK</div>
+      </div>
+      <div class="text-lg text-slate-600 font-black">+</div>
+      <div class="space-y-1">
+        <span class="text-[10px] text-slate-500 uppercase font-bold">PM Cashiers Cash</span>
+        <div id="rec-eq-cashier" class="text-sm font-mono font-black text-emerald-400">0 MMK</div>
+      </div>
+      <div class="text-lg text-slate-600 font-black">➡</div>
+      <div class="space-y-1">
+        <span class="text-[10px] text-slate-500 uppercase font-bold">System Status</span>
+        <div id="rec-eq-verdict" class="text-xs font-mono font-black text-emerald-400 uppercase">100% Balanced</div>
+      </div>
     </div>
   </div>
 
 </div>
 
-<!-- 💡 ၃။ ADD / EDIT STUDENT MONEY MODAL -->
+<!-- ============================================================================== -->
+<!-- 💡 ၃။ MODALS SECTION                                                           -->
+<!-- ============================================================================== -->
+
+<!-- MODAL 1: ADD / EDIT STUDENT MONEY & TRANSFER MODAL -->
 <div id="student-money-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
   <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
     <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
-      <h3 id="stm-form-title" class="text-sm font-black text-white uppercase tracking-wider">Add Student Money Entry</h3>
+      <h3 id="stm-form-title" class="text-sm font-black text-white uppercase tracking-wider">Add Student Money / Transfer</h3>
       <button onclick="closeStudentMoneyModal()" class="text-slate-500 hover:text-white transition"><i class="fa-solid fa-xmark text-sm"></i></button>
     </div>
 
     <form id="student-money-form" onsubmit="saveStudentMoneyForm(event)" class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
       <input type="hidden" id="stm-uniqueId">
 
-      <div class="grid grid-cols-2 gap-4">
+      <div class="grid grid-cols-3 gap-3">
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Select FY</label>
           <select id="stm-fy" onchange="onStudentIdOrFYChangeMoney()" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500 font-mono"></select>
         </div>
         <div class="flex flex-col gap-1">
-          <label class="font-bold text-slate-400 uppercase tracking-wide">Transaction Date</label>
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Date</label>
           <input type="date" id="stm-date" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
         </div>
-      </div>
-
-      <!-- Student Lookup Input -->
-      <div class="grid grid-cols-3 gap-3">
         <div class="flex flex-col gap-1">
-          <label class="font-bold text-indigo-400 uppercase tracking-wide">Student ID</label>
-          <input type="number" id="stm-id-search" oninput="onStudentIdOrFYChangeMoney()" placeholder="e.g. 1" required class="w-full font-mono font-bold text-indigo-300 bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-indigo-500">
-        </div>
-        <div class="flex flex-col gap-1">
-          <label class="font-bold text-slate-400 uppercase tracking-wide">Generated FYID</label>
-          <input type="text" id="stm-fyid-show" readonly class="w-full font-mono bg-slate-900/60 border border-slate-800 text-slate-400 rounded-lg p-2.5 outline-none">
-        </div>
-        <div class="flex flex-col gap-1">
-          <label class="font-bold text-slate-400 uppercase tracking-wide">Class</label>
-          <input type="text" id="stm-class" readonly class="w-full bg-slate-900/60 border border-slate-800 text-slate-400 rounded-lg p-2.5 outline-none">
+          <label class="font-bold text-amber-400 uppercase tracking-wide">Action Type</label>
+          <select id="stm-entry-type" onchange="onStudentMoneyEntryTypeChange()" required class="w-full bg-[#0f172a] border border-slate-800 text-amber-300 font-bold rounded-lg p-2.5 outline-none focus:border-amber-500">
+            <option value="Deposit" selected>Student Deposit (ကျောင်းသားငွေသွင်း)</option>
+            <option value="Withdraw">Student Withdraw (ကျောင်းသားငွေထုတ်)</option>
+            <option value="Transfer to PM Cashier">Transfer to PM Cashier (ငွေကိုင်သို့ အရင်းလွှဲခြင်း)</option>
+          </select>
         </div>
       </div>
 
-      <div class="flex flex-col gap-1">
-        <label class="font-bold text-slate-400 uppercase tracking-wide">Student Name</label>
-        <input type="text" id="stm-fyidname-show" readonly class="w-full font-bold text-white bg-slate-900/60 border border-slate-800 rounded-lg p-2.5 outline-none">
+      <!-- Responsibility Person Selector (Transfer to PM Cashier တွင်သာ ပေါ်မည်) -->
+      <div id="stm-resp-person-box" class="flex flex-col gap-1 p-3 bg-sky-950/20 border border-sky-500/20 rounded-xl hidden">
+        <label class="font-bold text-sky-400 uppercase tracking-wide">Target Cashier (တာဝန်ခံ ငွေကိုင်ရွေးချယ်ပါ)</label>
+        <select id="stm-responsibility-person" class="w-full bg-[#0f172a] border border-slate-800 text-white rounded-lg p-2.5 outline-none focus:border-sky-500 font-bold">
+          <option value="Cashier 1" selected>Cashier 1 (ငွေကိုင် ၁)</option>
+          <option value="Cashier 2">Cashier 2 (ငွေကိုင် ၂)</option>
+        </select>
       </div>
 
-      <!-- 💡 Current Wallet Live Balance Indicator -->
-      <div id="stm-wallet-live-badge" class="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center justify-between text-xs hidden">
-        <span class="font-bold text-amber-300 flex items-center gap-2"><i class="fa-solid fa-wallet"></i> လက်ရှိ အိတ်ကပ်ငွေ လက်ကျန်:</span>
-        <span id="stm-wallet-live-amount" class="font-mono font-black text-amber-400 text-sm">0 MMK</span>
+      <!-- Student Lookup Input (Deposit / Withdraw တွင် ပေါ်မည်) -->
+      <div id="stm-student-fields" class="space-y-3 p-3 bg-indigo-950/20 border border-indigo-500/20 rounded-xl">
+        <div class="grid grid-cols-3 gap-3">
+          <div class="flex flex-col gap-1">
+            <label class="font-bold text-indigo-400 uppercase tracking-wide">Student ID</label>
+            <input type="number" id="stm-id-search" oninput="onStudentIdOrFYChangeMoney()" placeholder="e.g. 1" class="w-full font-mono font-bold text-indigo-300 bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="font-bold text-slate-400 uppercase tracking-wide">FYID</label>
+            <input type="text" id="stm-fyid-show" readonly class="w-full font-mono bg-slate-900/60 border border-slate-800 text-slate-400 rounded-lg p-2.5 outline-none">
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="font-bold text-slate-400 uppercase tracking-wide">Class</label>
+            <input type="text" id="stm-class" readonly class="w-full bg-slate-900/60 border border-slate-800 text-slate-400 rounded-lg p-2.5 outline-none">
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Student Name</label>
+          <input type="text" id="stm-fyidname-show" readonly class="w-full font-bold text-white bg-slate-900/60 border border-slate-800 rounded-lg p-2.5 outline-none">
+        </div>
+
+        <div id="stm-wallet-live-badge" class="flex items-center justify-between text-xs pt-1 border-t border-indigo-500/10 hidden">
+          <span class="font-bold text-slate-300">လက်ရှိ မုန့်ဖိုးလက်ကျန်:</span>
+          <span id="stm-wallet-live-amount" class="font-mono font-black text-amber-400 text-sm">0 MMK</span>
+        </div>
       </div>
 
-      <!-- 💡 PAYMENT METHOD, DEPOSIT & WITHDRAW (ညီညာသပ်ရပ်စွာ ချိန်ညှိထားသော ROW) -->
+      <!-- Amount Section -->
       <div class="grid grid-cols-3 gap-3 items-start">
         <div class="flex flex-col gap-1.5">
-          <label class="font-bold text-slate-400 uppercase tracking-wide text-[11px] h-5 flex items-center">
-            Payment Method
-          </label>
+          <label class="font-bold text-slate-400 uppercase tracking-wide text-[11px] h-5 flex items-center">Payment Method</label>
           <select id="stm-method" required class="w-full h-10 bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg px-3 outline-none focus:border-indigo-500 text-xs">
             <option value="Cash" selected>Cash</option>
             <option value="Bank">Bank</option>
@@ -243,7 +488,7 @@
         </div>
         <div class="flex flex-col gap-1.5">
           <label class="font-bold text-rose-400 uppercase tracking-wide text-[11px] h-5 flex items-center justify-between">
-            <span>Withdraw (ထုတ်ငွေ)</span>
+            <span>Withdraw / Transfer</span>
             <span class="text-[9px] font-mono text-rose-400/80 font-normal">CREDIT</span>
           </label>
           <input type="number" id="stm-credit" value="0" class="w-full h-10 text-right font-bold text-rose-400 font-mono bg-[#0f172a] border border-slate-800 rounded-lg px-3 outline-none focus:border-rose-500 text-xs">
@@ -251,8 +496,8 @@
       </div>
 
       <div class="flex flex-col gap-1">
-        <label class="font-bold text-slate-400 uppercase tracking-wide">Remark (မှတ်ချက် / အသုံးပြုအကြောင်းပြချက်)</label>
-        <textarea id="stm-remark" rows="2" placeholder="ဥပမာ - မုန့်ဖိုးထုတ်ယူငွေ၊ စာရေးကိရိယာဝယ်ယူငွေ..." class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500"></textarea>
+        <label class="font-bold text-slate-400 uppercase tracking-wide">Remark / Purpose</label>
+        <textarea id="stm-remark" rows="2" placeholder="အသုံးပြုအကြောင်းပြချက် မှတ်ချက်..." class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500"></textarea>
       </div>
 
       <div class="flex justify-end items-center gap-3 pt-4 border-t border-slate-800">
@@ -263,7 +508,87 @@
   </div>
 </div>
 
-<!-- 💡 ၄။ INDIVIDUAL STUDENT STATEMENT TIMELINE MODAL -->
+<!-- MODAL 2: PM CASHIER STUDENT CASH WITHDRAW MODAL -->
+<div id="pm-cashier-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+    <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
+      <h3 class="text-sm font-black text-white uppercase tracking-wider">PM Cashier Student Cash Withdraw</h3>
+      <button onclick="closePmCashierBookModal()" class="text-slate-500 hover:text-white transition"><i class="fa-solid fa-xmark text-sm"></i></button>
+    </div>
+
+    <form id="pm-cashier-form" onsubmit="savePmCashierBookForm(event)" class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+      <input type="hidden" id="pm-cashier-uniqueId">
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Date</label>
+          <input type="date" id="pm-cashier-date" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-sky-500">
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-sky-400 uppercase tracking-wide">Cashier (တာဝန်ခံ ငွေကိုင်)</label>
+          <select id="pm-cashier-responsibility-person" required class="w-full bg-[#0f172a] border border-slate-800 text-sky-300 font-bold rounded-lg p-2.5 outline-none focus:border-sky-500">
+            <option value="Cashier 1" selected>Cashier 1 (ငွေကိုင် ၁)</option>
+            <option value="Cashier 2">Cashier 2 (ငွေကိုင် ၂)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Student Lookup for Cash Withdrawal -->
+      <div class="space-y-3 p-3 bg-sky-950/20 border border-sky-500/20 rounded-xl">
+        <div class="grid grid-cols-3 gap-3">
+          <div class="flex flex-col gap-1">
+            <label class="font-bold text-sky-400 uppercase tracking-wide">Student ID</label>
+            <input type="number" id="pm-student-id-search" oninput="onPmStudentLookup()" placeholder="e.g. 1" required class="w-full font-mono font-bold text-sky-300 bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-sky-500">
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="font-bold text-slate-400 uppercase tracking-wide">FYID</label>
+            <input type="text" id="pm-student-fyid" readonly class="w-full font-mono bg-slate-900/60 border border-slate-800 text-slate-400 rounded-lg p-2.5 outline-none">
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="font-bold text-slate-400 uppercase tracking-wide">Class</label>
+            <input type="text" id="pm-student-class" readonly class="w-full bg-slate-900/60 border border-slate-800 text-slate-400 rounded-lg p-2.5 outline-none">
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Student Name</label>
+          <input type="text" id="pm-student-name" readonly class="w-full font-bold text-white bg-slate-900/60 border border-slate-800 rounded-lg p-2.5 outline-none">
+        </div>
+
+        <div id="pm-student-wallet-badge" class="flex items-center justify-between text-xs pt-1 border-t border-sky-500/10 hidden">
+          <span class="font-bold text-slate-300">ကျောင်းသား လက်ကျန်ငွေ:</span>
+          <span id="pm-student-wallet-bal" class="font-mono font-black text-amber-400 text-sm">0 MMK</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Method</label>
+          <select id="pm-cashier-method" class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-sky-500">
+            <option value="Cash" selected>Cash</option>
+            <option value="Bank">Bank</option>
+          </select>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-rose-400 uppercase tracking-wide">Payout Amount (ထုတ်ပေးငွေ CREDIT)</label>
+          <input type="number" id="pm-cashier-credit" value="0" required class="w-full text-right font-bold text-rose-400 font-mono bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-rose-500">
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-1">
+        <label class="font-bold text-slate-400 uppercase tracking-wide">Description</label>
+        <textarea id="pm-cashier-description" rows="2" placeholder="မုန့်ဖိုးထုတ်ပေးငွေ အကြောင်းအရာ..." class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-sky-500"></textarea>
+      </div>
+
+      <div class="flex justify-end items-center gap-3 pt-4 border-t border-slate-800">
+        <button type="button" onclick="closePmCashierBookModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">Cancel</button>
+        <button type="submit" class="px-5 py-2 rounded-lg text-xs font-black bg-sky-600 hover:bg-sky-500 text-white shadow-lg shadow-sky-600/10 transition-all">Payout Cash</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL 3: INDIVIDUAL STUDENT STATEMENT TIMELINE MODAL -->
 <div id="stm-statement-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
   <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
     <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
@@ -303,9 +628,7 @@
               <th class="py-2.5 px-3">REMARK / PURPOSE</th>
             </tr>
           </thead>
-          <tbody id="stm-stmt-table-body" class="divide-y divide-slate-800/40 text-slate-300">
-            <!-- Timeline rows -->
-          </tbody>
+          <tbody id="stm-stmt-table-body" class="divide-y divide-slate-800/40 text-slate-300"></tbody>
         </table>
       </div>
     </div>

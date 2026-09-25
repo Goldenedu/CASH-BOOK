@@ -7,9 +7,8 @@
  *              🎯 Floating Point Safe Comparison (ROUND to 2 Decimals),
  *              Fail-Closed WebCrypto JWT & PBKDF2 Password Security (100k Iterations),
  *              Server-Side Brute-Force Lockout Defense,
- *              🛡️ Standalone Zero-Dependency D1 Audit Logger (No Missing Module Error),
- *              🎯 Phase 3: Added Scheduled Cron Trigger for Auto Audit Logs Cleanup
- *              🚀 PHASE 1 (INCREMENTAL RECALC): Integrated Base Row calculation
+ *              🛡️ Standalone Zero-Dependency D1 Audit Logger
+ *              ⚡ SPMMS 3-LEDGERS: VIRTUAL WALLET, CANTEEN, PM CASHIER WITH RECONCILIATION
  * ==============================================================================
  */
 
@@ -39,6 +38,16 @@ const ROLE_PERMS = {
   "HR Staff": { ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false, student_read: false, student_write: false, staff_read: true, staff_write: true, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: true, settings_write: false, grade_matrix: true, backup_dispatch: false },
   Cashier: { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: true, uniform_write: false, promo_read: true, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
   "Main Cashier": { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: true, uniform_write: false, promo_read: true, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
+  
+  // 💡 POS & SPMMS Roles
+  canteen_admin: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: false },
+  canteen_cashier: { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
+  counter1: { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
+  counter2: { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
+  counter3: { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
+  pm_cashier1: { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
+  pm_cashier2: { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
+  
   Staff: { ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: true, uniform_write: false, promo_read: true, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
   Viewer: { ledger_read: true, ledger_write: false, cashier_read: true, cashier_write: false, student_read: true, student_write: false, staff_read: true, staff_write: false, uniform_read: true, uniform_write: false, promo_read: true, promo_write: false, report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: false }
 };
@@ -228,14 +237,16 @@ async function resetLoginAttempts(db, username) {
 async function executeAutoRecalculateAll(db, body = {}) {
   const rawBook = body.bookName || body.tableName || body.book || "";
   const targetFy = body.fy ? String(body.fy).trim().replace(/^FY\s*/i, "") : null;
-  // Fallback to full recalculation if fromDate isn't supplied from UI
   const fromDate = body.fromDate ? String(body.fromDate).trim() : null; 
   const isExplicitAll = Boolean(body.confirmAll === true || body.all === true || body.action === 'recalculateAllBalances');
 
   const tableMap = {
     "bank": "bank", "main bank book": "bank", "cash": "cash", "main cash book": "cash",
     "office": "office", "office exp book": "office", "kitchen": "kitchen", "kitchen exp book": "kitchen",
-    "payroll": "payroll", "hr payroll exp book": "payroll", "student_money": "student_money", "student money ledger": "student_money",
+    "payroll": "payroll", "hr payroll exp book": "payroll", 
+    "student_money": "student_money", "student money ledger": "student_money",
+    "canteen_book": "canteen_book", "canteen book": "canteen_book",
+    "pm_cashier_book": "pm_cashier_book", "pm cashier book": "pm_cashier_book",
     "income": "income", "main income book": "income", "ca_bank": "ca_bank", "cabank": "ca_bank",
     "ca_cash": "ca_cash", "cacash": "ca_cash", "ca_office": "ca_office", "caoffice": "ca_office",
     "ca_kitchen": "ca_kitchen", "cakitchen": "ca_kitchen", "ca_payroll": "ca_payroll", "capayroll": "ca_payroll"
@@ -246,7 +257,7 @@ async function executeAutoRecalculateAll(db, body = {}) {
   if (rawBook && tableMap[rawBook.toLowerCase().trim()]) {
     targetTables = [tableMap[rawBook.toLowerCase().trim()]];
   } else if (isExplicitAll) {
-    targetTables = ["bank", "cash", "office", "kitchen", "payroll", "student_money", "income", "ca_bank", "ca_cash", "ca_office", "ca_kitchen", "ca_payroll"];
+    targetTables = ["bank", "cash", "office", "kitchen", "payroll", "student_money", "canteen_book", "pm_cashier_book", "income", "ca_bank", "ca_cash", "ca_office", "ca_kitchen", "ca_payroll"];
   } else {
     return { success: false, message: "Target table name is required for recalculation." };
   }
@@ -364,7 +375,7 @@ async function executeAutoRecalculateAll(db, body = {}) {
           `).run();
         }
       } else {
-        // bank, cash, office, etc
+        // bank, cash, office, canteen_book, pm_cashier_book etc
         if (targetFy) {
           if (fromDate) {
             // 🚀 INCREMENTAL RECALC
@@ -509,7 +520,6 @@ export default {
             await writeAuditLog(db, username, 'loginBlocked', body, `Locked out, ${lockoutStatus.remainingMinutes} min remaining`);
             return new Response(JSON.stringify({ success: false, message: `ကြိုးစားမှု အကြိမ်များစွာ မှားယွင်းသဖြင့် ${lockoutStatus.remainingMinutes} မိနစ်အကြာတွင် ပြန်လည် ကြိုးစားပါ။` }), { status: 429, headers: corsHeaders });
           }
-          // 🚀 OPTIMIZATION: Avoid SELECT *, fetch exact columns for memory efficiency
           const user = await db.prepare("SELECT username, password_hash, role, name FROM users WHERE LOWER(username) = LOWER(?)").bind(username).first();
           if (user) {
             const { ok, needsRehash } = await verifyPassword(password, user.password_hash);
@@ -592,21 +602,46 @@ export default {
           if (!can(userSession, 'cashier_write')) return forbidden(corsHeaders, "Cashier စာအုပ်မှ စာရင်းဖျက်သိမ်းခွင့် မရှိပါ။");
           result = await CashierHandlers.deleteCashierEntry(db, userSession, body); break;
 
+        // ==========================================================
+        // 💡 SPMMS 3-LEDGERS SYSTEM API ROUTES
+        // ==========================================================
         case 'getStudentMoneyData':
         case 'getStudentMoneySummary':
-          if (!can(userSession, 'ledger_read') && !can(userSession, 'student_read')) return forbidden(corsHeaders);
+          if (!can(userSession, 'ledger_read') && !can(userSession, 'student_read') && !can(userSession, 'cashier_read')) return forbidden(corsHeaders);
           if (action === 'getStudentMoneySummary') result = await StudentMoneyHandlers.getStudentMoneySummary(db, body);
           else result = await StudentMoneyHandlers.getStudentMoneyData(db, body);
           break;
         case 'saveStudentMoneyEntry':
           if (!can(userSession, 'ledger_write') && !can(userSession, 'cashier_write')) return forbidden(corsHeaders);
           result = await StudentMoneyHandlers.saveStudentMoneyEntry(db, userSession, body); break;
-        case 'updateStudentMoneyEntry':
-          if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders);
-          result = await StudentMoneyHandlers.updateStudentMoneyEntry(db, userSession, body); break;
         case 'deleteStudentMoneyEntry':
           if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders);
           result = await StudentMoneyHandlers.deleteStudentMoneyEntry(db, userSession, body); break;
+
+        case 'getCanteenBookData':
+          if (!can(userSession, 'ledger_read') && !can(userSession, 'cashier_read')) return forbidden(corsHeaders);
+          result = await StudentMoneyHandlers.getCanteenBookData(db, body); break;
+        case 'saveCanteenBookEntry':
+          if (!can(userSession, 'ledger_write') && !can(userSession, 'cashier_write')) return forbidden(corsHeaders);
+          result = await StudentMoneyHandlers.saveCanteenBookEntry(db, userSession, body); break;
+        case 'deleteCanteenBookEntry':
+          if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders);
+          result = await StudentMoneyHandlers.deleteCanteenBookEntry(db, userSession, body); break;
+
+        case 'getPmCashierBookData':
+          if (!can(userSession, 'ledger_read') && !can(userSession, 'cashier_read')) return forbidden(corsHeaders);
+          result = await StudentMoneyHandlers.getPmCashierBookData(db, body); break;
+        case 'savePmCashierBookEntry':
+          if (!can(userSession, 'ledger_write') && !can(userSession, 'cashier_write')) return forbidden(corsHeaders);
+          result = await StudentMoneyHandlers.savePmCashierBookEntry(db, userSession, body); break;
+        case 'deletePmCashierBookEntry':
+          if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders);
+          result = await StudentMoneyHandlers.deletePmCashierBookEntry(db, userSession, body); break;
+
+        case 'getSpmmsReconciliation':
+          if (!can(userSession, 'report_read')) return forbidden(corsHeaders);
+          result = await StudentMoneyHandlers.getSpmmsReconciliation(db, body); break;
+        // ==========================================================
 
         case 'getStudentData':
         case 'lookupStudentById':
@@ -737,7 +772,6 @@ export default {
       const db = env.DB || env.school_db;
       if (!db) return;
 
-      // ၆ လ (ရက် ၁80) ထက် ဟောင်းသော Log များကို ဖျက်ပစ်မည်
       await db.prepare(`DELETE FROM audit_logs WHERE datetime(created_at) < datetime('now', '-180 days')`).run();
       console.log("[CRON] Old audit logs cleaned up successfully.");
     } catch (err) {

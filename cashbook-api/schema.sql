@@ -1,9 +1,10 @@
 -- ==============================================================================
 -- GOLDEN ERP SYSTEM - CLOUDFLARE D1 DATABASE MASTER PRODUCTION SCHEMA
 -- File: schema.sql (Location: cashbook-api/schema.sql)
--- 💡 Features: 20 Complete Relational Tables, High-Performance Composite Indexes,
+-- 💡 Features: Complete Relational Tables, High-Performance Composite Indexes,
 --              PBKDF2 Password Security & Canonical Grade Matrix Initial Seeds
---              🎯 Phase 3: Added Foreign Keys (ON DELETE SET NULL) to preserve Accounting Integrity
+--              🎯 Phase 3: Added Foreign Keys (ON DELETE SET NULL)
+--              ⚡ PHASE 4: SPMMS 3-LEDGERS SYSTEM INTEGRATION (Enterprise Grade)
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
@@ -215,18 +216,19 @@ CREATE TABLE IF NOT EXISTS income (
   FOREIGN KEY (student_id) REFERENCES student(id) ON DELETE SET NULL
 );
 
+-- 💡 SPMMS Phase: Modified to act as the primary Finance Vault for Student Money
 CREATE TABLE IF NOT EXISTS student_money (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   no INTEGER DEFAULT 1,
   date TEXT NOT NULL,
   fy TEXT DEFAULT '2026-2027',
-  student_id INTEGER,
+  student_id INTEGER, -- 0 for System/Finance transfers
   fyid TEXT,
   fyid_name TEXT,
   class TEXT,
   method TEXT DEFAULT 'Cash',
-  debit REAL DEFAULT 0,
-  credit REAL DEFAULT 0,
+  debit REAL DEFAULT 0,  -- Money received from students
+  credit REAL DEFAULT 0, -- Money withdrawn by students or transferred to PM Cashier
   balances REAL DEFAULT 0,
   remark TEXT,
   created_by TEXT DEFAULT 'Admin',
@@ -471,6 +473,72 @@ CREATE TABLE IF NOT EXISTS ca_payroll (
   is_locked INTEGER DEFAULT 0
 );
 
+-- ==============================================================================
+-- 10. SPMMS (STUDENT POCKET MONEY & CANTEEN SYSTEM) - 3-LEDGERS ARCHITECTURE
+-- ==============================================================================
+
+-- A. PM Cashier Book (မုန့်ဖိုး ငွေသားထုတ်ပေးသည့် ကောင်တာစာအုပ်)
+CREATE TABLE IF NOT EXISTS pm_cashier_book (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  no INTEGER DEFAULT 1,
+  date TEXT NOT NULL,
+  responsibility_person TEXT DEFAULT '', -- Extracted strictly for multi-cashier tracking
+  category TEXT DEFAULT 'Float Receive',
+  description TEXT,
+  method TEXT DEFAULT 'Cash',
+  debit REAL DEFAULT 0,  -- Finance မှ အရင်းငွေ လက်ခံရရှိခြင်း
+  credit REAL DEFAULT 0, -- ကျောင်းသားများသို့ ငွေသား ထုတ်ပေးခြင်း
+  balances REAL DEFAULT 0,
+  vr_no TEXT,
+  my TEXT,
+  fy TEXT DEFAULT 'FY 2026-2027',
+  created_by TEXT DEFAULT 'PM Cashier',
+  created_at TEXT DEFAULT (datetime('now')),
+  uniqueid TEXT UNIQUE,
+  is_locked INTEGER DEFAULT 0
+);
+
+-- B. Canteen Book (ကန်တင်း အရောင်းနှင့် ရရန်ကျန်ငွေ စာအုပ်)
+CREATE TABLE IF NOT EXISTS canteen_book (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  no INTEGER DEFAULT 1,
+  date TEXT NOT NULL,
+  category TEXT DEFAULT 'POS Sales',
+  description TEXT,
+  method TEXT DEFAULT 'Transfer',
+  debit REAL DEFAULT 0,  -- POS စနစ်မှတဆင့် နေ့စဉ် ရောင်းရငွေ
+  credit REAL DEFAULT 0, -- (Optional future use for settlements or adjustments)
+  balances REAL DEFAULT 0,
+  vr_no TEXT,
+  my TEXT,
+  fy TEXT DEFAULT 'FY 2026-2027',
+  created_by TEXT DEFAULT 'System',
+  created_at TEXT DEFAULT (datetime('now')),
+  uniqueid TEXT UNIQUE,
+  is_locked INTEGER DEFAULT 0
+);
+
+-- C. POS Invoices (ကန်တင်း အရောင်းဘေလ် ခေါင်းစဉ်များ)
+CREATE TABLE IF NOT EXISTS pos_invoices (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  invoice_no TEXT UNIQUE NOT NULL,
+  date TEXT NOT NULL,
+  student_id INTEGER,
+  total_amount REAL DEFAULT 0,
+  cashier_name TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- D. POS Items (ကန်တင်း အရောင်းဘေလ် အသေးစိတ်)
+CREATE TABLE IF NOT EXISTS pos_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  invoice_no TEXT NOT NULL,
+  item_name TEXT NOT NULL,
+  qty INTEGER DEFAULT 1,
+  unit_price REAL DEFAULT 0,
+  subtotal REAL DEFAULT 0
+);
+
 -- ------------------------------------------------------------------------------
 -- 8. HIGH-PERFORMANCE COMPOSITE INDEXES
 -- ------------------------------------------------------------------------------
@@ -497,6 +565,12 @@ CREATE INDEX IF NOT EXISTS idx_ca_cash_fy_date ON ca_cash(fy, date);
 CREATE INDEX IF NOT EXISTS idx_ca_office_fy_date ON ca_office(fy, date);
 CREATE INDEX IF NOT EXISTS idx_ca_kitchen_fy_date ON ca_kitchen(fy, date);
 CREATE INDEX IF NOT EXISTS idx_ca_payroll_fy_date ON ca_payroll(fy, date);
+
+-- SPMMS Indexes
+CREATE INDEX IF NOT EXISTS idx_pm_cashier_fy_date ON pm_cashier_book(fy, date);
+CREATE INDEX IF NOT EXISTS idx_canteen_book_fy_date ON canteen_book(fy, date);
+CREATE INDEX IF NOT EXISTS idx_pos_invoices_date ON pos_invoices(date);
+CREATE INDEX IF NOT EXISTS idx_pos_items_inv ON pos_items(invoice_no);
 
 -- ------------------------------------------------------------------------------
 -- 9. CANONICAL INITIAL SEED DATA
