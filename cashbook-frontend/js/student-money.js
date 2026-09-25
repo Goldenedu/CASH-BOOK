@@ -26,7 +26,7 @@ var isSubmitting = false;
 var searchTimeout = null;
 
 // ==============================================================================
-// 💡 1. MAIN TAB SWITCHER (DYNAMIC TOP KPI LABELS)
+// 💡 1. MAIN TAB SWITCHER
 // ==============================================================================
 function switchStudentMoneySubTab(tabName) {
   gCurrentStudentMoneyTab = tabName || 'main';
@@ -42,29 +42,11 @@ function switchStudentMoneySubTab(tabName) {
     if (view) view.classList.toggle('hidden', t !== gCurrentStudentMoneyTab);
   });
 
-  const kpi1 = document.getElementById('stm-kpi-1-label');
-  const kpi2 = document.getElementById('stm-kpi-2-label');
-  const kpi3 = document.getElementById('stm-kpi-3-label');
-  const kpi4 = document.getElementById('stm-kpi-4-label');
-
   if (gCurrentStudentMoneyTab === 'main') {
-    if (kpi1) kpi1.textContent = 'TOTAL DEPOSITED (အပ်ငွေ)';
-    if (kpi2) kpi2.textContent = 'TOTAL WITHDRAWN/TRANSFER (ထုတ်ငွေ)';
-    if (kpi3) kpi3.textContent = 'CURRENT TRUST BALANCE';
-    if (kpi4) kpi4.textContent = 'TOTAL ENTRIES';
     loadStudentMoneyData(false);
   } else if (gCurrentStudentMoneyTab === 'canteen') {
-    if (kpi1) kpi1.textContent = 'TOTAL SALES (ရောင်းရငွေ DEBIT)';
-    if (kpi2) kpi2.textContent = 'TOTAL SETTLED (ရှင်းပြီးငွေ CREDIT)';
-    if (kpi3) kpi3.textContent = 'CANTEEN RECEIVABLE (ရရန်ကျန်ငွေ)';
-    if (kpi4) kpi4.textContent = 'CANTEEN ENTRIES';
     loadCanteenBookData(false);
   } else if (gCurrentStudentMoneyTab === 'cashier') {
-    // 🎯 PM Cashier Book အတွက် သီးသန့် အညွှန်းခေါင်းစဉ်များ
-    if (kpi1) kpi1.textContent = 'TOTAL FLOAT IN (အရင်းအဝင်ငွေ DEBIT)';
-    if (kpi2) kpi2.textContent = 'TOTAL PAID OUT (မုန့်ဖိုးထုတ်ငွေ CREDIT)';
-    if (kpi3) kpi3.textContent = 'PM CASH IN HAND (စုစုပေါင်း လက်ကျန်)';
-    if (kpi4) kpi4.textContent = 'CASHIER ENTRIES';
     loadPmCashierBookData(false);
   } else if (gCurrentStudentMoneyTab === 'reconcile') {
     loadSpmmsReconciliationData();
