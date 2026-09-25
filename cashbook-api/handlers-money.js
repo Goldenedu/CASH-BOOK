@@ -3,10 +3,9 @@
  * GOLDEN ERP SYSTEM - SPMMS HANDLERS (CLOUDFLARE D1)
  * File: handlers-money.js
  * 💡 Features: 3-Ledgers Strict Double-Entry Architecture
- *              🚀 Fixed: computeAcademicFy local helper (No missing import error)
- *              🚀 Foreign Key Safe: System rows use NULL student_id
- *              🔄 Bidirectional Transfers: Finance <-> PM Cashier Cash Flow
- *              🛡️ RECONCILIATION: O(1) Financial Audit Engine included
+ *              🛡️ OVER-TRANSFER GUARD: Prevents transferring more than Finance Vault cash
+ *              🔄 NON-DESTRUCTIVE TRANSITIONS: Transfer rows visible without altering Trust KPIs
+ *              🚀 RECONCILIATION: O(1) Financial Audit Engine
  * ==============================================================================
  */
 
@@ -15,13 +14,12 @@ import {
   generateVoucherNo, generateFyNo, recalculateLedgerBalances, getCurrentAcademicYear
 } from './utils.js';
 
-// 💡 Local Helper: Calculate Academic FY safely from any Date string (March Boundary)
 function computeAcademicFy(dateStr) {
   if (!dateStr) return getCurrentAcademicYear();
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return getCurrentAcademicYear();
   let year = d.getFullYear();
-  if (d.getMonth() < 2) year -= 1; // Jan & Feb belong to previous academic year
+  if (d.getMonth() < 2) year -= 1;
   return `${year}-${year + 1}`;
 }
 
@@ -54,9 +52,15 @@ export async function getStudentMoneyData(db, body) {
 
     const whereSql = `WHERE ${whereClauses.join(' AND ')}`;
 
+    // 🎯 IMPORTANT: Only count actual student transactions for Top KPI Cards (Exclude Internal Vault Transfers)
     const [countRow, statsRow] = await db.batch([
       db.prepare(`SELECT COUNT(id) as c FROM student_money ${whereSql}`).bind(...params),
-      db.prepare(`SELECT SUM(debit) as d, SUM(credit) as c FROM student_money WHERE fy IN (?, ?)`).bind(fy, `FY ${fy}`)
+      db.prepare(`
+        SELECT 
+          COALESCE(SUM(CASE WHEN student_id IS NOT NULL THEN debit ELSE 0 END), 0) as d,
+          COALESCE(SUM(CASE WHEN student_id IS NOT NULL THEN credit ELSE 0 END), 0) as c
+        FROM student_money WHERE fy IN (?, ?)
+      `).bind(fy, `FY ${fy}`)
     ]);
 
     const totalRows = countRow.results[0]?.c || 0;
@@ -84,6 +88,7 @@ export async function getStudentMoneySummary(db, body) {
     const fy = normalizeFyStr(body.fy || getCurrentAcademicYear()).replace(/^FY\s*/i, '');
     const searchVal = String(body.searchVal || "").trim();
 
+    // Exclude system rows
     let whereClauses = [`(fy IN (?, ?)) AND student_id IS NOT NULL`];
     let params = [fy, `FY ${fy}`];
 
@@ -132,22 +137,48 @@ export async function saveStudentMoneyEntry(db, session, body) {
     
     const batchStatements = [];
 
+    // =========================================================================
+    // 💡 SCENARIO 1: TRANSFER TO PM CASHIER (WITH OVER-TRANSFER GUARD)
+    // =========================================================================
     if (entryType === 'Transfer to PM Cashier' && credit > 0) {
-      // 1. PM Cashier Book ထဲသို့သာ Debit (ငွေဝင်) သွင်းမည်
+      // 🛡️ OVER-TRANSFER GUARD: Check available physical cash in Finance Vault
+      const [stuRes, pmRes] = await db.batch([
+        db.prepare("SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND student_id IS NOT NULL").bind(cleanFy, `FY ${cleanFy}`),
+        db.prepare("SELECT COALESCE(SUM(debit - credit), 0) as bal FROM pm_cashier_book WHERE fy IN (?, ?)").bind(cleanFy, `FY ${cleanFy}`)
+      ]);
+      const totalVirtual = parseFloat(stuRes.results[0]?.bal || 0);
+      const totalCashier = parseFloat(pmRes.results[0]?.bal || 0);
+      const availableFinanceCash = totalVirtual - totalCashier;
+
+      if (credit > availableFinanceCash) {
+        return {
+          success: false,
+          message: `ငွေလွှဲခွင့် မပြုပါ! Finance Vault တွင် လက်ရှိငွေသားလက်ကျန် (${availableFinanceCash.toLocaleString('en-US')} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString('en-US')} MMK) ပိုမိုလွှဲပြောင်း၍ မရပါ။`
+        };
+      }
+
+      // 1. Debit -> PM Cashier Book
       const noPm = await generateFyNo(db, 'pm_cashier_book', fy);
       const vrPm = await generateVoucherNo(db, 'pm_cashier_book', 'PMC', entryDate);
-      const pmRemark = body.remark || "Finance မှ PM Cashier သို့ အရင်းငွေလွှဲပေးခြင်း";
       const respPerson = body.responsibilityPerson || 'Cashier 1';
+      const pmRemark = body.remark || `Finance မှ ${respPerson} သို့ အရင်းငွေလွှဲပေးခြင်း`;
 
       batchStatements.push(
         db.prepare(`INSERT INTO pm_cashier_book (no, date, responsibility_person, category, description, method, debit, credit, balances, vr_no, my, fy, created_by, uniqueid) VALUES (?, ?, ?, 'Float Receive', ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)`)
         .bind(noPm, entryDate, respPerson, pmRemark, method, credit, vrPm, my, fy, session?.name || 'Finance', `PMC_${uniqueid}`)
       );
 
-      // 💡 Student Money စာအုပ်ထဲသို့ မထည့်တော့ပါ (ကျောင်းသား Wallet မဟုတ်သောကြောင့်)
+      // 2. 🌟 Record Transition in Student Money Book WITHOUT altering student wallet balance (student_id = NULL)
+      const noStu = await generateFyNo(db, 'student_money', cleanFy);
+      batchStatements.push(
+        db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, NULL, 'TRANSFER', ?, 'Vault Transfer', ?, 0, ?, 0, ?, ?, ?)`)
+        .bind(noStu, entryDate, cleanFy, `[Transfer] PM Cashier (${respPerson})`, method, credit, `[Finance Transfer] ${respPerson} သို့ အရင်းလွှဲ: ${pmRemark}`, session?.name || 'Finance', uniqueid)
+      );
 
     } else {
-      // Regular Student Deposit or Withdraw သာ ထည့်မည်
+      // =========================================================================
+      // 💡 SCENARIO 2: REGULAR STUDENT DEPOSIT OR WITHDRAW
+      // =========================================================================
       const noStu = await generateFyNo(db, 'student_money', cleanFy);
       const stuName = body.name ? `[${body.fyid}] ${body.name}` : `[ID ${studentId}]`;
       const prefix = entryType === 'Deposit' ? '[Finance] Deposit' : '[Finance] Withdraw';
@@ -161,7 +192,10 @@ export async function saveStudentMoneyEntry(db, session, body) {
 
     await db.batch(batchStatements);
 
-    await recalculateLedgerBalances(db, 'student_money', cleanFy, entryDate);
+    // Recalculate
+    if (studentId !== null) {
+      await recalculateLedgerBalances(db, 'student_money', cleanFy, entryDate);
+    }
     if (entryType === 'Transfer to PM Cashier') {
       await recalculateLedgerBalances(db, 'pm_cashier_book', fy, entryDate);
     }
@@ -175,7 +209,7 @@ export async function deleteStudentMoneyEntry(db, session, body) {
     const uid = body.uniqueId;
     if (!uid) return { success: false };
     
-    const existing = await db.prepare("SELECT fy, date, remark FROM student_money WHERE uniqueid = ?").bind(uid).first();
+    const existing = await db.prepare("SELECT fy, date, remark, student_id FROM student_money WHERE uniqueid = ?").bind(uid).first();
     if (!existing) return { success: false };
 
     const batchStatements = [];
@@ -183,13 +217,13 @@ export async function deleteStudentMoneyEntry(db, session, body) {
     
     if (existing.remark && existing.remark.includes('Transfer to PM Cashier')) {
       batchStatements.push(db.prepare("DELETE FROM pm_cashier_book WHERE uniqueid = ?").bind(`PMC_${uid}`));
-    } else if (existing.remark && existing.remark.includes('Settlement to Canteen')) {
-      batchStatements.push(db.prepare("DELETE FROM canteen_book WHERE uniqueid = ?").bind(`CAN_${uid}`));
     }
 
     await db.batch(batchStatements);
 
-    await recalculateLedgerBalances(db, 'student_money', existing.fy.replace(/^FY\s*/i, ''), existing.date);
+    if (existing.student_id !== null) {
+      await recalculateLedgerBalances(db, 'student_money', existing.fy.replace(/^FY\s*/i, ''), existing.date);
+    }
     if (existing.remark && existing.remark.includes('Transfer to PM Cashier')) {
       await recalculateLedgerBalances(db, 'pm_cashier_book', `FY ${existing.fy.replace(/^FY\s*/i, '')}`, existing.date);
     }
@@ -199,7 +233,7 @@ export async function deleteStudentMoneyEntry(db, session, body) {
 }
 
 // ==============================================================================
-// 💡 2. PM CASHIER BOOK (WITH BIDIRECTIONAL CASH RETURN SUPPORT)
+// 💡 2. PM CASHIER BOOK (WITH RETURN TO FINANCE TRANSITION)
 // ==============================================================================
 
 export async function getPmCashierBookData(db, body) {
@@ -216,8 +250,6 @@ export async function savePmCashierBookEntry(db, session, body) {
     const entryDate = getMyanmarDateString(body.date);
     const d = new Date(entryDate);
     const my = `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()]}-${d.getFullYear()}`;
-    
-    // 🎯 FIX: Used computeAcademicFy instead of undefined function
     const fy = normalizeFyStr(body.fy || computeAcademicFy(entryDate));
     const cleanFy = fy.replace(/^FY\s*/i, '');
     
@@ -231,13 +263,13 @@ export async function savePmCashierBookEntry(db, session, body) {
     const vrPm = body.vrNo || await generateVoucherNo(db, 'pm_cashier_book', 'PMC', entryDate);
     const batchStatements = [];
 
-    // 1. PM Cashier Entry (Withdraw သို့မဟုတ် Return to Finance)
+    // 1. PM Cashier Entry
     batchStatements.push(
       db.prepare(`INSERT INTO pm_cashier_book (no, date, responsibility_person, category, description, method, debit, credit, balances, vr_no, my, fy, created_by, uniqueid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`)
       .bind(noPm, entryDate, respPerson, category, body.description || '', body.method || 'Cash', debit, credit, vrPm, my, fy, session?.name || 'PM Cashier', uniqueid)
     );
 
-    // 2. ကျောင်းသား မုန့်ဖိုးတကယ်ထုတ်မှသာ student_money (Wallet) ထဲက နုတ်မည်
+    // 2A. Scenario 1: PM Withdraw -> Deduct from Student Wallet
     if (category === 'PM Withdraw' && body.studentId > 0 && credit > 0) {
       const noStu = await generateFyNo(db, 'student_money', cleanFy);
       const stuName = body.studentName ? `[${body.fyid}] ${body.studentName}` : `[ID ${body.studentId}]`;
@@ -248,13 +280,22 @@ export async function savePmCashierBookEntry(db, session, body) {
         .bind(noStu, entryDate, cleanFy, body.studentId, body.fyid || '', stuName, body.studentClass || '', body.method || 'Cash', credit, desc, session?.name || 'PM Cashier', `STM_${uniqueid}`)
       );
     }
-    // 💡 'Return to Finance' ဖြစ်ပါက student_money ထဲ မထည့်ပါ (ငွေကိုင်အချင်းချင်း အပ်နှံမှုသာ ဖြစ်သောကြောင့်)
+    // 2B. Scenario 2: Return to Finance -> Record Transition in Student Money Book WITHOUT altering student balance
+    else if (category === 'Return to Finance' && credit > 0) {
+      const noStu = await generateFyNo(db, 'student_money', cleanFy);
+      const desc = `[PM Cashier] Return Cash from ${respPerson}: ${body.description || ''}`.trim();
+
+      batchStatements.push(
+        db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, NULL, 'RETURN', ?, 'Vault Return', ?, ?, 0, 0, ?, ?, ?)`)
+        .bind(noStu, entryDate, cleanFy, `[Return] Finance Vault (${respPerson})`, body.method || 'Cash', credit, desc, session?.name || 'PM Cashier', `STM_${uniqueid}`)
+      );
+    }
 
     await db.batch(batchStatements);
 
-    // Atomic Recalculations
+    // Recalculate
     await recalculateLedgerBalances(db, 'pm_cashier_book', fy, entryDate);
-    if (category === 'PM Withdraw' || category === 'Return to Finance') {
+    if (category === 'PM Withdraw') {
       await recalculateLedgerBalances(db, 'student_money', cleanFy, entryDate);
     }
 
@@ -280,7 +321,7 @@ export async function deletePmCashierBookEntry(db, session, body) {
     await db.batch(batchStatements);
 
     await recalculateLedgerBalances(db, 'pm_cashier_book', existing.fy, existing.date);
-    if (existing.category === 'PM Withdraw' || existing.category === 'Return to Finance') {
+    if (existing.category === 'PM Withdraw') {
       await recalculateLedgerBalances(db, 'student_money', existing.fy.replace(/^FY\s*/i, ''), existing.date);
     }
 
@@ -306,8 +347,6 @@ export async function saveCanteenBookEntry(db, session, body) {
     const entryDate = getMyanmarDateString(body.date);
     const d = new Date(entryDate);
     const my = `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()]}-${d.getFullYear()}`;
-    
-    // 🎯 FIX: Used computeAcademicFy instead of undefined function
     const fy = normalizeFyStr(body.fy || computeAcademicFy(entryDate));
     const cleanFy = fy.replace(/^FY\s*/i, '');
     
@@ -379,22 +418,22 @@ export async function getSpmmsReconciliation(db, body) {
   try {
     const fy = normalizeFyStr(body.fy || getCurrentAcademicYear()).replace(/^FY\s*/i, '');
     
-    const [stuRes, pmRes] = await db.batch([
-      // ၁။ ကျောင်းသားများ၏ လက်ကျန်စုစုပေါင်း (Virtual Wallet Liability)
-      db.prepare("SELECT SUM(debit - credit) as bal FROM student_money WHERE fy IN (?, ?)").bind(fy, `FY ${fy}`),
+    const [stuBalRes, pmBalRes] = await db.batch([
+      // 1. Total Student Virtual Liability (Only genuine student balances)
+      db.prepare("SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND student_id IS NOT NULL").bind(fy, `FY ${fy}`),
       
-      // ၂။ PM Cashier များ လက်ထဲရှိ လက်ကျန်ငွေသား စုစုပေါင်း (Physical Cash)
-      db.prepare("SELECT SUM(debit - credit) as bal FROM pm_cashier_book WHERE fy IN (?, ?)").bind(fy, `FY ${fy}`)
+      // 2. Total PM Cashier Physical Cash in Hand
+      db.prepare("SELECT COALESCE(SUM(debit - credit), 0) as bal FROM pm_cashier_book WHERE fy IN (?, ?)").bind(fy, `FY ${fy}`)
     ]);
 
-    const totalVirtual = parseFloat(stuRes.results[0]?.bal || 0);
-    const totalCashier = parseFloat(pmRes.results[0]?.bal || 0);
+    const totalVirtual = parseFloat(stuBalRes.results[0]?.bal || 0);
+    const totalCashier = parseFloat(pmBalRes.results[0]?.bal || 0);
 
-    // ၃။ Finance Vault လက်ထဲတွင် အမှန်တကယ် ကျန်ရှိသော ငွေသား (ကျောင်းသားလက်ကျန် - Cashier ဆီရှိငွေ)
+    // 3. Finance Vault Physical Cash = Total Student Trust Liability - PM Cashier Float Cash
     const totalFinance = totalVirtual - totalCashier;
     const totalPhysicalCash = totalFinance + totalCashier;
 
-    const variance = totalVirtual - totalPhysicalCash; // Always 0
+    const variance = totalVirtual - totalPhysicalCash;
     const isMatched = Math.abs(variance) < 0.01;
 
     return {

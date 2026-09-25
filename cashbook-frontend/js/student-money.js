@@ -120,6 +120,7 @@ function applyStudentMoneySearchAndRender() {
   renderStudentMoneyTable();
 }
 
+// 💡 Student Money Table Rendering (Transfer Transitions clean display)
 function renderStudentMoneyTable() {
   const tbody = document.getElementById('stm-table-body');
   if (!tbody) return;
@@ -137,18 +138,27 @@ function renderStudentMoneyTable() {
   }
 
   items.forEach((row, idx) => {
-    const isSys = row.studentId === 0;
+    // 🌟 Identify internal vault transfers
+    const isTransfer = row.studentId === null || row.studentId === 0 || row.fyid === 'TRANSFER' || row.fyid === 'RETURN';
     const cleanFyid = window.sanitizeFyidStr(row.fyid);
-    const balStr = Number(row.balances || 0).toLocaleString('en-US', {minimumFractionDigits: 2});
+
+    // 🎯 Balances column: Student rows show running balance, Transfer rows show dash (-)
+    const balStr = isTransfer 
+      ? '<span class="text-slate-500 font-mono">-</span>' 
+      : Number(row.balances || 0).toLocaleString('en-US', {minimumFractionDigits: 2});
     
     tbody.innerHTML += `
       <tr class="hover:bg-slate-800/30 text-slate-300 text-xs border-b border-slate-800/40">
         <td class="text-center font-mono py-3 px-2">${start + idx + 1}</td>
         <td class="font-mono text-xs py-3 px-2">${window.escapeHtml(row.date)}</td>
         <td class="font-mono font-bold text-indigo-300 py-3 px-2">${window.escapeHtml(row.fy)}</td>
-        <td class="font-mono font-bold py-3 px-2">${isSys ? 'SYS' : row.studentId}</td>
-        <td class="font-mono font-bold ${isSys ? 'text-amber-400' : 'text-indigo-400'} py-3 px-2">${window.escapeHtml(cleanFyid)}</td>
-        <td class="font-bold ${isSys ? 'text-amber-300' : 'text-slate-100'} py-3 px-2">${window.escapeHtml(row.fyidName)}</td>
+        <td class="font-mono font-bold py-3 px-2">
+          ${isTransfer 
+            ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">XFER</span>' 
+            : row.studentId}
+        </td>
+        <td class="font-mono font-bold ${isTransfer ? 'text-amber-400' : 'text-indigo-400'} py-3 px-2">${window.escapeHtml(cleanFyid)}</td>
+        <td class="font-bold ${isTransfer ? 'text-amber-300' : 'text-slate-100'} py-3 px-2">${window.escapeHtml(row.fyidName)}</td>
         <td class="py-3 px-2">${window.escapeHtml(row.class)}</td>
         <td class="font-semibold py-3 px-2">${window.escapeHtml(row.method)}</td>
         <td class="text-right text-emerald-400 font-mono font-bold py-3 px-2">${row.debit > 0 ? Number(row.debit).toLocaleString('en-US') : '-'}</td>
@@ -157,7 +167,7 @@ function renderStudentMoneyTable() {
         <td class="max-w-xs truncate text-[11px] text-slate-400 py-3 px-2" title="${window.escapeHtml(row.remark)}">${window.escapeHtml(row.remark || '-')}</td>
         <td class="right-0 sticky bg-[#0c1322] border-l border-slate-800 text-center py-3 px-2">
           <div class="flex justify-center gap-2">
-            ${!isSys ? `<button onclick="openStudentStatementModal(${row.studentId})" class="text-amber-400 hover:text-amber-300" title="Statement"><i class="fa-solid fa-file-invoice"></i></button>` : ''}
+            ${!isTransfer ? `<button onclick="openStudentStatementModal(${row.studentId})" class="text-amber-400 hover:text-amber-300" title="Statement"><i class="fa-solid fa-file-invoice"></i></button>` : ''}
             <button onclick="deleteStudentMoneyEntry('${window.escapeJsAttr(row.uniqueId)}')" class="text-rose-400 hover:text-rose-300" title="Delete"><i class="fa-solid fa-trash"></i></button>
           </div>
         </td>
@@ -167,11 +177,6 @@ function renderStudentMoneyTable() {
   
   const info = document.getElementById('stm-pagination-info');
   if (info) info.textContent = `Showing ${start + 1} to ${Math.min(start + gStudentMoneyLimit, total)} of ${total} entries`;
-  
-  const prevBtn = document.getElementById('stm-btn-prev');
-  const nextBtn = document.getElementById('stm-btn-next');
-  if (prevBtn) prevBtn.disabled = (gStudentMoneyPage <= 1);
-  if (nextBtn) nextBtn.disabled = (start + gStudentMoneyLimit >= total);
 }
 
 function onSearchInputStudentMoney() { clearTimeout(searchTimeout); searchTimeout = setTimeout(applyStudentMoneySearchAndRender, 150); }
@@ -391,6 +396,7 @@ async function onStudentIdOrFYChangeMoney() {
   }
 }
 
+// 💡 Save Student Money Form (With Client-Side Over-Transfer Guard)
 async function saveStudentMoneyForm(e) {
   if (e && e.preventDefault) e.preventDefault();
   if (isSubmitting) return;
@@ -401,10 +407,23 @@ async function saveStudentMoneyForm(e) {
   const debit = parseFloat(document.getElementById('stm-debit')?.value || 0);
   const studentId = parseInt(document.getElementById('stm-id-search')?.value, 10) || 0;
 
+  // 🛡️ FRONTEND OVER-TRANSFER GUARD
   if (entryType === 'Transfer to PM Cashier') {
     if (credit <= 0) {
       isSubmitting = false; 
       return showToast("ERROR", "PM Cashier သို့ လွှဲမည့် Credit ပမာဏ ထည့်ပါ။");
+    }
+
+    // Calculate current available Finance cash: Trust Balance - Cash already in Cashiers
+    const trustBalText = document.getElementById('stm-balance')?.textContent || '0';
+    const trustBal = parseFloat(trustBalText.replace(/[^0-9.-]+/g, "")) || 0;
+    const cashierCashText = document.getElementById('pm-total-hand-cash')?.textContent || '0';
+    const cashierCash = parseFloat(cashierCashText.replace(/[^0-9.-]+/g, "")) || 0;
+    const availableFinanceCash = trustBal - cashierCash;
+
+    if (credit > availableFinanceCash) {
+      isSubmitting = false;
+      return showToast("ERROR", `Finance Vault တွင် လက်ကျန်ငွေသား (${availableFinanceCash.toLocaleString()} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString()} MMK) ပိုမိုလွှဲပြောင်း၍ မရပါ!`);
     }
   } else {
     if (!studentId || (debit <= 0 && credit <= 0)) {
@@ -422,7 +441,7 @@ async function saveStudentMoneyForm(e) {
     debit: debit,
     credit: credit,
     remark: document.getElementById('stm-remark')?.value || '',
-    studentId: entryType === 'Transfer to PM Cashier' ? 0 : studentId,
+    studentId: entryType === 'Transfer to PM Cashier' ? null : studentId,
     fyid: document.getElementById('stm-fyid-show')?.value || '',
     name: document.getElementById('stm-fyidname-show')?.value || '',
     class: document.getElementById('stm-class')?.value || '',
@@ -435,8 +454,11 @@ async function saveStudentMoneyForm(e) {
   try {
     const res = await callApi('saveStudentMoneyEntry', payload);
     if (res && res.success) {
-      showToast('SUCCESS', 'စာရင်းမှတ်တမ်းတင်ပြီးပါပြီ။ Double-Entry စနစ်ဖြင့် အလုပ်လုပ်ပါသည်။');
+      showToast('SUCCESS', entryType === 'Transfer to PM Cashier' 
+        ? 'PM Cashier သို့ အရင်းငွေလွှဲပြောင်းပြီးပါပြီ။' 
+        : 'ကျောင်းသားငွေစာရင်း မှတ်တမ်းတင်ပြီးပါပြီ။');
       loadStudentMoneyData(false);
+      loadPmCashierBookData(false);
     } else { 
       showToast('ERROR', res?.message || 'သိမ်းဆည်းမှု မအောင်မြင်ပါ။'); 
     }
