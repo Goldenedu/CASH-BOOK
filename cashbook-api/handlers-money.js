@@ -3,6 +3,7 @@
  * GOLDEN ERP SYSTEM - SPMMS HANDLERS (CLOUDFLARE D1)
  * File: handlers-money.js
  * 💡 Features: 3-Ledgers Strict Double-Entry Architecture
+ *              🚀 Fixed: computeAcademicFy local helper (No missing import error)
  *              🚀 Foreign Key Safe: System rows use NULL student_id
  *              🔄 Bidirectional Transfers: Finance <-> PM Cashier Cash Flow
  *              🛡️ RECONCILIATION: O(1) Financial Audit Engine included
@@ -13,6 +14,16 @@ import {
   getMyanmarDateString, normalizeFyStr, sanitizeFyidStr, generateUniqueId,
   generateVoucherNo, generateFyNo, recalculateLedgerBalances, getCurrentAcademicYear
 } from './utils.js';
+
+// 💡 Local Helper: Calculate Academic FY safely from any Date string (March Boundary)
+function computeAcademicFy(dateStr) {
+  if (!dateStr) return getCurrentAcademicYear();
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return getCurrentAcademicYear();
+  let year = d.getFullYear();
+  if (d.getMonth() < 2) year -= 1; // Jan & Feb belong to previous academic year
+  return `${year}-${year + 1}`;
+}
 
 // ==============================================================================
 // 💡 1. STUDENT MONEY (MAIN FINANCE & VIRTUAL WALLET)
@@ -73,7 +84,6 @@ export async function getStudentMoneySummary(db, body) {
     const fy = normalizeFyStr(body.fy || getCurrentAcademicYear()).replace(/^FY\s*/i, '');
     const searchVal = String(body.searchVal || "").trim();
 
-    // 🚀 Foreign Key Safe: Exclude system rows (student_id IS NULL)
     let whereClauses = [`(fy IN (?, ?)) AND student_id IS NOT NULL`];
     let params = [fy, `FY ${fy}`];
 
@@ -110,14 +120,14 @@ export async function saveStudentMoneyEntry(db, session, body) {
     const d = new Date(entryDate);
     const my = `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()]}-${d.getFullYear()}`;
     
-    const fy = normalizeFyStr(body.fy || getCurrentAcademicYear());
+    const fy = normalizeFyStr(body.fy || computeAcademicFy(entryDate));
     const cleanFy = fy.replace(/^FY\s*/i, '');
     const uniqueid = body.uniqueId ? String(body.uniqueId).trim() : generateUniqueId('STM');
     
     const entryType = body.entryType || 'Deposit';
     const debit = parseFloat(body.debit || 0);
     const credit = parseFloat(body.credit || 0);
-    const studentId = parseInt(body.studentId, 10) || null; // 🎯 FIX: Use null for FK constraint
+    const studentId = parseInt(body.studentId, 10) || null;
     const method = body.method || 'Cash';
     
     const batchStatements = [];
@@ -134,7 +144,7 @@ export async function saveStudentMoneyEntry(db, session, body) {
         .bind(noPm, entryDate, respPerson, pmRemark, method, credit, vrPm, my, fy, session?.name || 'Finance', `PMC_${uniqueid}`)
       );
 
-      // 2. Credit -> Student Money (student_id MUST BE NULL to pass FK constraint)
+      // 2. Credit -> Student Money (student_id = NULL for system vault transfer)
       const noStu = await generateFyNo(db, 'student_money', cleanFy);
       batchStatements.push(
         db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, NULL, 'FINANCE', 'Finance Vault', 'Vault', ?, 0, ?, 0, ?, ?, ?)`)
@@ -211,11 +221,13 @@ export async function savePmCashierBookEntry(db, session, body) {
     const entryDate = getMyanmarDateString(body.date);
     const d = new Date(entryDate);
     const my = `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()]}-${d.getFullYear()}`;
-    const fy = normalizeFyStr(body.fy || calculateAcademicFyFromDate(entryDate));
+    
+    // 🎯 FIX: Used computeAcademicFy instead of undefined function
+    const fy = normalizeFyStr(body.fy || computeAcademicFy(entryDate));
     const cleanFy = fy.replace(/^FY\s*/i, '');
     
     const uniqueid = body.uniqueId ? String(body.uniqueId).trim() : generateUniqueId('PMC');
-    const category = body.category || 'PM Withdraw'; // 'PM Withdraw' | 'Return to Finance'
+    const category = body.category || 'PM Withdraw';
     const credit = parseFloat(body.credit || 0);
     const debit = parseFloat(body.debit || 0);
     const respPerson = body.responsibilityPerson || 'Cashier 1';
@@ -308,7 +320,9 @@ export async function saveCanteenBookEntry(db, session, body) {
     const entryDate = getMyanmarDateString(body.date);
     const d = new Date(entryDate);
     const my = `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()]}-${d.getFullYear()}`;
-    const fy = normalizeFyStr(body.fy || calculateAcademicFyFromDate(entryDate));
+    
+    // 🎯 FIX: Used computeAcademicFy instead of undefined function
+    const fy = normalizeFyStr(body.fy || computeAcademicFy(entryDate));
     const cleanFy = fy.replace(/^FY\s*/i, '');
     
     const uniqueid = body.uniqueId ? String(body.uniqueId).trim() : generateUniqueId('CAN');
@@ -380,14 +394,13 @@ export async function getSpmmsReconciliation(db, body) {
     const fy = normalizeFyStr(body.fy || getCurrentAcademicYear()).replace(/^FY\s*/i, '');
     
     const [stuBalRes, pmBalRes, finRes] = await db.batch([
-      // 1. Total Student Virtual Balance (Only student accounts, excluding system rows)
+      // 1. Total Student Virtual Balance (Only student accounts)
       db.prepare("SELECT SUM(debit - credit) as bal FROM student_money WHERE fy IN (?, ?) AND student_id IS NOT NULL").bind(fy, `FY ${fy}`),
       
       // 2. Total PM Cashier Physical Cash in Hand
       db.prepare("SELECT SUM(debit - credit) as bal FROM pm_cashier_book WHERE fy IN (?, ?)").bind(fy, `FY ${fy}`),
       
       // 3. Finance Vault Physical Cash
-      // Net Cash = (All student deposits) - (Direct withdraws) - (Transfers to PM Cashier) + (Returns from PM Cashier)
       db.prepare(`
         SELECT SUM(
           CASE 
