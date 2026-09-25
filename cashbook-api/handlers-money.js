@@ -258,6 +258,22 @@ export async function savePmCashierBookEntry(db, session, body) {
     const credit = parseFloat(body.credit || 0);
     const debit = parseFloat(body.debit || 0);
     const respPerson = body.responsibilityPerson || 'Cashier 1';
+
+    // 🛡️ CASHIER BALANCE GUARD: ငွေထုတ်ခြင်း (သို့) Finance သို့ ပြန်လွှဲခြင်းတွင် Cashier လက်ကျန်ငွေထက် ပိုမိုမလွှဲနိုင်စေရန် စစ်ဆေးခြင်း
+    if (credit > 0) {
+      const cashierBalRow = await db.prepare(
+        "SELECT COALESCE(SUM(debit - credit), 0) as bal FROM pm_cashier_book WHERE fy IN (?, ?) AND responsibility_person = ?"
+      ).bind(cleanFy, `FY ${cleanFy}`, respPerson).first();
+      
+      const curCashierBal = parseFloat(cashierBalRow?.bal || 0);
+
+      if (credit > curCashierBal) {
+        return {
+          success: false,
+          message: `${respPerson} တွင် လက်ရှိငွေသားလက်ကျန် (${curCashierBal.toLocaleString('en-US')} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString('en-US')} MMK) ထုတ်ယူ/ပြန်လွှဲခွင့် မပြုပါ!`
+        };
+      }
+    }
     
     const noPm = await generateFyNo(db, 'pm_cashier_book', fy);
     const vrPm = body.vrNo || await generateVoucherNo(db, 'pm_cashier_book', 'PMC', entryDate);
@@ -280,7 +296,7 @@ export async function savePmCashierBookEntry(db, session, body) {
         .bind(noStu, entryDate, cleanFy, body.studentId, body.fyid || '', stuName, body.studentClass || '', body.method || 'Cash', credit, desc, session?.name || 'PM Cashier', `STM_${uniqueid}`)
       );
     }
-    // 2B. Scenario 2: Return to Finance -> Record Transition in Student Money Book WITHOUT altering student balance
+    // 2B. Scenario 2: Return to Finance -> Record Transition in Student Money Book
     else if (category === 'Return to Finance' && credit > 0) {
       const noStu = await generateFyNo(db, 'student_money', cleanFy);
       const desc = `[PM Cashier] Return Cash from ${respPerson}: ${body.description || ''}`.trim();
@@ -293,13 +309,13 @@ export async function savePmCashierBookEntry(db, session, body) {
 
     await db.batch(batchStatements);
 
-    // Recalculate
+    // Atomic Recalculations
     await recalculateLedgerBalances(db, 'pm_cashier_book', fy, entryDate);
     if (category === 'PM Withdraw') {
       await recalculateLedgerBalances(db, 'student_money', cleanFy, entryDate);
     }
 
-    return { success: true, uniqueId: uniqueid };
+    return { success: true, uniqueId: uniqueid, vrNo: vrPm };
   } catch (err) { return { success: false, message: err.message }; }
 }
 

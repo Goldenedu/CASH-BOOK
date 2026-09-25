@@ -103,68 +103,53 @@ function applyStudentMoneySearchAndRender() {
 }
 
 // 💡 Student Money Table Rendering (Transfer Transitions clean display)
-function renderStudentMoneyTable() {
-  const tbody = document.getElementById('stm-table-body');
+// ၂။ PM Cashier Table Rendering (Transfer နှင့် Return များတွင် Print Button ထည့်ခြင်း)
+function renderPmCashierBookTable() {
+  const tbody = document.getElementById('pm-cashier-table-body');
   if (!tbody) return;
   tbody.innerHTML = '';
   
-  const total = gStudentMoneyFilteredData.length;
-  const start = (gStudentMoneyPage - 1) * gStudentMoneyLimit;
-  const items = gStudentMoneyFilteredData.slice(start, start + gStudentMoneyLimit);
+  const total = gPmCashierBookFilteredData.length;
+  const start = (gPmCashierPage - 1) * gPmCashierLimit;
+  const items = gPmCashierBookFilteredData.slice(start, start + gPmCashierLimit);
 
   if (items.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="13" class="text-center py-8 text-slate-500 font-bold">စာရင်း မရှိပါ။</td></tr>`;
-    const info = document.getElementById('stm-pagination-info');
-    if (info) info.textContent = "Showing 0 entries";
+    tbody.innerHTML = `<tr><td colspan="12" class="text-center py-8 text-slate-500 font-bold">စာရင်း မရှိပါ။</td></tr>`;
     return;
   }
 
   items.forEach((row, idx) => {
-    // 🎯 FIX: အပေါ်ဆုံး (အသစ်ဆုံး) စာရင်းကို နောက်ဆုံးနံပါတ် (ဥပမာ- No. 6) စတင်ပြသခြင်း
     const displayNo = total - (start + idx);
+    const balStr = Number(row.balances || 0).toLocaleString('en-US', {minimumFractionDigits: 2});
+    const isXfer = row.category === 'Float Receive' || row.category === 'Return to Finance';
 
-    const isTransfer = row.studentId === null || row.studentId === 0 || row.fyid === 'TRANSFER' || row.fyid === 'RETURN';
-    const cleanFyid = window.sanitizeFyidStr(row.fyid);
-
-    const balStr = isTransfer 
-      ? '<span class="text-slate-500 font-mono">-</span>' 
-      : Number(row.balances || 0).toLocaleString('en-US', {minimumFractionDigits: 2});
-    
     tbody.innerHTML += `
       <tr class="hover:bg-slate-800/30 text-slate-300 text-xs border-b border-slate-800/40">
         <td class="text-center font-mono py-3 px-2 font-bold text-slate-400">${displayNo}</td>
         <td class="font-mono text-xs py-3 px-2">${window.escapeHtml(row.date)}</td>
-        <td class="font-mono font-bold text-indigo-300 py-3 px-2">${window.escapeHtml(row.fy)}</td>
-        <td class="font-mono font-bold py-3 px-2">
-          ${isTransfer 
-            ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">XFER</span>' 
-            : row.studentId}
-        </td>
-        <td class="font-mono font-bold ${isTransfer ? 'text-amber-400' : 'text-indigo-400'} py-3 px-2">${window.escapeHtml(cleanFyid)}</td>
-        <td class="font-bold ${isTransfer ? 'text-amber-300' : 'text-slate-100'} py-3 px-2">${window.escapeHtml(row.fyidName)}</td>
-        <td class="py-3 px-2">${window.escapeHtml(row.class)}</td>
-        <td class="font-semibold py-3 px-2">${window.escapeHtml(row.method)}</td>
-        <td class="text-right text-emerald-400 font-mono font-bold py-3 px-2">${row.debit > 0 ? Number(row.debit).toLocaleString('en-US') : '-'}</td>
-        <td class="text-right text-rose-400 font-mono font-bold py-3 px-2">${row.credit > 0 ? Number(row.credit).toLocaleString('en-US') : '-'}</td>
-        <td class="text-right text-indigo-400 font-mono font-bold py-3 px-2">${balStr}</td>
-        <td class="max-w-xs truncate text-[11px] text-slate-400 py-3 px-2" title="${window.escapeHtml(row.remark)}">${window.escapeHtml(row.remark || '-')}</td>
-        <td class="right-0 sticky bg-[#0c1322] border-l border-slate-800 text-center py-3 px-2">
-          <div class="flex justify-center gap-2">
-            ${!isTransfer ? `<button onclick="openStudentStatementModal(${row.studentId})" class="text-amber-400 hover:text-amber-300" title="Statement"><i class="fa-solid fa-file-invoice"></i></button>` : ''}
-            <button onclick="deleteStudentMoneyEntry('${window.escapeJsAttr(row.uniqueId)}')" class="text-rose-400 hover:text-rose-300" title="Delete"><i class="fa-solid fa-trash"></i></button>
+        <td class="font-bold text-sky-400 py-3 px-2">${window.escapeHtml(row.responsibility_person || '-')}</td>
+        <td class="py-3 px-2 font-semibold">${window.escapeHtml(row.category)}</td>
+        <td class="py-3 px-2 truncate max-w-xs" title="${window.escapeHtml(row.description)}">${window.escapeHtml(row.description || '')}</td>
+        <td class="py-3 px-2">${window.escapeHtml(row.method)}</td>
+        <td class="text-right font-mono text-emerald-400 py-3 px-2">${row.debit > 0 ? Number(row.debit).toLocaleString('en-US') : '-'}</td>
+        <td class="text-right font-mono text-rose-400 py-3 px-2">${row.credit > 0 ? Number(row.credit).toLocaleString('en-US') : '-'}</td>
+        <td class="text-right font-mono text-indigo-400 font-bold py-3 px-2">${balStr}</td>
+        <td class="font-mono text-slate-500 py-3 px-2">${window.escapeHtml(row.vrNo || '-')}</td>
+        <td class="font-mono text-slate-500 py-3 px-2">${window.escapeHtml(row.fy)}</td>
+        <td class="text-center right-0 sticky bg-[#0c1322] border-l border-slate-800 py-3 px-2">
+          <div class="flex justify-center items-center gap-2">
+            ${isXfer 
+              ? `<button onclick="printRowTransferVoucher('${window.escapeJsAttr(row.uniqueId)}', 'cashier')" class="p-1 text-sky-400 hover:text-sky-300 transition" title="Print Voucher"><i class="fa-solid fa-print"></i></button>`
+              : ''}
+            <button onclick="deletePmCashierBookEntry('${window.escapeJsAttr(row.uniqueId)}')" class="p-1 text-rose-400 hover:text-rose-300 transition" title="Delete"><i class="fa-solid fa-trash"></i></button>
           </div>
         </td>
       </tr>
     `;
   });
   
-  const info = document.getElementById('stm-pagination-info');
-  if (info) info.textContent = `Showing ${start + 1} to ${Math.min(start + gStudentMoneyLimit, total)} of ${total} entries`;
-  
-  const prevBtn = document.getElementById('stm-btn-prev');
-  const nextBtn = document.getElementById('stm-btn-next');
-  if (prevBtn) prevBtn.disabled = (gStudentMoneyPage <= 1);
-  if (nextBtn) nextBtn.disabled = (start + gStudentMoneyLimit >= total);
+  const info = document.getElementById('pm-cashier-pagination-info');
+  if (info) info.textContent = `Showing ${start + 1} to ${Math.min(start + gPmCashierLimit, total)} of ${total} entries`;
 }
 
 function onSearchInputStudentMoney() { clearTimeout(searchTimeout); searchTimeout = setTimeout(applyStudentMoneySearchAndRender, 150); }
@@ -849,27 +834,49 @@ async function onPmStudentLookup() {
   }
 }
 
+// ==============================================================================
+// 💡 PM CASHIER SAVE (WITH STRICT CASHIER-SPECIFIC BALANCE GUARD)
+// ==============================================================================
 async function savePmCashierBookForm(e) {
   if (e && e.preventDefault) e.preventDefault();
   if (isSubmitting) return;
   isSubmitting = true;
 
+  const category = document.getElementById('pm-cashier-category')?.value || 'PM Withdraw';
   const credit = parseFloat(document.getElementById('pm-cashier-credit')?.value || 0);
   const studentId = parseInt(document.getElementById('pm-student-id-search')?.value, 10) || 0;
+  const respPerson = document.getElementById('pm-cashier-responsibility-person')?.value || 'Cashier 1';
 
-  if (!studentId || credit <= 0) {
+  if (category === 'PM Withdraw' && (!studentId || credit <= 0)) {
     isSubmitting = false; 
     return showToast("ERROR", "ကျောင်းသား ID နှင့် ထုတ်ပေးငွေ ထည့်ပါ။");
   }
 
+  if (category === 'Return to Finance' && credit <= 0) {
+    isSubmitting = false;
+    return showToast("ERROR", "Finance သို့ ပြန်လွှဲမည့် ငွေပမာဏ ထည့်သွင်းပါ။");
+  }
+
+  // 🛡️ FRONTEND CASHIER BALANCE GUARD: သက်ဆိုင်ရာ ငွေကိုင် လက်ကျန်ထက် ပိုမထုတ်နိုင်စေရန် တားမြစ်ခြင်း
+  const c1Text = document.getElementById('pm-c1-balance')?.textContent || '0';
+  const c2Text = document.getElementById('pm-c2-balance')?.textContent || '0';
+  const c1Bal = parseFloat(c1Text.replace(/[^0-9.-]+/g, "")) || 0;
+  const c2Bal = parseFloat(c2Text.replace(/[^0-9.-]+/g, "")) || 0;
+  const targetBal = (respPerson === 'Cashier 1') ? c1Bal : c2Bal;
+
+  if (credit > targetBal) {
+    isSubmitting = false;
+    return showToast("ERROR", `${respPerson} တွင် လက်ကျန်ငွေ (${targetBal.toLocaleString()} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString()} MMK) ထုတ်ယူ/ပြန်လွှဲခွင့် မပြုပါ!`);
+  }
+
   const payload = {
     date: document.getElementById('pm-cashier-date')?.value || new Date().toISOString().slice(0, 10),
-    category: 'PM Withdraw',
-    studentId: studentId,
+    category: category,
+    studentId: category === 'PM Withdraw' ? studentId : null,
     studentName: document.getElementById('pm-student-name')?.value || '',
     fyid: document.getElementById('pm-student-fyid')?.value || '',
     studentClass: document.getElementById('pm-student-class')?.value || '',
-    responsibilityPerson: document.getElementById('pm-cashier-responsibility-person')?.value || 'Cashier 1',
+    responsibilityPerson: respPerson,
     method: document.getElementById('pm-cashier-method')?.value || 'Cash',
     debit: 0,
     credit: credit,
@@ -882,8 +889,25 @@ async function savePmCashierBookForm(e) {
   try {
     const res = await callApi('savePmCashierBookEntry', payload);
     if (res && res.success) {
-      showToast('SUCCESS', 'မုန့်ဖိုးထုတ်ပေးပြီးပါပြီ။ ကျောင်းသားလက်ကျန်ကိုပါ အလိုအလျောက် ဖြတ်တောက်ပြီးပါပြီ။');
+      showToast('SUCCESS', category === 'Return to Finance' 
+        ? 'Finance သို့ ငွေပြန်လွှဲပြီးပါပြီ။' 
+        : 'မုန့်ဖိုးထုတ်ပေးပြီးပါပြီ။');
       loadPmCashierBookData(false);
+      loadStudentMoneyData(false);
+
+      // 💡 ငွေပြန်အပ်ခြင်းဖြစ်ပါက Print Voucher ကို ချက်ချင်း ဖွင့်ပြပေးခြင်း
+      if (category === 'Return to Finance') {
+        openTransferVoucherModal({
+          vrNo: res.vrNo || 'RETURN-VCH',
+          date: payload.date,
+          type: 'RETURN TO FINANCE (ငွေပြန်အပ်လွှာ)',
+          cashier: respPerson,
+          amount: credit,
+          remark: payload.description,
+          senderTitle: `ငွေအပ်သူ (${respPerson})`,
+          receiverTitle: 'ငွေလက်ခံသူ (Finance Officer)'
+        });
+      }
     } else { 
       showToast('ERROR', res?.message || 'သိမ်းဆည်းမှု မအောင်မြင်ပါ။'); 
     }
@@ -1101,6 +1125,75 @@ function closeStudentStatementModal() {
   document.getElementById('stm-statement-modal')?.classList.add('hidden'); 
 }
 
+// ==============================================================================
+// 💡 PRINT VOUCHER MODAL CONTROLLER
+// ==============================================================================
+function printRowTransferVoucher(uniqueId, source) {
+  let row = null;
+  let isFromFinance = false;
+
+  if (source === 'main') {
+    row = gStudentMoneyHistoryData.find(r => r.uniqueId === uniqueId);
+    isFromFinance = row?.fyid === 'TRANSFER';
+  } else {
+    row = gPmCashierBookData.find(r => r.uniqueId === uniqueId);
+    isFromFinance = row?.category === 'Float Receive';
+  }
+
+  if (!row) return showToast("ERROR", "ဘောက်ချာထုတ်ရန် အချက်အလက် မတွေ့ပါ။");
+
+  const amount = isFromFinance ? (row.credit || row.debit) : (row.credit || row.debit);
+  const respPerson = row.responsibility_person || (row.remark?.includes('Cashier 2') ? 'Cashier 2' : 'Cashier 1');
+
+  openTransferVoucherModal({
+    vrNo: row.vrNo || 'VCH-' + row.date.replace(/-/g, ''),
+    date: row.date,
+    type: isFromFinance ? 'FLOAT TRANSFER (အရင်းငွေလွှဲပြား)' : 'RETURN TO FINANCE (လက်ကျန်ပြန်အပ်လွှာ)',
+    cashier: respPerson,
+    amount: amount,
+    remark: row.remark || row.description,
+    senderTitle: isFromFinance ? 'လွှဲပြောင်းပေးသူ (Finance Officer)' : `ငွေအပ်သူ (${respPerson})`,
+    receiverTitle: isFromFinance ? `လက်ခံရရှိသူ (${respPerson})` : 'ငွေလက်ခံသူ (Finance Officer)'
+  });
+}
+
+function openTransferVoucherModal(data) {
+  document.getElementById('vch-no').textContent = data.vrNo || 'TRANSFER-VCH';
+  document.getElementById('vch-date').textContent = data.date;
+  document.getElementById('vch-type').textContent = data.type;
+  document.getElementById('vch-cashier').textContent = data.cashier;
+  document.getElementById('vch-amount').textContent = `${Number(data.amount || 0).toLocaleString('en-US')} MMK`;
+  document.getElementById('vch-remark').textContent = data.remark || '-';
+
+  document.getElementById('vch-sender-title').textContent = data.senderTitle;
+  document.getElementById('vch-receiver-title').textContent = data.receiverTitle;
+
+  document.getElementById('stm-voucher-modal')?.classList.remove('hidden');
+}
+
+function closeTransferVoucherModal() {
+  document.getElementById('stm-voucher-modal')?.classList.add('hidden');
+}
+
+function triggerVoucherPrint() {
+  const printContent = document.getElementById('stm-voucher-print-area').innerHTML;
+  const originalContent = document.body.innerHTML;
+
+  const printWindow = window.open('', '', 'height=650,width=800');
+  printWindow.document.write('<html><head><title>Print Transfer Voucher</title>');
+  printWindow.document.write('<script src="https://cdn.tailwindcss.com"><\/script>');
+  printWindow.document.write('</head><body class="p-8 bg-white text-slate-900">');
+  printWindow.document.write(printContent);
+  printWindow.document.write('</body></html>');
+  printWindow.document.close();
+  
+  setTimeout(() => {
+    printWindow.focus();
+    printWindow.print();
+    printWindow.close();
+  }, 400);
+}
+
 // Global Window Exports
 window.switchStudentMoneySubTab = switchStudentMoneySubTab;
 window.loadStudentMoneyData = loadStudentMoneyData;
@@ -1143,3 +1236,8 @@ window.onDebitInputStudentMoney = onDebitInputStudentMoney;
 window.onCreditInputStudentMoney = onCreditInputStudentMoney;
 
 window.onPmCashierCategoryChange = onPmCashierCategoryChange;
+
+window.printRowTransferVoucher = printRowTransferVoucher;
+window.openTransferVoucherModal = openTransferVoucherModal;
+window.closeTransferVoucherModal = closeTransferVoucherModal;
+window.triggerVoucherPrint = triggerVoucherPrint;
