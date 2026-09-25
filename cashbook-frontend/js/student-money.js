@@ -2,7 +2,8 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - SPMMS (3-LEDGERS ARCHITECTURE)
  * File: js/student-money.js
- * 💡 Features: Finance Vault + PM Cashier + Canteen Book + Auto-Reconciliation
+ * 💡 Features: Master Student Lookup Cache, Auto-FY Populator, 
+ *              Multi-Ledger Double-Entry & Financial Reconciliation
  * ==============================================================================
  */
 
@@ -62,10 +63,15 @@ function switchStudentMoneySubTab(tabName) {
 }
 
 function renderTopKPIs(inc, exp, bal, count) {
-  document.getElementById('stm-total-income').textContent = `${Number(inc || 0).toLocaleString('en-US')} MMK`;
-  document.getElementById('stm-total-expense').textContent = `${Number(exp || 0).toLocaleString('en-US')} MMK`;
-  document.getElementById('stm-balance').textContent = `${Number(bal || 0).toLocaleString('en-US')} MMK`;
-  document.getElementById('stm-entries-count').textContent = Number(count || 0).toLocaleString('en-US');
+  const elInc = document.getElementById('stm-total-income');
+  const elExp = document.getElementById('stm-total-expense');
+  const elBal = document.getElementById('stm-balance');
+  const elCount = document.getElementById('stm-entries-count');
+
+  if (elInc) elInc.textContent = `${Number(inc || 0).toLocaleString('en-US')} MMK`;
+  if (elExp) elExp.textContent = `${Number(exp || 0).toLocaleString('en-US')} MMK`;
+  if (elBal) elBal.textContent = `${Number(bal || 0).toLocaleString('en-US')} MMK`;
+  if (elCount) elCount.textContent = Number(count || 0).toLocaleString('en-US');
 }
 
 // ==============================================================================
@@ -73,14 +79,18 @@ function renderTopKPIs(inc, exp, bal, count) {
 // ==============================================================================
 async function loadStudentMoneyData(isSilent) {
   try {
-    if (!isSilent) toggleLoading(true);
+    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(true);
     const res = await callApi('getStudentMoneyData', { page: 1, limit: 5000, forceRefresh: true }, 'GET');
     if (res && res.success) {
       gStudentMoneyHistoryData = res.data || [];
       renderTopKPIs(res.stats.totalIncome, res.stats.totalExpense, res.stats.balance, gStudentMoneyHistoryData.length);
       applyStudentMoneySearchAndRender();
     }
-  } catch (err) {} finally { if (!isSilent) toggleLoading(false); }
+  } catch (err) {
+    console.error("Student Money Load Error:", err);
+  } finally {
+    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(false);
+  }
 }
 
 function applyStudentMoneySearchAndRender() {
@@ -92,7 +102,9 @@ function applyStudentMoneySearchAndRender() {
     if (typeof window.isDateInRange === 'function' && !window.isDateInRange(r.date, fDate, tDate)) return false;
     if (!query) return true;
     return String(r.fyidName || '').toLowerCase().includes(query) ||
+           String(r.fyid || '').toLowerCase().includes(query) ||
            String(r.remark || '').toLowerCase().includes(query) ||
+           String(r.class || '').toLowerCase().includes(query) ||
            String(r.studentId || '').includes(query);
   });
   gStudentMoneyPage = 1;
@@ -110,7 +122,8 @@ function renderStudentMoneyTable() {
 
   if (items.length === 0) {
     tbody.innerHTML = `<tr><td colspan="13" class="text-center py-8 text-slate-500 font-bold">စာရင်း မရှိပါ။</td></tr>`;
-    document.getElementById('stm-pagination-info').textContent = "Showing 0 entries";
+    const info = document.getElementById('stm-pagination-info');
+    if (info) info.textContent = "Showing 0 entries";
     return;
   }
 
@@ -135,33 +148,74 @@ function renderStudentMoneyTable() {
         <td class="max-w-xs truncate text-[11px] text-slate-400 py-3 px-2" title="${window.escapeHtml(row.remark)}">${window.escapeHtml(row.remark || '-')}</td>
         <td class="right-0 sticky bg-[#0c1322] border-l border-slate-800 text-center py-3 px-2">
           <div class="flex justify-center gap-2">
-            ${!isSys ? `<button onclick="openStudentStatementModal(${row.studentId})" class="text-amber-400 hover:text-amber-300"><i class="fa-solid fa-file-invoice"></i></button>` : ''}
-            <button onclick="deleteStudentMoneyEntry('${window.escapeJsAttr(row.uniqueId)}')" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-trash"></i></button>
+            ${!isSys ? `<button onclick="openStudentStatementModal(${row.studentId})" class="text-amber-400 hover:text-amber-300" title="Statement"><i class="fa-solid fa-file-invoice"></i></button>` : ''}
+            <button onclick="deleteStudentMoneyEntry('${window.escapeJsAttr(row.uniqueId)}')" class="text-rose-400 hover:text-rose-300" title="Delete"><i class="fa-solid fa-trash"></i></button>
           </div>
         </td>
       </tr>
     `;
   });
   
-  document.getElementById('stm-pagination-info').textContent = `Showing ${start + 1} to ${Math.min(start + gStudentMoneyLimit, total)} of ${total} entries`;
+  const info = document.getElementById('stm-pagination-info');
+  if (info) info.textContent = `Showing ${start + 1} to ${Math.min(start + gStudentMoneyLimit, total)} of ${total} entries`;
+  
+  const prevBtn = document.getElementById('stm-btn-prev');
+  const nextBtn = document.getElementById('stm-btn-next');
+  if (prevBtn) prevBtn.disabled = (gStudentMoneyPage <= 1);
+  if (nextBtn) nextBtn.disabled = (start + gStudentMoneyLimit >= total);
 }
 
 function onSearchInputStudentMoney() { clearTimeout(searchTimeout); searchTimeout = setTimeout(applyStudentMoneySearchAndRender, 150); }
 function clearDateFilterStudentMoney() { document.getElementById('stm-date-from').value = ''; document.getElementById('stm-date-to').value = ''; applyStudentMoneySearchAndRender(); }
 function changePageStudentMoney(delta) { gStudentMoneyPage += delta; renderStudentMoneyTable(); }
 
-// 💡 Student Money Modal Controls
-function openAddModalStudentMoney() {
-  document.getElementById('student-money-form').reset();
-  document.getElementById('stm-date').value = new Date().toISOString().slice(0, 10);
-  onStudentMoneyEntryTypeChange();
-  document.getElementById('student-money-modal').classList.remove('hidden');
+// 💡 Populate Academic FY Dropdown
+function populateFYDropdownMoney() {
+  const select = document.getElementById('stm-fy');
+  if (!select) return;
+
+  const currentFY = (typeof window.getCurrentAcademicYear === 'function') 
+    ? window.getCurrentAcademicYear() 
+    : '2026-2027';
+  const startYear = parseInt(currentFY.split('-')[0], 10) || 2026;
+
+  const prevFY = `${startYear - 1}-${startYear}`;
+  const nextFY = `${startYear + 1}-${startYear + 2}`;
+  const currentVal = select.value || currentFY;
+
+  select.innerHTML = `
+    <option value="${prevFY}" ${prevFY === currentVal ? 'selected' : ''}>${prevFY}</option>
+    <option value="${currentFY}" ${currentFY === currentVal ? 'selected' : ''}>${currentFY}</option>
+    <option value="${nextFY}" ${nextFY === currentVal ? 'selected' : ''}>${nextFY}</option>
+  `;
 }
 
-function closeStudentMoneyModal() { document.getElementById('student-money-modal').classList.add('hidden'); }
+// 💡 Student Money Modal Controls
+function openAddModalStudentMoney() {
+  const form = document.getElementById('student-money-form');
+  if (form) form.reset();
+
+  const uid = document.getElementById('stm-uniqueId');
+  if (uid) uid.value = '';
+
+  const dateEl = document.getElementById('stm-date');
+  if (dateEl) dateEl.value = new Date().toISOString().slice(0, 10);
+
+  populateFYDropdownMoney();
+  onStudentMoneyEntryTypeChange();
+
+  const liveBadge = document.getElementById('stm-wallet-live-badge');
+  if (liveBadge) liveBadge.classList.add('hidden');
+
+  document.getElementById('student-money-modal')?.classList.remove('hidden');
+}
+
+function closeStudentMoneyModal() { 
+  document.getElementById('student-money-modal')?.classList.add('hidden'); 
+}
 
 function onStudentMoneyEntryTypeChange() {
-  const type = document.getElementById('stm-entry-type').value;
+  const type = document.getElementById('stm-entry-type')?.value || 'Deposit';
   const stuBox = document.getElementById('stm-student-fields');
   const respBox = document.getElementById('stm-resp-person-box');
   const deb = document.getElementById('stm-debit');
@@ -169,88 +223,188 @@ function onStudentMoneyEntryTypeChange() {
   const desc = document.getElementById('stm-remark');
 
   if (type === 'Transfer to PM Cashier') {
-    stuBox.classList.add('hidden');
-    respBox.classList.remove('hidden');
-    deb.disabled = true; deb.value = 0; cred.disabled = false;
-    desc.value = "Finance မှ PM Cashier သို့ အရင်းငွေလွှဲပေးခြင်း";
+    if (stuBox) stuBox.classList.add('hidden');
+    if (respBox) respBox.classList.remove('hidden');
+    if (deb) { deb.disabled = true; deb.value = 0; }
+    if (cred) { cred.disabled = false; }
+    if (desc) desc.value = "Finance မှ PM Cashier သို့ အရင်းငွေလွှဲပေးခြင်း";
   } else {
-    stuBox.classList.remove('hidden');
-    respBox.classList.add('hidden');
-    if (type === 'Deposit') { deb.disabled = false; cred.disabled = true; cred.value = 0; desc.value = "ကျောင်းသား မုန့်ဖိုးအပ်ငွေ"; }
-    else { deb.disabled = true; deb.value = 0; cred.disabled = false; desc.value = "ကျောင်းသားအား ငွေသားပြန်ထုတ်ပေးခြင်း"; }
+    if (stuBox) stuBox.classList.remove('hidden');
+    if (respBox) respBox.classList.add('hidden');
+    if (type === 'Deposit') {
+      if (deb) { deb.disabled = false; }
+      if (cred) { cred.disabled = true; cred.value = 0; }
+      if (desc && !desc.value) desc.value = "ကျောင်းသား မုန့်ဖိုးအပ်ငွေ";
+    } else {
+      if (deb) { deb.disabled = true; deb.value = 0; }
+      if (cred) { cred.disabled = false; }
+      if (desc && !desc.value) desc.value = "ကျောင်းသားအား ငွေသားပြန်ထုတ်ပေးခြင်း";
+    }
   }
 }
 
+// 🎯 FIXED: Master Student Directory Cache & Instant Lookup
 async function onStudentIdOrFYChangeMoney() {
+  const fyVal = document.getElementById('stm-fy')?.value || (typeof window.getCurrentAcademicYear === 'function' ? window.getCurrentAcademicYear() : '2026-2027');
   const idVal = document.getElementById('stm-id-search')?.value.trim();
-  if (!idVal) return;
-  const targetId = parseInt(idVal, 10);
-  try {
-    const res = await callApi('getStudentMoneySummary', { searchVal: targetId }, 'GET');
-    if (res && res.success && res.data && res.data.length > 0) {
-      const stu = res.data.find(r => r.studentId === targetId);
-      if (stu) {
-        document.getElementById('stm-fyid-show').value = stu.fyid || '';
-        document.getElementById('stm-fyidname-show').value = stu.fyidName || '';
-        document.getElementById('stm-class').value = stu.class || '';
-        document.getElementById('stm-wallet-live-amount').textContent = `${Number(stu.netBalance || 0).toLocaleString('en-US')} MMK`;
-        document.getElementById('stm-wallet-live-badge').classList.remove('hidden');
+
+  const fyidShow = document.getElementById('stm-fyid-show');
+  const fyidNameShow = document.getElementById('stm-fyidname-show');
+  const classEl = document.getElementById('stm-class');
+  const liveBadge = document.getElementById('stm-wallet-live-badge');
+  const liveAmountEl = document.getElementById('stm-wallet-live-amount');
+
+  if (!idVal) {
+    if (fyidShow) fyidShow.value = "";
+    if (fyidNameShow) fyidNameShow.value = "";
+    if (classEl) classEl.value = "";
+    if (liveBadge) liveBadge.classList.add('hidden');
+    return;
+  }
+
+  const targetIdNum = parseInt(idVal, 10);
+
+  // 1. Fetch from Master Student Directory (Cache)
+  if (!gStudentCacheForMoney[fyVal]) {
+    try {
+      const res = await callApi('getStudentData', { fy: fyVal, limit: 5000 }, 'GET');
+      if (res && res.success) {
+        gStudentCacheForMoney[fyVal] = res.data || [];
       }
+    } catch (e) {
+      console.warn("Student cache preload warning:", e);
     }
-  } catch(e) {}
+  }
+
+  const list = gStudentCacheForMoney[fyVal] || [];
+  let matched = list.find(s => parseInt(s.studentId || s.student_id || s.id, 10) === targetIdNum);
+
+  // Fallback single lookup if not yet loaded in cache
+  if (!matched) {
+    try {
+      const singleRes = await callApi('lookupStudentById', { studentId: targetIdNum, fy: fyVal }, 'GET');
+      if (singleRes && singleRes.success && singleRes.data) {
+        matched = singleRes.data;
+      }
+    } catch (e) {}
+  }
+
+  if (matched) {
+    const actualFyid = window.sanitizeFyidStr(matched.fyid || '');
+    const actualName = matched.name || matched.fyidName || '';
+
+    if (fyidShow) fyidShow.value = actualFyid;
+    if (fyidNameShow) fyidNameShow.value = `[${actualFyid}] ${actualName}`;
+    if (classEl) classEl.value = matched.class || '';
+
+    // 2. Fetch live wallet balance from student_money
+    try {
+      const sumRes = await callApi('getStudentMoneySummary', { fy: fyVal, searchVal: actualFyid }, 'GET');
+      if (sumRes && sumRes.success && sumRes.data && sumRes.data.length > 0) {
+        const studentSum = sumRes.data.find(r => r.studentId === targetIdNum);
+        if (studentSum && liveBadge && liveAmountEl) {
+          liveAmountEl.textContent = `${Number(studentSum.netBalance || 0).toLocaleString('en-US')} MMK`;
+          liveBadge.classList.remove('hidden');
+        }
+      } else {
+        if (liveBadge && liveAmountEl) {
+          liveAmountEl.textContent = "0 MMK";
+          liveBadge.classList.remove('hidden');
+        }
+      }
+    } catch (err) {}
+  } else {
+    if (fyidShow) fyidShow.value = "Not Found";
+    if (fyidNameShow) fyidNameShow.value = "ကျောင်းသား ရှာမတွေ့ပါ";
+    if (classEl) classEl.value = "";
+    if (liveBadge) liveBadge.classList.add('hidden');
+  }
 }
 
 async function saveStudentMoneyForm(e) {
-  e.preventDefault();
+  if (e && e.preventDefault) e.preventDefault();
   if (isSubmitting) return;
   isSubmitting = true;
 
-  const entryType = document.getElementById('stm-entry-type').value;
-  const credit = parseFloat(document.getElementById('stm-credit').value || 0);
-  const debit = parseFloat(document.getElementById('stm-debit').value || 0);
-  const studentId = parseInt(document.getElementById('stm-id-search').value, 10) || 0;
+  const entryType = document.getElementById('stm-entry-type')?.value || 'Deposit';
+  const credit = parseFloat(document.getElementById('stm-credit')?.value || 0);
+  const debit = parseFloat(document.getElementById('stm-debit')?.value || 0);
+  const studentId = parseInt(document.getElementById('stm-id-search')?.value, 10) || 0;
 
-  if (entryType === 'Transfer to PM Cashier' && credit <= 0) {
-    isSubmitting = false; return showToast("ERROR", "PM Cashier သို့ လွှဲမည့် Credit ပမာဏ ထည့်ပါ။");
-  }
-  if (entryType !== 'Transfer to PM Cashier' && (!studentId || (debit <= 0 && credit <= 0))) {
-    isSubmitting = false; return showToast("ERROR", "ကျောင်းသား ID နှင့် ပမာဏ အတိအကျ ထည့်ပါ။");
+  if (entryType === 'Transfer to PM Cashier') {
+    if (credit <= 0) {
+      isSubmitting = false; 
+      return showToast("ERROR", "PM Cashier သို့ လွှဲမည့် Credit ပမာဏ ထည့်ပါ။");
+    }
+  } else {
+    if (!studentId || (debit <= 0 && credit <= 0)) {
+      isSubmitting = false; 
+      return showToast("ERROR", "ကျောင်းသား ID နှင့် ငွေပမာဏ အတိအကျ ထည့်ပါ။");
+    }
   }
 
   const payload = {
-    uniqueId: document.getElementById('stm-uniqueId').value || '',
-    date: document.getElementById('stm-date').value,
-    fy: document.getElementById('stm-fy')?.value || window.getCurrentAcademicYear(),
+    uniqueId: document.getElementById('stm-uniqueId')?.value || '',
+    date: document.getElementById('stm-date')?.value || new Date().toISOString().slice(0, 10),
+    fy: document.getElementById('stm-fy')?.value || (typeof window.getCurrentAcademicYear === 'function' ? window.getCurrentAcademicYear() : '2026-2027'),
     entryType: entryType,
-    method: document.getElementById('stm-method').value,
-    debit: debit, credit: credit,
-    remark: document.getElementById('stm-remark').value,
+    method: document.getElementById('stm-method')?.value || 'Cash',
+    debit: debit,
+    credit: credit,
+    remark: document.getElementById('stm-remark')?.value || '',
     studentId: entryType === 'Transfer to PM Cashier' ? 0 : studentId,
     fyid: document.getElementById('stm-fyid-show')?.value || '',
     name: document.getElementById('stm-fyidname-show')?.value || '',
     class: document.getElementById('stm-class')?.value || '',
-    responsibilityPerson: document.getElementById('stm-responsibility-person')?.value || ''
+    responsibilityPerson: document.getElementById('stm-responsibility-person')?.value || 'Cashier 1'
   };
 
   closeStudentMoneyModal();
-  toggleLoading(true);
+  if (typeof toggleLoading === 'function') toggleLoading(true);
+
   try {
     const res = await callApi('saveStudentMoneyEntry', payload);
     if (res && res.success) {
       showToast('SUCCESS', 'စာရင်းမှတ်တမ်းတင်ပြီးပါပြီ။ Double-Entry စနစ်ဖြင့် အလုပ်လုပ်ပါသည်။');
       loadStudentMoneyData(false);
-    } else { showToast('ERROR', res.message); }
-  } catch (err) { showToast('ERROR', err.message); }
-  finally { isSubmitting = false; toggleLoading(false); }
+    } else { 
+      showToast('ERROR', res?.message || 'သိမ်းဆည်းမှု မအောင်မြင်ပါ။'); 
+    }
+  } catch (err) { 
+    showToast('ERROR', err.message); 
+  } finally { 
+    isSubmitting = false; 
+    if (typeof toggleLoading === 'function') toggleLoading(false); 
+  }
 }
 
 async function deleteStudentMoneyEntry(uniqueId) {
   if (!confirm("ဤစာရင်းအား ဖျက်ပါက ဆက်စပ်နေသော Cashier စာရင်းများပါ ပယ်ဖျက်သွားပါမည်။ သေချာပါသလား?")) return;
-  toggleLoading(true);
+  if (typeof toggleLoading === 'function') toggleLoading(true);
   try {
     const res = await callApi('deleteStudentMoneyEntry', { uniqueId });
-    if (res && res.success) loadStudentMoneyData(false);
-  } catch (err) {} finally { toggleLoading(false); }
+    if (res && res.success) {
+      showToast('SUCCESS', 'စာရင်း ဖျက်သိမ်းပြီးပါပြီ။');
+      loadStudentMoneyData(false);
+    }
+  } catch (err) {
+    showToast('ERROR', err.message);
+  } finally { 
+    if (typeof toggleLoading === 'function') toggleLoading(false); 
+  }
+}
+
+function exportToCSVStudentMoney() {
+  if (!gStudentMoneyHistoryData || gStudentMoneyHistoryData.length === 0) return showToast("ERROR", "ထုတ်ယူရန် စာရင်း မရှိပါ။");
+  let csv = "NO,DATE,FY,ID,FYID,NAME,CLASS,METHOD,DEBIT,CREDIT,BALANCES,REMARK\n";
+  gStudentMoneyHistoryData.forEach((r, idx) => {
+    csv += `${idx + 1},${window.safeCsvCell(r.date || '')},${window.safeCsvCell(r.fy || '')},${r.studentId},${window.safeCsvCell(window.sanitizeFyidStr(r.fyid))},${window.safeCsvCell(r.fyidName || '')},${window.safeCsvCell(r.class || '')},${window.safeCsvCell(r.method || '')},${r.debit || 0},${r.credit || 0},${r.balances || 0},${window.safeCsvCell(r.remark || '')}\n`;
+  });
+  const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `Student_Money_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
 }
 
 // ==============================================================================
@@ -258,13 +412,17 @@ async function deleteStudentMoneyEntry(uniqueId) {
 // ==============================================================================
 async function loadCanteenBookData(isSilent) {
   try {
-    if (!isSilent) toggleLoading(true);
+    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(true);
     const res = await callApi('getCanteenBookData', { forceRefresh: true }, 'GET');
     if (res && res.success) {
       gCanteenBookData = res.data || [];
-      applyCanteenBookSearchAndRender(); // This will also calculate KPIs
+      applyCanteenBookSearchAndRender();
     }
-  } catch (err) {} finally { if (!isSilent) toggleLoading(false); }
+  } catch (err) {
+    console.error("Canteen Load Error:", err);
+  } finally { 
+    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(false); 
+  }
 }
 
 function applyCanteenBookSearchAndRender() {
@@ -283,13 +441,16 @@ function applyCanteenBookSearchAndRender() {
     return String(row.description || '').toLowerCase().includes(query) || String(row.vrNo || '').toLowerCase().includes(query);
   });
 
-  // Calculate Filtered KPIs
   let filteredSales = 0;
   gCanteenBookFilteredData.forEach(r => { if (r.category === 'POS Sales') filteredSales += Number(r.debit || 0); });
 
-  document.getElementById('canteen-today-sales').textContent = `${todaySales.toLocaleString('en-US')} MMK`;
-  document.getElementById('canteen-filtered-sales').textContent = `${filteredSales.toLocaleString('en-US')} MMK`;
-  document.getElementById('canteen-filtered-count').textContent = gCanteenBookFilteredData.length;
+  const todayEl = document.getElementById('canteen-today-sales');
+  const filteredEl = document.getElementById('canteen-filtered-sales');
+  const countEl = document.getElementById('canteen-filtered-count');
+
+  if (todayEl) todayEl.textContent = `${todaySales.toLocaleString('en-US')} MMK`;
+  if (filteredEl) filteredEl.textContent = `${filteredSales.toLocaleString('en-US')} MMK`;
+  if (countEl) countEl.textContent = gCanteenBookFilteredData.length;
 
   gCanteenPage = 1;
   renderCanteenBookTable();
@@ -311,6 +472,12 @@ function renderCanteenBookTable() {
   const start = (gCanteenPage - 1) * gCanteenLimit;
   const items = gCanteenBookFilteredData.slice(start, start + gCanteenLimit);
 
+  if (items.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="11" class="text-center py-8 text-slate-500 font-bold">စာရင်း မရှိပါ။</td></tr>`;
+    document.getElementById('canteen-pagination-info').textContent = "Showing 0 entries";
+    return;
+  }
+
   items.forEach((row, idx) => {
     const balStr = Number(row.balances || 0).toLocaleString('en-US', {minimumFractionDigits: 2});
     tbody.innerHTML += `
@@ -318,7 +485,7 @@ function renderCanteenBookTable() {
         <td class="text-center font-mono py-3 px-2">${start + idx + 1}</td>
         <td class="font-mono py-3 px-2">${window.escapeHtml(row.date)}</td>
         <td class="py-3 px-2 font-bold text-emerald-400">${window.escapeHtml(row.category)}</td>
-        <td class="py-3 px-2 truncate max-w-xs">${window.escapeHtml(row.description || '')}</td>
+        <td class="py-3 px-2 truncate max-w-xs" title="${window.escapeHtml(row.description)}">${window.escapeHtml(row.description || '')}</td>
         <td class="py-3 px-2">${window.escapeHtml(row.method)}</td>
         <td class="text-right font-mono text-emerald-400 py-3 px-2">${row.debit > 0 ? Number(row.debit).toLocaleString('en-US') : '-'}</td>
         <td class="text-right font-mono text-rose-400 py-3 px-2">${row.credit > 0 ? Number(row.credit).toLocaleString('en-US') : '-'}</td>
@@ -326,12 +493,17 @@ function renderCanteenBookTable() {
         <td class="font-mono text-slate-500 py-3 px-2">${window.escapeHtml(row.vrNo || '-')}</td>
         <td class="font-mono text-slate-500 py-3 px-2">${window.escapeHtml(row.fy)}</td>
         <td class="text-center right-0 sticky bg-[#0c1322] py-3 px-2">
-          <button onclick="deleteCanteenBookEntry('${window.escapeJsAttr(row.uniqueId)}')" class="text-rose-400"><i class="fa-solid fa-trash"></i></button>
+          <button onclick="deleteCanteenBookEntry('${window.escapeJsAttr(row.uniqueId)}')" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-trash"></i></button>
         </td>
       </tr>
     `;
   });
   document.getElementById('canteen-pagination-info').textContent = `Showing ${start + 1} to ${Math.min(start + gCanteenLimit, total)} of ${total} entries`;
+  
+  const prevBtn = document.getElementById('canteen-btn-prev');
+  const nextBtn = document.getElementById('canteen-btn-next');
+  if (prevBtn) prevBtn.disabled = (gCanteenPage <= 1);
+  if (nextBtn) nextBtn.disabled = (start + gCanteenLimit >= total);
 }
 
 function onSearchInputCanteenBook() { clearTimeout(searchTimeout); searchTimeout = setTimeout(applyCanteenBookSearchAndRender, 150); }
@@ -340,11 +512,24 @@ function changePageCanteenBook(delta) { gCanteenPage += delta; renderCanteenBook
 
 async function deleteCanteenBookEntry(uniqueId) {
   if (!confirm("ဖျက်မည်မှာ သေချာပါသလား?")) return;
-  toggleLoading(true);
+  if (typeof toggleLoading === 'function') toggleLoading(true);
   try {
     const res = await callApi('deleteCanteenBookEntry', { uniqueId });
     if (res && res.success) loadCanteenBookData(false);
-  } catch (err) {} finally { toggleLoading(false); }
+  } catch (err) {} finally { if (typeof toggleLoading === 'function') toggleLoading(false); }
+}
+
+function exportToCSVCanteenBook() {
+  if (!gCanteenBookData || gCanteenBookData.length === 0) return showToast("ERROR", "ထုတ်ယူရန် စာရင်း မရှိပါ။");
+  let csv = "NO,DATE,CATEGORY,DESCRIPTION,METHOD,DEBIT,CREDIT,BALANCES,VR_NO,FY\n";
+  gCanteenBookData.forEach((r, idx) => {
+    csv += `${idx + 1},${window.safeCsvCell(r.date || '')},${window.safeCsvCell(r.category || '')},${window.safeCsvCell(r.description || '')},${window.safeCsvCell(r.method || '')},${r.debit || 0},${r.credit || 0},${r.balances || 0},${window.safeCsvCell(r.vrNo || '')},${window.safeCsvCell(r.fy || '')}\n`;
+  });
+  const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `Canteen_Book_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
 }
 
 // ==============================================================================
@@ -352,13 +537,17 @@ async function deleteCanteenBookEntry(uniqueId) {
 // ==============================================================================
 async function loadPmCashierBookData(isSilent) {
   try {
-    if (!isSilent) toggleLoading(true);
+    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(true);
     const res = await callApi('getPmCashierBookData', { forceRefresh: true }, 'GET');
     if (res && res.success) {
       gPmCashierBookData = res.data || [];
       applyPmCashierBookSearchAndRender();
     }
-  } catch (err) {} finally { if (!isSilent) toggleLoading(false); }
+  } catch (err) {
+    console.error("PM Cashier Load Error:", err);
+  } finally { 
+    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(false); 
+  }
 }
 
 function applyPmCashierBookSearchAndRender() {
@@ -371,7 +560,9 @@ function applyPmCashierBookSearchAndRender() {
     if (typeof window.isDateInRange === 'function' && !window.isDateInRange(row.date, fDate, tDate)) return false;
     if (respFilter && row.responsibility_person !== respFilter) return false;
     if (!query) return true;
-    return String(row.description || '').toLowerCase().includes(query) || String(row.vrNo || '').toLowerCase().includes(query);
+    return String(row.description || '').toLowerCase().includes(query) || 
+           String(row.vrNo || '').toLowerCase().includes(query) ||
+           String(row.responsibility_person || '').toLowerCase().includes(query);
   });
 
   gPmCashierPage = 1;
@@ -387,15 +578,21 @@ function renderPmCashierBookTable() {
   const start = (gPmCashierPage - 1) * gPmCashierLimit;
   const items = gPmCashierBookFilteredData.slice(start, start + gPmCashierLimit);
 
+  if (items.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="12" class="text-center py-8 text-slate-500 font-bold">စာရင်း မရှိပါ။</td></tr>`;
+    document.getElementById('pm-cashier-pagination-info').textContent = "Showing 0 entries";
+    return;
+  }
+
   items.forEach((row, idx) => {
     const balStr = Number(row.balances || 0).toLocaleString('en-US', {minimumFractionDigits: 2});
     tbody.innerHTML += `
       <tr class="hover:bg-slate-800/30 text-slate-300 text-xs border-b border-slate-800/40">
         <td class="text-center font-mono py-3 px-2">${start + idx + 1}</td>
-        <td class="font-mono py-3 px-2">${window.escapeHtml(row.date)}</td>
+        <td class="font-mono text-xs py-3 px-2">${window.escapeHtml(row.date)}</td>
         <td class="font-bold text-sky-400 py-3 px-2">${window.escapeHtml(row.responsibility_person || '-')}</td>
-        <td class="py-3 px-2">${window.escapeHtml(row.category)}</td>
-        <td class="py-3 px-2 truncate max-w-xs">${window.escapeHtml(row.description || '')}</td>
+        <td class="py-3 px-2 font-semibold">${window.escapeHtml(row.category)}</td>
+        <td class="py-3 px-2 truncate max-w-xs" title="${window.escapeHtml(row.description)}">${window.escapeHtml(row.description || '')}</td>
         <td class="py-3 px-2">${window.escapeHtml(row.method)}</td>
         <td class="text-right font-mono text-emerald-400 py-3 px-2">${row.debit > 0 ? Number(row.debit).toLocaleString('en-US') : '-'}</td>
         <td class="text-right font-mono text-rose-400 py-3 px-2">${row.credit > 0 ? Number(row.credit).toLocaleString('en-US') : '-'}</td>
@@ -403,12 +600,17 @@ function renderPmCashierBookTable() {
         <td class="font-mono text-slate-500 py-3 px-2">${window.escapeHtml(row.vrNo || '-')}</td>
         <td class="font-mono text-slate-500 py-3 px-2">${window.escapeHtml(row.fy)}</td>
         <td class="text-center right-0 sticky bg-[#0c1322] py-3 px-2">
-          <button onclick="deletePmCashierBookEntry('${window.escapeJsAttr(row.uniqueId)}')" class="text-rose-400"><i class="fa-solid fa-trash"></i></button>
+          <button onclick="deletePmCashierBookEntry('${window.escapeJsAttr(row.uniqueId)}')" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-trash"></i></button>
         </td>
       </tr>
     `;
   });
   document.getElementById('pm-cashier-pagination-info').textContent = `Showing ${start + 1} to ${Math.min(start + gPmCashierLimit, total)} of ${total} entries`;
+  
+  const prevBtn = document.getElementById('pm-cashier-btn-prev');
+  const nextBtn = document.getElementById('pm-cashier-btn-next');
+  if (prevBtn) prevBtn.disabled = (gPmCashierPage <= 1);
+  if (nextBtn) nextBtn.disabled = (start + gPmCashierLimit >= total);
 }
 
 function onSearchInputPmCashierBook() { clearTimeout(searchTimeout); searchTimeout = setTimeout(applyPmCashierBookSearchAndRender, 150); }
@@ -417,75 +619,165 @@ function clearDateFilterPmCashierBook() { document.getElementById('pm-cashier-da
 function changePagePmCashierBook(delta) { gPmCashierPage += delta; renderPmCashierBookTable(); }
 
 function openAddModalPmCashierBook() {
-  document.getElementById('pm-cashier-form').reset();
-  document.getElementById('pm-cashier-date').value = new Date().toISOString().slice(0, 10);
-  document.getElementById('pm-cashier-modal').classList.remove('hidden');
+  const form = document.getElementById('pm-cashier-form');
+  if (form) form.reset();
+
+  const uid = document.getElementById('pm-cashier-uniqueId');
+  if (uid) uid.value = '';
+
+  const dateEl = document.getElementById('pm-cashier-date');
+  if (dateEl) dateEl.value = new Date().toISOString().slice(0, 10);
+
+  const badge = document.getElementById('pm-student-wallet-badge');
+  if (badge) badge.classList.add('hidden');
+
+  document.getElementById('pm-cashier-modal')?.classList.remove('hidden');
 }
 
-function closePmCashierBookModal() { document.getElementById('pm-cashier-modal').classList.add('hidden'); }
+function closePmCashierBookModal() { 
+  document.getElementById('pm-cashier-modal')?.classList.add('hidden'); 
+}
 
+// 🎯 FIXED: Master Student Directory Cache & Instant Lookup for Cashier
 async function onPmStudentLookup() {
   const idVal = document.getElementById('pm-student-id-search')?.value.trim();
-  if (!idVal) return;
+  const fyidShow = document.getElementById('pm-student-fyid');
+  const nameShow = document.getElementById('pm-student-name');
+  const classShow = document.getElementById('pm-student-class');
+  const badge = document.getElementById('pm-student-wallet-badge');
+  const balEl = document.getElementById('pm-student-wallet-bal');
+  const desc = document.getElementById('pm-cashier-description');
+
+  if (!idVal) {
+    if (fyidShow) fyidShow.value = '';
+    if (nameShow) nameShow.value = '';
+    if (classShow) classShow.value = '';
+    if (badge) badge.classList.add('hidden');
+    return;
+  }
+
   const targetId = parseInt(idVal, 10);
-  try {
-    const res = await callApi('getStudentMoneySummary', { searchVal: targetId }, 'GET');
-    if (res && res.success && res.data && res.data.length > 0) {
-      const stu = res.data.find(r => r.studentId === targetId);
-      if (stu) {
-        document.getElementById('pm-student-fyid').value = stu.fyid || '';
-        document.getElementById('pm-student-name').value = stu.fyidName || '';
-        document.getElementById('pm-student-class').value = stu.class || '';
-        document.getElementById('pm-student-wallet-bal').textContent = `${Number(stu.netBalance || 0).toLocaleString('en-US')} MMK`;
-        document.getElementById('pm-student-wallet-badge').classList.remove('hidden');
+  const fyVal = typeof window.getCurrentAcademicYear === 'function' ? window.getCurrentAcademicYear() : '2026-2027';
+
+  if (!gStudentCacheForMoney[fyVal]) {
+    try {
+      const res = await callApi('getStudentData', { fy: fyVal, limit: 5000 }, 'GET');
+      if (res && res.success) gStudentCacheForMoney[fyVal] = res.data || [];
+    } catch (e) {}
+  }
+
+  const list = gStudentCacheForMoney[fyVal] || [];
+  let matched = list.find(s => parseInt(s.studentId || s.student_id || s.id, 10) === targetId);
+
+  if (!matched) {
+    try {
+      const singleRes = await callApi('lookupStudentById', { studentId: targetId, fy: fyVal }, 'GET');
+      if (singleRes && singleRes.success && singleRes.data) matched = singleRes.data;
+    } catch (e) {}
+  }
+
+  if (matched) {
+    const cleanFyid = window.sanitizeFyidStr(matched.fyid || '');
+    const actualName = matched.name || matched.fyidName || '';
+
+    if (fyidShow) fyidShow.value = cleanFyid;
+    if (nameShow) nameShow.value = actualName;
+    if (classShow) classShow.value = matched.class || '';
+    if (desc && !desc.value) desc.value = `[${cleanFyid}] ${actualName} - မုန့်ဖိုးထုတ်ပေးငွေ`;
+
+    // Fetch live balance
+    try {
+      const sumRes = await callApi('getStudentMoneySummary', { fy: fyVal, searchVal: cleanFyid }, 'GET');
+      if (sumRes && sumRes.success && sumRes.data && sumRes.data.length > 0) {
+        const stu = sumRes.data.find(r => r.studentId === targetId);
+        if (stu && balEl && badge) {
+          balEl.textContent = `${Number(stu.netBalance || 0).toLocaleString('en-US')} MMK`;
+          badge.classList.remove('hidden');
+        }
+      } else {
+        if (balEl && badge) {
+          balEl.textContent = "0 MMK";
+          badge.classList.remove('hidden');
+        }
       }
-    }
-  } catch (e) {}
+    } catch (e) {}
+  } else {
+    if (fyidShow) fyidShow.value = "Not Found";
+    if (nameShow) nameShow.value = "ကျောင်းသား ရှာမတွေ့ပါ";
+    if (classShow) classShow.value = "";
+    if (badge) badge.classList.add('hidden');
+  }
 }
 
 async function savePmCashierBookForm(e) {
-  e.preventDefault();
+  if (e && e.preventDefault) e.preventDefault();
   if (isSubmitting) return;
   isSubmitting = true;
 
-  const credit = parseFloat(document.getElementById('pm-cashier-credit').value || 0);
-  const studentId = parseInt(document.getElementById('pm-student-id-search').value, 10) || 0;
+  const credit = parseFloat(document.getElementById('pm-cashier-credit')?.value || 0);
+  const studentId = parseInt(document.getElementById('pm-student-id-search')?.value, 10) || 0;
 
   if (!studentId || credit <= 0) {
-    isSubmitting = false; return showToast("ERROR", "ကျောင်းသား ID နှင့် ထုတ်ပေးငွေ ထည့်ပါ။");
+    isSubmitting = false; 
+    return showToast("ERROR", "ကျောင်းသား ID နှင့် ထုတ်ပေးငွေ ထည့်ပါ။");
   }
 
   const payload = {
-    date: document.getElementById('pm-cashier-date').value,
+    date: document.getElementById('pm-cashier-date')?.value || new Date().toISOString().slice(0, 10),
     category: 'PM Withdraw',
     studentId: studentId,
-    studentName: document.getElementById('pm-student-name').value,
-    fyid: document.getElementById('pm-student-fyid').value,
-    studentClass: document.getElementById('pm-student-class').value,
-    responsibilityPerson: document.getElementById('pm-cashier-responsibility-person').value,
-    method: document.getElementById('pm-cashier-method').value,
-    debit: 0, credit: credit,
-    description: document.getElementById('pm-cashier-description').value
+    studentName: document.getElementById('pm-student-name')?.value || '',
+    fyid: document.getElementById('pm-student-fyid')?.value || '',
+    studentClass: document.getElementById('pm-student-class')?.value || '',
+    responsibilityPerson: document.getElementById('pm-cashier-responsibility-person')?.value || 'Cashier 1',
+    method: document.getElementById('pm-cashier-method')?.value || 'Cash',
+    debit: 0,
+    credit: credit,
+    description: document.getElementById('pm-cashier-description')?.value || ''
   };
 
   closePmCashierBookModal();
-  toggleLoading(true);
+  if (typeof toggleLoading === 'function') toggleLoading(true);
+
   try {
     const res = await callApi('savePmCashierBookEntry', payload);
     if (res && res.success) {
-      showToast('SUCCESS', 'မုန့်ဖိုးထုတ်ပေးပြီးပါပြီ။');
+      showToast('SUCCESS', 'မုန့်ဖိုးထုတ်ပေးပြီးပါပြီ။ ကျောင်းသားလက်ကျန်ကိုပါ အလိုအလျောက် ဖြတ်တောက်ပြီးပါပြီ။');
       loadPmCashierBookData(false);
-    } else { showToast('ERROR', res.message); }
-  } catch (err) {} finally { isSubmitting = false; toggleLoading(false); }
+    } else { 
+      showToast('ERROR', res?.message || 'သိမ်းဆည်းမှု မအောင်မြင်ပါ။'); 
+    }
+  } catch (err) { 
+    showToast('ERROR', err.message); 
+  } finally { 
+    isSubmitting = false; 
+    if (typeof toggleLoading === 'function') toggleLoading(false); 
+  }
 }
 
 async function deletePmCashierBookEntry(uniqueId) {
-  if(!confirm("ဖျက်မည်မှာ သေချာပါသလား?")) return;
-  toggleLoading(true);
+  if (!confirm("ဖျက်မည်မှာ သေချာပါသလား? ကျောင်းသားလက်ကျန်ပါ ပြန်လည်ညှိသွားပါမည်။")) return;
+  if (typeof toggleLoading === 'function') toggleLoading(true);
   try {
     const res = await callApi('deletePmCashierBookEntry', { uniqueId });
-    if(res && res.success) loadPmCashierBookData(false);
-  } catch(err) {} finally { toggleLoading(false); }
+    if (res && res.success) {
+      showToast('SUCCESS', 'စာရင်း ဖျက်သိမ်းပြီးပါပြီ။');
+      loadPmCashierBookData(false);
+    }
+  } catch (err) {} finally { if (typeof toggleLoading === 'function') toggleLoading(false); }
+}
+
+function exportToCSVPmCashierBook() {
+  if (!gPmCashierBookData || gPmCashierBookData.length === 0) return showToast("ERROR", "ထုတ်ယူရန် စာရင်း မရှိပါ။");
+  let csv = "NO,DATE,RESPONSIBILITY_PERSON,CATEGORY,DESCRIPTION,METHOD,DEBIT,CREDIT,BALANCES,VR_NO,FY\n";
+  gPmCashierBookData.forEach((r, idx) => {
+    csv += `${idx + 1},${window.safeCsvCell(r.date || '')},${window.safeCsvCell(r.responsibility_person || '')},${window.safeCsvCell(r.category || '')},${window.safeCsvCell(r.description || '')},${window.safeCsvCell(r.method || '')},${r.debit || 0},${r.credit || 0},${r.balances || 0},${window.safeCsvCell(r.vrNo || '')},${window.safeCsvCell(r.fy || '')}\n`;
+  });
+  const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `PM_Cashier_Book_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
 }
 
 // ==============================================================================
@@ -493,7 +785,7 @@ async function deletePmCashierBookEntry(uniqueId) {
 // ==============================================================================
 async function loadSpmmsReconciliationData() {
   try {
-    toggleLoading(true);
+    if (typeof toggleLoading === 'function') toggleLoading(true);
     const res = await callApi('getSpmmsReconciliation', { forceRefresh: true }, 'GET');
     if (res && res.success) {
       const data = res.data;
@@ -528,51 +820,24 @@ async function loadSpmmsReconciliationData() {
         desc.textContent = "သတိပြုရန်! စာရင်းနှင့် ငွေသား ကိုက်ညီမှု မရှိပါ။";
       }
     }
-  } catch (err) {} finally { toggleLoading(false); }
+  } catch (err) {
+    console.error("Reconciliation Error:", err);
+  } finally { 
+    if (typeof toggleLoading === 'function') toggleLoading(false); 
+  }
 }
 
-// Expose to window
-window.switchStudentMoneySubTab = switchStudentMoneySubTab;
-window.loadStudentMoneyData = loadStudentMoneyData;
-window.onSearchInputStudentMoney = onSearchInputStudentMoney;
-window.clearDateFilterStudentMoney = clearDateFilterStudentMoney;
-window.changePageStudentMoney = changePageStudentMoney;
-window.openAddModalStudentMoney = openAddModalStudentMoney;
-window.closeStudentMoneyModal = closeStudentMoneyModal;
-window.onStudentMoneyEntryTypeChange = onStudentMoneyEntryTypeChange;
-window.onStudentIdOrFYChangeMoney = onStudentIdOrFYChangeMoney;
-window.saveStudentMoneyForm = saveStudentMoneyForm;
-window.deleteStudentMoneyEntry = deleteStudentMoneyEntry;
-
-window.loadCanteenBookData = loadCanteenBookData;
-window.onSearchInputCanteenBook = onSearchInputCanteenBook;
-window.clearDateFilterCanteenBook = clearDateFilterCanteenBook;
-window.changePageCanteenBook = changePageCanteenBook;
-window.setFilterCanteenToday = setFilterCanteenToday;
-window.deleteCanteenBookEntry = deleteCanteenBookEntry;
-
-window.loadPmCashierBookData = loadPmCashierBookData;
-window.onSearchInputPmCashierBook = onSearchInputPmCashierBook;
-window.clearDateFilterPmCashierBook = clearDateFilterPmCashierBook;
-window.changePagePmCashierBook = changePagePmCashierBook;
-window.onPmCashierFilterChange = onPmCashierFilterChange;
-window.openAddModalPmCashierBook = openAddModalPmCashierBook;
-window.closePmCashierBookModal = closePmCashierBookModal;
-window.onPmStudentLookup = onPmStudentLookup;
-window.savePmCashierBookForm = savePmCashierBookForm;
-window.deletePmCashierBookEntry = deletePmCashierBookEntry;
-
-window.loadSpmmsReconciliationData = loadSpmmsReconciliationData;
-
-// Statement View Modal functions
+// ==============================================================================
+// 💡 6. STATEMENT TIMELINE MODAL
+// ==============================================================================
 async function openStudentStatementModal(studentId) {
   if (!studentId) return;
   try {
-    toggleLoading(true);
+    if (typeof toggleLoading === 'function') toggleLoading(true);
     const res = await callApi('getStudentMoneyData', { studentId: studentId, limit: 1000, forceRefresh: true }, 'GET');
     if (res && res.success) {
       const records = res.data || [];
-      if (records.length === 0) return;
+      if (records.length === 0) return showToast("ERROR", "ဤကျောင်းသားအတွက် မှတ်တမ်း မရှိသေးပါ။");
       const firstRow = records[0];
       document.getElementById('stm-stmt-student-name').textContent = `${firstRow.fyidName} - Pocket Money Statement`;
       document.getElementById('stm-stmt-student-info').textContent = `FY: ${firstRow.fy} | Class: ${firstRow.class} | ID: ${firstRow.studentId}`;
@@ -600,10 +865,49 @@ async function openStudentStatementModal(studentId) {
           `;
         }).join('');
       }
-      document.getElementById('stm-statement-modal').classList.remove('hidden');
+      document.getElementById('stm-statement-modal')?.classList.remove('hidden');
     }
-  } catch (err) {} finally { toggleLoading(false); }
+  } catch (err) {} finally { if (typeof toggleLoading === 'function') toggleLoading(false); }
 }
-function closeStudentStatementModal() { document.getElementById('stm-statement-modal').classList.add('hidden'); }
+
+function closeStudentStatementModal() { 
+  document.getElementById('stm-statement-modal')?.classList.add('hidden'); 
+}
+
+// Global Window Exports
+window.switchStudentMoneySubTab = switchStudentMoneySubTab;
+window.loadStudentMoneyData = loadStudentMoneyData;
+window.onSearchInputStudentMoney = onSearchInputStudentMoney;
+window.clearDateFilterStudentMoney = clearDateFilterStudentMoney;
+window.changePageStudentMoney = changePageStudentMoney;
+window.openAddModalStudentMoney = openAddModalStudentMoney;
+window.closeStudentMoneyModal = closeStudentMoneyModal;
+window.onStudentMoneyEntryTypeChange = onStudentMoneyEntryTypeChange;
+window.onStudentIdOrFYChangeMoney = onStudentIdOrFYChangeMoney;
+window.saveStudentMoneyForm = saveStudentMoneyForm;
+window.deleteStudentMoneyEntry = deleteStudentMoneyEntry;
+window.exportToCSVStudentMoney = exportToCSVStudentMoney;
+
+window.loadCanteenBookData = loadCanteenBookData;
+window.onSearchInputCanteenBook = onSearchInputCanteenBook;
+window.clearDateFilterCanteenBook = clearDateFilterCanteenBook;
+window.changePageCanteenBook = changePageCanteenBook;
+window.setFilterCanteenToday = setFilterCanteenToday;
+window.deleteCanteenBookEntry = deleteCanteenBookEntry;
+window.exportToCSVCanteenBook = exportToCSVCanteenBook;
+
+window.loadPmCashierBookData = loadPmCashierBookData;
+window.onSearchInputPmCashierBook = onSearchInputPmCashierBook;
+window.clearDateFilterPmCashierBook = clearDateFilterPmCashierBook;
+window.changePagePmCashierBook = changePagePmCashierBook;
+window.onPmCashierFilterChange = onPmCashierFilterChange;
+window.openAddModalPmCashierBook = openAddModalPmCashierBook;
+window.closePmCashierBookModal = closePmCashierBookModal;
+window.onPmStudentLookup = onPmStudentLookup;
+window.savePmCashierBookForm = savePmCashierBookForm;
+window.deletePmCashierBookEntry = deletePmCashierBookEntry;
+window.exportToCSVPmCashierBook = exportToCSVPmCashierBook;
+
+window.loadSpmmsReconciliationData = loadSpmmsReconciliationData;
 window.openStudentStatementModal = openStudentStatementModal;
 window.closeStudentStatementModal = closeStudentStatementModal;
