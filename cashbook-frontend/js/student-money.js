@@ -26,7 +26,7 @@ var isSubmitting = false;
 var searchTimeout = null;
 
 // ==============================================================================
-// 💡 1. MAIN TAB SWITCHER
+// 💡 1. MAIN TAB SWITCHER (DYNAMIC TOP KPI LABELS)
 // ==============================================================================
 function switchStudentMoneySubTab(tabName) {
   gCurrentStudentMoneyTab = tabName || 'main';
@@ -54,8 +54,17 @@ function switchStudentMoneySubTab(tabName) {
     if (kpi4) kpi4.textContent = 'TOTAL ENTRIES';
     loadStudentMoneyData(false);
   } else if (gCurrentStudentMoneyTab === 'canteen') {
+    if (kpi1) kpi1.textContent = 'TOTAL SALES (ရောင်းရငွေ DEBIT)';
+    if (kpi2) kpi2.textContent = 'TOTAL SETTLED (ရှင်းပြီးငွေ CREDIT)';
+    if (kpi3) kpi3.textContent = 'CANTEEN RECEIVABLE (ရရန်ကျန်ငွေ)';
+    if (kpi4) kpi4.textContent = 'CANTEEN ENTRIES';
     loadCanteenBookData(false);
   } else if (gCurrentStudentMoneyTab === 'cashier') {
+    // 🎯 PM Cashier Book အတွက် သီးသန့် အညွှန်းခေါင်းစဉ်များ
+    if (kpi1) kpi1.textContent = 'TOTAL FLOAT IN (အရင်းအဝင်ငွေ DEBIT)';
+    if (kpi2) kpi2.textContent = 'TOTAL PAID OUT (မုန့်ဖိုးထုတ်ငွေ CREDIT)';
+    if (kpi3) kpi3.textContent = 'PM CASH IN HAND (စုစုပေါင်း လက်ကျန်)';
+    if (kpi4) kpi4.textContent = 'CASHIER ENTRIES';
     loadPmCashierBookData(false);
   } else if (gCurrentStudentMoneyTab === 'reconcile') {
     loadSpmmsReconciliationData();
@@ -594,20 +603,69 @@ function exportToCSVCanteenBook() {
 }
 
 // ==============================================================================
-// 💡 4. PM CASHIER BOOK
+// 💡 4. PM CASHIER BOOK & INDIVIDUAL KPI CALCULATION
 // ==============================================================================
 async function loadPmCashierBookData(isSilent) {
   try {
-    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(true);
+    if (!isSilent) toggleLoading(true);
     const res = await callApi('getPmCashierBookData', { forceRefresh: true }, 'GET');
     if (res && res.success) {
       gPmCashierBookData = res.data || [];
+
+      // 🎯 Cashier 1, Cashier 2 နှင့် စုစုပေါင်း အဝင်/အထွက် တွက်ချက်ခြင်း
+      let totDeb = 0, totCred = 0;
+      let c1Deb = 0, c1Cred = 0;
+      let c2Deb = 0, c2Cred = 0;
+
+      gPmCashierBookData.forEach(r => {
+        const d = Number(r.debit || 0);
+        const c = Number(r.credit || 0);
+        totDeb += d;
+        totCred += c;
+
+        const resp = String(r.responsibility_person || '').trim().toLowerCase();
+        if (resp.includes('1') || resp.includes('၁')) {
+          c1Deb += d;
+          c1Cred += c;
+        } else if (resp.includes('2') || resp.includes('၂')) {
+          c2Deb += d;
+          c2Cred += c;
+        }
+      });
+
+      const totBal = totDeb - totCred;
+      const c1Bal = c1Deb - c1Cred;
+      const c2Bal = c2Deb - c2Cred;
+
+      // ၁။ ထိပ်ဆုံး 4-KPI ကတ်များအား PM Cashier ၏ ဂဏန်းများဖြင့် အစားထိုးပြသခြင်း
+      if (gCurrentStudentMoneyTab === 'cashier') {
+        renderTopKPIs(totDeb, totCred, totBal, gPmCashierBookData.length);
+      }
+
+      // ၂။ Cashier 1 နှင့် Cashier 2 သီးခြားကတ်များကို Update လုပ်ခြင်း
+      const c1BalEl = document.getElementById('pm-c1-balance');
+      const c1InEl = document.getElementById('pm-c1-in');
+      const c1OutEl = document.getElementById('pm-c1-out');
+      if (c1BalEl) c1BalEl.textContent = `${c1Bal.toLocaleString('en-US')} MMK`;
+      if (c1InEl) c1InEl.textContent = c1Deb.toLocaleString('en-US');
+      if (c1OutEl) c1OutEl.textContent = c1Cred.toLocaleString('en-US');
+
+      const c2BalEl = document.getElementById('pm-c2-balance');
+      const c2InEl = document.getElementById('pm-c2-in');
+      const c2OutEl = document.getElementById('pm-c2-out');
+      if (c2BalEl) c2BalEl.textContent = `${c2Bal.toLocaleString('en-US')} MMK`;
+      if (c2InEl) c2InEl.textContent = c2Deb.toLocaleString('en-US');
+      if (c2OutEl) c2OutEl.textContent = c2Cred.toLocaleString('en-US');
+
+      const totHandCashEl = document.getElementById('pm-total-hand-cash');
+      if (totHandCashEl) totHandCashEl.textContent = `${totBal.toLocaleString('en-US')} MMK`;
+
       applyPmCashierBookSearchAndRender();
     }
   } catch (err) {
     console.error("PM Cashier Load Error:", err);
   } finally { 
-    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(false); 
+    if (!isSilent) toggleLoading(false); 
   }
 }
 
