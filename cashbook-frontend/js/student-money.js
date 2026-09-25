@@ -214,6 +214,7 @@ function closeStudentMoneyModal() {
   document.getElementById('student-money-modal')?.classList.add('hidden'); 
 }
 
+// 💡 Action Type ပြောင်းလဲမှု ထိန်းချုပ်ခြင်း (Deposit နှင့် Withdraw အကွက် ၂ ခုလုံးကို အမြဲ Unlock ပေးထားသည်)
 function onStudentMoneyEntryTypeChange() {
   const type = document.getElementById('stm-entry-type')?.value || 'Deposit';
   const stuBox = document.getElementById('stm-student-fields');
@@ -231,16 +232,76 @@ function onStudentMoneyEntryTypeChange() {
   } else {
     if (stuBox) stuBox.classList.remove('hidden');
     if (respBox) respBox.classList.add('hidden');
+    
+    // 🎯 FIX: အကွက် ၂ ခုလုံးကို ဘယ်တော့မှ Lock မချဘဲ အမြဲ ရိုက်ထည့်ခွင့်ပြုထားသည်
+    if (deb) deb.disabled = false;
+    if (cred) cred.disabled = false;
+
     if (type === 'Deposit') {
-      if (deb) { deb.disabled = false; }
-      if (cred) { cred.disabled = true; cred.value = 0; }
-      if (desc && !desc.value) desc.value = "ကျောင်းသား မုန့်ဖိုးအပ်ငွေ";
-    } else {
-      if (deb) { deb.disabled = true; deb.value = 0; }
-      if (cred) { cred.disabled = false; }
-      if (desc && !desc.value) desc.value = "ကျောင်းသားအား ငွေသားပြန်ထုတ်ပေးခြင်း";
+      if (cred) cred.value = 0;
+      if (desc && (!desc.value || desc.value.includes('ငွေပြန်ထုတ်'))) desc.value = "ကျောင်းသား မုန့်ဖိုးအပ်ငွေ";
+    } else if (type === 'Withdraw') {
+      if (deb) deb.value = 0;
+      if (desc && (!desc.value || desc.value.includes('မုန့်ဖိုးအပ်ငွေ'))) desc.value = "ကျောင်းသားအား ငွေသားပြန်ထုတ်ပေးခြင်း";
     }
   }
+}
+
+// 💡 DEBIT (အပ်ငွေ) တွင် ရိုက်ထည့်လိုက်ပါက CREDIT အား 0 လုပ်ပြီး Action Type ကို Deposit သို့ အလိုအလျောက် ချိန်ညှိခြင်း
+function onDebitInputStudentMoney() {
+  const debVal = parseFloat(document.getElementById('stm-debit')?.value || 0);
+  if (debVal > 0) {
+    const cred = document.getElementById('stm-credit');
+    if (cred) cred.value = 0;
+
+    const typeSelect = document.getElementById('stm-entry-type');
+    if (typeSelect && typeSelect.value !== 'Transfer to PM Cashier') {
+      typeSelect.value = 'Deposit';
+      const desc = document.getElementById('stm-remark');
+      if (desc && (!desc.value || desc.value.includes('ငွေပြန်ထုတ်'))) desc.value = "ကျောင်းသား မုန့်ဖိုးအပ်ငွေ";
+    }
+  }
+}
+
+// 💡 WITHDRAW (ထုတ်ငွေ) တွင် ရိုက်ထည့်လိုက်ပါက DEBIT အား 0 လုပ်ပြီး Action Type ကို Withdraw သို့ အလိုအလျောက် ချိန်ညှိခြင်း
+function onCreditInputStudentMoney() {
+  const credVal = parseFloat(document.getElementById('stm-credit')?.value || 0);
+  if (credVal > 0) {
+    const deb = document.getElementById('stm-debit');
+    if (deb) deb.value = 0;
+
+    const typeSelect = document.getElementById('stm-entry-type');
+    if (typeSelect && typeSelect.value !== 'Transfer to PM Cashier') {
+      typeSelect.value = 'Withdraw';
+      const desc = document.getElementById('stm-remark');
+      if (desc && (!desc.value || desc.value.includes('မုန့်ဖိုးအပ်ငွေ'))) desc.value = "ကျောင်းသားအား ငွေသားပြန်ထုတ်ပေးခြင်း";
+    }
+  }
+}
+
+// Modal ဖွင့်ချိန်တွင် အကွက်များ အားလုံး ပွင့်နေစေရန် သေချာစေခြင်း
+function openAddModalStudentMoney() {
+  const form = document.getElementById('student-money-form');
+  if (form) form.reset();
+
+  const uid = document.getElementById('stm-uniqueId');
+  if (uid) uid.value = '';
+
+  const dateEl = document.getElementById('stm-date');
+  if (dateEl) dateEl.value = new Date().toISOString().slice(0, 10);
+
+  const deb = document.getElementById('stm-debit');
+  const cred = document.getElementById('stm-credit');
+  if (deb) { deb.disabled = false; deb.value = 0; }
+  if (cred) { cred.disabled = false; cred.value = 0; }
+
+  populateFYDropdownMoney();
+  onStudentMoneyEntryTypeChange();
+
+  const liveBadge = document.getElementById('stm-wallet-live-badge');
+  if (liveBadge) liveBadge.classList.add('hidden');
+
+  document.getElementById('student-money-modal')?.classList.remove('hidden');
 }
 
 // 🎯 FIXED: Master Student Directory Cache & Instant Lookup
@@ -911,3 +972,6 @@ window.exportToCSVPmCashierBook = exportToCSVPmCashierBook;
 window.loadSpmmsReconciliationData = loadSpmmsReconciliationData;
 window.openStudentStatementModal = openStudentStatementModal;
 window.closeStudentStatementModal = closeStudentStatementModal;
+
+window.onDebitInputStudentMoney = onDebitInputStudentMoney;
+window.onCreditInputStudentMoney = onCreditInputStudentMoney;
