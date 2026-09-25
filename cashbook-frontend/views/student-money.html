@@ -244,52 +244,63 @@
   <!-- 💡 TAB 3: PM CASHIER BOOK (WITH RESPONSIBILITY PERSON FILTER & ID SEARCH)      -->
   <!-- ============================================================================== -->
   <div id="stm-cashier-view" class="space-y-4 hidden">
-    <!-- 💡 PM Cashier သီးသန့် လက်ကျန်ငွေခွဲခြမ်းစိတ်ဖြာမှု KPI Strip -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-      <!-- Cashier 1 Card -->
-      <div class="p-4 bg-sky-950/30 border border-sky-500/30 rounded-xl flex items-center justify-between">
-        <div>
-          <div class="flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-sky-400"></span>
-            <p class="text-[10px] font-bold text-sky-400 uppercase tracking-wider">CASHIER 1 (ငွေကိုင် ၁ လက်ကျန်)</p>
-          </div>
-          <h4 id="pm-c1-balance" class="text-lg font-black text-sky-300 font-mono mt-1">0 MMK</h4>
-          <p class="text-[10px] text-slate-400 mt-0.5">
-            အဝင်: <span id="pm-c1-in" class="text-emerald-400 font-mono">0</span> | ထုတ်: <span id="pm-c1-out" class="text-rose-400 font-mono">0</span>
+    <!-- 💡 PM Cashier Single Row 4-KPI Grid (Matches Golden ERP stats-card style) -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <!-- Card 1: Cashier 1 -->
+      <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+        <div class="p-3.5 rounded-lg bg-sky-500/10 text-sky-400 shrink-0">
+          <i class="fa-solid fa-user-tie text-xl"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">CASHIER 1 (ငွေကိုင် ၁)</p>
+          <h3 id="pm-c1-balance" class="text-base font-extrabold text-sky-400 mt-1">0 MMK</h3>
+          <p class="text-[10px] text-slate-400 mt-0.5 font-mono truncate">
+            အဝင်: <span id="pm-c1-in" class="text-emerald-400">0</span> | ထုတ်: <span id="pm-c1-out" class="text-rose-400">0</span>
           </p>
         </div>
-        <div class="p-3 rounded-lg bg-sky-500/10 text-sky-400"><i class="fa-solid fa-user-tie text-xl"></i></div>
       </div>
 
-      <!-- Cashier 2 Card -->
-      <div class="p-4 bg-purple-950/30 border border-purple-500/30 rounded-xl flex items-center justify-between">
-        <div>
-          <div class="flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-purple-400"></span>
-            <p class="text-[10px] font-bold text-purple-400 uppercase tracking-wider">CASHIER 2 (ငွေကိုင် ၂ လက်ကျန်)</p>
-          </div>
-          <h4 id="pm-c2-balance" class="text-lg font-black text-purple-300 font-mono mt-1">0 MMK</h4>
-          <p class="text-[10px] text-slate-400 mt-0.5">
-            အဝင်: <span id="pm-c2-in" class="text-emerald-400 font-mono">0</span> | ထုတ်: <span id="pm-c2-out" class="text-rose-400 font-mono">0</span>
+      <!-- Card 2: Cashier 2 -->
+      <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+        <div class="p-3.5 rounded-lg bg-purple-500/10 text-purple-400 shrink-0">
+          <i class="fa-solid fa-user-tie text-xl"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">CASHIER 2 (ငွေကိုင် ၂)</p>
+          <h3 id="pm-c2-balance" class="text-base font-extrabold text-purple-400 mt-1">0 MMK</h3>
+          <p class="text-[10px] text-slate-400 mt-0.5 font-mono truncate">
+            အဝင်: <span id="pm-c2-in" class="text-emerald-400">0</span> | ထုတ်: <span id="pm-c2-out" class="text-rose-400">0</span>
           </p>
         </div>
-        <div class="p-3 rounded-lg bg-purple-500/10 text-purple-400"><i class="fa-solid fa-user-tie text-xl"></i></div>
       </div>
 
-      <!-- Total PM Cash In Hand -->
-      <div class="p-4 bg-emerald-950/30 border border-emerald-500/30 rounded-xl flex items-center justify-between sm:col-span-2 lg:col-span-1">
-        <div>
-          <div class="flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <p class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">TOTAL CASHIERS HAND CASH</p>
-          </div>
-          <h4 id="pm-total-hand-cash" class="text-lg font-black text-emerald-300 font-mono mt-1">0 MMK</h4>
-          <p class="text-[10px] text-slate-400 mt-0.5">Cashier 1 + Cashier 2 လက်ကျန်ငွေသား စုစုပေါင်း</p>
+      <!-- Card 3: Total PM Cash in Hand -->
+      <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+        <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0">
+          <i class="fa-solid fa-money-bill-wave text-xl"></i>
         </div>
-        <div class="p-3 rounded-lg bg-emerald-500/10 text-emerald-400"><i class="fa-solid fa-money-bill-wave text-xl"></i></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">TOTAL PM CASH IN HAND</p>
+          <h3 id="pm-total-hand-cash" class="text-base font-extrabold text-emerald-400 mt-1">0 MMK</h3>
+          <p class="text-[10px] text-slate-400 mt-0.5 font-mono truncate">
+            အဝင်: <span id="pm-total-in" class="text-emerald-400">0</span> | ထုတ်: <span id="pm-total-out" class="text-rose-400">0</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Card 4: Cashier Entries -->
+      <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+        <div class="p-3.5 rounded-lg bg-amber-500/10 text-amber-400 shrink-0">
+          <i class="fa-solid fa-receipt text-xl"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">CASHIER ENTRIES</p>
+          <h3 id="pm-cashier-entries-count" class="text-base font-extrabold text-amber-400 mt-1">0</h3>
+          <p class="text-[10px] text-slate-400 mt-0.5 truncate">ငွေလွှဲ / ငွေထုတ် စုစုပေါင်း</p>
+        </div>
       </div>
     </div>
-    
+
     <!-- PM Cashier Toolbar -->
     <div class="flex flex-col lg:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
       <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
