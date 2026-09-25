@@ -508,37 +508,44 @@
   </div>
 </div>
 
-<!-- MODAL 2: PM CASHIER STUDENT CASH WITHDRAW MODAL -->
+<!-- MODAL 2: PM CASHIER ACTION MODAL (WITHDRAW & RETURN TO FINANCE) -->
 <div id="pm-cashier-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
   <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
     <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
-      <h3 class="text-sm font-black text-white uppercase tracking-wider">PM Cashier Student Cash Withdraw</h3>
+      <h3 id="pm-modal-title" class="text-sm font-black text-white uppercase tracking-wider">PM Cashier Action</h3>
       <button onclick="closePmCashierBookModal()" class="text-slate-500 hover:text-white transition"><i class="fa-solid fa-xmark text-sm"></i></button>
     </div>
 
     <form id="pm-cashier-form" onsubmit="savePmCashierBookForm(event)" class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
       <input type="hidden" id="pm-cashier-uniqueId">
 
-      <div class="grid grid-cols-2 gap-4">
+      <div class="grid grid-cols-3 gap-3">
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Date</label>
           <input type="date" id="pm-cashier-date" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-sky-500">
         </div>
         <div class="flex flex-col gap-1">
-          <label class="font-bold text-sky-400 uppercase tracking-wide">Cashier (တာဝန်ခံ ငွေကိုင်)</label>
-          <select id="pm-cashier-responsibility-person" required class="w-full bg-[#0f172a] border border-slate-800 text-sky-300 font-bold rounded-lg p-2.5 outline-none focus:border-sky-500">
-            <option value="Cashier 1" selected>Cashier 1 (ငွေကိုင် ၁)</option>
-            <option value="Cashier 2">Cashier 2 (ငွေကိုင် ၂)</option>
+          <label class="font-bold text-sky-400 uppercase tracking-wide">Action Type</label>
+          <select id="pm-cashier-category" onchange="onPmCashierCategoryChange()" required class="w-full bg-[#0f172a] border border-slate-800 text-sky-300 font-bold rounded-lg p-2.5 outline-none focus:border-sky-500">
+            <option value="PM Withdraw" selected>PM Withdraw (မုန့်ဖိုးထုတ်ပေးငွေ)</option>
+            <option value="Return to Finance">Return to Finance (Finance သို့ ငွေပြန်လွှဲခြင်း)</option>
+          </select>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Cashier (ငွေကိုင်)</label>
+          <select id="pm-cashier-responsibility-person" required class="w-full bg-[#0f172a] border border-slate-800 text-white font-bold rounded-lg p-2.5 outline-none focus:border-sky-500">
+            <option value="Cashier 1" selected>Cashier 1</option>
+            <option value="Cashier 2">Cashier 2</option>
           </select>
         </div>
       </div>
 
-      <!-- Student Lookup for Cash Withdrawal -->
-      <div class="space-y-3 p-3 bg-sky-950/20 border border-sky-500/20 rounded-xl">
+      <!-- Student Lookup for Cash Withdrawal (Return to Finance တွင် ဖျောက်ထားမည်) -->
+      <div id="pm-student-lookup-container" class="space-y-3 p-3 bg-sky-950/20 border border-sky-500/20 rounded-xl">
         <div class="grid grid-cols-3 gap-3">
           <div class="flex flex-col gap-1">
             <label class="font-bold text-sky-400 uppercase tracking-wide">Student ID</label>
-            <input type="number" id="pm-student-id-search" oninput="onPmStudentLookup()" placeholder="e.g. 1" required class="w-full font-mono font-bold text-sky-300 bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-sky-500">
+            <input type="number" id="pm-student-id-search" oninput="onPmStudentLookup()" placeholder="e.g. 1" class="w-full font-mono font-bold text-sky-300 bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-sky-500">
           </div>
           <div class="flex flex-col gap-1">
             <label class="font-bold text-slate-400 uppercase tracking-wide">FYID</label>
@@ -570,19 +577,19 @@
           </select>
         </div>
         <div class="flex flex-col gap-1">
-          <label class="font-bold text-rose-400 uppercase tracking-wide">Payout Amount (ထုတ်ပေးငွေ CREDIT)</label>
+          <label class="font-bold text-rose-400 uppercase tracking-wide">Amount (ထုတ်ငွေ / ပြန်လွှဲငွေ CREDIT)</label>
           <input type="number" id="pm-cashier-credit" value="0" required class="w-full text-right font-bold text-rose-400 font-mono bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-rose-500">
         </div>
       </div>
 
       <div class="flex flex-col gap-1">
         <label class="font-bold text-slate-400 uppercase tracking-wide">Description</label>
-        <textarea id="pm-cashier-description" rows="2" placeholder="မုန့်ဖိုးထုတ်ပေးငွေ အကြောင်းအရာ..." class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-sky-500"></textarea>
+        <textarea id="pm-cashier-description" rows="2" placeholder="အသုံးပြုအကြောင်းပြချက်..." class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-sky-500"></textarea>
       </div>
 
       <div class="flex justify-end items-center gap-3 pt-4 border-t border-slate-800">
         <button type="button" onclick="closePmCashierBookModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">Cancel</button>
-        <button type="submit" class="px-5 py-2 rounded-lg text-xs font-black bg-sky-600 hover:bg-sky-500 text-white shadow-lg shadow-sky-600/10 transition-all">Payout Cash</button>
+        <button type="submit" class="px-5 py-2 rounded-lg text-xs font-black bg-sky-600 hover:bg-sky-500 text-white shadow-lg shadow-sky-600/10 transition-all">Confirm Action</button>
       </div>
     </form>
   </div>

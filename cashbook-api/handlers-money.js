@@ -3,7 +3,8 @@
  * GOLDEN ERP SYSTEM - SPMMS HANDLERS (CLOUDFLARE D1)
  * File: handlers-money.js
  * 💡 Features: 3-Ledgers Strict Double-Entry Architecture
- *              🚀 OPTIMIZED: db.batch() Atomic Transactions for absolute integrity
+ *              🚀 Foreign Key Safe: System rows use NULL student_id
+ *              🔄 Bidirectional Transfers: Finance <-> PM Cashier Cash Flow
  *              🛡️ RECONCILIATION: O(1) Financial Audit Engine included
  * ==============================================================================
  */
@@ -42,7 +43,6 @@ export async function getStudentMoneyData(db, body) {
 
     const whereSql = `WHERE ${whereClauses.join(' AND ')}`;
 
-    // 🚀 Optimize: COUNT() and FETCH only necessary columns
     const [countRow, statsRow] = await db.batch([
       db.prepare(`SELECT COUNT(id) as c FROM student_money ${whereSql}`).bind(...params),
       db.prepare(`SELECT SUM(debit) as d, SUM(credit) as c FROM student_money WHERE fy IN (?, ?)`).bind(fy, `FY ${fy}`)
@@ -73,7 +73,8 @@ export async function getStudentMoneySummary(db, body) {
     const fy = normalizeFyStr(body.fy || getCurrentAcademicYear()).replace(/^FY\s*/i, '');
     const searchVal = String(body.searchVal || "").trim();
 
-    let whereClauses = [`(fy IN (?, ?)) AND student_id != 0`]; // ID 0 is for System Transfers
+    // 🚀 Foreign Key Safe: Exclude system rows (student_id IS NULL)
+    let whereClauses = [`(fy IN (?, ?)) AND student_id IS NOT NULL`];
     let params = [fy, `FY ${fy}`];
 
     if (searchVal) {
@@ -116,33 +117,32 @@ export async function saveStudentMoneyEntry(db, session, body) {
     const entryType = body.entryType || 'Deposit';
     const debit = parseFloat(body.debit || 0);
     const credit = parseFloat(body.credit || 0);
-    const studentId = parseInt(body.studentId, 10) || 0;
+    const studentId = parseInt(body.studentId, 10) || null; // 🎯 FIX: Use null for FK constraint
     const method = body.method || 'Cash';
     
     const batchStatements = [];
 
-    // 💡 Strict Standardized Remark Tagging for Financial Audit
     if (entryType === 'Transfer to PM Cashier' && credit > 0) {
       // 1. Debit -> PM Cashier Book
       const noPm = await generateFyNo(db, 'pm_cashier_book', fy);
       const vrPm = await generateVoucherNo(db, 'pm_cashier_book', 'PMC', entryDate);
       const pmRemark = body.remark || "Finance မှ PM Cashier သို့ အရင်းငွေလွှဲပေးခြင်း";
-      const respPerson = body.responsibilityPerson || session?.name || '';
+      const respPerson = body.responsibilityPerson || 'Cashier 1';
 
       batchStatements.push(
         db.prepare(`INSERT INTO pm_cashier_book (no, date, responsibility_person, category, description, method, debit, credit, balances, vr_no, my, fy, created_by, uniqueid) VALUES (?, ?, ?, 'Float Receive', ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)`)
         .bind(noPm, entryDate, respPerson, pmRemark, method, credit, vrPm, my, fy, session?.name || 'Finance', `PMC_${uniqueid}`)
       );
 
-      // 2. Credit -> Student Money (ID=0 to represent system vault outflow)
+      // 2. Credit -> Student Money (student_id MUST BE NULL to pass FK constraint)
       const noStu = await generateFyNo(db, 'student_money', cleanFy);
       batchStatements.push(
-        db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, 0, 'FINANCE', 'Finance Vault', 'Vault', ?, 0, ?, 0, ?, ?, ?)`)
-        .bind(noStu, entryDate, cleanFy, method, credit, `[Finance] Transfer to PM Cashier: ${pmRemark}`, session?.name || 'Finance', uniqueid)
+        db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, NULL, 'FINANCE', 'Finance Vault', 'Vault', ?, 0, ?, 0, ?, ?, ?)`)
+        .bind(noStu, entryDate, cleanFy, method, credit, `[Finance] Transfer to PM Cashier (${respPerson}): ${pmRemark}`, session?.name || 'Finance', uniqueid)
       );
 
     } else {
-      // Regular Deposit or Withdraw
+      // Regular Student Deposit or Withdraw
       const noStu = await generateFyNo(db, 'student_money', cleanFy);
       const stuName = body.name ? `[${body.fyid}] ${body.name}` : `[ID ${studentId}]`;
       const prefix = entryType === 'Deposit' ? '[Finance] Deposit' : '[Finance] Withdraw';
@@ -156,7 +156,6 @@ export async function saveStudentMoneyEntry(db, session, body) {
 
     await db.batch(batchStatements);
 
-    // Atomic Recalculations
     await recalculateLedgerBalances(db, 'student_money', cleanFy, entryDate);
     if (entryType === 'Transfer to PM Cashier') {
       await recalculateLedgerBalances(db, 'pm_cashier_book', fy, entryDate);
@@ -177,24 +176,25 @@ export async function deleteStudentMoneyEntry(db, session, body) {
     const batchStatements = [];
     batchStatements.push(db.prepare("DELETE FROM student_money WHERE uniqueid = ?").bind(uid));
     
-    // Reverse Double-Entry if it was a Transfer
-    if (existing.remark.includes('Transfer to PM Cashier')) {
+    if (existing.remark && existing.remark.includes('Transfer to PM Cashier')) {
       batchStatements.push(db.prepare("DELETE FROM pm_cashier_book WHERE uniqueid = ?").bind(`PMC_${uid}`));
-    } else if (existing.remark.includes('Settlement to Canteen')) {
+    } else if (existing.remark && existing.remark.includes('Settlement to Canteen')) {
       batchStatements.push(db.prepare("DELETE FROM canteen_book WHERE uniqueid = ?").bind(`CAN_${uid}`));
     }
 
     await db.batch(batchStatements);
 
     await recalculateLedgerBalances(db, 'student_money', existing.fy.replace(/^FY\s*/i, ''), existing.date);
-    if (existing.remark.includes('Transfer to PM Cashier')) await recalculateLedgerBalances(db, 'pm_cashier_book', `FY ${existing.fy.replace(/^FY\s*/i, '')}`, existing.date);
+    if (existing.remark && existing.remark.includes('Transfer to PM Cashier')) {
+      await recalculateLedgerBalances(db, 'pm_cashier_book', `FY ${existing.fy.replace(/^FY\s*/i, '')}`, existing.date);
+    }
 
     return { success: true };
   } catch (err) { return { success: false, message: err.message }; }
 }
 
 // ==============================================================================
-// 💡 2. PM CASHIER BOOK
+// 💡 2. PM CASHIER BOOK (WITH BIDIRECTIONAL CASH RETURN SUPPORT)
 // ==============================================================================
 
 export async function getPmCashierBookData(db, body) {
@@ -215,38 +215,50 @@ export async function savePmCashierBookEntry(db, session, body) {
     const cleanFy = fy.replace(/^FY\s*/i, '');
     
     const uniqueid = body.uniqueId ? String(body.uniqueId).trim() : generateUniqueId('PMC');
-    const category = body.category || 'PM Withdraw';
+    const category = body.category || 'PM Withdraw'; // 'PM Withdraw' | 'Return to Finance'
     const credit = parseFloat(body.credit || 0);
     const debit = parseFloat(body.debit || 0);
-    const respPerson = body.responsibilityPerson || session?.name || '';
+    const respPerson = body.responsibilityPerson || 'Cashier 1';
     
     const noPm = await generateFyNo(db, 'pm_cashier_book', fy);
     const vrPm = body.vrNo || await generateVoucherNo(db, 'pm_cashier_book', 'PMC', entryDate);
     const batchStatements = [];
 
-    // 1. Insert PM Cashier Record
+    // 1. PM Cashier Entry
     batchStatements.push(
       db.prepare(`INSERT INTO pm_cashier_book (no, date, responsibility_person, category, description, method, debit, credit, balances, vr_no, my, fy, created_by, uniqueid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`)
       .bind(noPm, entryDate, respPerson, category, body.description || '', body.method || 'Cash', debit, credit, vrPm, my, fy, session?.name || 'PM Cashier', uniqueid)
     );
 
-    // 2. Double-Entry Auto Deduct from Student Money
+    // 2A. Scenario 1: PM Withdraw -> Deduct from Student Wallet
     if (category === 'PM Withdraw' && body.studentId > 0 && credit > 0) {
       const noStu = await generateFyNo(db, 'student_money', cleanFy);
       const stuName = body.studentName ? `[${body.fyid}] ${body.studentName}` : `[ID ${body.studentId}]`;
-      const desc = `[PM Cashier] Withdraw: ${body.description || ''}`.trim();
+      const desc = `[PM Cashier - ${respPerson}] Withdraw: ${body.description || ''}`.trim();
 
       batchStatements.push(
         db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?)`)
         .bind(noStu, entryDate, cleanFy, body.studentId, body.fyid || '', stuName, body.studentClass || '', body.method || 'Cash', credit, desc, session?.name || 'PM Cashier', `STM_${uniqueid}`)
       );
     }
+    // 2B. Scenario 2: Return to Finance -> Debit to Student Money Vault (student_id = NULL)
+    else if (category === 'Return to Finance' && credit > 0) {
+      const noStu = await generateFyNo(db, 'student_money', cleanFy);
+      const desc = `[PM Cashier] Return Cash from ${respPerson}: ${body.description || ''}`.trim();
+
+      batchStatements.push(
+        db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, NULL, 'FINANCE', 'Finance Vault', 'Vault', ?, ?, 0, 0, ?, ?, ?)`)
+        .bind(noStu, entryDate, cleanFy, body.method || 'Cash', credit, desc, session?.name || 'PM Cashier', `STM_${uniqueid}`)
+      );
+    }
 
     await db.batch(batchStatements);
 
-    // Recalculate
+    // Atomic Recalculations
     await recalculateLedgerBalances(db, 'pm_cashier_book', fy, entryDate);
-    if (category === 'PM Withdraw') await recalculateLedgerBalances(db, 'student_money', cleanFy, entryDate);
+    if (category === 'PM Withdraw' || category === 'Return to Finance') {
+      await recalculateLedgerBalances(db, 'student_money', cleanFy, entryDate);
+    }
 
     return { success: true, uniqueId: uniqueid };
   } catch (err) { return { success: false, message: err.message }; }
@@ -263,14 +275,16 @@ export async function deletePmCashierBookEntry(db, session, body) {
     const batchStatements = [];
     batchStatements.push(db.prepare("DELETE FROM pm_cashier_book WHERE uniqueid = ?").bind(uid));
     
-    if (existing.category === 'PM Withdraw') {
+    if (existing.category === 'PM Withdraw' || existing.category === 'Return to Finance') {
       batchStatements.push(db.prepare("DELETE FROM student_money WHERE uniqueid = ?").bind(`STM_${uid}`));
     }
 
     await db.batch(batchStatements);
 
     await recalculateLedgerBalances(db, 'pm_cashier_book', existing.fy, existing.date);
-    if (existing.category === 'PM Withdraw') await recalculateLedgerBalances(db, 'student_money', existing.fy.replace(/^FY\s*/i, ''), existing.date);
+    if (existing.category === 'PM Withdraw' || existing.category === 'Return to Finance') {
+      await recalculateLedgerBalances(db, 'student_money', existing.fy.replace(/^FY\s*/i, ''), existing.date);
+    }
 
     return { success: true };
   } catch (err) { return { success: false, message: err.message }; }
@@ -299,8 +313,8 @@ export async function saveCanteenBookEntry(db, session, body) {
     
     const uniqueid = body.uniqueId ? String(body.uniqueId).trim() : generateUniqueId('CAN');
     const category = body.category || 'POS Sales';
-    const debit = parseFloat(body.debit || 0); // Sales increase receivable
-    const studentId = parseInt(body.studentId, 10) || 0;
+    const debit = parseFloat(body.debit || 0);
+    const studentId = parseInt(body.studentId, 10) || null;
     
     const noCan = await generateFyNo(db, 'canteen_book', fy);
     const vrCan = body.vrNo || await generateVoucherNo(db, 'canteen_book', 'CAN', entryDate);
@@ -312,7 +326,7 @@ export async function saveCanteenBookEntry(db, session, body) {
       .bind(noCan, entryDate, category, body.description || '', body.method || 'Transfer', debit, vrCan, my, fy, session?.name || 'System', uniqueid)
     );
 
-    // 2. Double-Entry Auto Deduct from Student Money
+    // 2. Deduct from Student Money
     if (category === 'POS Sales' && studentId > 0 && debit > 0) {
       const noStu = await generateFyNo(db, 'student_money', cleanFy);
       const stuName = body.studentName ? `[${body.fyid}] ${body.studentName}` : `[ID ${studentId}]`;
@@ -366,31 +380,30 @@ export async function getSpmmsReconciliation(db, body) {
     const fy = normalizeFyStr(body.fy || getCurrentAcademicYear()).replace(/^FY\s*/i, '');
     
     const [stuBalRes, pmBalRes, finRes] = await db.batch([
-      // 1. Total Student Virtual Balance
-      db.prepare("SELECT SUM(debit - credit) as bal FROM student_money WHERE fy=? AND student_id != 0").bind(fy),
+      // 1. Total Student Virtual Balance (Only student accounts, excluding system rows)
+      db.prepare("SELECT SUM(debit - credit) as bal FROM student_money WHERE fy IN (?, ?) AND student_id IS NOT NULL").bind(fy, `FY ${fy}`),
       
-      // 2. Total PM Cashier Physical Balance
-      db.prepare("SELECT SUM(debit - credit) as bal FROM pm_cashier_book WHERE fy=?").bind(`FY ${fy}`),
+      // 2. Total PM Cashier Physical Cash in Hand
+      db.prepare("SELECT SUM(debit - credit) as bal FROM pm_cashier_book WHERE fy IN (?, ?)").bind(fy, `FY ${fy}`),
       
       // 3. Finance Vault Physical Cash
-      // Inflow = All Student Deposits (debits)
-      // Outflow = Direct Withdraws + Transfers to Cashier/Canteen (credits not from PM/Canteen systems)
+      // Net Cash = (All student deposits) - (Direct withdraws) - (Transfers to PM Cashier) + (Returns from PM Cashier)
       db.prepare(`
-        SELECT 
-          SUM(debit) as tot_in,
-          SUM(CASE WHEN student_id = 0 OR remark LIKE '[Finance] Withdraw%' THEN credit ELSE 0 END) as tot_out
-        FROM student_money WHERE fy=?
-      `).bind(fy)
+        SELECT SUM(
+          CASE 
+            WHEN student_id IS NOT NULL THEN (debit - (CASE WHEN remark LIKE '[Finance] Withdraw%' THEN credit ELSE 0 END))
+            ELSE (debit - credit)
+          END
+        ) as bal 
+        FROM student_money WHERE fy IN (?, ?)
+      `).bind(fy, `FY ${fy}`)
     ]);
 
     const totalVirtual = parseFloat(stuBalRes.results[0]?.bal || 0);
     const totalCashier = parseFloat(pmBalRes.results[0]?.bal || 0);
-    const financeIn = parseFloat(finRes.results[0]?.tot_in || 0);
-    const financeOut = parseFloat(finRes.results[0]?.tot_out || 0);
-    const totalFinance = financeIn - financeOut;
+    const totalFinance = parseFloat(finRes.results[0]?.bal || 0);
 
     const totalPhysicalCash = totalFinance + totalCashier;
-    // The equation: Virtual Balance must exactly equal (Finance Cash + PM Cashier Cash)
     const variance = totalVirtual - totalPhysicalCash;
     const isMatched = Math.abs(variance) < 0.01;
 

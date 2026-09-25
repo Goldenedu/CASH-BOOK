@@ -841,6 +841,93 @@ function exportToCSVPmCashierBook() {
   a.click();
 }
 
+// 💡 PM Cashier Modal Action Change
+function onPmCashierCategoryChange() {
+  const cat = document.getElementById('pm-cashier-category')?.value || 'PM Withdraw';
+  const stuBox = document.getElementById('pm-student-lookup-container');
+  const desc = document.getElementById('pm-cashier-description');
+
+  if (cat === 'Return to Finance') {
+    if (stuBox) stuBox.classList.add('hidden');
+    if (desc) desc.value = "PM Cashier မှ Finance သို့ လက်ကျန်ငွေ ပြန်လည်အပ်နှံခြင်း";
+  } else {
+    if (stuBox) stuBox.classList.remove('hidden');
+    if (desc) desc.value = "";
+  }
+}
+
+function openAddModalPmCashierBook() {
+  const form = document.getElementById('pm-cashier-form');
+  if (form) form.reset();
+
+  const uid = document.getElementById('pm-cashier-uniqueId');
+  if (uid) uid.value = '';
+
+  const dateEl = document.getElementById('pm-cashier-date');
+  if (dateEl) dateEl.value = new Date().toISOString().slice(0, 10);
+
+  const badge = document.getElementById('pm-student-wallet-badge');
+  if (badge) badge.classList.add('hidden');
+
+  onPmCashierCategoryChange();
+  document.getElementById('pm-cashier-modal')?.classList.remove('hidden');
+}
+
+async function savePmCashierBookForm(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  if (isSubmitting) return;
+  isSubmitting = true;
+
+  const category = document.getElementById('pm-cashier-category')?.value || 'PM Withdraw';
+  const credit = parseFloat(document.getElementById('pm-cashier-credit')?.value || 0);
+  const studentId = parseInt(document.getElementById('pm-student-id-search')?.value, 10) || 0;
+
+  if (category === 'PM Withdraw' && (!studentId || credit <= 0)) {
+    isSubmitting = false; 
+    return showToast("ERROR", "ကျောင်းသား ID နှင့် ထုတ်ပေးငွေ ထည့်ပါ။");
+  }
+
+  if (category === 'Return to Finance' && credit <= 0) {
+    isSubmitting = false;
+    return showToast("ERROR", "Finance သို့ ပြန်လွှဲမည့် ငွေပမာဏ ထည့်သွင်းပါ။");
+  }
+
+  const payload = {
+    date: document.getElementById('pm-cashier-date')?.value || new Date().toISOString().slice(0, 10),
+    category: category,
+    studentId: category === 'PM Withdraw' ? studentId : null,
+    studentName: document.getElementById('pm-student-name')?.value || '',
+    fyid: document.getElementById('pm-student-fyid')?.value || '',
+    studentClass: document.getElementById('pm-student-class')?.value || '',
+    responsibilityPerson: document.getElementById('pm-cashier-responsibility-person')?.value || 'Cashier 1',
+    method: document.getElementById('pm-cashier-method')?.value || 'Cash',
+    debit: 0,
+    credit: credit,
+    description: document.getElementById('pm-cashier-description')?.value || ''
+  };
+
+  closePmCashierBookModal();
+  if (typeof toggleLoading === 'function') toggleLoading(true);
+
+  try {
+    const res = await callApi('savePmCashierBookEntry', payload);
+    if (res && res.success) {
+      showToast('SUCCESS', category === 'Return to Finance' 
+        ? 'Finance သို့ ငွေပြန်လွှဲပြီးပါပြီ။ Student Money စာအုပ်ထဲသို့ အလိုအလျောက် ငွေဝင်သွားပါပြီ။' 
+        : 'မုန့်ဖိုးထုတ်ပေးပြီးပါပြီ။ ကျောင်းသားလက်ကျန်ကိုပါ အလိုအလျောက် ဖြတ်တောက်ပြီးပါပြီ။');
+      loadPmCashierBookData(false);
+      loadStudentMoneyData(false);
+    } else { 
+      showToast('ERROR', res?.message || 'သိမ်းဆည်းမှု မအောင်မြင်ပါ။'); 
+    }
+  } catch (err) { 
+    showToast('ERROR', err.message); 
+  } finally { 
+    isSubmitting = false; 
+    if (typeof toggleLoading === 'function') toggleLoading(false); 
+  }
+}
+
 // ==============================================================================
 // 💡 5. RECONCILIATION AUDIT CONTROLLER
 // ==============================================================================
@@ -975,3 +1062,5 @@ window.closeStudentStatementModal = closeStudentStatementModal;
 
 window.onDebitInputStudentMoney = onDebitInputStudentMoney;
 window.onCreditInputStudentMoney = onCreditInputStudentMoney;
+
+window.onPmCashierCategoryChange = onPmCashierCategoryChange;
