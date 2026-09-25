@@ -30,49 +30,46 @@
     </div>
   </div>
 
-  <!-- 💡 ၂။ Top KPI Stats Cards Grid (Active Tab ပေါ်မူတည်၍ ပြောင်းလဲမည်) -->
-  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-    <!-- Card 1: Inflow / Deposit / Sales -->
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400"><i class="fa-solid fa-circle-arrow-down text-xl"></i></div>
-      <div>
-        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500" id="stm-kpi-1-label">TOTAL DEPOSITED (အပ်ငွေ)</p>
-        <h3 id="stm-total-income" class="text-base font-extrabold text-emerald-400 mt-1">0 MMK</h3>
-      </div>
-    </div>
-
-    <!-- Card 2: Outflow / Withdrawn / Settled -->
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-rose-500/10 text-rose-400"><i class="fa-solid fa-circle-arrow-up text-xl"></i></div>
-      <div>
-        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500" id="stm-kpi-2-label">TOTAL WITHDRAWN (ထုတ်ငွေ)</p>
-        <h3 id="stm-total-expense" class="text-base font-extrabold text-rose-400 mt-1">0 MMK</h3>
-      </div>
-    </div>
-
-    <!-- Card 3: Balance / Net Position -->
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-indigo-500/10 text-indigo-400"><i class="fa-solid fa-vault text-xl"></i></div>
-      <div>
-        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500" id="stm-kpi-3-label">CURRENT TRUST BALANCE</p>
-        <h3 id="stm-balance" class="text-base font-extrabold text-white mt-1">0 MMK</h3>
-      </div>
-    </div>
-
-    <!-- Card 4: Total Entries / Students -->
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-amber-500/10 text-amber-400"><i class="fa-solid fa-receipt text-xl"></i></div>
-      <div>
-        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500" id="stm-kpi-4-label">TOTAL ENTRIES</p>
-        <h3 id="stm-entries-count" class="text-base font-extrabold text-amber-400 mt-1">0</h3>
-      </div>
-    </div>
-  </div>
-
   <!-- ============================================================================== -->
   <!-- 💡 TAB 1: STUDENT MONEY BOOK (MAIN FINANCE & VIRTUAL WALLETS)                   -->
   <!-- ============================================================================== -->
   <div id="stm-main-view" class="space-y-4">
+    
+    <!-- 🎯 TAB 1 သီးသန့် 1-Row 4-KPI Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+        <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0"><i class="fa-solid fa-circle-arrow-down text-xl"></i></div>
+        <div>
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">TOTAL DEPOSITED (အပ်ငွေ)</p>
+          <h3 id="stm-total-income" class="text-base font-extrabold text-emerald-400 mt-1">0 MMK</h3>
+        </div>
+      </div>
+
+      <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+        <div class="p-3.5 rounded-lg bg-rose-500/10 text-rose-400 shrink-0"><i class="fa-solid fa-circle-arrow-up text-xl"></i></div>
+        <div>
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">TOTAL WITHDRAWN/TRANSFER (ထုတ်ငွေ)</p>
+          <h3 id="stm-total-expense" class="text-base font-extrabold text-rose-400 mt-1">0 MMK</h3>
+        </div>
+      </div>
+
+      <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+        <div class="p-3.5 rounded-lg bg-indigo-500/10 text-indigo-400 shrink-0"><i class="fa-solid fa-vault text-xl"></i></div>
+        <div>
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">CURRENT TRUST BALANCE</p>
+          <h3 id="stm-balance" class="text-base font-extrabold text-white mt-1">0 MMK</h3>
+        </div>
+      </div>
+
+      <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+        <div class="p-3.5 rounded-lg bg-amber-500/10 text-amber-400 shrink-0"><i class="fa-solid fa-receipt text-xl"></i></div>
+        <div>
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">TOTAL ENTRIES</p>
+          <h3 id="stm-entries-count" class="text-base font-extrabold text-amber-400 mt-1">0</h3>
+        </div>
+      </div>
+    </div>
+
     <!-- Search & Action Toolbar -->
     <div class="flex flex-col lg:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
       <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
@@ -144,7 +141,7 @@
   </div>
 
   <!-- ============================================================================== -->
-  <!-- 💡 TAB 2: CANTEEN BOOK (WITH TODAY QUICK KPI & REACTIVE FILTERS)               -->
+  <!-- 💡 TAB 2: CANTEEN BOOK                                                        -->
   <!-- ============================================================================== -->
   <div id="stm-canteen-view" class="space-y-4 hidden">
     <!-- Canteen Quick Insight Strip -->
@@ -158,14 +155,14 @@
       </div>
       <div class="p-4 bg-sky-500/10 border border-sky-500/20 rounded-xl flex items-center justify-between">
         <div>
-          <p class="text-[10px] font-bold text-sky-400 uppercase tracking-wider">FILTERED TOTAL (ရွေးချယ်ထားသော ရက်စွဲ ရောင်းရငွေ)</p>
+          <p class="text-[10px] font-bold text-sky-400 uppercase tracking-wider">FILTERED TOTAL (ရောင်းရငွေ စုစုပေါင်း)</p>
           <h4 id="canteen-filtered-sales" class="text-lg font-black text-sky-300 font-mono mt-0.5">0 MMK</h4>
         </div>
         <div class="p-2.5 rounded-lg bg-sky-500/20 text-sky-400"><i class="fa-solid fa-chart-line text-lg"></i></div>
       </div>
       <div class="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center justify-between">
         <div>
-          <p class="text-[10px] font-bold text-amber-400 uppercase tracking-wider">TOTAL INVOICES / TRANSACTIONS</p>
+          <p class="text-[10px] font-bold text-amber-400 uppercase tracking-wider">TOTAL INVOICES / ENTRIES</p>
           <h4 id="canteen-filtered-count" class="text-lg font-black text-amber-300 font-mono mt-0.5">0</h4>
         </div>
         <div class="p-2.5 rounded-lg bg-amber-500/20 text-amber-400"><i class="fa-solid fa-receipt text-lg"></i></div>
@@ -175,7 +172,6 @@
     <!-- Filter & Action Toolbar -->
     <div class="flex flex-col lg:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
       <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
-        <!-- 💡 Today Button Quick Filter -->
         <button onclick="setFilterCanteenToday()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-black transition flex items-center gap-1.5 shadow-sm whitespace-nowrap">
           <i class="fa-solid fa-calendar-day"></i> Today (ဒီနေ့)
         </button>
@@ -241,10 +237,11 @@
   </div>
 
   <!-- ============================================================================== -->
-  <!-- 💡 TAB 3: PM CASHIER BOOK (WITH RESPONSIBILITY PERSON FILTER & ID SEARCH)      -->
+  <!-- 💡 TAB 3: PM CASHIER BOOK (ONLY ONE ROW 4-KPIs GRID)                            -->
   <!-- ============================================================================== -->
   <div id="stm-cashier-view" class="space-y-4 hidden">
-    <!-- 💡 PM Cashier Single Row 4-KPI Grid (Matches Golden ERP stats-card style) -->
+    
+    <!-- 🎯 TAB 3 သီးသန့် 1-Row 4-KPI Grid (Matches Golden ERP stats-card style) -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       <!-- Card 1: Cashier 1 -->
       <div class="stats-card p-5 rounded-xl flex items-start gap-4">
@@ -309,7 +306,6 @@
           <input type="text" id="pm-cashier-search" oninput="onSearchInputPmCashierBook()" placeholder="Search description, student ID..." class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white focus:outline-none focus:border-sky-500 transition-all">
         </div>
 
-        <!-- 💡 Filter by Responsibility Person -->
         <select id="pm-cashier-resp-filter" onchange="onPmCashierFilterChange()" class="w-full sm:w-44 bg-[#0f172a] border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-2 outline-none focus:border-sky-500 font-bold">
           <option value="">All Cashiers (ငွေကိုင်အားလုံး)</option>
           <option value="Cashier 1">Cashier 1 (ငွေကိုင် ၁)</option>
@@ -333,12 +329,12 @@
           <i class="fa-solid fa-file-export text-xs"></i> Export CSV
         </button>
         <button onclick="openAddModalPmCashierBook()" class="p-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-sky-600/10 transition-all">
-          <i class="fa-solid fa-hand-holding-dollar text-xs"></i> PM Withdraw (မုန့်ဖိုးထုတ်ပေးရန်)
+          <i class="fa-solid fa-hand-holding-dollar text-xs"></i> PM Cashier Action
         </button>
       </div>
     </div>
 
-    <!-- PM Cashier Table Grid (Debit အရင်းအဝင်, Credit မုန့်ဖိုးထုတ်ပေးငွေ) -->
+    <!-- PM Cashier Table Grid -->
     <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
       <table class="w-full text-left border-collapse min-w-[1350px]">
         <thead>
@@ -376,10 +372,9 @@
   </div>
 
   <!-- ============================================================================== -->
-  <!-- 💡 TAB 4: AUDIT & RECONCILIATION (FINANCIAL INTEGRITY BALANCING ENGINE)         -->
+  <!-- 💡 TAB 4: AUDIT & RECONCILIATION                                               -->
   <!-- ============================================================================== -->
   <div id="stm-reconcile-view" class="space-y-5 hidden">
-    <!-- Audit Headline Banner -->
     <div class="p-6 bg-[#0c1322] border border-slate-800 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
       <div>
         <h3 class="text-base font-black text-white flex items-center gap-2">
@@ -396,7 +391,6 @@
 
     <!-- Reconciliation Formula Equation Cards Grid -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <!-- Card A: Total Virtual Liability -->
       <div class="p-5 bg-[#0e172a] border border-slate-800 rounded-xl space-y-2">
         <div class="flex items-center justify-between text-xs font-bold text-slate-400 uppercase">
           <span>A. Total Student Wallets</span>
@@ -406,7 +400,6 @@
         <p class="text-[11px] text-slate-500">ကျောင်းသားတစ်ဦးချင်းစီ၏ စာရင်းအရ လက်ကျန်ငွေများ စုစုပေါင်း</p>
       </div>
 
-      <!-- Card B: Physical Cash in Hand -->
       <div class="p-5 bg-[#0e172a] border border-slate-800 rounded-xl space-y-2">
         <div class="flex items-center justify-between text-xs font-bold text-slate-400 uppercase">
           <span>B. Total Physical Cash</span>
@@ -419,7 +412,6 @@
         </div>
       </div>
 
-      <!-- Card C: Variance & Audit Status -->
       <div class="p-5 bg-[#0e172a] border border-slate-800 rounded-xl space-y-2">
         <div class="flex items-center justify-between text-xs font-bold text-slate-400 uppercase">
           <span>C. Variance (ကွာဟချက်)</span>
@@ -430,7 +422,7 @@
       </div>
     </div>
 
-    <!-- Reconciliation Verification Equation Visualizer -->
+    <!-- Visualizer -->
     <div class="p-5 bg-[#080e1c] border border-slate-800/80 rounded-xl flex flex-col md:flex-row items-center justify-around gap-4 text-center">
       <div class="space-y-1">
         <span class="text-[10px] text-slate-500 uppercase font-bold">Total Virtual Wallets</span>
@@ -460,7 +452,7 @@
 <!-- 💡 ၃။ MODALS SECTION                                                           -->
 <!-- ============================================================================== -->
 
-<!-- MODAL 1: ADD / EDIT STUDENT MONEY & TRANSFER MODAL -->
+<!-- MODAL 1: STUDENT MONEY & TRANSFER MODAL -->
 <div id="student-money-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
   <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
     <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
@@ -490,7 +482,6 @@
         </div>
       </div>
 
-      <!-- Responsibility Person Selector (Transfer to PM Cashier တွင်သာ ပေါ်မည်) -->
       <div id="stm-resp-person-box" class="flex flex-col gap-1 p-3 bg-sky-950/20 border border-sky-500/20 rounded-xl hidden">
         <label class="font-bold text-sky-400 uppercase tracking-wide">Target Cashier (တာဝန်ခံ ငွေကိုင်ရွေးချယ်ပါ)</label>
         <select id="stm-responsibility-person" class="w-full bg-[#0f172a] border border-slate-800 text-white rounded-lg p-2.5 outline-none focus:border-sky-500 font-bold">
@@ -499,7 +490,6 @@
         </select>
       </div>
 
-      <!-- Student Lookup Input (Deposit / Withdraw တွင် ပေါ်မည်) -->
       <div id="stm-student-fields" class="space-y-3 p-3 bg-indigo-950/20 border border-indigo-500/20 rounded-xl">
         <div class="grid grid-cols-3 gap-3">
           <div class="flex flex-col gap-1">
@@ -527,7 +517,6 @@
         </div>
       </div>
 
-      <!-- Amount Section -->
       <div class="grid grid-cols-3 gap-3 items-start">
         <div class="flex flex-col gap-1.5">
           <label class="font-bold text-slate-400 uppercase tracking-wide text-[11px] h-5 flex items-center">Payment Method</label>
@@ -565,11 +554,11 @@
   </div>
 </div>
 
-<!-- MODAL 2: PM CASHIER ACTION MODAL (WITHDRAW & RETURN TO FINANCE) -->
+<!-- MODAL 2: PM CASHIER ACTION MODAL -->
 <div id="pm-cashier-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
   <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
     <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
-      <h3 id="pm-modal-title" class="text-sm font-black text-white uppercase tracking-wider">PM Cashier Action</h3>
+      <h3 class="text-sm font-black text-white uppercase tracking-wider">PM Cashier Action</h3>
       <button onclick="closePmCashierBookModal()" class="text-slate-500 hover:text-white transition"><i class="fa-solid fa-xmark text-sm"></i></button>
     </div>
 
@@ -597,7 +586,6 @@
         </div>
       </div>
 
-      <!-- Student Lookup for Cash Withdrawal (Return to Finance တွင် ဖျောက်ထားမည်) -->
       <div id="pm-student-lookup-container" class="space-y-3 p-3 bg-sky-950/20 border border-sky-500/20 rounded-xl">
         <div class="grid grid-cols-3 gap-3">
           <div class="flex flex-col gap-1">
@@ -652,7 +640,7 @@
   </div>
 </div>
 
-<!-- MODAL 3: INDIVIDUAL STUDENT STATEMENT TIMELINE MODAL -->
+<!-- MODAL 3: STATEMENT TIMELINE MODAL -->
 <div id="stm-statement-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
   <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
     <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
