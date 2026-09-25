@@ -138,18 +138,19 @@ function renderStudentMoneyTable() {
   }
 
   items.forEach((row, idx) => {
-    // 🌟 Identify internal vault transfers
+    // 🎯 FIX: အပေါ်ဆုံး (အသစ်ဆုံး) စာရင်းကို နောက်ဆုံးနံပါတ် (ဥပမာ- No. 6) စတင်ပြသခြင်း
+    const displayNo = total - (start + idx);
+
     const isTransfer = row.studentId === null || row.studentId === 0 || row.fyid === 'TRANSFER' || row.fyid === 'RETURN';
     const cleanFyid = window.sanitizeFyidStr(row.fyid);
 
-    // 🎯 Balances column: Student rows show running balance, Transfer rows show dash (-)
     const balStr = isTransfer 
       ? '<span class="text-slate-500 font-mono">-</span>' 
       : Number(row.balances || 0).toLocaleString('en-US', {minimumFractionDigits: 2});
     
     tbody.innerHTML += `
       <tr class="hover:bg-slate-800/30 text-slate-300 text-xs border-b border-slate-800/40">
-        <td class="text-center font-mono py-3 px-2">${start + idx + 1}</td>
+        <td class="text-center font-mono py-3 px-2 font-bold text-slate-400">${displayNo}</td>
         <td class="font-mono text-xs py-3 px-2">${window.escapeHtml(row.date)}</td>
         <td class="font-mono font-bold text-indigo-300 py-3 px-2">${window.escapeHtml(row.fy)}</td>
         <td class="font-mono font-bold py-3 px-2">
@@ -177,6 +178,11 @@ function renderStudentMoneyTable() {
   
   const info = document.getElementById('stm-pagination-info');
   if (info) info.textContent = `Showing ${start + 1} to ${Math.min(start + gStudentMoneyLimit, total)} of ${total} entries`;
+  
+  const prevBtn = document.getElementById('stm-btn-prev');
+  const nextBtn = document.getElementById('stm-btn-next');
+  if (prevBtn) prevBtn.disabled = (gStudentMoneyPage <= 1);
+  if (nextBtn) nextBtn.disabled = (start + gStudentMoneyLimit >= total);
 }
 
 function onSearchInputStudentMoney() { clearTimeout(searchTimeout); searchTimeout = setTimeout(applyStudentMoneySearchAndRender, 150); }
@@ -571,11 +577,14 @@ function renderCanteenBookTable() {
   }
 
   items.forEach((row, idx) => {
+    // 🎯 FIX: အပေါ်ဆုံးစာကြောင်းကို နောက်ဆုံးနံပါတ် စတင်ပြသခြင်း
+    const displayNo = total - (start + idx);
     const balStr = Number(row.balances || 0).toLocaleString('en-US', {minimumFractionDigits: 2});
+
     tbody.innerHTML += `
       <tr class="hover:bg-slate-800/30 text-slate-300 text-xs border-b border-slate-800/40">
-        <td class="text-center font-mono py-3 px-2">${start + idx + 1}</td>
-        <td class="font-mono py-3 px-2">${window.escapeHtml(row.date)}</td>
+        <td class="text-center font-mono py-3 px-2 font-bold text-slate-400">${displayNo}</td>
+        <td class="font-mono text-xs py-3 px-2">${window.escapeHtml(row.date)}</td>
         <td class="py-3 px-2 font-bold text-emerald-400">${window.escapeHtml(row.category)}</td>
         <td class="py-3 px-2 truncate max-w-xs" title="${window.escapeHtml(row.description)}">${window.escapeHtml(row.description || '')}</td>
         <td class="py-3 px-2">${window.escapeHtml(row.method)}</td>
@@ -726,10 +735,13 @@ function renderPmCashierBookTable() {
   }
 
   items.forEach((row, idx) => {
+    // 🎯 FIX: အပေါ်ဆုံးစာကြောင်းကို နောက်ဆုံးနံပါတ် စတင်ပြသခြင်း
+    const displayNo = total - (start + idx);
     const balStr = Number(row.balances || 0).toLocaleString('en-US', {minimumFractionDigits: 2});
+
     tbody.innerHTML += `
       <tr class="hover:bg-slate-800/30 text-slate-300 text-xs border-b border-slate-800/40">
-        <td class="text-center font-mono py-3 px-2">${start + idx + 1}</td>
+        <td class="text-center font-mono py-3 px-2 font-bold text-slate-400">${displayNo}</td>
         <td class="font-mono text-xs py-3 px-2">${window.escapeHtml(row.date)}</td>
         <td class="font-bold text-sky-400 py-3 px-2">${window.escapeHtml(row.responsibility_person || '-')}</td>
         <td class="py-3 px-2 font-semibold">${window.escapeHtml(row.category)}</td>
