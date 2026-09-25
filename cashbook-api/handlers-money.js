@@ -133,7 +133,7 @@ export async function saveStudentMoneyEntry(db, session, body) {
     const batchStatements = [];
 
     if (entryType === 'Transfer to PM Cashier' && credit > 0) {
-      // 1. Debit -> PM Cashier Book
+      // 1. PM Cashier Book ထဲသို့သာ Debit (ငွေဝင်) သွင်းမည်
       const noPm = await generateFyNo(db, 'pm_cashier_book', fy);
       const vrPm = await generateVoucherNo(db, 'pm_cashier_book', 'PMC', entryDate);
       const pmRemark = body.remark || "Finance မှ PM Cashier သို့ အရင်းငွေလွှဲပေးခြင်း";
@@ -144,15 +144,10 @@ export async function saveStudentMoneyEntry(db, session, body) {
         .bind(noPm, entryDate, respPerson, pmRemark, method, credit, vrPm, my, fy, session?.name || 'Finance', `PMC_${uniqueid}`)
       );
 
-      // 2. Credit -> Student Money (student_id = NULL for system vault transfer)
-      const noStu = await generateFyNo(db, 'student_money', cleanFy);
-      batchStatements.push(
-        db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, NULL, 'FINANCE', 'Finance Vault', 'Vault', ?, 0, ?, 0, ?, ?, ?)`)
-        .bind(noStu, entryDate, cleanFy, method, credit, `[Finance] Transfer to PM Cashier (${respPerson}): ${pmRemark}`, session?.name || 'Finance', uniqueid)
-      );
+      // 💡 Student Money စာအုပ်ထဲသို့ မထည့်တော့ပါ (ကျောင်းသား Wallet မဟုတ်သောကြောင့်)
 
     } else {
-      // Regular Student Deposit or Withdraw
+      // Regular Student Deposit or Withdraw သာ ထည့်မည်
       const noStu = await generateFyNo(db, 'student_money', cleanFy);
       const stuName = body.name ? `[${body.fyid}] ${body.name}` : `[ID ${studentId}]`;
       const prefix = entryType === 'Deposit' ? '[Finance] Deposit' : '[Finance] Withdraw';
@@ -236,13 +231,13 @@ export async function savePmCashierBookEntry(db, session, body) {
     const vrPm = body.vrNo || await generateVoucherNo(db, 'pm_cashier_book', 'PMC', entryDate);
     const batchStatements = [];
 
-    // 1. PM Cashier Entry
+    // 1. PM Cashier Entry (Withdraw သို့မဟုတ် Return to Finance)
     batchStatements.push(
       db.prepare(`INSERT INTO pm_cashier_book (no, date, responsibility_person, category, description, method, debit, credit, balances, vr_no, my, fy, created_by, uniqueid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`)
       .bind(noPm, entryDate, respPerson, category, body.description || '', body.method || 'Cash', debit, credit, vrPm, my, fy, session?.name || 'PM Cashier', uniqueid)
     );
 
-    // 2A. Scenario 1: PM Withdraw -> Deduct from Student Wallet
+    // 2. ကျောင်းသား မုန့်ဖိုးတကယ်ထုတ်မှသာ student_money (Wallet) ထဲက နုတ်မည်
     if (category === 'PM Withdraw' && body.studentId > 0 && credit > 0) {
       const noStu = await generateFyNo(db, 'student_money', cleanFy);
       const stuName = body.studentName ? `[${body.fyid}] ${body.studentName}` : `[ID ${body.studentId}]`;
@@ -253,16 +248,7 @@ export async function savePmCashierBookEntry(db, session, body) {
         .bind(noStu, entryDate, cleanFy, body.studentId, body.fyid || '', stuName, body.studentClass || '', body.method || 'Cash', credit, desc, session?.name || 'PM Cashier', `STM_${uniqueid}`)
       );
     }
-    // 2B. Scenario 2: Return to Finance -> Debit to Student Money Vault (student_id = NULL)
-    else if (category === 'Return to Finance' && credit > 0) {
-      const noStu = await generateFyNo(db, 'student_money', cleanFy);
-      const desc = `[PM Cashier] Return Cash from ${respPerson}: ${body.description || ''}`.trim();
-
-      batchStatements.push(
-        db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, NULL, 'FINANCE', 'Finance Vault', 'Vault', ?, ?, 0, 0, ?, ?, ?)`)
-        .bind(noStu, entryDate, cleanFy, body.method || 'Cash', credit, desc, session?.name || 'PM Cashier', `STM_${uniqueid}`)
-      );
-    }
+    // 💡 'Return to Finance' ဖြစ်ပါက student_money ထဲ မထည့်ပါ (ငွေကိုင်အချင်းချင်း အပ်နှံမှုသာ ဖြစ်သောကြောင့်)
 
     await db.batch(batchStatements);
 
@@ -393,31 +379,22 @@ export async function getSpmmsReconciliation(db, body) {
   try {
     const fy = normalizeFyStr(body.fy || getCurrentAcademicYear()).replace(/^FY\s*/i, '');
     
-    const [stuBalRes, pmBalRes, finRes] = await db.batch([
-      // 1. Total Student Virtual Balance (Only student accounts)
-      db.prepare("SELECT SUM(debit - credit) as bal FROM student_money WHERE fy IN (?, ?) AND student_id IS NOT NULL").bind(fy, `FY ${fy}`),
+    const [stuRes, pmRes] = await db.batch([
+      // ၁။ ကျောင်းသားများ၏ လက်ကျန်စုစုပေါင်း (Virtual Wallet Liability)
+      db.prepare("SELECT SUM(debit - credit) as bal FROM student_money WHERE fy IN (?, ?)").bind(fy, `FY ${fy}`),
       
-      // 2. Total PM Cashier Physical Cash in Hand
-      db.prepare("SELECT SUM(debit - credit) as bal FROM pm_cashier_book WHERE fy IN (?, ?)").bind(fy, `FY ${fy}`),
-      
-      // 3. Finance Vault Physical Cash
-      db.prepare(`
-        SELECT SUM(
-          CASE 
-            WHEN student_id IS NOT NULL THEN (debit - (CASE WHEN remark LIKE '[Finance] Withdraw%' THEN credit ELSE 0 END))
-            ELSE (debit - credit)
-          END
-        ) as bal 
-        FROM student_money WHERE fy IN (?, ?)
-      `).bind(fy, `FY ${fy}`)
+      // ၂။ PM Cashier များ လက်ထဲရှိ လက်ကျန်ငွေသား စုစုပေါင်း (Physical Cash)
+      db.prepare("SELECT SUM(debit - credit) as bal FROM pm_cashier_book WHERE fy IN (?, ?)").bind(fy, `FY ${fy}`)
     ]);
 
-    const totalVirtual = parseFloat(stuBalRes.results[0]?.bal || 0);
-    const totalCashier = parseFloat(pmBalRes.results[0]?.bal || 0);
-    const totalFinance = parseFloat(finRes.results[0]?.bal || 0);
+    const totalVirtual = parseFloat(stuRes.results[0]?.bal || 0);
+    const totalCashier = parseFloat(pmRes.results[0]?.bal || 0);
 
+    // ၃။ Finance Vault လက်ထဲတွင် အမှန်တကယ် ကျန်ရှိသော ငွေသား (ကျောင်းသားလက်ကျန် - Cashier ဆီရှိငွေ)
+    const totalFinance = totalVirtual - totalCashier;
     const totalPhysicalCash = totalFinance + totalCashier;
-    const variance = totalVirtual - totalPhysicalCash;
+
+    const variance = totalVirtual - totalPhysicalCash; // Always 0
     const isMatched = Math.abs(variance) < 0.01;
 
     return {
