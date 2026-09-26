@@ -312,11 +312,26 @@ export async function deleteStudentMoneyEntry(db, session, body) {
 // 💡 2. PM CASHIER BOOK (WITH ROLE-BASED ANTI-IMPERSONATION)
 // ==============================================================================
 
-export async function getPmCashierBookData(db, body) {
+// ==============================================================================
+// 💡 PM CASHIER DATA (ROLE-SCOPED: CASHIER 1/2 သီးသန့် စစ်ထုတ်ခြင်း)
+// ==============================================================================
+export async function getPmCashierBookData(db, body, session) {
   try {
     const fy = normalizeFyStr(body.fy || getCurrentAcademicYear());
-    const query = `SELECT * FROM pm_cashier_book WHERE fy = ? ORDER BY date DESC, id DESC LIMIT 500`;
-    const res = await db.prepare(query).bind(fy).all();
+    const role = session?.role || '';
+    
+    let query = `SELECT * FROM pm_cashier_book WHERE fy = ?`;
+    let params = [fy];
+
+    // 🔒 ROLE ISOLATION: pm_cashier1 ဆိုပါက Cashier 1 သာမြင်ရမည်၊ pm_cashier2 ဆိုပါက Cashier 2 သာ မြင်ရမည်
+    if (role === 'pm_cashier1') {
+      query += ` AND responsibility_person = 'Cashier 1'`;
+    } else if (role === 'pm_cashier2') {
+      query += ` AND responsibility_person = 'Cashier 2'`;
+    }
+
+    query += ` ORDER BY date DESC, id DESC LIMIT 500`;
+    const res = await db.prepare(query).bind(...params).all();
     return { success: true, data: (res.results || []).map(r => ({ ...r, uniqueId: r.uniqueid })) };
   } catch (err) { return { success: false, message: err.message }; }
 }
@@ -410,27 +425,58 @@ export async function savePmCashierBookEntry(db, session, body) {
   } catch (err) { return { success: false, message: err.message }; }
 }
 
-// 🎯 BULLETPROOF CASCADE DELETE FROM PM CASHIER BOOK
+// ==============================================================================
+// 💡 PM CASHIER DELETE (STRICT 1-DAY & NO-FLOAT-DELETE POLICY)
+// ==============================================================================
 export async function deletePmCashierBookEntry(db, session, body) {
   try {
     const uid = body.uniqueId;
     if (!uid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     
-    const existing = await db.prepare("SELECT fy, date, category, uniqueid FROM pm_cashier_book WHERE uniqueid = ?").bind(uid).first();
+    const existing = await db.prepare("SELECT fy, date, category, responsibility_person, uniqueid FROM pm_cashier_book WHERE uniqueid = ?").bind(uid).first();
     if (!existing) return { success: false, message: "ဖျက်မည့် စာရင်း ရှာမတွေ့ပါ။" };
+
+    const role = session?.role || '';
+    const isCashierRole = (role === 'pm_cashier1' || role === 'pm_cashier2');
+
+    // 🛡️ စည်းကမ်း ၁ - Finance မှ လွှဲထားသော အရင်းငွေစာရင်း (Float Receive) ကို ငွေကိုင်မှ လုံးဝဖျက်ခွင့် မရှိပါ
+    if (isCashierRole && existing.category === 'Float Receive') {
+      return { 
+        success: false, 
+        message: "ငွေလွှဲခွင့် မပြုပါ! Finance မှ လွှဲပေးထားသော အရင်းငွေစာရင်း (Float Receive) ကို ငွေကိုင်မှ ဖျက်ပိုင်ခွင့် လုံးဝမရှိပါ။ Finance သို့ ဆက်သွယ်ပါ။" 
+      };
+    }
+
+    // 🛡️ စည်းကမ်း ၂ - အခြားငွေကိုင်၏ စာရင်းကို ဝင်ရောက်ဖျက်ဆီးခွင့် မရှိပါ
+    if (role === 'pm_cashier1' && existing.responsibility_person !== 'Cashier 1') {
+      return { success: false, message: "Cashier 1 ၏ စာရင်း မဟုတ်သဖြင့် ဖျက်ခွင့်မရှိပါ။" };
+    }
+    if (role === 'pm_cashier2' && existing.responsibility_person !== 'Cashier 2') {
+      return { success: false, message: "Cashier 2 ၏ စာရင်း မဟုတ်သဖြင့် ဖျက်ခွင့်မရှိပါ။" };
+    }
+
+    // 🛡️ စည်းကမ်း ၃ - စာရင်းဖျက်ခွင့်ကို ၁ ရက် (ယနေ့အတွင်းသာ) ခွင့်ပြုမည်
+    if (isCashierRole) {
+      const todayStr = getMyanmarDateString(); // e.g. "2026-09-26"
+      if (existing.date !== todayStr) {
+        return { 
+          success: false, 
+          message: "ဖျက်ခွင့် မရှိပါ! စာရင်းသွင်းပြီး ၁ ရက် (ယနေ့) ကျော်လွန်သွားသော စာရင်းဟောင်းများကို ငွေကိုင်မှ ဖျက်ပိုင်ခွင့် မရှိပါ။ Admin သို့ တင်ပြပါ။" 
+        };
+      }
+    }
 
     const coreId = uid.replace(/^(STM_|PMC_|CAN_)+/i, '');
 
+    // ချိတ်ဆက်ထားသော စာအုပ်များမှ တစ်ပါတည်း ဖျက်ခြင်း
     const batchStatements = [
       db.prepare("DELETE FROM pm_cashier_book WHERE uniqueid = ? OR uniqueid LIKE ?").bind(uid, `%${coreId}%`),
       db.prepare(`
         DELETE FROM student_money 
         WHERE uniqueid = ? 
            OR uniqueid = ? 
-           OR uniqueid = ? 
-           OR uniqueid = ? 
            OR uniqueid LIKE ?
-      `).bind(uid, `STM_${uid}`, `STM_${coreId}`, `STM_PMC_${coreId}`, `%${coreId}%`)
+      `).bind(uid, `STM_${coreId}`, `%${coreId}%`)
     ];
 
     await db.batch(batchStatements);
@@ -440,7 +486,9 @@ export async function deletePmCashierBookEntry(db, session, body) {
     await recalculateLedgerBalances(db, 'student_money', cleanFy, existing.date);
 
     return { success: true };
-  } catch (err) { return { success: false, message: err.message }; }
+  } catch (err) { 
+    return { success: false, message: err.message }; 
+  }
 }
 
 // ==============================================================================

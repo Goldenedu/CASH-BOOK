@@ -1,7 +1,7 @@
 /**
  * GOLDEN ERP SYSTEM - AUTHENTICATION & ROLE ENGINE
  * File: js/auth.js 
- * 💡 SECURED (D1 Database Edition): JWT Verification & Bulletproof RBAC Matrix
+ * 💡 SECURED (D1 Database Edition): JWT Verification, Bulletproof RBAC Matrix & PM Cashier Mobile Routing
  */
 
 /**
@@ -38,12 +38,11 @@ function hasPermission(permissionName) {
     .trim()
     .replace(/\s+/g, ' ');
 
-  // Role တစ်ခုချင်းစီ ရရှိမည့် Permission အမည်များကိုသာ Array ဖြင့် သတ်မှတ်ခြင်း
   const PERM_GROUPS = {
     FULL_ACCESS: ['can_view', 'can_add', 'can_edit', 'can_delete', 'can_manage_grades', 'can_backup'],
     FINANCE: ['can_view', 'can_add', 'can_edit', 'can_delete', 'can_backup'],
     HR: ['can_view', 'can_add', 'can_edit', 'can_delete', 'can_manage_grades'],
-    OPERATOR: ['can_view', 'can_add', 'can_edit', 'can_delete'], // Cashiers & Counters
+    OPERATOR: ['can_view', 'can_add', 'can_edit', 'can_delete'],
     STAFF: ['can_view', 'can_add'],
     VIEW_ONLY: ['can_view']
   };
@@ -76,9 +75,7 @@ window.onSystemTypeChange = onSystemTypeChange;
 window.hasPermission = hasPermission;
 
 /**
- * 💡 Verify JWT Token or Local Session Expiration with Robust Base64 Padding
- * @param {string} token 
- * @returns {boolean} True if expired, false if valid
+ * 💡 Verify JWT Token or Local Session Expiration
  */
 function isTokenExpired(token) {
   if (!token) return true;
@@ -88,7 +85,7 @@ function isTokenExpired(token) {
     if (parts.length === 3) {
       let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
       while (base64.length % 4) {
-        base64 += '='; // ✅ Added Padding Fix
+        base64 += '=';
       }
       const payloadJson = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
       const payload = JSON.parse(payloadJson);
@@ -119,6 +116,8 @@ function clearAuthStorage() {
   localStorage.removeItem('golden_auth_token');
   localStorage.removeItem('golden_user');
   localStorage.removeItem('golden_token_expires_at');
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
 
   if (window.AppState) {
     window.AppState.currentUser = null;
@@ -152,7 +151,7 @@ function validateLoginInput(username, password) {
 }
 
 /**
- * 💡 Handle Login Form Submission (D1 Database Compatible)
+ * 💡 Handle Login Form Submission (With PM Cashier Redirect)
  */
 async function handleLoginSubmit(e) {
   if (e && e.preventDefault) e.preventDefault();
@@ -185,6 +184,7 @@ async function handleLoginSubmit(e) {
     if (response && response.success) {
       const resUser = response.user ? response.user.username : (response.username || username);
       const resRole = response.user ? response.user.role : (response.role || 'Admin');
+      const resName = response.user ? (response.user.name || resUser) : resUser;
       const resToken = response.token;
 
       window.AppState = window.AppState || {};
@@ -195,12 +195,24 @@ async function handleLoginSubmit(e) {
       const defaultTtlMs = 8 * 60 * 60 * 1000;
       const expiresAt = Date.now() + (response.expiresInMs || defaultTtlMs);
 
-      const userObj = JSON.stringify({ username: resUser, role: resRole });
+      const userObj = JSON.stringify({ username: resUser, role: resRole, name: resName });
+
+      // Golden ERP Keys
       localStorage.setItem('golden_user_name', resUser);
       localStorage.setItem('golden_user_role', resRole);
       localStorage.setItem('golden_auth_token', resToken);
       localStorage.setItem('golden_user', userObj);
       localStorage.setItem('golden_token_expires_at', String(expiresAt));
+
+      // PM Cashier Module Compatible Keys
+      localStorage.setItem('token', resToken);
+      localStorage.setItem('user', userObj);
+
+      // 🎯 REDIRECT CHECK: pm_cashier1 သို့မဟုတ် pm_cashier2 ဖြစ်ပါက views/pm_cashier.html သို့ တိုက်ရိုက်သွားမည်
+      if (resRole === 'pm_cashier1' || resRole === 'pm_cashier2') {
+        window.location.href = 'views/pm_cashier.html';
+        return;
+      }
 
       showWorkspace();
       applyRoleRestrictions();
@@ -211,7 +223,7 @@ async function handleLoginSubmit(e) {
       }
 
       if (typeof showToast === 'function') {
-        showToast("SUCCESS", `မင်္ဂလာပါ ${resUser} (${resRole})၊ လော့ဂ်အင် ဝင်ရောက်မှု အောင်မြင်ပါသည်။`);
+        showToast("SUCCESS", `မင်္ဂလာပါ ${resName} (${resRole})၊ လော့ဂ်အင် ဝင်ရောက်မှု အောင်မြင်ပါသည်။`);
       }
     } else {
       if (errorBox) {
@@ -241,7 +253,6 @@ function applyRoleRestrictions() {
     settingsSection.style.removeProperty('display');
   }
 
-  // ✅ Added 'HR' to allowed roles
   const allowedHrRoles = ["Owner", "Admin", "Finance", "HR", "HR Staff", "HRStaff"];
   if (hrSection) {
     if (allowedHrRoles.includes(role)) {
@@ -340,6 +351,12 @@ function checkExistingSession() {
       if (typeof showToast === 'function') {
         showToast("WARNING", "လော့ဂ်အင် သက်တမ်း ကုန်ဆုံးသွားပါပြီ။ ကျေးဇူးပြု၍ ပြန်လည် လော့ဂ်အင် ဝင်ပါ။");
       }
+      return;
+    }
+
+    // 🎯 REDIRECT CHECK: အကောင့်ရှိပြီးသား Cashier သည် index.html သို့ ပြန်လာပါက views/pm_cashier.html သို့ အလိုအလျောက် ပြန်ပို့ပေးခြင်း
+    if (savedRole === 'pm_cashier1' || savedRole === 'pm_cashier2') {
+      window.location.href = 'views/pm_cashier.html';
       return;
     }
 
