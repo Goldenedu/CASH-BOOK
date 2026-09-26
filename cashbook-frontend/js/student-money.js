@@ -276,13 +276,6 @@ function onDebitInputStudentMoney() {
   if (debVal > 0) {
     const cred = document.getElementById('stm-credit');
     if (cred) cred.value = 0;
-
-    const typeSelect = document.getElementById('stm-entry-type');
-    if (typeSelect && typeSelect.value !== 'Transfer to PM Cashier') {
-      typeSelect.value = 'Deposit';
-      const desc = document.getElementById('stm-remark');
-      if (desc && (!desc.value || desc.value.includes('ငွေပြန်ထုတ်'))) desc.value = "ကျောင်းသား မုန့်ဖိုးအပ်ငွေ";
-    }
   }
 }
 
@@ -291,13 +284,6 @@ function onCreditInputStudentMoney() {
   if (credVal > 0) {
     const deb = document.getElementById('stm-debit');
     if (deb) deb.value = 0;
-
-    const typeSelect = document.getElementById('stm-entry-type');
-    if (typeSelect && typeSelect.value !== 'Transfer to PM Cashier') {
-      typeSelect.value = 'Withdraw';
-      const desc = document.getElementById('stm-remark');
-      if (desc && (!desc.value || desc.value.includes('မုန့်ဖိုးအပ်ငွေ'))) desc.value = "ကျောင်းသားအား ငွေသားပြန်ထုတ်ပေးခြင်း";
-    }
   }
 }
 
@@ -374,20 +360,25 @@ async function saveStudentMoneyForm(e) {
   if (isSubmitting) return;
   isSubmitting = true;
 
-  const entryType = document.getElementById('stm-entry-type')?.value || 'Deposit';
+  const entryTypeSelect = document.getElementById('stm-entry-type');
+  const entryType = (entryTypeSelect?.value || 'Deposit').trim();
   const credit = parseFloat(document.getElementById('stm-credit')?.value || 0);
   const debit = parseFloat(document.getElementById('stm-debit')?.value || 0);
   const studentId = parseInt(document.getElementById('stm-id-search')?.value, 10) || 0;
 
-  if (entryType === 'Transfer to PM Cashier') {
+  // 🎯 ROBUST TRANSFER DETECTION: Dropdown တန်ဖိုး မည်သို့ဖြစ်စေ Transfer ပါက ငွေလွှဲအဖြစ် သတ်မှတ်ခြင်း
+  const isTransfer = entryType.toLowerCase().includes('transfer') || entryType.toLowerCase().includes('အရင်းလွှဲ');
+
+  if (isTransfer) {
     if (credit <= 0) {
       isSubmitting = false; 
-      return showToast("ERROR", "PM Cashier သို့ လွှဲမည့် Credit ပမာဏ ထည့်ပါ။");
+      return showToast("ERROR", "PM Cashier သို့ လွှဲမည့် Credit ငွေပမာဏ ထည့်သွင်းပါ။");
     }
 
+    // Vault Cash စစ်ဆေးခြင်း
     const trustBalText = document.getElementById('stm-balance')?.textContent || '0';
     const trustBal = parseFloat(trustBalText.replace(/[^0-9.-]+/g, "")) || 0;
-    const cashierCashText = document.getElementById('pm-total-hand-cash')?.textContent || '0';
+    const cashierCashText = document.getElementById('stm-pm-cashier-cash')?.textContent || document.getElementById('pm-total-hand-cash')?.textContent || '0';
     const cashierCash = parseFloat(cashierCashText.replace(/[^0-9.-]+/g, "")) || 0;
     const availableFinanceCash = trustBal - cashierCash;
 
@@ -395,18 +386,21 @@ async function saveStudentMoneyForm(e) {
       isSubmitting = false;
       return showToast("ERROR", `Finance Vault တွင် လက်ကျန်ငွေသား (${availableFinanceCash.toLocaleString()} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString()} MMK) ပိုမိုလွှဲပြောင်း၍ မရပါ!`);
     }
-  } 
-  if (entryType === 'Withdraw' && credit > 0) {
-    const liveBalText = document.getElementById('stm-wallet-live-amount')?.textContent || '0';
-    const liveBal = parseFloat(liveBalText.replace(/[^0-9.-]+/g, "")) || 0;
-    if (credit > liveBal) {
-      isSubmitting = false;
-      return showToast("ERROR", `ကျောင်းသားတွင် လက်ရှိမုန့်ဖိုးလက်ကျန် (${liveBal.toLocaleString()} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString()} MMK) ထုတ်ယူခွင့် မပြုပါ!`);
-    }
-  }else {
+  } else {
+    // Regular Student Deposit or Withdraw
     if (!studentId || (debit <= 0 && credit <= 0)) {
       isSubmitting = false; 
       return showToast("ERROR", "ကျောင်းသား ID နှင့် ငွေပမာဏ အတိအကျ ထည့်ပါ။");
+    }
+
+    // Student Overdraft Guard
+    if (entryType === 'Withdraw' && credit > 0) {
+      const liveBalText = document.getElementById('stm-wallet-live-amount')?.textContent || '0';
+      const liveBal = parseFloat(liveBalText.replace(/[^0-9.-]+/g, "")) || 0;
+      if (credit > liveBal) {
+        isSubmitting = false;
+        return showToast("ERROR", `ကျောင်းသားတွင် လက်ရှိမုန့်ဖိုးလက်ကျန် (${liveBal.toLocaleString()} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString()} MMK) ထုတ်ယူခွင့် မပြုပါ!`);
+      }
     }
   }
 
@@ -414,12 +408,12 @@ async function saveStudentMoneyForm(e) {
     uniqueId: document.getElementById('stm-uniqueId')?.value || '',
     date: document.getElementById('stm-date')?.value || new Date().toISOString().slice(0, 10),
     fy: document.getElementById('stm-fy')?.value || (typeof window.getCurrentAcademicYear === 'function' ? window.getCurrentAcademicYear() : '2026-2027'),
-    entryType: entryType,
+    entryType: isTransfer ? 'Transfer to PM Cashier' : entryType,
     method: document.getElementById('stm-method')?.value || 'Cash',
     debit: debit,
     credit: credit,
     remark: document.getElementById('stm-remark')?.value || '',
-    studentId: entryType === 'Transfer to PM Cashier' ? null : studentId,
+    studentId: isTransfer ? null : studentId,
     fyid: document.getElementById('stm-fyid-show')?.value || '',
     name: document.getElementById('stm-fyidname-show')?.value || '',
     class: document.getElementById('stm-class')?.value || '',
@@ -432,7 +426,7 @@ async function saveStudentMoneyForm(e) {
   try {
     const res = await callApi('saveStudentMoneyEntry', payload);
     if (res && res.success) {
-      showToast('SUCCESS', entryType === 'Transfer to PM Cashier' 
+      showToast('SUCCESS', isTransfer 
         ? 'PM Cashier သို့ အရင်းငွေလွှဲပြောင်းပြီးပါပြီ။' 
         : 'ကျောင်းသားငွေစာရင်း မှတ်တမ်းတင်ပြီးပါပြီ။');
       loadStudentMoneyData(false);
@@ -1355,6 +1349,59 @@ function triggerVoucherPrint() {
     printWindow.close();
   }, 400);
 }
+
+// ==============================================================================
+// 💡 HIGH-CONTRAST PROFESSIONAL TOAST NOTIFICATION (Z-INDEX: 99999)
+// ==============================================================================
+window.showToast = function(type, message) {
+  let container = document.getElementById('global-toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'global-toast-container';
+    // 🎯 Screen အပေါ်တည့်တည့်တွင် Modal များအားလုံး၏ အပေါ်ဆုံး (z-[99999]) မှ ပြသခြင်း
+    container.className = 'fixed top-6 left-1/2 -translate-x-1/2 z-[99999] flex flex-col items-center gap-3 pointer-events-none w-full max-w-md px-4';
+    document.body.appendChild(container);
+  }
+
+  const isError = type === 'ERROR';
+  const toast = document.createElement('div');
+  
+  // 🌟 အလွန်ထင်ရှားသော Red/Emerald Gradient + Bold White Text + Strong Shadow
+  toast.className = `pointer-events-auto flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl border transition-all duration-300 transform translate-y-[-20px] opacity-0 scale-95 ${
+    isError 
+      ? 'bg-rose-600 border-rose-400 text-white shadow-rose-950/80 ring-4 ring-rose-500/30' 
+      : 'bg-emerald-600 border-emerald-400 text-white shadow-emerald-950/80 ring-4 ring-emerald-500/30'
+  }`;
+
+  const icon = isError 
+    ? '<i class="fa-solid fa-circle-exclamation text-xl text-amber-200 animate-pulse shrink-0"></i>' 
+    : '<i class="fa-solid fa-circle-check text-xl text-emerald-100 shrink-0"></i>';
+
+  toast.innerHTML = `
+    ${icon}
+    <div class="flex-1 text-xs font-black tracking-wide leading-relaxed">
+      <span class="block uppercase text-[10px] tracking-widest text-white/80 font-bold">${isError ? 'Action Denied / Error' : 'Success'}</span>
+      ${message}
+    </div>
+    <button onclick="this.parentElement.remove()" class="text-white/70 hover:text-white transition p-1 text-xs shrink-0">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  `;
+
+  container.appendChild(toast);
+
+  // Smooth Animate In
+  requestAnimationFrame(() => {
+    toast.classList.remove('translate-y-[-20px]', 'opacity-0', 'scale-95');
+    toast.classList.add('translate-y-0', 'opacity-100', 'scale-100');
+  });
+
+  // Auto Dismiss after 4.5 seconds
+  setTimeout(() => {
+    toast.classList.add('opacity-0', 'scale-95', 'translate-y-[-10px]');
+    setTimeout(() => toast.remove(), 300);
+  }, 4500);
+};
 
 // Global Window Exports
 window.switchStudentMoneySubTab = switchStudentMoneySubTab;

@@ -161,18 +161,32 @@ export async function saveStudentMoneyEntry(db, session, body) {
     const cleanFy = fy.replace(/^FY\s*/i, '');
     const uniqueid = body.uniqueId ? String(body.uniqueId).trim() : generateUniqueId('STM');
     
-    const entryType = body.entryType || 'Deposit';
+    const rawType = String(body.entryType || 'Deposit').trim();
     const debit = parseFloat(body.debit || 0);
     const credit = parseFloat(body.credit || 0);
     const studentId = parseInt(body.studentId, 10) || null;
     const method = body.method || 'Cash';
     
+    // 🎯 ၁။ Transfer ဟုတ်/မဟုတ် Case-insensitive & Flexible စစ်ဆေးခြင်း
+    const isTransfer = rawType.toLowerCase().includes('transfer') || 
+                       rawType.toLowerCase().includes('pm cashier') || 
+                       rawType.toLowerCase().includes('အရင်းလွှဲ');
+    
     const batchStatements = [];
+    let generatedVrNo = null;
 
     // =========================================================================
     // 💡 SCENARIO 1: TRANSFER TO PM CASHIER (WITH OVER-TRANSFER GUARD)
     // =========================================================================
-    if (entryType === 'Transfer to PM Cashier' && credit > 0) {
+    if (isTransfer) {
+      if (credit <= 0) {
+        return {
+          success: false,
+          message: "PM Cashier သို့ လွှဲမည့် Credit ငွေပမာဏကို အတိအကျ ထည့်သွင်းပါ။"
+        };
+      }
+
+      // 🛡️ OVER-TRANSFER GUARD: Check available physical cash in Finance Vault
       const [stuRes, pmRes] = await db.batch([
         db.prepare("SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND student_id IS NOT NULL").bind(cleanFy, `FY ${cleanFy}`),
         db.prepare("SELECT COALESCE(SUM(debit - credit), 0) as bal FROM pm_cashier_book WHERE fy IN (?, ?)").bind(cleanFy, `FY ${cleanFy}`)
@@ -190,14 +204,17 @@ export async function saveStudentMoneyEntry(db, session, body) {
 
       const noPm = await generateFyNo(db, 'pm_cashier_book', fy);
       const vrPm = await generateVoucherNo(db, 'pm_cashier_book', 'PMC', entryDate);
+      generatedVrNo = vrPm;
       const respPerson = body.responsibilityPerson || 'Cashier 1';
       const pmRemark = body.remark || `Finance မှ ${respPerson} သို့ အရင်းငွေလွှဲပေးခြင်း`;
 
+      // 1. Debit -> PM Cashier Book
       batchStatements.push(
         db.prepare(`INSERT INTO pm_cashier_book (no, date, responsibility_person, category, description, method, debit, credit, balances, vr_no, my, fy, created_by, uniqueid) VALUES (?, ?, ?, 'Float Receive', ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)`)
         .bind(noPm, entryDate, respPerson, pmRemark, method, credit, vrPm, my, fy, session?.name || 'Finance', `PMC_${uniqueid}`)
       );
 
+      // 2. Student Money Transition Record (student_id = NULL)
       const noStu = await generateFyNo(db, 'student_money', cleanFy);
       batchStatements.push(
         db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, NULL, 'TRANSFER', ?, 'Vault Transfer', ?, 0, ?, 0, ?, ?, ?)`)
@@ -209,8 +226,23 @@ export async function saveStudentMoneyEntry(db, session, body) {
       // 💡 SCENARIO 2: REGULAR STUDENT DEPOSIT OR WITHDRAW
       // =========================================================================
 
+      // 🎯 ၂။ ကျောင်းသား စာရင်းများအတွက် ID နှင့် Amount စစ်ဆေးချက်
+      if (!studentId || studentId <= 0) {
+        return {
+          success: false,
+          message: "ကျောင်းသား ID အတိအကျ ထည့်သွင်းပေးပါ။"
+        };
+      }
+
+      if (debit <= 0 && credit <= 0) {
+        return {
+          success: false,
+          message: "အပ်ငွေ (Deposit) သို့မဟုတ် ထုတ်ငွေ (Withdraw) ပမာဏ ထည့်သွင်းပေးပါ။"
+        };
+      }
+
       // 🛡️ STUDENT OVERDRAFT GUARD (ကျောင်းသားလက်ကျန်ထက် ပိုမထုတ်နိုင်စေရန် စစ်ဆေးခြင်း)
-      if (entryType === 'Withdraw' && credit > 0 && studentId) {
+      if (rawType.toLowerCase().includes('withdraw') && credit > 0) {
         const stuBalRow = await db.prepare(
           "SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND student_id = ?"
         ).bind(cleanFy, `FY ${cleanFy}`, studentId).first();
@@ -226,7 +258,7 @@ export async function saveStudentMoneyEntry(db, session, body) {
 
       const noStu = await generateFyNo(db, 'student_money', cleanFy);
       const stuName = body.name ? `[${body.fyid}] ${body.name}` : `[ID ${studentId}]`;
-      const prefix = entryType === 'Deposit' ? '[Finance] Deposit' : '[Finance] Withdraw';
+      const prefix = rawType.toLowerCase().includes('withdraw') ? '[Finance] Withdraw' : '[Finance] Deposit';
       const remark = `${prefix}: ${body.remark || ''}`.trim();
 
       batchStatements.push(
@@ -237,15 +269,17 @@ export async function saveStudentMoneyEntry(db, session, body) {
 
     await db.batch(batchStatements);
 
-    if (studentId !== null) {
+    if (!isTransfer && studentId !== null) {
       await recalculateLedgerBalances(db, 'student_money', cleanFy, entryDate);
     }
-    if (entryType === 'Transfer to PM Cashier') {
+    if (isTransfer) {
       await recalculateLedgerBalances(db, 'pm_cashier_book', fy, entryDate);
     }
 
-    return { success: true, uniqueId: uniqueid };
-  } catch (err) { return { success: false, message: err.message }; }
+    return { success: true, uniqueId: uniqueid, vrNo: generatedVrNo };
+  } catch (err) { 
+    return { success: false, message: err.message }; 
+  }
 }
 
 export async function deleteStudentMoneyEntry(db, session, body) {
