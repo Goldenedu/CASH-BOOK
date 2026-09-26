@@ -251,29 +251,43 @@ export async function saveStudentMoneyEntry(db, session, body) {
 export async function deleteStudentMoneyEntry(db, session, body) {
   try {
     const uid = body.uniqueId;
-    if (!uid) return { success: false };
+    if (!uid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     
-    const existing = await db.prepare("SELECT fy, date, remark, student_id FROM student_money WHERE uniqueid = ?").bind(uid).first();
-    if (!existing) return { success: false };
+    const existing = await db.prepare("SELECT fy, date, remark, student_id, uniqueid FROM student_money WHERE uniqueid = ?").bind(uid).first();
+    if (!existing) return { success: false, message: "ဖျက်မည့် စာရင်း ရှာမတွေ့ပါ။" };
 
-    const batchStatements = [];
-    batchStatements.push(db.prepare("DELETE FROM student_money WHERE uniqueid = ?").bind(uid));
-    
-    if (existing.remark && existing.remark.includes('Transfer to PM Cashier')) {
-      batchStatements.push(db.prepare("DELETE FROM pm_cashier_book WHERE uniqueid = ?").bind(`PMC_${uid}`));
-    }
+    const rawId = uid.replace(/^(STM_|PMC_|CAN_)/, '');
+
+    // 🎯 D1 Batch: Student Money စာအုပ်မှ ဖျက်ရုံသာမက PM Cashier နှင့် Canteen စာအုပ်များရှိ ချိတ်ဆက်ထားသော ID များကိုပါ တစ်ပါတည်း ဖျက်ပစ်ခြင်း
+    const batchStatements = [
+      // ၁။ Student Money မူရင်း စာရင်းဖျက်ခြင်း
+      db.prepare("DELETE FROM student_money WHERE uniqueid = ?").bind(uid),
+
+      // ၂။ PM Cashier စာအုပ်ရှိ ဆက်စပ်စာရင်း (Withdraw / Return / Transfer) ကိုပါ လိုက်ဖျက်ခြင်း
+      db.prepare(`
+        DELETE FROM pm_cashier_book 
+        WHERE uniqueid IN (?, ?, ?, ?, ?)
+      `).bind(uid, `PMC_${uid}`, `PMC_${rawId}`, rawId, `STM_${rawId}`),
+
+      // ၃။ Canteen စာအုပ်ရှိ ဆက်စပ်စာရင်း (POS Sales) ကိုပါ လိုက်ဖျက်ခြင်း
+      db.prepare(`
+        DELETE FROM canteen_book 
+        WHERE uniqueid IN (?, ?, ?, ?, ?)
+      `).bind(uid, `CAN_${uid}`, `CAN_${rawId}`, rawId, `STM_${rawId}`)
+    ];
 
     await db.batch(batchStatements);
 
-    if (existing.student_id !== null) {
-      await recalculateLedgerBalances(db, 'student_money', existing.fy.replace(/^FY\s*/i, ''), existing.date);
-    }
-    if (existing.remark && existing.remark.includes('Transfer to PM Cashier')) {
-      await recalculateLedgerBalances(db, 'pm_cashier_book', `FY ${existing.fy.replace(/^FY\s*/i, '')}`, existing.date);
-    }
+    // Balance များကို သက်ဆိုင်ရာ စာအုပ်များအားလုံးတွင် တစ်ပြိုင်နက် ပြန်လည်ညှိယူခြင်း
+    const cleanFy = existing.fy ? existing.fy.replace(/^FY\s*/i, '') : '';
+    await recalculateLedgerBalances(db, 'student_money', cleanFy, existing.date);
+    await recalculateLedgerBalances(db, 'pm_cashier_book', `FY ${cleanFy}`, existing.date);
+    await recalculateLedgerBalances(db, 'canteen_book', `FY ${cleanFy}`, existing.date);
 
     return { success: true };
-  } catch (err) { return { success: false, message: err.message }; }
+  } catch (err) { 
+    return { success: false, message: err.message }; 
+  }
 }
 
 // ==============================================================================
@@ -381,27 +395,34 @@ export async function savePmCashierBookEntry(db, session, body) {
 export async function deletePmCashierBookEntry(db, session, body) {
   try {
     const uid = body.uniqueId;
-    if (!uid) return { success: false };
+    if (!uid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     
-    const existing = await db.prepare("SELECT fy, date, category FROM pm_cashier_book WHERE uniqueid = ?").bind(uid).first();
-    if (!existing) return { success: false };
+    const existing = await db.prepare("SELECT fy, date, category, uniqueid FROM pm_cashier_book WHERE uniqueid = ?").bind(uid).first();
+    if (!existing) return { success: false, message: "ဖျက်မည့် စာရင်း ရှာမတွေ့ပါ။" };
 
-    const batchStatements = [];
-    batchStatements.push(db.prepare("DELETE FROM pm_cashier_book WHERE uniqueid = ?").bind(uid));
-    
-    if (existing.category === 'PM Withdraw' || existing.category === 'Return to Finance') {
-      batchStatements.push(db.prepare("DELETE FROM student_money WHERE uniqueid = ?").bind(`STM_${uid}`));
-    }
+    const rawId = uid.replace(/^(STM_|PMC_|CAN_)/, '');
+
+    const batchStatements = [
+      // ၁။ PM Cashier စာအုပ်မှ ဖျက်ခြင်း
+      db.prepare("DELETE FROM pm_cashier_book WHERE uniqueid = ?").bind(uid),
+
+      // ၂။ Student Money (ကျောင်းသား Wallet / Vault Transfer) စာအုပ်ရှိ ချိတ်ဆက်ထားသော စာရင်းကိုပါ လိုက်ဖျက်ခြင်း
+      db.prepare(`
+        DELETE FROM student_money 
+        WHERE uniqueid IN (?, ?, ?, ?, ?)
+      `).bind(uid, `STM_${uid}`, `STM_${rawId}`, rawId, `PMC_${rawId}`)
+    ];
 
     await db.batch(batchStatements);
 
-    await recalculateLedgerBalances(db, 'pm_cashier_book', existing.fy, existing.date);
-    if (existing.category === 'PM Withdraw') {
-      await recalculateLedgerBalances(db, 'student_money', existing.fy.replace(/^FY\s*/i, ''), existing.date);
-    }
+    const cleanFy = existing.fy ? existing.fy.replace(/^FY\s*/i, '') : '';
+    await recalculateLedgerBalances(db, 'pm_cashier_book', `FY ${cleanFy}`, existing.date);
+    await recalculateLedgerBalances(db, 'student_money', cleanFy, existing.date);
 
     return { success: true };
-  } catch (err) { return { success: false, message: err.message }; }
+  } catch (err) { 
+    return { success: false, message: err.message }; 
+  }
 }
 
 // ==============================================================================
@@ -464,25 +485,34 @@ export async function saveCanteenBookEntry(db, session, body) {
 export async function deleteCanteenBookEntry(db, session, body) {
   try {
     const uid = body.uniqueId;
-    if (!uid) return { success: false };
+    if (!uid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     
-    const existing = await db.prepare("SELECT fy, date, category FROM canteen_book WHERE uniqueid = ?").bind(uid).first();
-    if (!existing) return { success: false };
+    const existing = await db.prepare("SELECT fy, date, category, uniqueid FROM canteen_book WHERE uniqueid = ?").bind(uid).first();
+    if (!existing) return { success: false, message: "ဖျက်မည့် စာရင်း ရှာမတွေ့ပါ။" };
 
-    const batchStatements = [];
-    batchStatements.push(db.prepare("DELETE FROM canteen_book WHERE uniqueid = ?").bind(uid));
-    
-    if (existing.category === 'POS Sales') {
-      batchStatements.push(db.prepare("DELETE FROM student_money WHERE uniqueid = ?").bind(`STM_${uid}`));
-    }
+    const rawId = uid.replace(/^(STM_|PMC_|CAN_)/, '');
+
+    const batchStatements = [
+      // ၁။ Canteen စာအုပ်မှ ဖျက်ခြင်း
+      db.prepare("DELETE FROM canteen_book WHERE uniqueid = ?").bind(uid),
+
+      // ၂။ Student Money ကျောင်းသား Wallet စာအုပ်မှ အလိုအလျောက် လိုက်ဖျက်ခြင်း
+      db.prepare(`
+        DELETE FROM student_money 
+        WHERE uniqueid IN (?, ?, ?, ?, ?)
+      `).bind(uid, `STM_${uid}`, `STM_${rawId}`, rawId, `CAN_${rawId}`)
+    ];
 
     await db.batch(batchStatements);
 
-    await recalculateLedgerBalances(db, 'canteen_book', existing.fy, existing.date);
-    if (existing.category === 'POS Sales') await recalculateLedgerBalances(db, 'student_money', existing.fy.replace(/^FY\s*/i, ''), existing.date);
+    const cleanFy = existing.fy ? existing.fy.replace(/^FY\s*/i, '') : '';
+    await recalculateLedgerBalances(db, 'canteen_book', `FY ${cleanFy}`, existing.date);
+    await recalculateLedgerBalances(db, 'student_money', cleanFy, existing.date);
 
     return { success: true };
-  } catch (err) { return { success: false, message: err.message }; }
+  } catch (err) { 
+    return { success: false, message: err.message }; 
+  }
 }
 
 // ==============================================================================

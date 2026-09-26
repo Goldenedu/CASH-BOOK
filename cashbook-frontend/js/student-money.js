@@ -449,13 +449,18 @@ async function saveStudentMoneyForm(e) {
 }
 
 async function deleteStudentMoneyEntry(uniqueId) {
-  if (!confirm("ဤစာရင်းအား ဖျက်ပါက ဆက်စပ်နေသော Cashier စာရင်းများပါ ပယ်ဖျက်သွားပါမည်။ သေချာပါသလား?")) return;
+  if (!confirm("ဤစာရင်းအား ဖျက်ပါက ဆက်စပ်နေသော Cashier / Canteen စာရင်းများပါ အလိုအလျောက် ပယ်ဖျက်သွားပါမည်။ သေချာပါသလား?")) return;
   if (typeof toggleLoading === 'function') toggleLoading(true);
   try {
     const res = await callApi('deleteStudentMoneyEntry', { uniqueId });
     if (res && res.success) {
-      showToast('SUCCESS', 'စာရင်း ဖျက်သိမ်းပြီးပါပြီ။');
+      showToast('SUCCESS', 'စာရင်းအားလုံးမှ ချိတ်ဆက်ဖျက်သိမ်းပြီးပါပြီ။');
+      // 🎯 စာအုပ်အားလုံး၏ Data များကို တစ်ပြိုင်နက် ပြန်လည်ဆွဲတင်ခြင်း
       loadStudentMoneyData(false);
+      loadPmCashierBookData(false);
+      loadCanteenBookData(false);
+    } else {
+      showToast('ERROR', res?.message || 'ဖျက်သိမ်းမှု မအောင်မြင်ပါ။');
     }
   } catch (err) {
     showToast('ERROR', err.message);
@@ -935,15 +940,23 @@ async function savePmCashierBookForm(e) {
 }
 
 async function deletePmCashierBookEntry(uniqueId) {
-  if (!confirm("ဖျက်မည်မှာ သေချာပါသလား? ကျောင်းသားလက်ကျန်ပါ ပြန်လည်ညှိသွားပါမည်။")) return;
+  if (!confirm("ဤစာရင်းအား ဖျက်ပါက Student Money စာအုပ်ရှိ ကျောင်းသားလက်ကျန်ပါ အလိုအလျောက် ပြန်လည်ညှိသွားပါမည်။ သေချာပါသလား?")) return;
   if (typeof toggleLoading === 'function') toggleLoading(true);
   try {
     const res = await callApi('deletePmCashierBookEntry', { uniqueId });
     if (res && res.success) {
-      showToast('SUCCESS', 'စာရင်း ဖျက်သိမ်းပြီးပါပြီ။');
+      showToast('SUCCESS', 'စာရင်းအားလုံးမှ ချိတ်ဆက်ဖျက်သိမ်းပြီးပါပြီ။');
+      // 🎯 စာအုပ်အားလုံး၏ Data များကို တစ်ပြိုင်နက် ပြန်လည်ဆွဲတင်ခြင်း
       loadPmCashierBookData(false);
+      loadStudentMoneyData(false);
+    } else {
+      showToast('ERROR', res?.message || 'ဖျက်သိမ်းမှု မအောင်မြင်ပါ။');
     }
-  } catch (err) {} finally { if (typeof toggleLoading === 'function') toggleLoading(false); }
+  } catch (err) {
+    showToast('ERROR', err.message);
+  } finally { 
+    if (typeof toggleLoading === 'function') toggleLoading(false); 
+  }
 }
 
 function exportToCSVPmCashierBook() {
