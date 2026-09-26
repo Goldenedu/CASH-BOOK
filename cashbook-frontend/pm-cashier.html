@@ -204,9 +204,9 @@
       const userStr = localStorage.getItem('golden_user') || localStorage.getItem('user');
       const token = localStorage.getItem('golden_auth_token') || localStorage.getItem('token');
 
-      // Root တွင်ရှိသဖြင့် Session မရှိပါက index.html သို့ တိုက်ရိုက်သွားမည်
+      // 🎯 index.html အစား Root Domain (/) သို့ သွားမည်
       if (!userStr || !token) {
-        window.location.href = 'index.html';
+        window.location.href = '/';
         return;
       }
       gSession = JSON.parse(userStr);
@@ -489,7 +489,7 @@
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       // Root ရှိ index.html သို့ ပြန်ထွက်မည်
-      window.location.href = 'index.html';
+      window.location.href = '/';
     }
   </script>
 </body>
