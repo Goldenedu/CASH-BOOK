@@ -7,13 +7,25 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
-    body { background-color: #050b14; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
-    .glass-card { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(51, 65, 85, 0.4); }
+    body { 
+      background-color: #050b14; 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+      -webkit-tap-highlight-color: transparent; 
+    }
+    .glass-card { 
+      background: rgba(15, 23, 42, 0.75); 
+      backdrop-filter: blur(12px); 
+      border: 1px solid rgba(51, 65, 85, 0.4); 
+    }
   </style>
+
+  <!-- 💡 ပင်မ ERP ၏ Config နှင့် API စနစ်များကို တိုက်ရိုက် ချိတ်ဆက်ခြင်း -->
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
 </head>
 <body class="text-slate-100 min-h-screen pb-24 select-none">
 
-  <!-- App Header -->
+  <!-- 💡 App Header -->
   <header class="sticky top-0 z-40 bg-[#080f1e]/90 backdrop-blur-md border-b border-slate-800/80 px-4 py-3 flex items-center justify-between">
     <div class="flex items-center gap-2.5">
       <div class="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 font-black text-sm">
@@ -34,10 +46,10 @@
     </div>
   </header>
 
-  <!-- Main Mobile Container -->
+  <!-- 💡 Main Mobile Container -->
   <main class="p-4 space-y-4 max-w-lg mx-auto">
 
-    <!-- Hero Card: Cash in Hand -->
+    <!-- 🎯 Hero KPI Card: Cash in Hand -->
     <div class="glass-card p-5 rounded-2xl relative overflow-hidden border border-sky-500/30 bg-gradient-to-br from-[#0c1e38] via-[#091528] to-[#070e1c] shadow-2xl">
       <div class="flex justify-between items-start">
         <span class="text-[10px] font-black uppercase tracking-widest text-sky-400">လက်ဝယ်ရှိ ငွေသား (Cash In Hand)</span>
@@ -58,7 +70,7 @@
       </div>
     </div>
 
-    <!-- Quick Action Buttons -->
+    <!-- 🎯 Fast Primary Action Buttons -->
     <div class="grid grid-cols-2 gap-3">
       <button onclick="openWithdrawModal()" class="py-3.5 px-4 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white rounded-xl font-black text-xs shadow-lg shadow-sky-950 flex items-center justify-center gap-2 active:scale-95 transition">
         <i class="fa-solid fa-hand-holding-dollar text-sm"></i>
@@ -71,7 +83,7 @@
       </button>
     </div>
 
-    <!-- Transactions List -->
+    <!-- 🎯 Transactions Section -->
     <div class="space-y-2.5 pt-2">
       <div class="flex justify-between items-center px-1">
         <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -79,11 +91,16 @@
         </h3>
         <span id="pm-entries-count" class="text-[11px] font-mono text-slate-500">0 စောင်</span>
       </div>
-      <div id="pm-feed-list" class="space-y-2.5"></div>
+
+      <div id="pm-feed-list" class="space-y-2.5">
+        <!-- Dynamic Cards -->
+      </div>
     </div>
   </main>
 
-  <!-- MODAL: WITHDRAW -->
+  <!-- ============================================================================== -->
+  <!-- 💡 MODAL: PM WITHDRAW (မုန့်ဖိုးထုတ်ပေးရန် MODAL)                               -->
+  <!-- ============================================================================== -->
   <div id="pm-withdraw-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
     <div class="bg-[#0e172a] border-t sm:border border-slate-800 w-full max-w-md rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-center pb-2 border-b border-slate-800">
@@ -127,7 +144,9 @@
     </div>
   </div>
 
-  <!-- MODAL: RETURN TO FINANCE -->
+  <!-- ============================================================================== -->
+  <!-- 💡 MODAL: RETURN TO FINANCE (FINANCE သို့ ငွေပြန်အပ် MODAL)                   -->
+  <!-- ============================================================================== -->
   <div id="pm-return-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
     <div class="bg-[#0e172a] border-t sm:border border-slate-800 w-full max-w-md rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-center pb-2 border-b border-slate-800">
@@ -157,15 +176,18 @@
 
   <div id="pm-toast-box" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[999999] pointer-events-none w-11/12 max-w-sm"></div>
 
+  <!-- ============================================================================== -->
+  <!-- 💡 JAVASCRIPT APP LOGIC                                                        -->
+  <!-- ============================================================================== -->
   <script>
-    const API_URL = "https://cashbook-api.than-toe-aung.workers.dev";
     let gSession = null;
     let gCashierList = [];
     let gMatchedStudent = null;
 
     function showToast(type, msg) {
       const box = document.getElementById('pm-toast-box');
-      const isErr = type === 'ERROR';
+      if (!box) return;
+      const isErr = (type === 'ERROR');
       box.innerHTML = `
         <div class="pointer-events-auto p-4 rounded-2xl shadow-2xl border-2 flex items-center gap-3 animate-in zoom-in-95 duration-150 ${
           isErr ? 'bg-rose-950 border-rose-500 text-white shadow-[0_0_40px_rgba(244,63,94,0.4)]' : 'bg-emerald-950 border-emerald-500 text-white shadow-[0_0_40px_rgba(16,185,129,0.4)]'
@@ -174,30 +196,15 @@
           <p class="text-xs font-bold leading-snug flex-1">${msg}</p>
         </div>
       `;
-      setTimeout(() => { box.innerHTML = ''; }, 3500);
+      setTimeout(() => { if (box) box.innerHTML = ''; }, 3500);
     }
 
-    async function api(action, payload = {}, method = 'POST') {
-      const token = localStorage.getItem('golden_auth_token') || localStorage.getItem('token') || '';
-      let url = `${API_URL}?action=${action}`;
-      let opts = {
-        method,
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
-      };
-      if (method === 'GET') {
-        for (const [k, v] of Object.entries(payload)) url += `&${k}=${encodeURIComponent(v)}`;
-      } else {
-        opts.body = JSON.stringify({ action, ...payload });
-      }
-      const res = await fetch(url, opts);
-      return await res.json();
-    }
-
+    // 💡 Root App Initialization
     window.addEventListener('DOMContentLoaded', async () => {
       const userStr = localStorage.getItem('golden_user') || localStorage.getItem('user');
       const token = localStorage.getItem('golden_auth_token') || localStorage.getItem('token');
 
-      // Root မှာရှိနေသောကြောင့် index.html ဟုသာ ညွှန်းပါ
+      // Root တွင်ရှိသဖြင့် Session မရှိပါက index.html သို့ တိုက်ရိုက်သွားမည်
       if (!userStr || !token) {
         window.location.href = 'index.html';
         return;
@@ -216,12 +223,15 @@
       await loadPmCashierData();
     });
 
+    // 🚀 ပင်မ callApi() ကို သုံးထားသဖြင့် URL နှင့် Token အတိအကျဖြင့် ချိတ်ဆက်အလုပ်လုပ်ပါသည်
     async function loadPmCashierData() {
       try {
-        const res = await api('getPmCashierBookData', { forceRefresh: true }, 'GET');
+        const res = await callApi('getPmCashierBookData', { forceRefresh: true }, 'GET');
         if (res && res.success) {
           gCashierList = res.data || [];
           renderCashierView();
+        } else {
+          showToast("ERROR", res?.message || "Data ဆွဲယူ၍ မရပါ။");
         }
       } catch (err) {
         showToast("ERROR", "Data ဆွဲယူ၍ မရပါ: " + err.message);
@@ -255,6 +265,8 @@
         const isFloat = r.category === 'Float Receive';
         const isReturn = r.category === 'Return to Finance';
         const isToday = (r.date === todayStr);
+
+        // 🛡️ စည်းကမ်းချက် - Float Receive ကို လုံးဝဖျက်ခွင့်မရှိ။ ကျန်စာရင်းများကို ၁ ရက် (ယနေ့) သာ ဖျက်ခွင့်ပေးသည်။
         const canDelete = !isFloat && isToday;
 
         feed.innerHTML += `
@@ -297,13 +309,13 @@
       if (!idVal) return card.classList.add('hidden');
 
       try {
-        const res = await api('lookupStudentById', { studentId: idVal }, 'GET');
+        const res = await callApi('lookupStudentById', { studentId: idVal }, 'GET');
         if (res && res.success && res.data) {
           gMatchedStudent = res.data;
           document.getElementById('w-student-name').textContent = res.data.name;
           document.getElementById('w-student-class').textContent = res.data.class || '';
 
-          const sumRes = await api('getStudentMoneySummary', { searchVal: res.data.fyid }, 'GET');
+          const sumRes = await callApi('getStudentMoneySummary', { searchVal: res.data.fyid }, 'GET');
           let bal = 0;
           if (sumRes && sumRes.success && sumRes.data) {
             const row = sumRes.data.find(s => s.studentId === parseInt(idVal, 10));
@@ -347,12 +359,12 @@
       };
 
       closeModal('pm-withdraw-modal');
-      const res = await api('savePmCashierBookEntry', payload, 'POST');
+      const res = await callApi('savePmCashierBookEntry', payload);
       if (res && res.success) {
         showToast("SUCCESS", "မုန့်ဖိုး ထုတ်ပေးပြီးပါပြီ။");
         loadPmCashierData();
       } else {
-        showToast("ERROR", res.message || "မအောင်မြင်ပါ။");
+        showToast("ERROR", res?.message || "မအောင်မြင်ပါ။");
       }
     }
 
@@ -374,23 +386,23 @@
       };
 
       closeModal('pm-return-modal');
-      const res = await api('savePmCashierBookEntry', payload, 'POST');
+      const res = await callApi('savePmCashierBookEntry', payload);
       if (res && res.success) {
         showToast("SUCCESS", "Finance သို့ ငွေပြန်အပ်ပြီးပါပြီ။");
         loadPmCashierData();
       } else {
-        showToast("ERROR", res.message || "မအောင်မြင်ပါ။");
+        showToast("ERROR", res?.message || "မအောင်မြင်ပါ။");
       }
     }
 
     async function deleteEntry(uid) {
       if (!confirm("ဤစာရင်းအား ဖျက်မည်မှာ သေချာပါသလား?")) return;
-      const res = await api('deletePmCashierBookEntry', { uniqueId: uid }, 'POST');
+      const res = await callApi('deletePmCashierBookEntry', { uniqueId: uid });
       if (res && res.success) {
         showToast("SUCCESS", "စာရင်း ဖျက်ပြီးပါပြီ။");
         loadPmCashierData();
       } else {
-        showToast("ERROR", res.message || "ဖျက်ခွင့် မရှိပါ။");
+        showToast("ERROR", res?.message || "ဖျက်ခွင့် မရှိပါ။");
       }
     }
 
@@ -458,16 +470,25 @@
       gMatchedStudent = null;
       document.getElementById('pm-withdraw-modal').classList.remove('hidden');
     }
+
     function openReturnModal() {
       document.getElementById('r-amount').value = '';
       document.getElementById('pm-return-modal').classList.remove('hidden');
     }
-    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+    function closeModal(id) { 
+      document.getElementById(id).classList.add('hidden'); 
+    }
+
     function logoutCashier() {
       localStorage.removeItem('golden_auth_token');
       localStorage.removeItem('golden_user');
+      localStorage.removeItem('golden_user_role');
+      localStorage.removeItem('golden_user_name');
+      localStorage.removeItem('golden_token_expires_at');
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      // Root ရှိ index.html သို့ ပြန်ထွက်မည်
       window.location.href = 'index.html';
     }
   </script>
