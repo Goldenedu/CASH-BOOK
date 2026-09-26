@@ -400,10 +400,18 @@ export async function savePmCashierBookEntry(db, session, body) {
       db.prepare("SELECT COALESCE(SUM(debit - credit), 0) as bal FROM pm_cashier_book WHERE fy IN (?, ?) AND responsibility_person = ?").bind(cleanFy, `FY ${cleanFy}`, respPerson)
     ];
 
+    // 🛡️ PM WITHDRAW DESCRIPTION GUARD: ကျောင်းသားအမည် မပါလာပါက Server က အလိုအလျောက် ပေါင်းစပ်ပေးခြင်း
+    let finalDescription = (body.description || '').trim();
     if (category === 'PM Withdraw' && body.studentId > 0) {
-      verifyQueries.push(
-        db.prepare("SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND student_id = ?").bind(cleanFy, `FY ${cleanFy}`, body.studentId)
-      );
+      const stuPrefix = body.studentName 
+        ? `[${body.fyid || ''}] ${body.studentName}`.trim() 
+        : `[ID ${body.studentId}]`;
+      
+      if (!finalDescription.includes(stuPrefix) && !(body.studentName && finalDescription.includes(body.studentName))) {
+        finalDescription = finalDescription 
+          ? `${stuPrefix} - ${finalDescription}`
+          : `${stuPrefix} - မုန့်ဖိုးထုတ်ပေးငွေ`;
+      }
     }
 
     const verifyRes = await db.batch(verifyQueries);

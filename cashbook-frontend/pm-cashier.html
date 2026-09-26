@@ -291,6 +291,21 @@
         const isToday = (r.date === todayStr);
         const canDelete = !isFloat && isToday;
 
+        // 🎯 ကျောင်းသား အချက်အလက်နှင့် မှတ်ချက်အား ၂ ပိုင်းခွဲ၍ သပ်ရပ်စွာ ပုံဖော်ခြင်း
+        let descHtml = '';
+        const match = (r.description || '').match(/^(\[[^\]]+\]\s*[^-]+)(?:\s*-\s*(.*))?$/);
+        
+        if (match && !isFloat && !isReturn) {
+          const studentInfo = match[1].trim();
+          const remarkText = (match[2] || '').trim();
+          descHtml = `
+            <h4 class="text-xs font-black text-white truncate mt-0.5">${studentInfo}</h4>
+            ${remarkText ? `<p class="text-[10px] text-slate-400 truncate mt-0.5 font-sans flex items-center gap-1"><i class="fa-solid fa-tag text-[8px] text-sky-400"></i> ${remarkText}</p>` : ''}
+          `;
+        } else {
+          descHtml = `<h4 class="text-xs font-bold text-white truncate mt-0.5" title="${r.description || ''}">${r.description || '-'}</h4>`;
+        }
+
         feed.innerHTML += `
           <div class="glass-card p-3.5 rounded-xl border border-slate-800/80 flex items-center justify-between gap-3">
             <div class="flex items-center gap-3 min-w-0">
@@ -307,7 +322,7 @@
                   }">${r.category}</span>
                   <span class="text-[10px] font-mono text-slate-400">${r.date}</span>
                 </div>
-                <h4 class="text-xs font-bold text-white truncate mt-0.5" title="${r.description || ''}">${r.description || '-'}</h4>
+                ${descHtml}
               </div>
             </div>
 
@@ -389,6 +404,11 @@
         return showToast("ERROR", `ငွေကိုင်လက်ထဲတွင် လက်ကျန် (${curCash.toLocaleString()} MMK) သာ ရှိသဖြင့် မလုံလောက်ပါ!`);
       }
 
+      // 🎯 ကျောင်းသား ID နှင့် အမည်ကို ရှေ့တွင် အမြဲမပြတ် ထည့်သွင်းပေးခြင်း
+      const stuPrefix = `[${gMatchedStudent.fyid || ''}] ${gMatchedStudent.name}`.trim();
+      const userRemark = (document.getElementById('w-remark').value || '').trim();
+      const finalDesc = userRemark ? `${stuPrefix} - ${userRemark}` : `${stuPrefix} - မုန့်ဖိုးထုတ်ပေးငွေ`;
+
       const payload = {
         date: new Date().toISOString().slice(0, 10),
         category: 'PM Withdraw',
@@ -397,14 +417,14 @@
         fyid: gMatchedStudent.fyid,
         studentClass: gMatchedStudent.class,
         credit: amount,
-        description: document.getElementById('w-remark').value || `${gMatchedStudent.name} - မုန့်ဖိုးထုတ်ပေးငွေ`
+        description: finalDesc // 🌟 [FYID] Name - Remark အပြည့်အစုံ သိမ်းဆည်းသည်
       };
 
       closeModal('pm-withdraw-modal');
       const res = await callApi('savePmCashierBookEntry', payload);
       if (res && res.success) {
         showToast("SUCCESS", "မုန့်ဖိုး ထုတ်ပေးပြီးပါပြီ။");
-        gPmPage = 1; // Update လုပ်ပြီးပါက Page 1 သို့ ပြန်သွားမည်
+        gPmPage = 1;
         loadPmCashierData();
       } else {
         showToast("ERROR", res?.message || "မအောင်မြင်ပါ။");
