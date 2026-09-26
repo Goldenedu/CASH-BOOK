@@ -57,18 +57,20 @@ function switchStudentMoneySubTab(tabName) {
   }
 }
 
-function renderTopKPIs(inc, exp, bal, count, vaultCash) {
+function renderTopKPIs(inc, exp, bal, count, vaultCash, pmCash) {
   const elInc = document.getElementById('stm-total-income');
   const elExp = document.getElementById('stm-total-expense');
   const elBal = document.getElementById('stm-balance');
-  const elCount = document.getElementById('stm-entries-count');
   const elVault = document.getElementById('stm-vault-cash');
+  const elPmCash = document.getElementById('stm-pm-cashier-cash');
+  const elCount = document.getElementById('stm-entries-count');
 
   if (elInc) elInc.textContent = `${Number(inc || 0).toLocaleString('en-US')} MMK`;
   if (elExp) elExp.textContent = `${Number(exp || 0).toLocaleString('en-US')} MMK`;
   if (elBal) elBal.textContent = `${Number(bal || 0).toLocaleString('en-US')} MMK`;
-  if (elCount) elCount.textContent = Number(count || 0).toLocaleString('en-US');
   if (elVault) elVault.textContent = `${Number(vaultCash || 0).toLocaleString('en-US')} MMK`;
+  if (elPmCash) elPmCash.textContent = `${Number(pmCash || 0).toLocaleString('en-US')} MMK`;
+  if (elCount) elCount.textContent = Number(count || 0).toLocaleString('en-US');
 }
 
 // ==============================================================================
@@ -83,8 +85,15 @@ async function loadStudentMoneyData(isSilent) {
       gStudentMoneyHistoryData = res.data || [];
       const st = res.stats || {};
       
-      // 🎯 Pass financeVaultCash to renderTopKPIs
-      renderTopKPIs(st.totalIncome, st.totalExpense, st.balance, gStudentMoneyHistoryData.length, st.financeVaultCash);
+      // 🎯 Pass all 6 metrics to the 3x2 Grid
+      renderTopKPIs(
+        st.totalIncome, 
+        st.totalExpense, 
+        st.balance, 
+        gStudentMoneyHistoryData.length, 
+        st.financeVaultCash, 
+        st.pmCashierCash
+      );
       applyStudentMoneySearchAndRender();
     }
   } catch (err) {

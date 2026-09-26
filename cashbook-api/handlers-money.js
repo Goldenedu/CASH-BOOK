@@ -52,7 +52,7 @@ export async function getStudentMoneyData(db, body) {
 
     const whereSql = `WHERE ${whereClauses.join(' AND ')}`;
 
-    // 🚀 O(1) Batch: ကျောင်းသားစာရင်းနှင့် PM Cashier လက်ကျန်ငွေသားကို တစ်ပြိုင်နက် Query လုပ်ခြင်း
+    // 🚀 D1 Batch: ကျောင်းသားစာရင်းနှင့် PM Cashier ငွေသားလက်ကျန်ကို O(1) ဖြင့် တစ်ပြိုင်နက် ရယူခြင်း
     const [countRow, statsRow, pmStatsRow] = await db.batch([
       db.prepare(`SELECT COUNT(id) as c FROM student_money ${whereSql}`).bind(...params),
       db.prepare(`
@@ -75,7 +75,7 @@ export async function getStudentMoneyData(db, body) {
     const totalExpense = parseFloat(stats.c || 0);
     const trustBalance = totalIncome - totalExpense;
     
-    // 💡 Finance Vault Physical Cash = ကျောင်းသားလက်ကျန် - ငွေကိုင်များလက်ထဲရှိငွေ
+    // Finance Vault Cash = Virtual Trust Balance - PM Cashier Hand Cash
     const financeVaultCash = trustBalance - pmCashierCash;
 
     const dataQuery = `
