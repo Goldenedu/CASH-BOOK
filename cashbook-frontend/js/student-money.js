@@ -901,23 +901,11 @@ async function savePmCashierBookForm(e) {
     const res = await callApi('savePmCashierBookEntry', payload);
     if (res && res.success) {
       showToast('SUCCESS', category === 'Return to Finance' 
-        ? 'Finance သို့ ငွေပြန်လွှဲပြီးပါပြီ။' 
+        ? 'Finance သို့ လက်ကျန်ငွေ ပြန်လည်အပ်နှံပြီးပါပြီ။' 
         : 'မုန့်ဖိုးထုတ်ပေးပြီးပါပြီ။');
       loadPmCashierBookData(false);
       loadStudentMoneyData(false);
-
-      if (category === 'Return to Finance') {
-        openTransferVoucherModal({
-          vrNo: res.vrNo || 'RETURN-VCH',
-          date: payload.date,
-          type: 'RETURN TO FINANCE (ငွေပြန်အပ်လွှာ)',
-          cashier: respPerson,
-          amount: credit,
-          remark: payload.description,
-          senderTitle: `ငွေအပ်သူ (${respPerson})`,
-          receiverTitle: 'ငွေလက်ခံသူ (Finance Officer)'
-        });
-      }
+      // 🎯 Auto-popup ကို ဖြုတ်ပစ်ထားပါသည် (Print ခလုတ်နှိပ်မှသာ ပေါ်မည်)
     } else { 
       showToast('ERROR', res?.message || 'သိမ်းဆည်းမှု မအောင်မြင်ပါ။'); 
     }
@@ -1064,21 +1052,139 @@ function printRowTransferVoucher(uniqueId, source) {
     isFromFinance = row?.category === 'Float Receive';
   }
 
-  if (!row) return showToast("ERROR", "ဘောက်ချာထုတ်ရန် အချက်အလက် မတွေ့ပါ။");
+  if (!row) return showToast("ERROR", "ပြေစာထုတ်ရန် အချက်အလက် မတွေ့ပါ။");
 
-  const amount = isFromFinance ? (row.credit || row.debit) : (row.credit || row.debit);
+  const amount = (row.credit > 0 ? row.credit : row.debit) || 0;
+  const vrNo = row.vrNo || 'TRF-' + String(row.date || '').replace(/-/g, '') + '-' + (row.no || '01');
+  const dateStr = row.date || new Date().toISOString().slice(0, 10);
   const respPerson = row.responsibility_person || (row.remark?.includes('Cashier 2') ? 'Cashier 2' : 'Cashier 1');
+  const method = row.method || 'Cash';
+  const remark = row.remark || row.description || 'Internal Cash Transfer';
+  const fyStr = row.fy || window.getCurrentAcademicYear();
 
-  openTransferVoucherModal({
-    vrNo: row.vrNo || 'VCH-' + String(row.date || '').replace(/-/g, ''),
-    date: row.date,
-    type: isFromFinance ? 'FLOAT TRANSFER (အရင်းငွေလွှဲပြား)' : 'RETURN TO FINANCE (လက်ကျန်ပြန်အပ်လွှာ)',
-    cashier: respPerson,
-    amount: amount,
-    remark: row.remark || row.description,
-    senderTitle: isFromFinance ? 'လွှဲပြောင်းပေးသူ (Finance Officer)' : `ငွေအပ်သူ (${respPerson})`,
-    receiverTitle: isFromFinance ? `လက်ခံရရှိသူ (${respPerson})` : 'ငွေလက်ခံသူ (Finance Officer)'
-  });
+  // အပေါ်အောက် ခေါင်းစဉ်များ သတ်မှတ်ခြင်း
+  let topCopyTitle = "";
+  let btmCopyTitle = "";
+  let senderRole = "";
+  let receiverRole = "";
+
+  if (isFromFinance) {
+    topCopyTitle = "FINANCE COPY (ဗဟိုဘဏ္ဍာသိမ်းဆည်းရန်ပြေစာ)";
+    btmCopyTitle = "CASHIER COPY (ငွေကိုင်လက်ခံပြေစာ)";
+    senderRole = "Finance Vault (ဗဟိုဘဏ္ဍာ)";
+    receiverRole = `${respPerson} (မုန့်ဖိုးငွေကိုင်)`;
+  } else {
+    topCopyTitle = "FINANCE COPY (ဗဟိုဘဏ္ဍာလက်ခံပြေစာ)";
+    btmCopyTitle = "CASHIER COPY (ငွေကိုင်သိမ်းဆည်းရန်ပြေစာ)";
+    senderRole = `${respPerson} (မုန့်ဖိုးငွေကိုင်)`;
+    receiverRole = "Finance Vault (ဗဟိုဘဏ္ဍာ)";
+  }
+
+  // Single Voucher Template (A4 တစ်ဝက်စာ)
+  const renderSingleSlip = (copyTitle) => `
+    <div style="border: 1.5px solid #1e293b; border-radius: 6px; padding: 18px 24px; background: #fff; color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; box-sizing: border-box;">
+      <!-- Title Header -->
+      <div style="text-align: center; border-bottom: 1.5px solid #0f172a; padding-bottom: 6px; margin-bottom: 12px;">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 900; letter-spacing: 0.5px; text-transform: uppercase;">GOLDEN ERP FINANCIAL MANAGEMENT SYSTEM</h2>
+        <p style="margin: 3px 0 0 0; font-size: 11px; font-weight: 800; color: #334155; text-decoration: underline;">${copyTitle}</p>
+      </div>
+
+      <!-- Metadata Grid -->
+      <table style="width: 100%; font-size: 11px; margin-bottom: 10px; border-collapse: collapse;">
+        <tr>
+          <td style="padding: 2px 0; width: 60%;"><strong>လွှဲပြောင်းပေးသူ :</strong> ${senderRole}</td>
+          <td style="padding: 2px 0; text-align: right;"><strong>Date :</strong> ${dateStr}</td>
+        </tr>
+        <tr>
+          <td style="padding: 2px 0;"><strong>လက်ခံရရှိသူ :</strong> ${receiverRole}</td>
+          <td style="padding: 2px 0; text-align: right;"><strong>Voucher No :</strong> ${vrNo}</td>
+        </tr>
+        <tr>
+          <td style="padding: 2px 0;"><strong>အမျိုးအစား :</strong> ${isFromFinance ? 'အရင်းငွေလွှဲပြောင်းခြင်း (Float Receive)' : 'လက်ကျန်ငွေပြန်အပ်နှံခြင်း (Return Cash)'}</td>
+          <td style="padding: 2px 0; text-align: right;"><strong>FY :</strong> ${fyStr}</td>
+        </tr>
+      </table>
+
+      <!-- Items Table -->
+      <table style="width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 10px; border: 1px solid #334155;">
+        <thead>
+          <tr style="background-color: #f1f5f9; text-align: center; font-weight: 800; border-bottom: 1px solid #334155;">
+            <th style="border: 1px solid #334155; padding: 6px; width: 40px;">NO</th>
+            <th style="border: 1px solid #334155; padding: 6px; text-align: left;">DESCRIPTION (အကြောင်းအရာ)</th>
+            <th style="border: 1px solid #334155; padding: 6px; width: 90px;">METHOD</th>
+            <th style="border: 1px solid #334155; padding: 6px; width: 130px; text-align: right;">AMOUNT (ကျပ်)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="border: 1px solid #334155; padding: 8px 6px; text-align: center; font-family: monospace;">1</td>
+            <td style="border: 1px solid #334155; padding: 8px 6px;">${remark}</td>
+            <td style="border: 1px solid #334155; padding: 8px 6px; text-align: center;">${method}</td>
+            <td style="border: 1px solid #334155; padding: 8px 6px; text-align: right; font-family: monospace; font-weight: 800;">${Number(amount).toLocaleString('en-US')} MMK</td>
+          </tr>
+          <tr style="font-weight: 900; background: #fafafa;">
+            <td colspan="3" style="border: 1px solid #334155; padding: 6px; text-align: right;">Total (စုစုပေါင်း) :</td>
+            <td style="border: 1px solid #334155; padding: 6px; text-align: right; font-family: monospace; font-size: 12px;">${Number(amount).toLocaleString('en-US')} MMK</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Signatures Footer -->
+      <table style="width: 100%; font-size: 10px; font-weight: 800; margin-top: 35px; text-align: center;">
+        <tr>
+          <td style="width: 45%;">
+            <div style="border-top: 1.5px dashed #475569; width: 85%; margin: 0 auto 4px auto;"></div>
+            Received By (ငွေလက်ခံသူ)
+          </td>
+          <td style="width: 10%;"></td>
+          <td style="width: 45%;">
+            <div style="border-top: 1.5px dashed #475569; width: 85%; margin: 0 auto 4px auto;"></div>
+            Handed Over By (ငွေလွှဲပေးသူ)
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
+
+  // A4 Layout with Cut Marker
+  const fullPrintHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Print Transfer Voucher - ${vrNo}</title>
+      <style>
+        @page { size: A4 portrait; margin: 10mm 12mm; }
+        body { margin: 0; padding: 0; font-family: sans-serif; background: #fff; }
+        .cut-line {
+          text-align: center;
+          font-size: 10px;
+          color: #64748b;
+          font-family: monospace;
+          margin: 12px 0;
+          letter-spacing: 2px;
+        }
+      </style>
+    </head>
+    <body>
+      ${renderSingleSlip(topCopyTitle)}
+      <div class="cut-line">✂ - - - - - - - - - - - - - - - - - - - - - Cut Here - - - - - - - - - - - - - - - - - - - - - ✂</div>
+      ${renderSingleSlip(btmCopyTitle)}
+    </body>
+    </html>
+  `;
+
+  // Print Window တိုက်ရိုက်ခေါ်ယူခြင်း
+  const printWindow = window.open('', '_blank', 'width=850,height=950');
+  if (!printWindow) return showToast("ERROR", "Browser မှ Pop-up ပိတ်ထားသဖြင့် Print Window မဖွင့်နိုင်ပါ။");
+  
+  printWindow.document.write(fullPrintHtml);
+  printWindow.document.close();
+
+  setTimeout(() => {
+    printWindow.focus();
+    printWindow.print();
+    printWindow.close();
+  }, 400);
 }
 
 function openTransferVoucherModal(data) {
@@ -1165,3 +1271,5 @@ window.printRowTransferVoucher = printRowTransferVoucher;
 window.openTransferVoucherModal = openTransferVoucherModal;
 window.closeTransferVoucherModal = closeTransferVoucherModal;
 window.triggerVoucherPrint = triggerVoucherPrint;
+
+window.printRowTransferVoucher = printRowTransferVoucher;
