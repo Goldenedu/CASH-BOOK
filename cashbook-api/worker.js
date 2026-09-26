@@ -642,7 +642,9 @@ export default {
 
         case 'getPmCashierBookData':
           if (!can(userSession, 'ledger_read') && !can(userSession, 'cashier_read')) return forbidden(corsHeaders);
-          result = await StudentMoneyHandlers.getPmCashierBookData(db, body); break;
+          // 🎯 FIX: userSession ကို argument အဖြစ် မဖြစ်မနေ ထည့်ပေးရပါမည်
+          result = await StudentMoneyHandlers.getPmCashierBookData(db, body, userSession); 
+          break;
         case 'savePmCashierBookEntry':
           if (!can(userSession, 'ledger_write') && !can(userSession, 'cashier_write')) return forbidden(corsHeaders);
           result = await StudentMoneyHandlers.savePmCashierBookEntry(db, userSession, body); break;

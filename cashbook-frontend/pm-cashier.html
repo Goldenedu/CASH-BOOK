@@ -236,12 +236,16 @@
       await loadPmCashierData();
     });
 
-    // 🚀 D1 Quota Optimized: Read strictly 20 rows per page
+    // 🚀 D1 Quota & Role-Scoped: မိမိ Cashier လက်ကျန်နှင့် စာရင်းကိုသာ သီးသန့် ဆွဲယူခြင်း
     async function loadPmCashierData() {
       try {
+        const role = gSession?.role || '';
+        const targetPerson = (role === 'pm_cashier1') ? 'Cashier 1' : ((role === 'pm_cashier2') ? 'Cashier 2' : '');
+
         const res = await callApi('getPmCashierBookData', { 
           page: gPmPage, 
-          limit: gPmPageLimit, 
+          limit: gPmPageLimit,
+          responsibilityPerson: targetPerson, // 🎯 မိမိ Cashier သီးသန့် ခေါ်ယူခြင်း
           forceRefresh: true 
         }, 'GET');
 
@@ -250,7 +254,7 @@
           const stats = res.stats || {};
           gPmTotalRows = stats.totalRows || gCashierList.length;
 
-          // 🎯 KPI cards များသည် စာရင်းတစ်ခုလုံး၏ အမှန်တကယ် လက်ကျန်ကို ပြသခြင်း
+          // 🎯 Cashier 1 ၏ သီးသန့် အမှန်တကယ် လက်ကျန်ငွေသာ ပေါ်မည်
           const bal = stats.balance || 0;
           const tIn = stats.totalIn || 0;
           const tOut = stats.totalOut || 0;
