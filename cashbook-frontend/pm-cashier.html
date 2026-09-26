@@ -13,7 +13,7 @@
 </head>
 <body class="text-slate-100 min-h-screen pb-24 select-none">
 
-  <!-- 💡 App Header -->
+  <!-- App Header -->
   <header class="sticky top-0 z-40 bg-[#080f1e]/90 backdrop-blur-md border-b border-slate-800/80 px-4 py-3 flex items-center justify-between">
     <div class="flex items-center gap-2.5">
       <div class="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 font-black text-sm">
@@ -34,10 +34,10 @@
     </div>
   </header>
 
-  <!-- 💡 Main Mobile Container -->
+  <!-- Main Mobile Container -->
   <main class="p-4 space-y-4 max-w-lg mx-auto">
 
-    <!-- 🎯 Hero KPI Card: Cash in Hand -->
+    <!-- Hero Card: Cash in Hand -->
     <div class="glass-card p-5 rounded-2xl relative overflow-hidden border border-sky-500/30 bg-gradient-to-br from-[#0c1e38] via-[#091528] to-[#070e1c] shadow-2xl">
       <div class="flex justify-between items-start">
         <span class="text-[10px] font-black uppercase tracking-widest text-sky-400">လက်ဝယ်ရှိ ငွေသား (Cash In Hand)</span>
@@ -58,7 +58,7 @@
       </div>
     </div>
 
-    <!-- 🎯 Fast Primary Action Buttons -->
+    <!-- Quick Action Buttons -->
     <div class="grid grid-cols-2 gap-3">
       <button onclick="openWithdrawModal()" class="py-3.5 px-4 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white rounded-xl font-black text-xs shadow-lg shadow-sky-950 flex items-center justify-center gap-2 active:scale-95 transition">
         <i class="fa-solid fa-hand-holding-dollar text-sm"></i>
@@ -71,7 +71,7 @@
       </button>
     </div>
 
-    <!-- 🎯 Transactions Section -->
+    <!-- Transactions List -->
     <div class="space-y-2.5 pt-2">
       <div class="flex justify-between items-center px-1">
         <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -79,16 +79,11 @@
         </h3>
         <span id="pm-entries-count" class="text-[11px] font-mono text-slate-500">0 စောင်</span>
       </div>
-
-      <div id="pm-feed-list" class="space-y-2.5">
-        <!-- Dynamic Cards -->
-      </div>
+      <div id="pm-feed-list" class="space-y-2.5"></div>
     </div>
   </main>
 
-  <!-- ============================================================================== -->
-  <!-- 💡 MODAL: PM WITHDRAW (မုန့်ဖိုးထုတ်ပေးရန် MODAL)                               -->
-  <!-- ============================================================================== -->
+  <!-- MODAL: WITHDRAW -->
   <div id="pm-withdraw-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
     <div class="bg-[#0e172a] border-t sm:border border-slate-800 w-full max-w-md rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-center pb-2 border-b border-slate-800">
@@ -132,9 +127,7 @@
     </div>
   </div>
 
-  <!-- ============================================================================== -->
-  <!-- 💡 MODAL: RETURN TO FINANCE (FINANCE သို့ ငွေပြန်အပ် MODAL)                   -->
-  <!-- ============================================================================== -->
+  <!-- MODAL: RETURN TO FINANCE -->
   <div id="pm-return-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
     <div class="bg-[#0e172a] border-t sm:border border-slate-800 w-full max-w-md rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-center pb-2 border-b border-slate-800">
@@ -164,9 +157,6 @@
 
   <div id="pm-toast-box" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[999999] pointer-events-none w-11/12 max-w-sm"></div>
 
-  <!-- ============================================================================== -->
-  <!-- 💡 JAVASCRIPT APP LOGIC                                                        -->
-  <!-- ============================================================================== -->
   <script>
     const API_URL = "https://cashbook-api.than-toe-aung.workers.dev";
     let gSession = null;
@@ -187,7 +177,6 @@
       setTimeout(() => { box.innerHTML = ''; }, 3500);
     }
 
-    // 🎯 FIX 1: Robust API handler with body.action included on POST
     async function api(action, payload = {}, method = 'POST') {
       const token = localStorage.getItem('golden_auth_token') || localStorage.getItem('token') || '';
       let url = `${API_URL}?action=${action}`;
@@ -198,20 +187,19 @@
       if (method === 'GET') {
         for (const [k, v] of Object.entries(payload)) url += `&${k}=${encodeURIComponent(v)}`;
       } else {
-        // 🚀 CRITICAL FIX: Include action inside POST body for Cloudflare Worker
         opts.body = JSON.stringify({ action, ...payload });
       }
       const res = await fetch(url, opts);
       return await res.json();
     }
 
-    // 🎯 FIX 2: Redirect to ../index.html if unauthenticated
     window.addEventListener('DOMContentLoaded', async () => {
       const userStr = localStorage.getItem('golden_user') || localStorage.getItem('user');
       const token = localStorage.getItem('golden_auth_token') || localStorage.getItem('token');
 
+      // Root မှာရှိနေသောကြောင့် index.html ဟုသာ ညွှန်းပါ
       if (!userStr || !token) {
-        window.location.href = '../index.html';
+        window.location.href = 'index.html';
         return;
       }
       gSession = JSON.parse(userStr);
@@ -267,8 +255,6 @@
         const isFloat = r.category === 'Float Receive';
         const isReturn = r.category === 'Return to Finance';
         const isToday = (r.date === todayStr);
-
-        // 🛡️ စည်းကမ်းချက် - Float Receive ကို လုံးဝဖျက်ခွင့်မရှိ။ ကျန်စာရင်းများကို ၁ ရက် (ယနေ့) သာ ဖျက်ခွင့်ပေးသည်။
         const canDelete = !isFloat && isToday;
 
         feed.innerHTML += `
@@ -408,7 +394,6 @@
       }
     }
 
-    // 🎯 FIX 3: Print Voucher Engine Implementation
     function printVoucher(uniqueId) {
       const row = gCashierList.find(r => r.uniqueId === uniqueId);
       if (!row) return showToast("ERROR", "ပြေစာ အချက်အလက် မတွေ့ပါ။");
@@ -483,7 +468,7 @@
       localStorage.removeItem('golden_user');
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '../index.html';
+      window.location.href = 'index.html';
     }
   </script>
 </body>

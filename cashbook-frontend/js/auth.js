@@ -208,9 +208,9 @@ async function handleLoginSubmit(e) {
       localStorage.setItem('token', resToken);
       localStorage.setItem('user', userObj);
 
-      // 🎯 REDIRECT CHECK: pm_cashier1 သို့မဟုတ် pm_cashier2 ဖြစ်ပါက views/pm_cashier.html သို့ တိုက်ရိုက်သွားမည်
+      // 🎯 REDIRECT CHECK: pm_cashier1 သို့မဟုတ် pm_cashier2 ဖြစ်ပါက pm-cashier.html သို့ တိုက်ရိုက်သွားမည်
       if (resRole === 'pm_cashier1' || resRole === 'pm_cashier2') {
-        window.location.href = 'views/pm_cashier.html';
+        window.location.href = 'pm-cashier.html';
         return;
       }
 
@@ -354,11 +354,11 @@ function checkExistingSession() {
       return;
     }
 
-    // 🎯 REDIRECT CHECK: အကောင့်ရှိပြီးသား Cashier သည် index.html သို့ ပြန်လာပါက views/pm_cashier.html သို့ အလိုအလျောက် ပြန်ပို့ပေးခြင်း
-    if (savedRole === 'pm_cashier1' || savedRole === 'pm_cashier2') {
-      window.location.href = 'views/pm_cashier.html';
-      return;
-    }
+    // checkExistingSession ထဲတွင်
+  if (savedRole === 'pm_cashier1' || savedRole === 'pm_cashier2') {
+    window.location.href = 'pm-cashier.html';
+    return;
+  }
 
     window.AppState = window.AppState || {};
     window.AppState.currentUser = savedUser;
