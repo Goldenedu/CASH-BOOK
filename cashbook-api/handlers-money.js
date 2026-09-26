@@ -52,19 +52,31 @@ export async function getStudentMoneyData(db, body) {
 
     const whereSql = `WHERE ${whereClauses.join(' AND ')}`;
 
-    // 🎯 IMPORTANT: Only count actual student transactions for Top KPI Cards (Exclude Internal Vault Transfers)
-    const [countRow, statsRow] = await db.batch([
+    // 🚀 O(1) Batch: ကျောင်းသားစာရင်းနှင့် PM Cashier လက်ကျန်ငွေသားကို တစ်ပြိုင်နက် Query လုပ်ခြင်း
+    const [countRow, statsRow, pmStatsRow] = await db.batch([
       db.prepare(`SELECT COUNT(id) as c FROM student_money ${whereSql}`).bind(...params),
       db.prepare(`
         SELECT 
           COALESCE(SUM(CASE WHEN student_id IS NOT NULL THEN debit ELSE 0 END), 0) as d,
           COALESCE(SUM(CASE WHEN student_id IS NOT NULL THEN credit ELSE 0 END), 0) as c
         FROM student_money WHERE fy IN (?, ?)
+      `).bind(fy, `FY ${fy}`),
+      db.prepare(`
+        SELECT COALESCE(SUM(debit - credit), 0) as pm_bal 
+        FROM pm_cashier_book WHERE fy IN (?, ?)
       `).bind(fy, `FY ${fy}`)
     ]);
 
     const totalRows = countRow.results[0]?.c || 0;
     const stats = statsRow.results[0] || { d: 0, c: 0 };
+    const pmCashierCash = parseFloat(pmStatsRow.results[0]?.pm_bal || 0);
+
+    const totalIncome = parseFloat(stats.d || 0);
+    const totalExpense = parseFloat(stats.c || 0);
+    const trustBalance = totalIncome - totalExpense;
+    
+    // 💡 Finance Vault Physical Cash = ကျောင်းသားလက်ကျန် - ငွေကိုင်များလက်ထဲရှိငွေ
+    const financeVaultCash = trustBalance - pmCashierCash;
 
     const dataQuery = `
       SELECT id, no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, uniqueid 
@@ -78,7 +90,13 @@ export async function getStudentMoneyData(db, body) {
         ...r, studentId: r.student_id, fyidName: r.fyid_name, uniqueId: r.uniqueid
       })),
       totalRows, page, limit,
-      stats: { totalIncome: stats.d, totalExpense: stats.c, balance: stats.d - stats.c }
+      stats: { 
+        totalIncome: totalIncome, 
+        totalExpense: totalExpense, 
+        balance: trustBalance,
+        pmCashierCash: pmCashierCash,
+        financeVaultCash: financeVaultCash
+      }
     };
   } catch (err) { return { success: false, message: err.message }; }
 }

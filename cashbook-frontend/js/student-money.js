@@ -57,28 +57,34 @@ function switchStudentMoneySubTab(tabName) {
   }
 }
 
-function renderTopKPIs(inc, exp, bal, count) {
+function renderTopKPIs(inc, exp, bal, count, vaultCash) {
   const elInc = document.getElementById('stm-total-income');
   const elExp = document.getElementById('stm-total-expense');
   const elBal = document.getElementById('stm-balance');
   const elCount = document.getElementById('stm-entries-count');
+  const elVault = document.getElementById('stm-vault-cash');
 
   if (elInc) elInc.textContent = `${Number(inc || 0).toLocaleString('en-US')} MMK`;
   if (elExp) elExp.textContent = `${Number(exp || 0).toLocaleString('en-US')} MMK`;
   if (elBal) elBal.textContent = `${Number(bal || 0).toLocaleString('en-US')} MMK`;
   if (elCount) elCount.textContent = Number(count || 0).toLocaleString('en-US');
+  if (elVault) elVault.textContent = `${Number(vaultCash || 0).toLocaleString('en-US')} MMK`;
 }
 
 // ==============================================================================
 // 💡 2. STUDENT MONEY BOOK (MAIN FINANCE & VIRTUAL WALLET)
 // ==============================================================================
+
 async function loadStudentMoneyData(isSilent) {
   try {
     if (!isSilent && typeof toggleLoading === 'function') toggleLoading(true);
     const res = await callApi('getStudentMoneyData', { page: 1, limit: 5000, forceRefresh: true }, 'GET');
     if (res && res.success) {
       gStudentMoneyHistoryData = res.data || [];
-      renderTopKPIs(res.stats.totalIncome, res.stats.totalExpense, res.stats.balance, gStudentMoneyHistoryData.length);
+      const st = res.stats || {};
+      
+      // 🎯 Pass financeVaultCash to renderTopKPIs
+      renderTopKPIs(st.totalIncome, st.totalExpense, st.balance, gStudentMoneyHistoryData.length, st.financeVaultCash);
       applyStudentMoneySearchAndRender();
     }
   } catch (err) {

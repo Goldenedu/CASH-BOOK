@@ -35,36 +35,51 @@
   <!-- ============================================================================== -->
   <div id="stm-main-view" class="space-y-4">
     
-    <!-- 🎯 TAB 1 သီးသန့် 1-Row 4-KPI Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-      <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-        <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0"><i class="fa-solid fa-circle-arrow-down text-xl"></i></div>
-        <div>
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">TOTAL DEPOSITED (အပ်ငွေ)</p>
+    <!-- 🎯 TAB 1: 5-KPI Grid (Debit, Credit, Trust Bal, Finance Vault Cash, Entries) -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+      <!-- Card 1: Total Deposited -->
+      <div class="stats-card p-4 rounded-xl flex items-start gap-3.5">
+        <div class="p-3 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0"><i class="fa-solid fa-circle-arrow-down text-lg"></i></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">TOTAL DEPOSITED (အပ်ငွေ)</p>
           <h3 id="stm-total-income" class="text-base font-extrabold text-emerald-400 mt-1">0 MMK</h3>
         </div>
       </div>
 
-      <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-        <div class="p-3.5 rounded-lg bg-rose-500/10 text-rose-400 shrink-0"><i class="fa-solid fa-circle-arrow-up text-xl"></i></div>
-        <div>
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">TOTAL WITHDRAWN/TRANSFER (ထုတ်ငွေ)</p>
+      <!-- Card 2: Total Withdrawn -->
+      <div class="stats-card p-4 rounded-xl flex items-start gap-3.5">
+        <div class="p-3 rounded-lg bg-rose-500/10 text-rose-400 shrink-0"><i class="fa-solid fa-circle-arrow-up text-lg"></i></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">TOTAL WITHDRAWN (ထုတ်ငွေ)</p>
           <h3 id="stm-total-expense" class="text-base font-extrabold text-rose-400 mt-1">0 MMK</h3>
         </div>
       </div>
 
-      <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-        <div class="p-3.5 rounded-lg bg-indigo-500/10 text-indigo-400 shrink-0"><i class="fa-solid fa-vault text-xl"></i></div>
-        <div>
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">CURRENT TRUST BALANCE</p>
+      <!-- Card 3: Total Trust Balance -->
+      <div class="stats-card p-4 rounded-xl flex items-start gap-3.5">
+        <div class="p-3 rounded-lg bg-indigo-500/10 text-indigo-400 shrink-0"><i class="fa-solid fa-wallet text-lg"></i></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">TOTAL TRUST BALANCE</p>
           <h3 id="stm-balance" class="text-base font-extrabold text-white mt-1">0 MMK</h3>
+          <p class="text-[10px] text-slate-400 mt-0.5 truncate">ကျောင်းသား စုစုပေါင်း လက်ကျန်</p>
         </div>
       </div>
 
-      <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-        <div class="p-3.5 rounded-lg bg-amber-500/10 text-amber-400 shrink-0"><i class="fa-solid fa-receipt text-xl"></i></div>
-        <div>
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">TOTAL ENTRIES</p>
+      <!-- Card 4: 🌟 FINANCE VAULT CASH (NEW CARD) -->
+      <div class="stats-card p-4 rounded-xl flex items-start gap-3.5 border border-sky-500/20 bg-sky-950/10">
+        <div class="p-3 rounded-lg bg-sky-500/10 text-sky-400 shrink-0"><i class="fa-solid fa-vault text-lg"></i></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[10px] uppercase font-bold tracking-wider text-sky-400 truncate">FINANCE VAULT CASH</p>
+          <h3 id="stm-vault-cash" class="text-base font-extrabold text-sky-300 mt-1">0 MMK</h3>
+          <p class="text-[10px] text-slate-400 mt-0.5 truncate">လက်ဝယ်ရှိ ငွေသားပကတိ</p>
+        </div>
+      </div>
+
+      <!-- Card 5: Total Entries -->
+      <div class="stats-card p-4 rounded-xl flex items-start gap-3.5">
+        <div class="p-3 rounded-lg bg-amber-500/10 text-amber-400 shrink-0"><i class="fa-solid fa-receipt text-lg"></i></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">TOTAL ENTRIES</p>
           <h3 id="stm-entries-count" class="text-base font-extrabold text-amber-400 mt-1">0</h3>
         </div>
       </div>
