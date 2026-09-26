@@ -993,48 +993,149 @@ async function loadSpmmsReconciliationData() {
 // ==============================================================================
 // 💡 6. STATEMENT TIMELINE MODAL
 // ==============================================================================
+
+// ==============================================================================
+// 💡 STATEMENT STATE VARIABLES
+// ==============================================================================
+var gStmtStudentId = null;
+var gStmtPage = 1;
+var gStmtLimit = 20; // 🎯 D1 Quota သက်သာစေရန် တစ်ခါဆွဲလျှင် အကြောင်း ၂၀ သာ
+var gStmtTotalRows = 0;
+
 async function openStudentStatementModal(studentId) {
   if (!studentId) return;
-  try {
-    if (typeof toggleLoading === 'function') toggleLoading(true);
-    const res = await callApi('getStudentMoneyData', { studentId: studentId, limit: 1000, forceRefresh: true }, 'GET');
-    if (res && res.success) {
-      const records = res.data || [];
-      if (records.length === 0) return showToast("ERROR", "ဤကျောင်းသားအတွက် မှတ်တမ်း မရှိသေးပါ။");
-      const firstRow = records[0];
-      document.getElementById('stm-stmt-student-name').textContent = `${firstRow.fyidName} - Pocket Money Statement`;
-      document.getElementById('stm-stmt-student-info').textContent = `FY: ${firstRow.fy} | Class: ${firstRow.class} | ID: ${firstRow.studentId}`;
-      let totDep = 0, totWith = 0;
-      records.forEach(r => { totDep += Number(r.debit || 0); totWith += Number(r.credit || 0); });
-      document.getElementById('stm-stmt-total-deposit').textContent = `${totDep.toLocaleString('en-US')} MMK`;
-      document.getElementById('stm-stmt-total-withdraw').textContent = `${totWith.toLocaleString('en-US')} MMK`;
-      document.getElementById('stm-stmt-current-balance').textContent = `${(totDep - totWith).toLocaleString('en-US')} MMK`;
+  gStmtStudentId = studentId;
+  gStmtPage = 1;
 
-      const tbody = document.getElementById('stm-stmt-table-body');
-      if (tbody) {
-        let running = 0;
-        tbody.innerHTML = [...records].reverse().map((r, i) => {
-          running += Number(r.debit || 0) - Number(r.credit || 0);
-          return `
-            <tr class="hover:bg-slate-800/30 text-xs">
-              <td class="text-center font-mono py-2 px-3 text-slate-400">${i + 1}</td>
-              <td class="font-mono py-2 px-3 text-slate-300">${esc(r.date)}</td>
-              <td class="py-2 px-3 font-semibold">${esc(r.method)}</td>
-              <td class="text-right font-mono font-bold text-emerald-400 py-2 px-3">${r.debit > 0 ? Number(r.debit).toLocaleString('en-US') : '-'}</td>
-              <td class="text-right font-mono font-bold text-rose-400 py-2 px-3">${r.credit > 0 ? Number(r.credit).toLocaleString('en-US') : '-'}</td>
-              <td class="text-right font-mono font-bold text-indigo-400 py-2 px-3">${running.toLocaleString('en-US')}</td>
-              <td class="py-2 px-3 text-slate-400 truncate max-w-xs">${esc(r.remark || '-')}</td>
-            </tr>
-          `;
-        }).join('');
-      }
-      document.getElementById('stm-statement-modal')?.classList.remove('hidden');
-    }
-  } catch (err) {} finally { if (typeof toggleLoading === 'function') toggleLoading(false); }
+  // Clear date filters when opening fresh modal
+  const fromEl = document.getElementById('stm-stmt-date-from');
+  const toEl = document.getElementById('stm-stmt-date-to');
+  if (fromEl) fromEl.value = '';
+  if (toEl) toEl.value = '';
+
+  document.getElementById('stm-statement-modal')?.classList.remove('hidden');
+  await loadStudentStatementData();
 }
 
-function closeStudentStatementModal() { 
-  document.getElementById('stm-statement-modal')?.classList.add('hidden'); 
+// Statement Data ကို Backend မှ လှမ်းခေါ်ပြီး ရေးဆွဲခြင်း
+async function loadStudentStatementData() {
+  if (!gStmtStudentId) return;
+
+  const dateFrom = document.getElementById('stm-stmt-date-from')?.value || '';
+  const dateTo = document.getElementById('stm-stmt-date-to')?.value || '';
+
+  try {
+    if (typeof toggleLoading === 'function') toggleLoading(true);
+
+    // 🚀 D1 Quota Optimized API Call (Limit: 20, Page, Date Filters passed to SQL)
+    const res = await callApi('getStudentMoneyData', {
+      studentId: gStmtStudentId,
+      page: gStmtPage,
+      limit: gStmtLimit,
+      dateFrom: dateFrom,
+      dateTo: dateTo,
+      forceRefresh: true
+    }, 'GET');
+
+    if (res && res.success) {
+      const records = res.data || [];
+      gStmtTotalRows = res.totalRows || 0;
+
+      // 1. Header Information Update
+      const nameEl = document.getElementById('stm-stmt-student-name');
+      const infoEl = document.getElementById('stm-stmt-student-info');
+      if (records.length > 0) {
+        const firstRow = records[0];
+        if (nameEl) nameEl.textContent = `${firstRow.fyidName} - Pocket Money Statement`;
+        if (infoEl) infoEl.textContent = `FY: ${firstRow.fy} | Class: ${firstRow.class} | ID: ${firstRow.studentId}`;
+      }
+
+      // 2. Top 3 Cards Stats
+      const stats = res.stats || {};
+      const depEl = document.getElementById('stm-stmt-total-deposit');
+      const withEl = document.getElementById('stm-stmt-total-withdraw');
+      const balEl = document.getElementById('stm-stmt-current-balance');
+
+      if (depEl) depEl.textContent = `${Number(stats.totalIncome || 0).toLocaleString('en-US')} MMK`;
+      if (withEl) withEl.textContent = `${Number(stats.totalExpense || 0).toLocaleString('en-US')} MMK`;
+      if (balEl) balEl.textContent = `${Number(stats.balance || 0).toLocaleString('en-US')} MMK`;
+
+      // 3. Table Rows Rendering
+      const tbody = document.getElementById('stm-stmt-table-body');
+      if (tbody) {
+        tbody.innerHTML = '';
+
+        if (records.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-slate-500 font-bold">ရွေးချယ်ထားသော ရက်အတွင်း မှတ်တမ်း မရှိပါ။</td></tr>`;
+        } else {
+          records.forEach((r, idx) => {
+            // 🎯 အသစ်ဆုံးကို အပေါ်ဆုံးတွင် နံပါတ်အကြီးဆုံးဖြင့် စတင်ပြသခြင်း
+            const displayNo = gStmtTotalRows - ((gStmtPage - 1) * gStmtLimit + idx);
+            const balStr = Number(r.balances || 0).toLocaleString('en-US', {minimumFractionDigits: 2});
+
+            tbody.innerHTML += `
+              <tr class="hover:bg-slate-800/30 text-xs">
+                <td class="text-center font-mono py-2.5 px-3 font-bold text-slate-400">${displayNo}</td>
+                <td class="font-mono py-2.5 px-3 text-slate-300">${window.escapeHtml(r.date)}</td>
+                <td class="py-2.5 px-3 font-semibold">${window.escapeHtml(r.method)}</td>
+                <td class="text-right font-mono font-bold text-emerald-400 py-2.5 px-3">${r.debit > 0 ? Number(r.debit).toLocaleString('en-US') : '-'}</td>
+                <td class="text-right font-mono font-bold text-rose-400 py-2.5 px-3">${r.credit > 0 ? Number(r.credit).toLocaleString('en-US') : '-'}</td>
+                <td class="text-right font-mono font-bold text-indigo-400 py-2.5 px-3">${balStr}</td>
+                <td class="py-2.5 px-3 text-slate-400 truncate max-w-xs" title="${window.escapeHtml(r.remark)}">${window.escapeHtml(r.remark || '-')}</td>
+              </tr>
+            `;
+          });
+        }
+      }
+
+      // 4. Statement Pagination Info Update
+      updateStmtPaginationControls();
+    }
+  } catch (err) {
+    console.error("Statement Load Error:", err);
+  } finally {
+    if (typeof toggleLoading === 'function') toggleLoading(false);
+  }
+}
+
+function updateStmtPaginationControls() {
+  const start = (gStmtPage - 1) * gStmtLimit + 1;
+  const end = Math.min(start + gStmtLimit - 1, gStmtTotalRows);
+  const infoEl = document.getElementById('stm-stmt-pagination-info');
+  
+  if (infoEl) {
+    infoEl.textContent = gStmtTotalRows === 0 
+      ? "Showing 0 entries" 
+      : `Showing ${start} to ${end} of ${gStmtTotalRows} entries`;
+  }
+
+  const prevBtn = document.getElementById('stm-stmt-btn-prev');
+  const nextBtn = document.getElementById('stm-stmt-btn-next');
+  if (prevBtn) prevBtn.disabled = (gStmtPage <= 1);
+  if (nextBtn) nextBtn.disabled = (end >= gStmtTotalRows);
+}
+
+function changeStmtPage(delta) {
+  gStmtPage += delta;
+  loadStudentStatementData();
+}
+
+function onStmtDateFilterChange() {
+  gStmtPage = 1; // Filter ပြောင်းလျှင် Page 1 သို့ ပြန်သွားမည်
+  loadStudentStatementData();
+}
+
+function clearStmtDateFilter() {
+  const fromEl = document.getElementById('stm-stmt-date-from');
+  const toEl = document.getElementById('stm-stmt-date-to');
+  if (fromEl) fromEl.value = '';
+  if (toEl) toEl.value = '';
+  gStmtPage = 1;
+  loadStudentStatementData();
+}
+
+function closeStudentStatementModal() {
+  document.getElementById('stm-statement-modal')?.classList.add('hidden');
 }
 
 // ==============================================================================
@@ -1273,3 +1374,9 @@ window.closeTransferVoucherModal = closeTransferVoucherModal;
 window.triggerVoucherPrint = triggerVoucherPrint;
 
 window.printRowTransferVoucher = printRowTransferVoucher;
+
+window.openStudentStatementModal = openStudentStatementModal;
+window.closeStudentStatementModal = closeStudentStatementModal;
+window.changeStmtPage = changeStmtPage;
+window.onStmtDateFilterChange = onStmtDateFilterChange;
+window.clearStmtDateFilter = clearStmtDateFilter;

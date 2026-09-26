@@ -33,8 +33,11 @@ export async function getStudentMoneyData(db, body) {
     const searchVal = String(body.searchVal || "").trim();
     const studentIdFilter = parseInt(body.studentId, 10) || 0;
     const page = parseInt(body.page || 1, 10);
-    const limit = parseInt(body.limit || 50, 10);
+    const limit = parseInt(body.limit || 20, 10); // 🎯 Default 20 rows per page
     const offset = (page - 1) * limit;
+
+    const dateFrom = String(body.dateFrom || body.fromDate || "").trim();
+    const dateTo = String(body.dateTo || body.toDate || "").trim();
 
     let whereClauses = [`(fy IN (?, ?))`];
     let params = [fy, `FY ${fy}`];
@@ -42,6 +45,16 @@ export async function getStudentMoneyData(db, body) {
     if (studentIdFilter > 0) {
       whereClauses.push(`(student_id = ? OR id = ?)`);
       params.push(studentIdFilter, studentIdFilter);
+    }
+
+    // 🎯 SQL Level Date Filter (D1 Quota သက်သာစေရန်)
+    if (dateFrom) {
+      whereClauses.push(`date >= ?`);
+      params.push(dateFrom);
+    }
+    if (dateTo) {
+      whereClauses.push(`date <= ?`);
+      params.push(dateTo);
     }
 
     if (searchVal) {
@@ -52,15 +65,15 @@ export async function getStudentMoneyData(db, body) {
 
     const whereSql = `WHERE ${whereClauses.join(' AND ')}`;
 
-    // 🚀 D1 Batch: ကျောင်းသားစာရင်းနှင့် PM Cashier ငွေသားလက်ကျန်ကို O(1) ဖြင့် တစ်ပြိုင်နက် ရယူခြင်း
+    // 🚀 D1 Batch: Count, Filtered Stats, and Cashier Cash in 1 roundtrip
     const [countRow, statsRow, pmStatsRow] = await db.batch([
       db.prepare(`SELECT COUNT(id) as c FROM student_money ${whereSql}`).bind(...params),
       db.prepare(`
         SELECT 
           COALESCE(SUM(CASE WHEN student_id IS NOT NULL THEN debit ELSE 0 END), 0) as d,
           COALESCE(SUM(CASE WHEN student_id IS NOT NULL THEN credit ELSE 0 END), 0) as c
-        FROM student_money WHERE fy IN (?, ?)
-      `).bind(fy, `FY ${fy}`),
+        FROM student_money ${whereSql}
+      `).bind(...params),
       db.prepare(`
         SELECT COALESCE(SUM(debit - credit), 0) as pm_bal 
         FROM pm_cashier_book WHERE fy IN (?, ?)
@@ -74,13 +87,14 @@ export async function getStudentMoneyData(db, body) {
     const totalIncome = parseFloat(stats.d || 0);
     const totalExpense = parseFloat(stats.c || 0);
     const trustBalance = totalIncome - totalExpense;
-    
-    // Finance Vault Cash = Virtual Trust Balance - PM Cashier Hand Cash
     const financeVaultCash = trustBalance - pmCashierCash;
 
+    // 🎯 ORDER BY date DESC, id DESC ဖြင့် အသစ်ဆုံးကို အပေါ်ကထားပြီး LIMIT 20 OFFSET ဖြင့်သာ ဆွဲယူသည်
     const dataQuery = `
       SELECT id, no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, uniqueid 
-      FROM student_money ${whereSql} ORDER BY date DESC, id DESC LIMIT ? OFFSET ?
+      FROM student_money ${whereSql} 
+      ORDER BY date DESC, id DESC 
+      LIMIT ? OFFSET ?
     `;
     const rowsRes = await db.prepare(dataQuery).bind(...params, limit, offset).all();
 

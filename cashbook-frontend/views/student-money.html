@@ -684,7 +684,9 @@
 
 <!-- MODAL 3: STATEMENT TIMELINE MODAL -->
 <div id="stm-statement-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-  <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+  <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200">
+    
+    <!-- Modal Header -->
     <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
       <div>
         <h3 id="stm-stmt-student-name" class="text-sm font-black text-white uppercase tracking-wider">Student Pocket Money Statement</h3>
@@ -693,7 +695,10 @@
       <button onclick="closeStudentStatementModal()" class="text-slate-500 hover:text-white transition"><i class="fa-solid fa-xmark text-sm"></i></button>
     </div>
 
+    <!-- Modal Body -->
     <div class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+      
+      <!-- Top 3 KPI Cards -->
       <div class="grid grid-cols-3 gap-3">
         <div class="p-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-center">
           <span class="text-[10px] font-bold text-slate-400 uppercase">Total Deposited</span>
@@ -709,12 +714,34 @@
         </div>
       </div>
 
-      <div class="table-container bg-[#080e1c] border border-slate-800 rounded-xl overflow-x-auto">
-        <table class="w-full text-left text-xs border-collapse">
-          <thead>
-            <tr class="bg-[#0e172a] text-slate-400 border-b border-slate-800 text-[11px]">
-              <th class="py-2.5 px-3 w-10 text-center">NO</th>
-              <th class="py-2.5 px-3 w-24">DATE</th>
+      <!-- 🎯 STATEMENT DATE FILTER TOOLBAR -->
+      <div class="flex flex-col sm:flex-row justify-between items-center bg-[#080e1c] border border-slate-800 p-2.5 rounded-xl gap-2">
+        <div class="flex items-center gap-2 w-full sm:w-auto">
+          <span class="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1.5 pl-1">
+            <i class="fa-solid fa-calendar-days text-indigo-400"></i> Date Filter:
+          </span>
+          <div class="flex items-center gap-1.5 bg-[#0c1322] border border-slate-800 px-2 py-1 rounded-lg text-xs">
+            <span class="text-[10px] text-slate-500 font-bold uppercase">From:</span>
+            <input type="date" id="stm-stmt-date-from" onchange="onStmtDateFilterChange()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
+            <span class="text-[10px] text-slate-500 font-bold uppercase ml-1">To:</span>
+            <input type="date" id="stm-stmt-date-to" onchange="onStmtDateFilterChange()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
+            <button onclick="clearStmtDateFilter()" class="p-1 text-slate-500 hover:text-rose-400 transition" title="Clear Date Filter">
+              <i class="fa-solid fa-circle-xmark text-xs"></i>
+            </button>
+          </div>
+        </div>
+        <div class="text-[11px] font-mono text-slate-500 pr-2 hidden sm:block">
+          Showing 20 records per page
+        </div>
+      </div>
+
+      <!-- Statement Table (Sticky Header) -->
+      <div class="table-container bg-[#080e1c] border border-slate-800 rounded-xl overflow-x-auto relative">
+        <table class="w-full text-left text-xs border-collapse min-w-[700px]">
+          <thead class="sticky top-0 bg-[#0e172a] z-10">
+            <tr class="text-slate-400 border-b border-slate-800 text-[11px]">
+              <th class="py-2.5 px-3 w-12 text-center">NO</th>
+              <th class="py-2.5 px-3 w-28">DATE</th>
               <th class="py-2.5 px-3 w-20">METHOD</th>
               <th class="py-2.5 px-3 text-right text-emerald-400 w-28">DEPOSIT</th>
               <th class="py-2.5 px-3 text-right text-rose-400 w-28">WITHDRAW</th>
@@ -722,11 +749,28 @@
               <th class="py-2.5 px-3">REMARK / PURPOSE</th>
             </tr>
           </thead>
-          <tbody id="stm-stmt-table-body" class="divide-y divide-slate-800/40 text-slate-300"></tbody>
+          <tbody id="stm-stmt-table-body" class="divide-y divide-slate-800/40 text-slate-300">
+            <!-- Dynamic Rows -->
+          </tbody>
         </table>
       </div>
+
+      <!-- 🎯 STATEMENT PAGINATION CONTROLLER -->
+      <div class="flex justify-between items-center bg-[#080e1c] border border-slate-800 px-4 py-2 rounded-xl text-xs">
+        <div id="stm-stmt-pagination-info" class="text-slate-400 font-mono text-[11px]">Showing 0 entries</div>
+        <div class="flex items-center gap-2">
+          <button onclick="changeStmtPage(-1)" id="stm-stmt-btn-prev" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition disabled:opacity-30 disabled:pointer-events-none text-[11px] flex items-center gap-1">
+            <i class="fa-solid fa-chevron-left text-[9px]"></i> Previous
+          </button>
+          <button onclick="changeStmtPage(1)" id="stm-stmt-btn-next" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition disabled:opacity-30 disabled:pointer-events-none text-[11px] flex items-center gap-1">
+            Next <i class="fa-solid fa-chevron-right text-[9px]"></i>
+          </button>
+        </div>
+      </div>
+
     </div>
 
+    <!-- Modal Footer -->
     <div class="px-6 py-3 border-t border-slate-800 bg-[#0e172a] flex justify-end items-center shrink-0">
       <button onclick="closeStudentStatementModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition">Close Statement</button>
     </div>
