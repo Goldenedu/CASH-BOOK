@@ -313,27 +313,64 @@ export async function deleteStudentMoneyEntry(db, session, body) {
 // ==============================================================================
 
 // ==============================================================================
-// 💡 PM CASHIER DATA (ROLE-SCOPED: CASHIER 1/2 သီးသန့် စစ်ထုတ်ခြင်း)
+// 💡 PM CASHIER DATA (D1 QUOTA OPTIMIZED: 20 ROWS & ACCURATE SUMMARY)
 // ==============================================================================
 export async function getPmCashierBookData(db, body, session) {
   try {
     const fy = normalizeFyStr(body.fy || getCurrentAcademicYear());
     const role = session?.role || '';
-    
-    let query = `SELECT * FROM pm_cashier_book WHERE fy = ?`;
+    const page = Math.max(1, parseInt(body.page || 1, 10));
+    const limit = Math.min(100, Math.max(1, parseInt(body.limit || 20, 10))); // 🎯 Default: 20 rows
+    const offset = (page - 1) * limit;
+
+    let whereClauses = [`fy = ?`];
     let params = [fy];
 
-    // 🔒 ROLE ISOLATION: pm_cashier1 ဆိုပါက Cashier 1 သာမြင်ရမည်၊ pm_cashier2 ဆိုပါက Cashier 2 သာ မြင်ရမည်
+    // 🔒 Cashier 1/2 သီးသန့် စစ်ထုတ်ခြင်း
     if (role === 'pm_cashier1') {
-      query += ` AND responsibility_person = 'Cashier 1'`;
+      whereClauses.push(`responsibility_person = 'Cashier 1'`);
     } else if (role === 'pm_cashier2') {
-      query += ` AND responsibility_person = 'Cashier 2'`;
+      whereClauses.push(`responsibility_person = 'Cashier 2'`);
+    } else if (body.responsibilityPerson) {
+      whereClauses.push(`responsibility_person = ?`);
+      params.push(body.responsibilityPerson);
     }
 
-    query += ` ORDER BY date DESC, id DESC LIMIT 500`;
-    const res = await db.prepare(query).bind(...params).all();
-    return { success: true, data: (res.results || []).map(r => ({ ...r, uniqueId: r.uniqueid })) };
-  } catch (err) { return { success: false, message: err.message }; }
+    const whereSql = `WHERE ${whereClauses.join(' AND ')}`;
+
+    // 🚀 D1 Batch: ငွေလက်ကျန် KPI များကို စာရင်းတစ်ခုလုံးမှ တိကျစွာပေါင်းထုတ်ပြီး စာရင်းအကြောင်း ၂၀ သာ ဆွဲယူသည်
+    const [statsRes, rowsRes] = await db.batch([
+      db.prepare(`
+        SELECT 
+          COUNT(id) as totalRows,
+          COALESCE(SUM(debit), 0) as totalIn,
+          COALESCE(SUM(credit), 0) as totalOut
+        FROM pm_cashier_book ${whereSql}
+      `).bind(...params),
+      db.prepare(`
+        SELECT * FROM pm_cashier_book 
+        ${whereSql} 
+        ORDER BY date DESC, id DESC 
+        LIMIT ? OFFSET ?
+      `).bind(...params, limit, offset)
+    ]);
+
+    const stats = statsRes.results[0] || { totalRows: 0, totalIn: 0, totalOut: 0 };
+    const totalIn = parseFloat(stats.totalIn || 0);
+    const totalOut = parseFloat(stats.totalOut || 0);
+    const balance = totalIn - totalOut;
+    const totalRows = parseInt(stats.totalRows || 0, 10);
+
+    return {
+      success: true,
+      data: (rowsRes.results || []).map(r => ({ ...r, uniqueId: r.uniqueid })),
+      stats: { totalIn, totalOut, balance, totalRows },
+      page,
+      limit
+    };
+  } catch (err) { 
+    return { success: false, message: err.message }; 
+  }
 }
 
 export async function savePmCashierBookEntry(db, session, body) {

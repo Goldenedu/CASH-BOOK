@@ -19,7 +19,7 @@
     }
   </style>
 
-  <!-- 💡 ပင်မ ERP ၏ Config နှင့် API စနစ်များကို တိုက်ရိုက် ချိတ်ဆက်ခြင်း -->
+  <!-- 💡 ပင်မ ERP ၏ Config နှင့် API စနစ်များ ချိတ်ဆက်ခြင်း -->
   <script src="js/config.js"></script>
   <script src="js/api.js"></script>
 </head>
@@ -87,20 +87,32 @@
     <div class="space-y-2.5 pt-2">
       <div class="flex justify-between items-center px-1">
         <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-          <i class="fa-solid fa-receipt text-sky-400"></i> မှတ်တမ်းများ (Transactions)
+          <i class="fa-solid fa-receipt text-sky-400"></i> မှတ်တမ်းများ (TRANSACTIONS)
         </h3>
-        <span id="pm-entries-count" class="text-[11px] font-mono text-slate-500">0 စောင်</span>
+        <span id="pm-entries-count" class="text-[11px] font-mono text-slate-400 font-bold">0 စောင်</span>
       </div>
 
+      <!-- Feed Container -->
       <div id="pm-feed-list" class="space-y-2.5">
-        <!-- Dynamic Cards -->
+        <!-- Dynamic Cards (Max 20 rows) -->
+      </div>
+
+      <!-- 🎯 MOBILE PAGINATION CONTROLLER (နောက်ဆုံး ၂၀ စာရင်း ထိန်းချုပ်ခလုတ်များ) -->
+      <div class="flex items-center justify-between pt-2 px-1 text-xs">
+        <span id="pm-page-indicator" class="text-[11px] font-mono text-slate-400">Page 1</span>
+        <div class="flex items-center gap-2">
+          <button id="btn-pm-prev" onclick="changePmPage(-1)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold disabled:opacity-30 disabled:pointer-events-none transition flex items-center gap-1">
+            <i class="fa-solid fa-chevron-left text-[10px]"></i> ရှေ့သို့
+          </button>
+          <button id="btn-pm-next" onclick="changePmPage(1)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold disabled:opacity-30 disabled:pointer-events-none transition flex items-center gap-1">
+            နောက်သို့ <i class="fa-solid fa-chevron-right text-[10px]"></i>
+          </button>
+        </div>
       </div>
     </div>
   </main>
 
-  <!-- ============================================================================== -->
-  <!-- 💡 MODAL: PM WITHDRAW (မုန့်ဖိုးထုတ်ပေးရန် MODAL)                               -->
-  <!-- ============================================================================== -->
+  <!-- MODAL 1: PM WITHDRAW -->
   <div id="pm-withdraw-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
     <div class="bg-[#0e172a] border-t sm:border border-slate-800 w-full max-w-md rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-center pb-2 border-b border-slate-800">
@@ -144,9 +156,7 @@
     </div>
   </div>
 
-  <!-- ============================================================================== -->
-  <!-- 💡 MODAL: RETURN TO FINANCE (FINANCE သို့ ငွေပြန်အပ် MODAL)                   -->
-  <!-- ============================================================================== -->
+  <!-- MODAL 2: RETURN TO FINANCE -->
   <div id="pm-return-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
     <div class="bg-[#0e172a] border-t sm:border border-slate-800 w-full max-w-md rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-center pb-2 border-b border-slate-800">
@@ -177,12 +187,17 @@
   <div id="pm-toast-box" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[999999] pointer-events-none w-11/12 max-w-sm"></div>
 
   <!-- ============================================================================== -->
-  <!-- 💡 JAVASCRIPT APP LOGIC                                                        -->
+  <!-- 💡 JAVASCRIPT APP LOGIC (20-ROWS PAGINATED)                                    -->
   <!-- ============================================================================== -->
   <script>
     let gSession = null;
     let gCashierList = [];
     let gMatchedStudent = null;
+
+    // 🎯 Pagination State (အကြောင်း ၂၀ စီသာ ခေါ်ယူပြသခြင်း)
+    let gPmPage = 1;
+    const gPmPageLimit = 20;
+    let gPmTotalRows = 0;
 
     function showToast(type, msg) {
       const box = document.getElementById('pm-toast-box');
@@ -199,12 +214,10 @@
       setTimeout(() => { if (box) box.innerHTML = ''; }, 3500);
     }
 
-    // 💡 Root App Initialization
     window.addEventListener('DOMContentLoaded', async () => {
       const userStr = localStorage.getItem('golden_user') || localStorage.getItem('user');
       const token = localStorage.getItem('golden_auth_token') || localStorage.getItem('token');
 
-      // 🎯 index.html အစား Root Domain (/) သို့ သွားမည်
       if (!userStr || !token) {
         window.location.href = '/';
         return;
@@ -223,13 +236,32 @@
       await loadPmCashierData();
     });
 
-    // 🚀 ပင်မ callApi() ကို သုံးထားသဖြင့် URL နှင့် Token အတိအကျဖြင့် ချိတ်ဆက်အလုပ်လုပ်ပါသည်
+    // 🚀 D1 Quota Optimized: Read strictly 20 rows per page
     async function loadPmCashierData() {
       try {
-        const res = await callApi('getPmCashierBookData', { forceRefresh: true }, 'GET');
+        const res = await callApi('getPmCashierBookData', { 
+          page: gPmPage, 
+          limit: gPmPageLimit, 
+          forceRefresh: true 
+        }, 'GET');
+
         if (res && res.success) {
           gCashierList = res.data || [];
+          const stats = res.stats || {};
+          gPmTotalRows = stats.totalRows || gCashierList.length;
+
+          // 🎯 KPI cards များသည် စာရင်းတစ်ခုလုံး၏ အမှန်တကယ် လက်ကျန်ကို ပြသခြင်း
+          const bal = stats.balance || 0;
+          const tIn = stats.totalIn || 0;
+          const tOut = stats.totalOut || 0;
+
+          document.getElementById('pm-hand-cash').innerHTML = `${Number(bal).toLocaleString('en-US')} <span class="text-sm font-bold text-sky-400">MMK</span>`;
+          document.getElementById('pm-stat-in').textContent = `+${Number(tIn).toLocaleString('en-US')} MMK`;
+          document.getElementById('pm-stat-out').textContent = `-${Number(tOut).toLocaleString('en-US')} MMK`;
+          document.getElementById('pm-entries-count').textContent = `${gPmTotalRows} စောင်`;
+
           renderCashierView();
+          updatePaginationControls();
         } else {
           showToast("ERROR", res?.message || "Data ဆွဲယူ၍ မရပါ။");
         }
@@ -239,18 +271,6 @@
     }
 
     function renderCashierView() {
-      let tIn = 0, tOut = 0;
-      gCashierList.forEach(r => {
-        tIn += Number(r.debit || 0);
-        tOut += Number(r.credit || 0);
-      });
-      const bal = tIn - tOut;
-
-      document.getElementById('pm-hand-cash').innerHTML = `${bal.toLocaleString('en-US')} <span class="text-sm font-bold text-sky-400">MMK</span>`;
-      document.getElementById('pm-stat-in').textContent = `+${tIn.toLocaleString('en-US')} MMK`;
-      document.getElementById('pm-stat-out').textContent = `-${tOut.toLocaleString('en-US')} MMK`;
-      document.getElementById('pm-entries-count').textContent = `${gCashierList.length} စောင်`;
-
       const feed = document.getElementById('pm-feed-list');
       feed.innerHTML = '';
 
@@ -265,8 +285,6 @@
         const isFloat = r.category === 'Float Receive';
         const isReturn = r.category === 'Return to Finance';
         const isToday = (r.date === todayStr);
-
-        // 🛡️ စည်းကမ်းချက် - Float Receive ကို လုံးဝဖျက်ခွင့်မရှိ။ ကျန်စာရင်းများကို ၁ ရက် (ယနေ့) သာ ဖျက်ခွင့်ပေးသည်။
         const canDelete = !isFloat && isToday;
 
         feed.innerHTML += `
@@ -301,6 +319,26 @@
           </div>
         `;
       });
+    }
+
+    // 🎯 Pagination Controller
+    function updatePaginationControls() {
+      const start = (gPmPage - 1) * gPmPageLimit + 1;
+      const end = Math.min(start + gPmPageLimit - 1, gPmTotalRows);
+      const indicator = document.getElementById('pm-page-indicator');
+      if (indicator) {
+        indicator.textContent = (gPmTotalRows === 0) ? '0 entries' : `Showing ${start}–${end} of ${gPmTotalRows}`;
+      }
+
+      const prevBtn = document.getElementById('btn-pm-prev');
+      const nextBtn = document.getElementById('btn-pm-next');
+      if (prevBtn) prevBtn.disabled = (gPmPage <= 1);
+      if (nextBtn) nextBtn.disabled = (end >= gPmTotalRows);
+    }
+
+    function changePmPage(delta) {
+      gPmPage += delta;
+      loadPmCashierData();
     }
 
     async function lookupStudent() {
@@ -362,6 +400,7 @@
       const res = await callApi('savePmCashierBookEntry', payload);
       if (res && res.success) {
         showToast("SUCCESS", "မုန့်ဖိုး ထုတ်ပေးပြီးပါပြီ။");
+        gPmPage = 1; // Update လုပ်ပြီးပါက Page 1 သို့ ပြန်သွားမည်
         loadPmCashierData();
       } else {
         showToast("ERROR", res?.message || "မအောင်မြင်ပါ။");
@@ -389,6 +428,7 @@
       const res = await callApi('savePmCashierBookEntry', payload);
       if (res && res.success) {
         showToast("SUCCESS", "Finance သို့ ငွေပြန်အပ်ပြီးပါပြီ။");
+        gPmPage = 1;
         loadPmCashierData();
       } else {
         showToast("ERROR", res?.message || "မအောင်မြင်ပါ။");
@@ -488,7 +528,6 @@
       localStorage.removeItem('golden_token_expires_at');
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      // Root ရှိ index.html သို့ ပြန်ထွက်မည်
       window.location.href = '/';
     }
   </script>
