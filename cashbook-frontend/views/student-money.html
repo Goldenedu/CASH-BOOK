@@ -35,54 +35,79 @@
   <!-- ============================================================================== -->
   <div id="stm-main-view" class="space-y-4">
     
-    <!-- 🎯 TAB 1: 5-KPI Grid (Debit, Credit, Trust Bal, Finance Vault Cash, Entries) -->
+    <!-- 🎯 PROFESSIONAL 5-CARD FINTECH KPI STRIP (1-ROW BALANCED DESKTOP) -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+      
       <!-- Card 1: Total Deposited -->
-      <div class="stats-card p-4 rounded-xl flex items-start gap-3.5">
-        <div class="p-3 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0"><i class="fa-solid fa-circle-arrow-down text-lg"></i></div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">TOTAL DEPOSITED (အပ်ငွေ)</p>
-          <h3 id="stm-total-income" class="text-base font-extrabold text-emerald-400 mt-1">0 MMK</h3>
+      <div class="group relative overflow-hidden bg-[#0c1322] hover:bg-[#0f172a] border border-slate-800/80 hover:border-emerald-500/40 p-4 rounded-xl transition-all duration-200 shadow-sm flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Deposited</span>
+          <span class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 text-xs"><i class="fa-solid fa-arrow-down-left"></i></span>
+        </div>
+        <div class="mt-2">
+          <h3 id="stm-total-income" class="text-base font-black font-mono text-emerald-400 tracking-tight">0 MMK</h3>
+          <p class="text-[10px] text-slate-500 mt-0.5 font-medium flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> ကျောင်းသား အပ်ငွေစုစုပေါင်း
+          </p>
         </div>
       </div>
 
       <!-- Card 2: Total Withdrawn -->
-      <div class="stats-card p-4 rounded-xl flex items-start gap-3.5">
-        <div class="p-3 rounded-lg bg-rose-500/10 text-rose-400 shrink-0"><i class="fa-solid fa-circle-arrow-up text-lg"></i></div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">TOTAL WITHDRAWN (ထုတ်ငွေ)</p>
-          <h3 id="stm-total-expense" class="text-base font-extrabold text-rose-400 mt-1">0 MMK</h3>
+      <div class="group relative overflow-hidden bg-[#0c1322] hover:bg-[#0f172a] border border-slate-800/80 hover:border-rose-500/40 p-4 rounded-xl transition-all duration-200 shadow-sm flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Withdrawn</span>
+          <span class="p-2 rounded-lg bg-rose-500/10 text-rose-400 text-xs"><i class="fa-solid fa-arrow-up-right"></i></span>
+        </div>
+        <div class="mt-2">
+          <h3 id="stm-total-expense" class="text-base font-black font-mono text-rose-400 tracking-tight">0 MMK</h3>
+          <p class="text-[10px] text-slate-500 mt-0.5 font-medium flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> ကျောင်းသား ထုတ်ငွေစုစုပေါင်း
+          </p>
         </div>
       </div>
 
-      <!-- Card 3: Total Trust Balance -->
-      <div class="stats-card p-4 rounded-xl flex items-start gap-3.5">
-        <div class="p-3 rounded-lg bg-indigo-500/10 text-indigo-400 shrink-0"><i class="fa-solid fa-wallet text-lg"></i></div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">TOTAL TRUST BALANCE</p>
-          <h3 id="stm-balance" class="text-base font-extrabold text-white mt-1">0 MMK</h3>
-          <p class="text-[10px] text-slate-400 mt-0.5 truncate">ကျောင်းသား စုစုပေါင်း လက်ကျန်</p>
+      <!-- Card 3: Total Trust Balance (Core Virtual Liability) -->
+      <div class="group relative overflow-hidden bg-gradient-to-b from-[#101b33] to-[#0c1322] border border-indigo-500/30 hover:border-indigo-500/60 p-4 rounded-xl transition-all duration-200 shadow-lg shadow-indigo-950/20 flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-300">Trust Balance</span>
+          <span class="p-2 rounded-lg bg-indigo-500/20 text-indigo-300 text-xs"><i class="fa-solid fa-wallet"></i></span>
+        </div>
+        <div class="mt-2">
+          <h3 id="stm-balance" class="text-base font-black font-mono text-white tracking-tight">0 MMK</h3>
+          <p class="text-[10px] text-indigo-300/80 mt-0.5 font-medium flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span> Virtual ကျောင်းသားလက်ကျန်ချုပ်
+          </p>
         </div>
       </div>
 
-      <!-- Card 4: 🌟 FINANCE VAULT CASH (NEW CARD) -->
-      <div class="stats-card p-4 rounded-xl flex items-start gap-3.5 border border-sky-500/20 bg-sky-950/10">
-        <div class="p-3 rounded-lg bg-sky-500/10 text-sky-400 shrink-0"><i class="fa-solid fa-vault text-lg"></i></div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-sky-400 truncate">FINANCE VAULT CASH</p>
-          <h3 id="stm-vault-cash" class="text-base font-extrabold text-sky-300 mt-1">0 MMK</h3>
-          <p class="text-[10px] text-slate-400 mt-0.5 truncate">လက်ဝယ်ရှိ ငွေသားပကတိ</p>
+      <!-- Card 4: Finance Vault Cash (Actual Physical Asset) -->
+      <div class="group relative overflow-hidden bg-gradient-to-b from-[#0a2336] to-[#0c1322] border border-sky-500/30 hover:border-sky-500/60 p-4 rounded-xl transition-all duration-200 shadow-lg shadow-sky-950/20 flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-sky-300">Finance Vault Cash</span>
+          <span class="p-2 rounded-lg bg-sky-500/20 text-sky-300 text-xs"><i class="fa-solid fa-vault"></i></span>
+        </div>
+        <div class="mt-2">
+          <h3 id="stm-vault-cash" class="text-base font-black font-mono text-sky-200 tracking-tight">0 MMK</h3>
+          <p class="text-[10px] text-sky-300/80 mt-0.5 font-medium flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span> ရုံးခန်းလက်ဝယ်ရှိ ငွေသားစစ်စစ်
+          </p>
         </div>
       </div>
 
       <!-- Card 5: Total Entries -->
-      <div class="stats-card p-4 rounded-xl flex items-start gap-3.5">
-        <div class="p-3 rounded-lg bg-amber-500/10 text-amber-400 shrink-0"><i class="fa-solid fa-receipt text-lg"></i></div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">TOTAL ENTRIES</p>
-          <h3 id="stm-entries-count" class="text-base font-extrabold text-amber-400 mt-1">0</h3>
+      <div class="group relative overflow-hidden bg-[#0c1322] hover:bg-[#0f172a] border border-slate-800/80 hover:border-amber-500/40 p-4 rounded-xl transition-all duration-200 shadow-sm flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Entries</span>
+          <span class="p-2 rounded-lg bg-amber-500/10 text-amber-400 text-xs"><i class="fa-solid fa-receipt"></i></span>
+        </div>
+        <div class="mt-2">
+          <h3 id="stm-entries-count" class="text-base font-black font-mono text-amber-300 tracking-tight">0</h3>
+          <p class="text-[10px] text-slate-500 mt-0.5 font-medium flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> စုစုပေါင်း မှတ်တမ်းအကြိမ်ရေ
+          </p>
         </div>
       </div>
+
     </div>
 
     <!-- Search & Action Toolbar -->
