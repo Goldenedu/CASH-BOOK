@@ -1351,56 +1351,70 @@ function triggerVoucherPrint() {
 }
 
 // ==============================================================================
-// 💡 HIGH-CONTRAST PROFESSIONAL TOAST NOTIFICATION (Z-INDEX: 99999)
+// 💡 SCREEN-CENTER HIGH-CONTRAST TOAST NOTIFICATION (Z-INDEX: 999999)
 // ==============================================================================
 window.showToast = function(type, message) {
-  let container = document.getElementById('global-toast-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'global-toast-container';
-    // 🎯 Screen အပေါ်တည့်တည့်တွင် Modal များအားလုံး၏ အပေါ်ဆုံး (z-[99999]) မှ ပြသခြင်း
-    container.className = 'fixed top-6 left-1/2 -translate-x-1/2 z-[99999] flex flex-col items-center gap-3 pointer-events-none w-full max-w-md px-4';
-    document.body.appendChild(container);
-  }
+  // ယခင်ရှိနေသော Toast အဟောင်းများကို ရှင်းထုတ်ခြင်း
+  const oldToast = document.getElementById('global-center-toast-wrapper');
+  if (oldToast) oldToast.remove();
 
-  const isError = type === 'ERROR';
+  // 🎯 Screen အလယ်တည့်တည့် (Dead Center) နှင့် Modal အားလုံး၏ အပေါ်ဆုံး (z-[999999])
+  const wrapper = document.createElement('div');
+  wrapper.id = 'global-center-toast-wrapper';
+  wrapper.className = 'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[999999] pointer-events-none flex flex-col items-center justify-center w-full max-w-md px-4';
+
+  const isSuccess = (String(type).toUpperCase() === 'SUCCESS');
+
   const toast = document.createElement('div');
-  
-  // 🌟 အလွန်ထင်ရှားသော Red/Emerald Gradient + Bold White Text + Strong Shadow
-  toast.className = `pointer-events-auto flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl border transition-all duration-300 transform translate-y-[-20px] opacity-0 scale-95 ${
-    isError 
-      ? 'bg-rose-600 border-rose-400 text-white shadow-rose-950/80 ring-4 ring-rose-500/30' 
-      : 'bg-emerald-600 border-emerald-400 text-white shadow-emerald-950/80 ring-4 ring-emerald-500/30'
+  toast.className = `pointer-events-auto flex items-center gap-4 px-6 py-4 rounded-2xl shadow-2xl border-2 backdrop-blur-xl transition-all duration-300 transform scale-90 opacity-0 ${
+    isSuccess
+      ? 'bg-[#061e18]/95 border-emerald-400 text-white shadow-[0_0_50px_rgba(16,185,129,0.4)] ring-4 ring-emerald-500/20'
+      : 'bg-[#2a080c]/95 border-rose-500 text-white shadow-[0_0_50px_rgba(244,63,94,0.4)] ring-4 ring-rose-500/20'
   }`;
 
-  const icon = isError 
-    ? '<i class="fa-solid fa-circle-exclamation text-xl text-amber-200 animate-pulse shrink-0"></i>' 
-    : '<i class="fa-solid fa-circle-check text-xl text-emerald-100 shrink-0"></i>';
+  const iconHtml = isSuccess
+    ? '<div class="p-3 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-400/30 text-2xl shrink-0"><i class="fa-solid fa-circle-check"></i></div>'
+    : '<div class="p-3 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/30 text-2xl shrink-0 animate-bounce"><i class="fa-solid fa-triangle-exclamation"></i></div>';
+
+  const titleText = isSuccess ? 'ACTION SUCCESSFUL' : 'ACTION DENIED / ERROR';
+  const titleColor = isSuccess ? 'text-emerald-400' : 'text-rose-400';
 
   toast.innerHTML = `
-    ${icon}
-    <div class="flex-1 text-xs font-black tracking-wide leading-relaxed">
-      <span class="block uppercase text-[10px] tracking-widest text-white/80 font-bold">${isError ? 'Action Denied / Error' : 'Success'}</span>
-      ${message}
+    ${iconHtml}
+    <div class="flex-1 min-w-0 pr-2">
+      <span class="block uppercase text-[10px] tracking-widest font-black ${titleColor} mb-0.5">${titleText}</span>
+      <p class="text-xs font-bold text-slate-100 leading-snug break-words">${message}</p>
     </div>
-    <button onclick="this.parentElement.remove()" class="text-white/70 hover:text-white transition p-1 text-xs shrink-0">
-      <i class="fa-solid fa-xmark"></i>
+    <button onclick="dismissCenterToast()" class="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition shrink-0">
+      <i class="fa-solid fa-xmark text-sm"></i>
     </button>
   `;
 
-  container.appendChild(toast);
+  wrapper.appendChild(toast);
+  document.body.appendChild(wrapper);
 
-  // Smooth Animate In
+  // Smooth Pop-in Animation
   requestAnimationFrame(() => {
-    toast.classList.remove('translate-y-[-20px]', 'opacity-0', 'scale-95');
-    toast.classList.add('translate-y-0', 'opacity-100', 'scale-100');
+    toast.classList.remove('scale-90', 'opacity-0');
+    toast.classList.add('scale-100', 'opacity-100');
   });
 
-  // Auto Dismiss after 4.5 seconds
-  setTimeout(() => {
-    toast.classList.add('opacity-0', 'scale-95', 'translate-y-[-10px]');
-    setTimeout(() => toast.remove(), 300);
-  }, 4500);
+  // Auto Dismiss Timer (3.5 Seconds)
+  window.toastDismissTimer = setTimeout(() => {
+    dismissCenterToast();
+  }, 3500);
+};
+
+window.dismissCenterToast = function() {
+  clearTimeout(window.toastDismissTimer);
+  const wrapper = document.getElementById('global-center-toast-wrapper');
+  if (!wrapper) return;
+  const toast = wrapper.firstElementChild;
+  if (toast) {
+    toast.classList.remove('scale-100', 'opacity-100');
+    toast.classList.add('scale-90', 'opacity-0');
+  }
+  setTimeout(() => wrapper.remove(), 250);
 };
 
 // Global Window Exports
