@@ -173,7 +173,6 @@ export async function saveStudentMoneyEntry(db, session, body) {
     // 💡 SCENARIO 1: TRANSFER TO PM CASHIER (WITH OVER-TRANSFER GUARD)
     // =========================================================================
     if (entryType === 'Transfer to PM Cashier' && credit > 0) {
-      // 🛡️ OVER-TRANSFER GUARD: Check available physical cash in Finance Vault
       const [stuRes, pmRes] = await db.batch([
         db.prepare("SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND student_id IS NOT NULL").bind(cleanFy, `FY ${cleanFy}`),
         db.prepare("SELECT COALESCE(SUM(debit - credit), 0) as bal FROM pm_cashier_book WHERE fy IN (?, ?)").bind(cleanFy, `FY ${cleanFy}`)
@@ -189,7 +188,6 @@ export async function saveStudentMoneyEntry(db, session, body) {
         };
       }
 
-      // 1. Debit -> PM Cashier Book
       const noPm = await generateFyNo(db, 'pm_cashier_book', fy);
       const vrPm = await generateVoucherNo(db, 'pm_cashier_book', 'PMC', entryDate);
       const respPerson = body.responsibilityPerson || 'Cashier 1';
@@ -200,7 +198,6 @@ export async function saveStudentMoneyEntry(db, session, body) {
         .bind(noPm, entryDate, respPerson, pmRemark, method, credit, vrPm, my, fy, session?.name || 'Finance', `PMC_${uniqueid}`)
       );
 
-      // 2. 🌟 Record Transition in Student Money Book WITHOUT altering student wallet balance (student_id = NULL)
       const noStu = await generateFyNo(db, 'student_money', cleanFy);
       batchStatements.push(
         db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, NULL, 'TRANSFER', ?, 'Vault Transfer', ?, 0, ?, 0, ?, ?, ?)`)
@@ -211,6 +208,22 @@ export async function saveStudentMoneyEntry(db, session, body) {
       // =========================================================================
       // 💡 SCENARIO 2: REGULAR STUDENT DEPOSIT OR WITHDRAW
       // =========================================================================
+
+      // 🛡️ STUDENT OVERDRAFT GUARD (ကျောင်းသားလက်ကျန်ထက် ပိုမထုတ်နိုင်စေရန် စစ်ဆေးခြင်း)
+      if (entryType === 'Withdraw' && credit > 0 && studentId) {
+        const stuBalRow = await db.prepare(
+          "SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND student_id = ?"
+        ).bind(cleanFy, `FY ${cleanFy}`, studentId).first();
+        
+        const curStuBal = parseFloat(stuBalRow?.bal || 0);
+        if (credit > curStuBal) {
+          return {
+            success: false,
+            message: `ငွေထုတ်ယူခွင့် မပြုပါ! ကျောင်းသားတွင် လက်ရှိမုန့်ဖိုးလက်ကျန် (${curStuBal.toLocaleString('en-US')} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString('en-US')} MMK) ပိုမိုထုတ်ယူခွင့် မရှိပါ။`
+          };
+        }
+      }
+
       const noStu = await generateFyNo(db, 'student_money', cleanFy);
       const stuName = body.name ? `[${body.fyid}] ${body.name}` : `[ID ${studentId}]`;
       const prefix = entryType === 'Deposit' ? '[Finance] Deposit' : '[Finance] Withdraw';
@@ -224,7 +237,6 @@ export async function saveStudentMoneyEntry(db, session, body) {
 
     await db.batch(batchStatements);
 
-    // Recalculate
     if (studentId !== null) {
       await recalculateLedgerBalances(db, 'student_money', cleanFy, entryDate);
     }
@@ -291,7 +303,7 @@ export async function savePmCashierBookEntry(db, session, body) {
     const debit = parseFloat(body.debit || 0);
     const respPerson = body.responsibilityPerson || 'Cashier 1';
 
-    // 🛡️ CASHIER BALANCE GUARD: ငွေထုတ်ခြင်း (သို့) Finance သို့ ပြန်လွှဲခြင်းတွင် Cashier လက်ကျန်ငွေထက် ပိုမိုမလွှဲနိုင်စေရန် စစ်ဆေးခြင်း
+    // 🛡️ 1. CASHIER FLOAT GUARD: ငွေကိုင်ထံတွင် ငွေသားလက်ကျန် လုံလောက်မှုရှိမရှိ စစ်ဆေးခြင်း
     if (credit > 0) {
       const cashierBalRow = await db.prepare(
         "SELECT COALESCE(SUM(debit - credit), 0) as bal FROM pm_cashier_book WHERE fy IN (?, ?) AND responsibility_person = ?"
@@ -302,7 +314,23 @@ export async function savePmCashierBookEntry(db, session, body) {
       if (credit > curCashierBal) {
         return {
           success: false,
-          message: `${respPerson} တွင် လက်ရှိငွေသားလက်ကျန် (${curCashierBal.toLocaleString('en-US')} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString('en-US')} MMK) ထုတ်ယူ/ပြန်လွှဲခွင့် မပြုပါ!`
+          message: `${respPerson} တွင် ငွေသားလက်ကျန် (${curCashierBal.toLocaleString('en-US')} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString('en-US')} MMK) ထုတ်ပေး/ပြန်လွှဲခွင့် မပြုပါ!`
+        };
+      }
+    }
+
+    // 🛡️ 2. STUDENT OVERDRAFT GUARD: ကျောင်းသားတွင် မုန့်ဖိုးလက်ကျန် လုံလောက်မှုရှိမရှိ စစ်ဆေးခြင်း
+    if (category === 'PM Withdraw' && body.studentId > 0 && credit > 0) {
+      const stuBalRow = await db.prepare(
+        "SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND student_id = ?"
+      ).bind(cleanFy, `FY ${cleanFy}`, body.studentId).first();
+      
+      const curStuBal = parseFloat(stuBalRow?.bal || 0);
+
+      if (credit > curStuBal) {
+        return {
+          success: false,
+          message: `မုန့်ဖိုးထုတ်ပေးခွင့် မပြုပါ! ကျောင်းသားတွင် လက်ရှိမုန့်ဖိုးလက်ကျန် (${curStuBal.toLocaleString('en-US')} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString('en-US')} MMK) ပိုမိုထုတ်ယူခွင့် မရှိပါ။`
         };
       }
     }
@@ -341,7 +369,6 @@ export async function savePmCashierBookEntry(db, session, body) {
 
     await db.batch(batchStatements);
 
-    // Atomic Recalculations
     await recalculateLedgerBalances(db, 'pm_cashier_book', fy, entryDate);
     if (category === 'PM Withdraw') {
       await recalculateLedgerBalances(db, 'student_money', cleanFy, entryDate);

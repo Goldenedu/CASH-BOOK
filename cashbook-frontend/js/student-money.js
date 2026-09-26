@@ -395,7 +395,15 @@ async function saveStudentMoneyForm(e) {
       isSubmitting = false;
       return showToast("ERROR", `Finance Vault တွင် လက်ကျန်ငွေသား (${availableFinanceCash.toLocaleString()} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString()} MMK) ပိုမိုလွှဲပြောင်း၍ မရပါ!`);
     }
-  } else {
+  } 
+  if (entryType === 'Withdraw' && credit > 0) {
+    const liveBalText = document.getElementById('stm-wallet-live-amount')?.textContent || '0';
+    const liveBal = parseFloat(liveBalText.replace(/[^0-9.-]+/g, "")) || 0;
+    if (credit > liveBal) {
+      isSubmitting = false;
+      return showToast("ERROR", `ကျောင်းသားတွင် လက်ရှိမုန့်ဖိုးလက်ကျန် (${liveBal.toLocaleString()} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString()} MMK) ထုတ်ယူခွင့် မပြုပါ!`);
+    }
+  }else {
     if (!studentId || (debit <= 0 && credit <= 0)) {
       isSubmitting = false; 
       return showToast("ERROR", "ကျောင်းသား ID နှင့် ငွေပမာဏ အတိအကျ ထည့်ပါ။");
@@ -896,6 +904,15 @@ async function savePmCashierBookForm(e) {
 
   closePmCashierBookModal();
   if (typeof toggleLoading === 'function') toggleLoading(true);
+
+  if (category === 'PM Withdraw') {
+    const stuBalText = document.getElementById('pm-student-wallet-bal')?.textContent || '0';
+    const stuBal = parseFloat(stuBalText.replace(/[^0-9.-]+/g, "")) || 0;
+    if (credit > stuBal) {
+      isSubmitting = false;
+      return showToast("ERROR", `ကျောင်းသားတွင် လက်ရှိမုန့်ဖိုးလက်ကျန် (${stuBal.toLocaleString()} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString()} MMK) ထုတ်ပေးခွင့် မပြုပါ!`);
+    }
+  }
 
   try {
     const res = await callApi('savePmCashierBookEntry', payload);
