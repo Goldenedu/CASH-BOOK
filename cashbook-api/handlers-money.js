@@ -1,11 +1,14 @@
 /**
  * ==============================================================================
- * GOLDEN ERP SYSTEM - SPMMS HANDLERS (CLOUDFLARE D1)
+ * GOLDEN ERP SYSTEM - SPMMS HANDLERS (CLOUDFLARE D1 ENTERPRISE EDITION)
  * File: handlers-money.js
- * 💡 Features: 3-Ledgers Strict Double-Entry Architecture
- *              🛡️ OVER-TRANSFER GUARD: Prevents transferring more than Finance Vault cash
- *              🔄 NON-DESTRUCTIVE TRANSITIONS: Transfer rows visible without altering Trust KPIs
- *              🚀 RECONCILIATION: O(1) Financial Audit Engine
+ * 
+ * 💡 Features:
+ *   1. ⚡ QUOTA-SHIELD: O(1) Batch Queries & Conditional Ledger Recalculations
+ *   2. 🛡️ ZERO-OVERDRAFT GUARDS: Double-entry validation on Vault, Cashier & Students
+ *   3. 🔒 SECURITY & ANTI-IMPERSONATION: RBAC-enforced Cashier identity locking
+ *   4. 🎯 NUMERICAL INTEGRITY: Math.round 2-decimal protection against precision drift
+ *   5. 🔄 ATOMIC CASCADE: Bidirectional link cleanup across all 3 books
  * ==============================================================================
  */
 
@@ -24,7 +27,7 @@ function computeAcademicFy(dateStr) {
 }
 
 // ==============================================================================
-// 💡 1. STUDENT MONEY (MAIN FINANCE & VIRTUAL WALLET)
+// 💡 1. STUDENT MONEY (MAIN FINANCE & VIRTUAL WALLETS)
 // ==============================================================================
 
 export async function getStudentMoneyData(db, body) {
@@ -32,8 +35,8 @@ export async function getStudentMoneyData(db, body) {
     const fy = normalizeFyStr(body.fy || getCurrentAcademicYear()).replace(/^FY\s*/i, '');
     const searchVal = String(body.searchVal || "").trim();
     const studentIdFilter = parseInt(body.studentId, 10) || 0;
-    const page = parseInt(body.page || 1, 10);
-    const limit = parseInt(body.limit || 20, 10); // 🎯 Default 20 rows per page
+    const page = Math.max(1, parseInt(body.page || 1, 10));
+    const limit = Math.min(100, Math.max(1, parseInt(body.limit || 20, 10)));
     const offset = (page - 1) * limit;
 
     const dateFrom = String(body.dateFrom || body.fromDate || "").trim();
@@ -47,7 +50,6 @@ export async function getStudentMoneyData(db, body) {
       params.push(studentIdFilter, studentIdFilter);
     }
 
-    // 🎯 SQL Level Date Filter (D1 Quota သက်သာစေရန်)
     if (dateFrom) {
       whereClauses.push(`date >= ?`);
       params.push(dateFrom);
@@ -65,31 +67,33 @@ export async function getStudentMoneyData(db, body) {
 
     const whereSql = `WHERE ${whereClauses.join(' AND ')}`;
 
-    // 🚀 D1 Batch: Count, Filtered Stats, and Cashier Cash in 1 roundtrip
-    const [countRow, statsRow, pmStatsRow] = await db.batch([
+    // ⚡ QUOTA-SHIELD: ကျောင်းသားတစ်ဦးချင်း Statement ကြည့်ချိန်တွင် မလိုအပ်သော Cashier Book Query ကို လုံးဝချန်လှပ်မည်
+    const batchQueries = [
       db.prepare(`SELECT COUNT(id) as c FROM student_money ${whereSql}`).bind(...params),
       db.prepare(`
         SELECT 
           COALESCE(SUM(CASE WHEN student_id IS NOT NULL THEN debit ELSE 0 END), 0) as d,
           COALESCE(SUM(CASE WHEN student_id IS NOT NULL THEN credit ELSE 0 END), 0) as c
         FROM student_money ${whereSql}
-      `).bind(...params),
-      db.prepare(`
-        SELECT COALESCE(SUM(debit - credit), 0) as pm_bal 
-        FROM pm_cashier_book WHERE fy IN (?, ?)
-      `).bind(fy, `FY ${fy}`)
-    ]);
+      `).bind(...params)
+    ];
 
-    const totalRows = countRow.results[0]?.c || 0;
-    const stats = statsRow.results[0] || { d: 0, c: 0 };
-    const pmCashierCash = parseFloat(pmStatsRow.results[0]?.pm_bal || 0);
+    if (studentIdFilter === 0) {
+      batchQueries.push(
+        db.prepare(`SELECT COALESCE(SUM(debit - credit), 0) as pm_bal FROM pm_cashier_book WHERE fy IN (?, ?)`).bind(fy, `FY ${fy}`)
+      );
+    }
+
+    const batchResults = await db.batch(batchQueries);
+    const totalRows = batchResults[0]?.results[0]?.c || 0;
+    const stats = batchResults[1]?.results[0] || { d: 0, c: 0 };
+    const pmCashierCash = (studentIdFilter === 0 && batchResults[2]) ? parseFloat(batchResults[2].results[0]?.pm_bal || 0) : 0;
 
     const totalIncome = parseFloat(stats.d || 0);
     const totalExpense = parseFloat(stats.c || 0);
     const trustBalance = totalIncome - totalExpense;
     const financeVaultCash = trustBalance - pmCashierCash;
 
-    // 🎯 ORDER BY date DESC, id DESC ဖြင့် အသစ်ဆုံးကို အပေါ်ကထားပြီး LIMIT 20 OFFSET ဖြင့်သာ ဆွဲယူသည်
     const dataQuery = `
       SELECT id, no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, uniqueid 
       FROM student_money ${whereSql} 
@@ -105,11 +109,11 @@ export async function getStudentMoneyData(db, body) {
       })),
       totalRows, page, limit,
       stats: { 
-        totalIncome: totalIncome, 
-        totalExpense: totalExpense, 
+        totalIncome, 
+        totalExpense, 
         balance: trustBalance,
-        pmCashierCash: pmCashierCash,
-        financeVaultCash: financeVaultCash
+        pmCashierCash,
+        financeVaultCash
       }
     };
   } catch (err) { return { success: false, message: err.message }; }
@@ -120,7 +124,6 @@ export async function getStudentMoneySummary(db, body) {
     const fy = normalizeFyStr(body.fy || getCurrentAcademicYear()).replace(/^FY\s*/i, '');
     const searchVal = String(body.searchVal || "").trim();
 
-    // Exclude system rows
     let whereClauses = [`(fy IN (?, ?)) AND student_id IS NOT NULL`];
     let params = [fy, `FY ${fy}`];
 
@@ -162,12 +165,12 @@ export async function saveStudentMoneyEntry(db, session, body) {
     const uniqueid = body.uniqueId ? String(body.uniqueId).trim() : generateUniqueId('STM');
     
     const rawType = String(body.entryType || 'Deposit').trim();
-    const debit = parseFloat(body.debit || 0);
-    const credit = parseFloat(body.credit || 0);
+    // 🎯 NUMERICAL INTEGRITY: အနုတ်ဂဏန်းထည့်သွင်းမှု ကာကွယ်ခြင်းနှင့် ၂ နေရာစိတ် ဒဿမတိကျမှု
+    const debit = Math.round(Math.max(0, parseFloat(body.debit || 0)) * 100) / 100;
+    const credit = Math.round(Math.max(0, parseFloat(body.credit || 0)) * 100) / 100;
     const studentId = parseInt(body.studentId, 10) || null;
     const method = body.method || 'Cash';
     
-    // 🎯 ၁။ Transfer ဟုတ်/မဟုတ် Case-insensitive & Flexible စစ်ဆေးခြင်း
     const isTransfer = rawType.toLowerCase().includes('transfer') || 
                        rawType.toLowerCase().includes('pm cashier') || 
                        rawType.toLowerCase().includes('အရင်းလွှဲ');
@@ -175,25 +178,15 @@ export async function saveStudentMoneyEntry(db, session, body) {
     const batchStatements = [];
     let generatedVrNo = null;
 
-    // =========================================================================
-    // 💡 SCENARIO 1: TRANSFER TO PM CASHIER (WITH OVER-TRANSFER GUARD)
-    // =========================================================================
     if (isTransfer) {
-      if (credit <= 0) {
-        return {
-          success: false,
-          message: "PM Cashier သို့ လွှဲမည့် Credit ငွေပမာဏကို အတိအကျ ထည့်သွင်းပါ။"
-        };
-      }
+      if (credit <= 0) return { success: false, message: "PM Cashier သို့ လွှဲမည့် Credit ငွေပမာဏကို အတိအကျ ထည့်သွင်းပါ။" };
 
-      // 🛡️ OVER-TRANSFER GUARD: Check available physical cash in Finance Vault
+      // 🛡️ OVER-TRANSFER GUARD: Vault ထဲတွင် လက်ကျန်ရှိသော ငွေသားထက် ပိုမလွှဲနိုင်စေရန် စစ်ဆေးခြင်း
       const [stuRes, pmRes] = await db.batch([
         db.prepare("SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND student_id IS NOT NULL").bind(cleanFy, `FY ${cleanFy}`),
         db.prepare("SELECT COALESCE(SUM(debit - credit), 0) as bal FROM pm_cashier_book WHERE fy IN (?, ?)").bind(cleanFy, `FY ${cleanFy}`)
       ]);
-      const totalVirtual = parseFloat(stuRes.results[0]?.bal || 0);
-      const totalCashier = parseFloat(pmRes.results[0]?.bal || 0);
-      const availableFinanceCash = totalVirtual - totalCashier;
+      const availableFinanceCash = parseFloat(stuRes.results[0]?.bal || 0) - parseFloat(pmRes.results[0]?.bal || 0);
 
       if (credit > availableFinanceCash) {
         return {
@@ -208,13 +201,12 @@ export async function saveStudentMoneyEntry(db, session, body) {
       const respPerson = body.responsibilityPerson || 'Cashier 1';
       const pmRemark = body.remark || `Finance မှ ${respPerson} သို့ အရင်းငွေလွှဲပေးခြင်း`;
 
-      // 1. Debit -> PM Cashier Book
       batchStatements.push(
         db.prepare(`INSERT INTO pm_cashier_book (no, date, responsibility_person, category, description, method, debit, credit, balances, vr_no, my, fy, created_by, uniqueid) VALUES (?, ?, ?, 'Float Receive', ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)`)
         .bind(noPm, entryDate, respPerson, pmRemark, method, credit, vrPm, my, fy, session?.name || 'Finance', `PMC_${uniqueid}`)
       );
 
-      // 2. Student Money Transition Record (student_id = NULL)
+      // Student Wallet မထိခိုက်စေဘဲ စာအုပ်တွင် Transition Row အဖြစ်သာ မှတ်တမ်းတင်ခြင်း (student_id = NULL)
       const noStu = await generateFyNo(db, 'student_money', cleanFy);
       batchStatements.push(
         db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, NULL, 'TRANSFER', ?, 'Vault Transfer', ?, 0, ?, 0, ?, ?, ?)`)
@@ -222,26 +214,10 @@ export async function saveStudentMoneyEntry(db, session, body) {
       );
 
     } else {
-      // =========================================================================
-      // 💡 SCENARIO 2: REGULAR STUDENT DEPOSIT OR WITHDRAW
-      // =========================================================================
+      if (!studentId || studentId <= 0) return { success: false, message: "ကျောင်းသား ID အတိအကျ ထည့်သွင်းပေးပါ။" };
+      if (debit <= 0 && credit <= 0) return { success: false, message: "အပ်ငွေ (Deposit) သို့မဟုတ် ထုတ်ငွေ (Withdraw) ပမာဏ ထည့်သွင်းပေးပါ။" };
 
-      // 🎯 ၂။ ကျောင်းသား စာရင်းများအတွက် ID နှင့် Amount စစ်ဆေးချက်
-      if (!studentId || studentId <= 0) {
-        return {
-          success: false,
-          message: "ကျောင်းသား ID အတိအကျ ထည့်သွင်းပေးပါ။"
-        };
-      }
-
-      if (debit <= 0 && credit <= 0) {
-        return {
-          success: false,
-          message: "အပ်ငွေ (Deposit) သို့မဟုတ် ထုတ်ငွေ (Withdraw) ပမာဏ ထည့်သွင်းပေးပါ။"
-        };
-      }
-
-      // 🛡️ STUDENT OVERDRAFT GUARD (ကျောင်းသားလက်ကျန်ထက် ပိုမထုတ်နိုင်စေရန် စစ်ဆေးခြင်း)
+      // 🛡️ STUDENT OVERDRAFT GUARD: Finance က ငွေထုတ်ပေးချိန် ကျောင်းသားလက်ကျန် စစ်ဆေးခြင်း
       if (rawType.toLowerCase().includes('withdraw') && credit > 0) {
         const stuBalRow = await db.prepare(
           "SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND student_id = ?"
@@ -269,6 +245,7 @@ export async function saveStudentMoneyEntry(db, session, body) {
 
     await db.batch(batchStatements);
 
+    // ⚡ TARGETED RECALCULATION: သက်ဆိုင်ရာ စာအုပ်ကိုသာ ကွက်ပြီး Recalculate ပြုလုပ်ခြင်း
     if (!isTransfer && studentId !== null) {
       await recalculateLedgerBalances(db, 'student_money', cleanFy, entryDate);
     }
@@ -277,9 +254,7 @@ export async function saveStudentMoneyEntry(db, session, body) {
     }
 
     return { success: true, uniqueId: uniqueid, vrNo: generatedVrNo };
-  } catch (err) { 
-    return { success: false, message: err.message }; 
-  }
+  } catch (err) { return { success: false, message: err.message }; }
 }
 
 export async function deleteStudentMoneyEntry(db, session, body) {
@@ -287,51 +262,41 @@ export async function deleteStudentMoneyEntry(db, session, body) {
     const uid = body.uniqueId;
     if (!uid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     
-    const existing = await db.prepare("SELECT fy, date, remark, student_id, uniqueid FROM student_money WHERE uniqueid = ?").bind(uid).first();
+    const existing = await db.prepare("SELECT fy, date, student_id, remark, uniqueid FROM student_money WHERE uniqueid = ?").bind(uid).first();
     if (!existing) return { success: false, message: "ဖျက်မည့် စာရင်း ရှာမတွေ့ပါ။" };
 
     const rawId = uid.replace(/^(STM_|PMC_|CAN_)/, '');
+    const cleanFy = existing.fy ? existing.fy.replace(/^FY\s*/i, '') : '';
+    const isTransferOrCashier = existing.student_id === null || (existing.remark && existing.remark.includes('PM Cashier'));
 
-    // 🎯 D1 Batch: Student Money စာအုပ်မှ ဖျက်ရုံသာမက PM Cashier နှင့် Canteen စာအုပ်များရှိ ချိတ်ဆက်ထားသော ID များကိုပါ တစ်ပါတည်း ဖျက်ပစ်ခြင်း
     const batchStatements = [
-      // ၁။ Student Money မူရင်း စာရင်းဖျက်ခြင်း
       db.prepare("DELETE FROM student_money WHERE uniqueid = ?").bind(uid),
-
-      // ၂။ PM Cashier စာအုပ်ရှိ ဆက်စပ်စာရင်း (Withdraw / Return / Transfer) ကိုပါ လိုက်ဖျက်ခြင်း
-      db.prepare(`
-        DELETE FROM pm_cashier_book 
-        WHERE uniqueid IN (?, ?, ?, ?, ?)
-      `).bind(uid, `PMC_${uid}`, `PMC_${rawId}`, rawId, `STM_${rawId}`),
-
-      // ၃။ Canteen စာအုပ်ရှိ ဆက်စပ်စာရင်း (POS Sales) ကိုပါ လိုက်ဖျက်ခြင်း
-      db.prepare(`
-        DELETE FROM canteen_book 
-        WHERE uniqueid IN (?, ?, ?, ?, ?)
-      `).bind(uid, `CAN_${uid}`, `CAN_${rawId}`, rawId, `STM_${rawId}`)
+      db.prepare("DELETE FROM pm_cashier_book WHERE uniqueid IN (?, ?, ?)").bind(uid, `PMC_${rawId}`, rawId),
+      db.prepare("DELETE FROM canteen_book WHERE uniqueid IN (?, ?, ?)").bind(uid, `CAN_${rawId}`, rawId)
     ];
 
     await db.batch(batchStatements);
 
-    // Balance များကို သက်ဆိုင်ရာ စာအုပ်များအားလုံးတွင် တစ်ပြိုင်နက် ပြန်လည်ညှိယူခြင်း
-    const cleanFy = existing.fy ? existing.fy.replace(/^FY\s*/i, '') : '';
-    await recalculateLedgerBalances(db, 'student_money', cleanFy, existing.date);
-    await recalculateLedgerBalances(db, 'pm_cashier_book', `FY ${cleanFy}`, existing.date);
-    await recalculateLedgerBalances(db, 'canteen_book', `FY ${cleanFy}`, existing.date);
+    // ⚡ WRITE QUOTA SHIELD: သက်ဆိုင်ရာ စာအုပ်ကိုသာ ပြန်ညှိမည်
+    if (existing.student_id !== null) {
+      await recalculateLedgerBalances(db, 'student_money', cleanFy, existing.date);
+    }
+    if (isTransferOrCashier) {
+      await recalculateLedgerBalances(db, 'pm_cashier_book', `FY ${cleanFy}`, existing.date);
+    }
 
     return { success: true };
-  } catch (err) { 
-    return { success: false, message: err.message }; 
-  }
+  } catch (err) { return { success: false, message: err.message }; }
 }
 
 // ==============================================================================
-// 💡 2. PM CASHIER BOOK (WITH RETURN TO FINANCE TRANSITION)
+// 💡 2. PM CASHIER BOOK (WITH ROLE-BASED ANTI-IMPERSONATION)
 // ==============================================================================
 
 export async function getPmCashierBookData(db, body) {
   try {
     const fy = normalizeFyStr(body.fy || getCurrentAcademicYear());
-    const query = `SELECT * FROM pm_cashier_book WHERE fy = ? ORDER BY date DESC, id DESC LIMIT 2000`;
+    const query = `SELECT * FROM pm_cashier_book WHERE fy = ? ORDER BY date DESC, id DESC LIMIT 500`;
     const res = await db.prepare(query).bind(fy).all();
     return { success: true, data: (res.results || []).map(r => ({ ...r, uniqueId: r.uniqueid })) };
   } catch (err) { return { success: false, message: err.message }; }
@@ -347,39 +312,38 @@ export async function savePmCashierBookEntry(db, session, body) {
     
     const uniqueid = body.uniqueId ? String(body.uniqueId).trim() : generateUniqueId('PMC');
     const category = body.category || 'PM Withdraw';
-    const credit = parseFloat(body.credit || 0);
-    const debit = parseFloat(body.debit || 0);
-    const respPerson = body.responsibilityPerson || 'Cashier 1';
+    const credit = Math.round(Math.max(0, parseFloat(body.credit || 0)) * 100) / 100;
+    const debit = Math.round(Math.max(0, parseFloat(body.debit || 0)) * 100) / 100;
+    
+    // 🔒 ANTI-IMPERSONATION: ငွေကိုင်သည် မိမိတာဝန်ယူထားသော အကောင့်အမည်ဖြင့်သာ စာရင်းသွင်းနိုင်စေရန် ကာကွယ်ခြင်း
+    let respPerson = body.responsibilityPerson || 'Cashier 1';
+    if (session?.role === 'pm_cashier1') respPerson = 'Cashier 1';
+    else if (session?.role === 'pm_cashier2') respPerson = 'Cashier 2';
 
-    // 🛡️ 1. CASHIER FLOAT GUARD: ငွေကိုင်ထံတွင် ငွေသားလက်ကျန် လုံလောက်မှုရှိမရှိ စစ်ဆေးခြင်း
-    if (credit > 0) {
-      const cashierBalRow = await db.prepare(
-        "SELECT COALESCE(SUM(debit - credit), 0) as bal FROM pm_cashier_book WHERE fy IN (?, ?) AND responsibility_person = ?"
-      ).bind(cleanFy, `FY ${cleanFy}`, respPerson).first();
-      
-      const curCashierBal = parseFloat(cashierBalRow?.bal || 0);
+    // ⚡ O(1) BATCH VERIFICATION: Cashier လက်ကျန်နှင့် ကျောင်းသားလက်ကျန်ကို တစ်ပြိုင်နက်တည်း အပြိုင်စစ်ဆေးခြင်း
+    const verifyQueries = [
+      db.prepare("SELECT COALESCE(SUM(debit - credit), 0) as bal FROM pm_cashier_book WHERE fy IN (?, ?) AND responsibility_person = ?").bind(cleanFy, `FY ${cleanFy}`, respPerson)
+    ];
 
-      if (credit > curCashierBal) {
-        return {
-          success: false,
-          message: `${respPerson} တွင် ငွေသားလက်ကျန် (${curCashierBal.toLocaleString('en-US')} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString('en-US')} MMK) ထုတ်ပေး/ပြန်လွှဲခွင့် မပြုပါ!`
-        };
-      }
+    if (category === 'PM Withdraw' && body.studentId > 0) {
+      verifyQueries.push(
+        db.prepare("SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND student_id = ?").bind(cleanFy, `FY ${cleanFy}`, body.studentId)
+      );
     }
 
-    // 🛡️ 2. STUDENT OVERDRAFT GUARD: ကျောင်းသားတွင် မုန့်ဖိုးလက်ကျန် လုံလောက်မှုရှိမရှိ စစ်ဆေးခြင်း
-    if (category === 'PM Withdraw' && body.studentId > 0 && credit > 0) {
-      const stuBalRow = await db.prepare(
-        "SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND student_id = ?"
-      ).bind(cleanFy, `FY ${cleanFy}`, body.studentId).first();
-      
-      const curStuBal = parseFloat(stuBalRow?.bal || 0);
+    const verifyRes = await db.batch(verifyQueries);
+    const curCashierBal = parseFloat(verifyRes[0]?.results[0]?.bal || 0);
 
+    // 🛡️ CASHIER FLOAT OVERDRAFT GUARD
+    if (credit > 0 && credit > curCashierBal) {
+      return { success: false, message: `${respPerson} တွင် ငွေသားလက်ကျန် (${curCashierBal.toLocaleString('en-US')} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString('en-US')} MMK) ထုတ်ပေး/ပြန်လွှဲခွင့် မပြုပါ!` };
+    }
+
+    // 🛡️ STUDENT WALLET OVERDRAFT GUARD
+    if (category === 'PM Withdraw' && body.studentId > 0 && credit > 0) {
+      const curStuBal = parseFloat(verifyRes[1]?.results[0]?.bal || 0);
       if (credit > curStuBal) {
-        return {
-          success: false,
-          message: `မုန့်ဖိုးထုတ်ပေးခွင့် မပြုပါ! ကျောင်းသားတွင် လက်ရှိမုန့်ဖိုးလက်ကျန် (${curStuBal.toLocaleString('en-US')} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString('en-US')} MMK) ပိုမိုထုတ်ယူခွင့် မရှိပါ။`
-        };
+        return { success: false, message: `မုန့်ဖိုးထုတ်ပေးခွင့် မပြုပါ! ကျောင်းသားတွင် လက်ရှိမုန့်ဖိုးလက်ကျန် (${curStuBal.toLocaleString('en-US')} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString('en-US')} MMK) ပိုမိုထုတ်ယူခွင့် မရှိပါ။` };
       }
     }
     
@@ -387,13 +351,11 @@ export async function savePmCashierBookEntry(db, session, body) {
     const vrPm = body.vrNo || await generateVoucherNo(db, 'pm_cashier_book', 'PMC', entryDate);
     const batchStatements = [];
 
-    // 1. PM Cashier Entry
     batchStatements.push(
       db.prepare(`INSERT INTO pm_cashier_book (no, date, responsibility_person, category, description, method, debit, credit, balances, vr_no, my, fy, created_by, uniqueid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`)
       .bind(noPm, entryDate, respPerson, category, body.description || '', body.method || 'Cash', debit, credit, vrPm, my, fy, session?.name || 'PM Cashier', uniqueid)
     );
 
-    // 2A. Scenario 1: PM Withdraw -> Deduct from Student Wallet
     if (category === 'PM Withdraw' && body.studentId > 0 && credit > 0) {
       const noStu = await generateFyNo(db, 'student_money', cleanFy);
       const stuName = body.studentName ? `[${body.fyid}] ${body.studentName}` : `[ID ${body.studentId}]`;
@@ -403,9 +365,7 @@ export async function savePmCashierBookEntry(db, session, body) {
         db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?)`)
         .bind(noStu, entryDate, cleanFy, body.studentId, body.fyid || '', stuName, body.studentClass || '', body.method || 'Cash', credit, desc, session?.name || 'PM Cashier', `STM_${uniqueid}`)
       );
-    }
-    // 2B. Scenario 2: Return to Finance -> Record Transition in Student Money Book
-    else if (category === 'Return to Finance' && credit > 0) {
+    } else if (category === 'Return to Finance' && credit > 0) {
       const noStu = await generateFyNo(db, 'student_money', cleanFy);
       const desc = `[PM Cashier] Return Cash from ${respPerson}: ${body.description || ''}`.trim();
 
@@ -417,6 +377,7 @@ export async function savePmCashierBookEntry(db, session, body) {
 
     await db.batch(batchStatements);
 
+    // ⚡ TARGETED RECALCULATION
     await recalculateLedgerBalances(db, 'pm_cashier_book', fy, entryDate);
     if (category === 'PM Withdraw') {
       await recalculateLedgerBalances(db, 'student_money', cleanFy, entryDate);
@@ -437,36 +398,30 @@ export async function deletePmCashierBookEntry(db, session, body) {
     const rawId = uid.replace(/^(STM_|PMC_|CAN_)/, '');
 
     const batchStatements = [
-      // ၁။ PM Cashier စာအုပ်မှ ဖျက်ခြင်း
       db.prepare("DELETE FROM pm_cashier_book WHERE uniqueid = ?").bind(uid),
-
-      // ၂။ Student Money (ကျောင်းသား Wallet / Vault Transfer) စာအုပ်ရှိ ချိတ်ဆက်ထားသော စာရင်းကိုပါ လိုက်ဖျက်ခြင်း
-      db.prepare(`
-        DELETE FROM student_money 
-        WHERE uniqueid IN (?, ?, ?, ?, ?)
-      `).bind(uid, `STM_${uid}`, `STM_${rawId}`, rawId, `PMC_${rawId}`)
+      db.prepare("DELETE FROM student_money WHERE uniqueid IN (?, ?, ?)").bind(uid, `STM_${rawId}`, rawId)
     ];
 
     await db.batch(batchStatements);
 
     const cleanFy = existing.fy ? existing.fy.replace(/^FY\s*/i, '') : '';
     await recalculateLedgerBalances(db, 'pm_cashier_book', `FY ${cleanFy}`, existing.date);
-    await recalculateLedgerBalances(db, 'student_money', cleanFy, existing.date);
+    if (existing.category === 'PM Withdraw') {
+      await recalculateLedgerBalances(db, 'student_money', cleanFy, existing.date);
+    }
 
     return { success: true };
-  } catch (err) { 
-    return { success: false, message: err.message }; 
-  }
+  } catch (err) { return { success: false, message: err.message }; }
 }
 
 // ==============================================================================
-// 💡 3. CANTEEN BOOK
+// 💡 3. CANTEEN BOOK (WITH POS WALLET OVERDRAFT GUARD)
 // ==============================================================================
 
 export async function getCanteenBookData(db, body) {
   try {
     const fy = normalizeFyStr(body.fy || getCurrentAcademicYear());
-    const query = `SELECT * FROM canteen_book WHERE fy = ? ORDER BY date DESC, id DESC LIMIT 2000`;
+    const query = `SELECT * FROM canteen_book WHERE fy = ? ORDER BY date DESC, id DESC LIMIT 500`;
     const res = await db.prepare(query).bind(fy).all();
     return { success: true, data: (res.results || []).map(r => ({ ...r, uniqueId: r.uniqueid })) };
   } catch (err) { return { success: false, message: err.message }; }
@@ -482,21 +437,36 @@ export async function saveCanteenBookEntry(db, session, body) {
     
     const uniqueid = body.uniqueId ? String(body.uniqueId).trim() : generateUniqueId('CAN');
     const category = body.category || 'POS Sales';
-    const debit = parseFloat(body.debit || 0);
+    const debit = Math.round(Math.max(0, parseFloat(body.debit || 0)) * 100) / 100;
     const studentId = parseInt(body.studentId, 10) || null;
+
+    if (debit <= 0) return { success: false, message: "ရောင်းရငွေ ပမာဏကို အတိအကျ ထည့်သွင်းပါ။" };
+
+    // 🛡️ CANTEEN POS OVERDRAFT GUARD: ကျောင်းသား Wallet မှ ဝယ်ယူချိန် လက်ကျန်စစ်ဆေးခြင်း
+    if (category === 'POS Sales' && studentId > 0) {
+      const stuBalRow = await db.prepare(
+        "SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND student_id = ?"
+      ).bind(cleanFy, `FY ${cleanFy}`, studentId).first();
+      
+      const curStuBal = parseFloat(stuBalRow?.bal || 0);
+      if (debit > curStuBal) {
+        return {
+          success: false,
+          message: `ကန်တင်းအရောင်း မအောင်မြင်ပါ! ကျောင်းသားတွင် မုန့်ဖိုးလက်ကျန် (${curStuBal.toLocaleString('en-US')} MMK) သာ ရှိသဖြင့် (${debit.toLocaleString('en-US')} MMK) ပိုမိုဖြတ်တောက်၍ မရပါ။`
+        };
+      }
+    }
     
     const noCan = await generateFyNo(db, 'canteen_book', fy);
     const vrCan = body.vrNo || await generateVoucherNo(db, 'canteen_book', 'CAN', entryDate);
     const batchStatements = [];
 
-    // 1. Debit Canteen Book
     batchStatements.push(
       db.prepare(`INSERT INTO canteen_book (no, date, category, description, method, debit, credit, balances, vr_no, my, fy, created_by, uniqueid) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)`)
       .bind(noCan, entryDate, category, body.description || '', body.method || 'Transfer', debit, vrCan, my, fy, session?.name || 'System', uniqueid)
     );
 
-    // 2. Deduct from Student Money
-    if (category === 'POS Sales' && studentId > 0 && debit > 0) {
+    if (category === 'POS Sales' && studentId > 0) {
       const noStu = await generateFyNo(db, 'student_money', cleanFy);
       const stuName = body.studentName ? `[${body.fyid}] ${body.studentName}` : `[ID ${studentId}]`;
       const desc = `[Canteen] POS Sales: ${body.description || ''}`.trim();
@@ -509,8 +479,11 @@ export async function saveCanteenBookEntry(db, session, body) {
 
     await db.batch(batchStatements);
 
+    // ⚡ TARGETED RECALCULATION
     await recalculateLedgerBalances(db, 'canteen_book', fy, entryDate);
-    if (category === 'POS Sales') await recalculateLedgerBalances(db, 'student_money', cleanFy, entryDate);
+    if (category === 'POS Sales' && studentId > 0) {
+      await recalculateLedgerBalances(db, 'student_money', cleanFy, entryDate);
+    }
 
     return { success: true, uniqueId: uniqueid };
   } catch (err) { return { success: false, message: err.message }; }
@@ -527,26 +500,20 @@ export async function deleteCanteenBookEntry(db, session, body) {
     const rawId = uid.replace(/^(STM_|PMC_|CAN_)/, '');
 
     const batchStatements = [
-      // ၁။ Canteen စာအုပ်မှ ဖျက်ခြင်း
       db.prepare("DELETE FROM canteen_book WHERE uniqueid = ?").bind(uid),
-
-      // ၂။ Student Money ကျောင်းသား Wallet စာအုပ်မှ အလိုအလျောက် လိုက်ဖျက်ခြင်း
-      db.prepare(`
-        DELETE FROM student_money 
-        WHERE uniqueid IN (?, ?, ?, ?, ?)
-      `).bind(uid, `STM_${uid}`, `STM_${rawId}`, rawId, `CAN_${rawId}`)
+      db.prepare("DELETE FROM student_money WHERE uniqueid IN (?, ?, ?)").bind(uid, `STM_${rawId}`, rawId)
     ];
 
     await db.batch(batchStatements);
 
     const cleanFy = existing.fy ? existing.fy.replace(/^FY\s*/i, '') : '';
     await recalculateLedgerBalances(db, 'canteen_book', `FY ${cleanFy}`, existing.date);
-    await recalculateLedgerBalances(db, 'student_money', cleanFy, existing.date);
+    if (existing.category === 'POS Sales') {
+      await recalculateLedgerBalances(db, 'student_money', cleanFy, existing.date);
+    }
 
     return { success: true };
-  } catch (err) { 
-    return { success: false, message: err.message }; 
-  }
+  } catch (err) { return { success: false, message: err.message }; }
 }
 
 // ==============================================================================
@@ -558,17 +525,13 @@ export async function getSpmmsReconciliation(db, body) {
     const fy = normalizeFyStr(body.fy || getCurrentAcademicYear()).replace(/^FY\s*/i, '');
     
     const [stuBalRes, pmBalRes] = await db.batch([
-      // 1. Total Student Virtual Liability (Only genuine student balances)
       db.prepare("SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND student_id IS NOT NULL").bind(fy, `FY ${fy}`),
-      
-      // 2. Total PM Cashier Physical Cash in Hand
       db.prepare("SELECT COALESCE(SUM(debit - credit), 0) as bal FROM pm_cashier_book WHERE fy IN (?, ?)").bind(fy, `FY ${fy}`)
     ]);
 
     const totalVirtual = parseFloat(stuBalRes.results[0]?.bal || 0);
     const totalCashier = parseFloat(pmBalRes.results[0]?.bal || 0);
 
-    // 3. Finance Vault Physical Cash = Total Student Trust Liability - PM Cashier Float Cash
     const totalFinance = totalVirtual - totalCashier;
     const totalPhysicalCash = totalFinance + totalCashier;
 
@@ -586,7 +549,5 @@ export async function getSpmmsReconciliation(db, body) {
         isMatched
       }
     };
-  } catch (err) {
-    return { success: false, message: err.message };
-  }
+  } catch (err) { return { success: false, message: err.message }; }
 }

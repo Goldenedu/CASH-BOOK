@@ -112,7 +112,7 @@ async function writeAuditLog(db, sessionOrUser, actionType, moduleOrPayload = {}
 }
 
 // ==============================================================================
-// 💡 3. CRYPTOGRAPHIC JWT & PBKDF2 PASSWORD ENGINE (Dynamic JWT EXPIRY Support)
+// 💡 3. CRYPTOGRAPHIC JWT & PBKDF2 PASSWORD ENGINE (0 D1 READ ON VERIFY)
 // ==============================================================================
 function base64UrlEncode(bytesOrStr) {
   const bytes = typeof bytesOrStr === "string" ? new TextEncoder().encode(bytesOrStr) : bytesOrStr;
@@ -232,7 +232,7 @@ async function resetLoginAttempts(db, username) {
 }
 
 // ==============================================================================
-// 💡 5. SAFE GLOBAL RECALCULATOR ENGINE (⚡ QUOTA-SHIELD PROTECTED)
+// 💡 5. SAFE GLOBAL RECALCULATOR ENGINE (⚡ QUOTA-SHIELD & TRANSIT-SAFE)
 // ==============================================================================
 async function executeAutoRecalculateAll(db, body = {}) {
   const rawBook = body.bookName || body.tableName || body.book || "";
@@ -266,14 +266,14 @@ async function executeAutoRecalculateAll(db, body = {}) {
   for (const tbl of targetTables) {
     try {
       if (tbl === 'student_money') {
+        // 🎯 FIX: student_id IS NULL ဖြစ်သော Transfer row များကို Balance = 0 သတ်မှတ်ပြီး ကျောင်းသားတစ်ဦးချင်းကိုသာ Partition တွက်ချက်ခြင်း
         if (targetFy) {
           if (fromDate) {
-            // 🚀 INCREMENTAL RECALC WITH BASE ROW
             await db.prepare(`
               WITH base AS (
                 SELECT sm.student_id, sm.balances as base_bal
                 FROM student_money sm
-                WHERE sm.fy IN (?, ?) AND sm.date < ?
+                WHERE sm.fy IN (?, ?) AND sm.date < ? AND sm.student_id IS NOT NULL
                   AND sm.id = (
                     SELECT id FROM student_money sm2
                     WHERE sm2.student_id = sm.student_id AND sm2.fy IN (?, ?) AND sm2.date < ?
@@ -283,33 +283,40 @@ async function executeAutoRecalculateAll(db, body = {}) {
               calculated AS (
                 SELECT sm.id,
                        ROW_NUMBER() OVER (ORDER BY sm.date ASC, sm.id ASC) as calc_no,
-                       COALESCE(base.base_bal, 0) + SUM(sm.debit - sm.credit) OVER (
-                         PARTITION BY sm.student_id 
-                         ORDER BY sm.date ASC, sm.id ASC 
-                         ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                       ) as calc_bal
+                       CASE 
+                         WHEN sm.student_id IS NOT NULL THEN
+                           COALESCE(base.base_bal, 0) + SUM(sm.debit - sm.credit) OVER (
+                             PARTITION BY sm.student_id 
+                             ORDER BY sm.date ASC, sm.id ASC 
+                             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                           )
+                         ELSE 0
+                       END as calc_bal
                 FROM student_money sm
                 LEFT JOIN base ON base.student_id = sm.student_id
                 WHERE sm.fy IN (?, ?) AND sm.date >= ?
               )
               UPDATE student_money 
-              SET no = (SELECT no FROM student_money sm3 WHERE sm3.fy IN (?, ?) AND sm3.date < ? ORDER BY date DESC, id DESC LIMIT 1) + calculated.calc_no, 
+              SET no = (SELECT COALESCE(MAX(no), 0) FROM student_money sm3 WHERE sm3.fy IN (?, ?) AND sm3.date < ?) + calculated.calc_no, 
                   balances = calculated.calc_bal 
               FROM calculated 
               WHERE student_money.id = calculated.id
-                AND (student_money.no IS NOT ((SELECT no FROM student_money sm3 WHERE sm3.fy IN (?, ?) AND sm3.date < ? ORDER BY date DESC, id DESC LIMIT 1) + calculated.calc_no) OR ROUND(student_money.balances, 2) IS NOT ROUND(calculated.calc_bal, 2));
+                AND (student_money.no IS NOT ((SELECT COALESCE(MAX(no), 0) FROM student_money sm3 WHERE sm3.fy IN (?, ?) AND sm3.date < ?) + calculated.calc_no) OR ROUND(student_money.balances, 2) IS NOT ROUND(calculated.calc_bal, 2));
             `).bind(targetFy, `FY ${targetFy}`, fromDate, targetFy, `FY ${targetFy}`, fromDate, targetFy, `FY ${targetFy}`, fromDate, targetFy, `FY ${targetFy}`, fromDate, targetFy, `FY ${targetFy}`, fromDate).run();
           } else {
-            // FULL RECALC
             await db.prepare(`
               WITH calculated AS (
                 SELECT id, 
                        ROW_NUMBER() OVER (ORDER BY date ASC, id ASC) as new_no,
-                       SUM(debit - credit) OVER (
-                         PARTITION BY student_id 
-                         ORDER BY date ASC, id ASC 
-                         ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                       ) as calc_bal
+                       CASE 
+                         WHEN student_id IS NOT NULL THEN
+                           SUM(debit - credit) OVER (
+                             PARTITION BY student_id 
+                             ORDER BY date ASC, id ASC 
+                             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                           )
+                         ELSE 0
+                       END as calc_bal
                 FROM student_money
                 WHERE fy IN (?, ?)
               )
@@ -325,11 +332,15 @@ async function executeAutoRecalculateAll(db, body = {}) {
             WITH calculated AS (
               SELECT id, 
                      ROW_NUMBER() OVER (PARTITION BY fy ORDER BY date ASC, id ASC) as new_no,
-                     SUM(debit - credit) OVER (
-                       PARTITION BY student_id 
-                       ORDER BY date ASC, id ASC 
-                       ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                     ) as calc_bal
+                     CASE 
+                       WHEN student_id IS NOT NULL THEN
+                         SUM(debit - credit) OVER (
+                           PARTITION BY student_id 
+                           ORDER BY date ASC, id ASC 
+                           ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                         )
+                       ELSE 0
+                     END as calc_bal
               FROM student_money
             )
             UPDATE student_money 
@@ -378,7 +389,6 @@ async function executeAutoRecalculateAll(db, body = {}) {
         // bank, cash, office, canteen_book, pm_cashier_book etc
         if (targetFy) {
           if (fromDate) {
-            // 🚀 INCREMENTAL RECALC
             const baseRow = await db.prepare(`SELECT no, balances FROM ${tbl} WHERE fy IN (?, ?) AND date < ? ORDER BY date DESC, id DESC LIMIT 1`).bind(targetFy, `FY ${targetFy}`, fromDate).first();
             const baseNo = baseRow ? (parseInt(baseRow.no, 10) || 0) : 0;
             const baseBal = baseRow ? (parseFloat(baseRow.balances) || 0) : 0;
@@ -401,7 +411,6 @@ async function executeAutoRecalculateAll(db, body = {}) {
                 AND (${tbl}.no IS NOT calculated.new_no OR ROUND(${tbl}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2));
             `).bind(baseNo, baseBal, targetFy, `FY ${targetFy}`, fromDate).run();
           } else {
-            // FULL RECALC
             await db.prepare(`
               WITH calculated AS (
                 SELECT id, 
@@ -603,7 +612,7 @@ export default {
           result = await CashierHandlers.deleteCashierEntry(db, userSession, body); break;
 
         // ==========================================================
-        // 💡 SPMMS 3-LEDGERS SYSTEM API ROUTES
+        // 💡 SPMMS 3-LEDGERS SYSTEM API ROUTES (STRICT ZERO-ESCALATION RBAC)
         // ==========================================================
         case 'getStudentMoneyData':
         case 'getStudentMoneySummary':
@@ -611,11 +620,14 @@ export default {
           if (action === 'getStudentMoneySummary') result = await StudentMoneyHandlers.getStudentMoneySummary(db, body);
           else result = await StudentMoneyHandlers.getStudentMoneyData(db, body);
           break;
+
         case 'saveStudentMoneyEntry':
-          if (!can(userSession, 'ledger_write') && !can(userSession, 'cashier_write')) return forbidden(corsHeaders);
+          // 🛡️ SECURITY ENFORCED: Finance ပင်မငွေစာရင်းအုပ်အား Admin/Finance/Accountant (ledger_write) သာ ခွင့်ပြုသည်
+          if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders, "Student Money ပင်မစာအုပ်တွင် စာရင်းသွင်းခွင့် မရှိပါ။");
           result = await StudentMoneyHandlers.saveStudentMoneyEntry(db, userSession, body); break;
+
         case 'deleteStudentMoneyEntry':
-          if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders);
+          if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders, "Student Money ပင်မစာအုပ်မှ စာရင်းဖျက်သိမ်းခွင့် မရှိပါ။");
           result = await StudentMoneyHandlers.deleteStudentMoneyEntry(db, userSession, body); break;
 
         case 'getCanteenBookData':
@@ -625,7 +637,7 @@ export default {
           if (!can(userSession, 'ledger_write') && !can(userSession, 'cashier_write')) return forbidden(corsHeaders);
           result = await StudentMoneyHandlers.saveCanteenBookEntry(db, userSession, body); break;
         case 'deleteCanteenBookEntry':
-          if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders);
+          if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders, "Canteen စာရင်းဖျက်သိမ်းခွင့် မရှိပါ။");
           result = await StudentMoneyHandlers.deleteCanteenBookEntry(db, userSession, body); break;
 
         case 'getPmCashierBookData':
@@ -635,11 +647,11 @@ export default {
           if (!can(userSession, 'ledger_write') && !can(userSession, 'cashier_write')) return forbidden(corsHeaders);
           result = await StudentMoneyHandlers.savePmCashierBookEntry(db, userSession, body); break;
         case 'deletePmCashierBookEntry':
-          if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders);
+          if (!can(userSession, 'ledger_write') && !can(userSession, 'cashier_write')) return forbidden(corsHeaders);
           result = await StudentMoneyHandlers.deletePmCashierBookEntry(db, userSession, body); break;
 
         case 'getSpmmsReconciliation':
-          if (!can(userSession, 'report_read')) return forbidden(corsHeaders);
+          if (!can(userSession, 'report_read') && !can(userSession, 'ledger_read')) return forbidden(corsHeaders);
           result = await StudentMoneyHandlers.getSpmmsReconciliation(db, body); break;
         // ==========================================================
 
@@ -741,7 +753,7 @@ export default {
           return new Response(JSON.stringify({ success: false, message: `Action '${action}' မဟုတ်ပါ သို့မဟုတ် မပံ့ပိုးသေးပါ။` }), { headers: corsHeaders });
       }
 
-      // 🛡️ D1 AUDIT LOGGING
+      // 🛡️ D1 AUDIT LOGGING (NON-BLOCKING)
       const isMutatingAction = /^(save|update|delete|export|send|recalculate)/i.test(action);
       if (isMutatingAction && result && result.success !== false && userSession) {
         if (ctx && typeof ctx.waitUntil === 'function') {
