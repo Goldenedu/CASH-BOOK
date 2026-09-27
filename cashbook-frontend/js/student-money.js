@@ -239,6 +239,7 @@ function closeStudentMoneyModal() {
   document.getElementById('student-money-modal')?.classList.add('hidden'); 
 }
 
+// 🎯 ၁။ Action Type အလိုက် Input Box များအား Enable / Disable အတိအကျ သတ်မှတ်ခြင်း
 function onStudentMoneyEntryTypeChange() {
   const type = document.getElementById('stm-entry-type')?.value || 'Deposit';
   const stuBox = document.getElementById('stm-student-fields');
@@ -247,24 +248,48 @@ function onStudentMoneyEntryTypeChange() {
   const cred = document.getElementById('stm-credit');
   const desc = document.getElementById('stm-remark');
 
+  // Input Box စတိုင်လ် အပိတ်/အဖွင့် Helper
+  const lockInput = (el) => {
+    if (!el) return;
+    el.disabled = true;
+    el.value = 0;
+    el.classList.add('opacity-40', 'cursor-not-allowed', 'bg-slate-900/80');
+    el.classList.remove('focus:border-indigo-500', 'focus:border-emerald-500', 'focus:border-rose-500');
+  };
+
+  const unlockInput = (el) => {
+    if (!el) return;
+    el.disabled = false;
+    el.classList.remove('opacity-40', 'cursor-not-allowed', 'bg-slate-900/80');
+  };
+
   if (type === 'Transfer to PM Cashier') {
     if (stuBox) stuBox.classList.add('hidden');
     if (respBox) respBox.classList.remove('hidden');
-    if (deb) { deb.disabled = true; deb.value = 0; }
-    if (cred) cred.disabled = false;
+
+    lockInput(deb);    // အရင်းလွှဲချိန်တွင် အပ်ငွေ (Debit) ကို ပိတ်မည်
+    unlockInput(cred); // Credit သာ ရိုက်ခွင့်ပြုမည်
     if (desc) desc.value = "Finance မှ PM Cashier သို့ အရင်းငွေလွှဲပေးခြင်း";
+
   } else {
     if (stuBox) stuBox.classList.remove('hidden');
     if (respBox) respBox.classList.add('hidden');
-    if (deb) deb.disabled = false;
-    if (cred) cred.disabled = false;
 
     if (type === 'Deposit') {
-      if (cred) cred.value = 0;
-      if (desc && (!desc.value || desc.value.includes('ငွေပြန်ထုတ်'))) desc.value = "ကျောင်းသား မုန့်ဖိုးအပ်ငွေ";
+      // 🌟 DEPOSIT: အပ်ငွေ (Debit) သာ ရိုက်ခွင့်ပြုပြီး ထုတ်ငွေ (Credit) ကို လုံးဝ ပိတ်ထားမည်
+      unlockInput(deb);
+      lockInput(cred);
+      if (desc && (!desc.value || desc.value.includes('ငွေပြန်ထုတ်') || desc.value.includes('အရင်းငွေလွှဲ'))) {
+        desc.value = "ကျောင်းသား မုန့်ဖိုးအပ်ငွေ";
+      }
+
     } else if (type === 'Withdraw') {
-      if (deb) deb.value = 0;
-      if (desc && (!desc.value || desc.value.includes('မုန့်ဖိုးအပ်ငွေ'))) desc.value = "ကျောင်းသားအား ငွေသားပြန်ထုတ်ပေးခြင်း";
+      // 🌟 WITHDRAW: ထုတ်ငွေ (Credit) သာ ရိုက်ခွင့်ပြုပြီး အပ်ငွေ (Debit) ကို လုံးဝ ပိတ်ထားမည်
+      lockInput(deb);
+      unlockInput(cred);
+      if (desc && (!desc.value || desc.value.includes('မုန့်ဖိုးအပ်ငွေ') || desc.value.includes('အရင်းငွေလွှဲ'))) {
+        desc.value = "ကျောင်းသားအား ငွေသားပြန်ထုတ်ပေးခြင်း";
+      }
     }
   }
 }
@@ -360,14 +385,15 @@ async function saveStudentMoneyForm(e) {
 
   const entryTypeSelect = document.getElementById('stm-entry-type');
   const entryType = (entryTypeSelect?.value || 'Deposit').trim();
-  const credit = parseFloat(document.getElementById('stm-credit')?.value || 0);
-  const debit = parseFloat(document.getElementById('stm-debit')?.value || 0);
+  let credit = parseFloat(document.getElementById('stm-credit')?.value || 0);
+  let debit = parseFloat(document.getElementById('stm-debit')?.value || 0);
   const studentId = parseInt(document.getElementById('stm-id-search')?.value, 10) || 0;
 
   const isTransfer = entryType.toLowerCase().includes('transfer') || entryType.toLowerCase().includes('အရင်းလွှဲ');
 
   // 1. Validation Before Closing Modal
   if (isTransfer) {
+    debit = 0; // 🛡️ Transfer ဖြစ်ပါက Debit ကို အမြဲတမ်း 0 သတ်မှတ်သည်
     if (credit <= 0) return showToast("ERROR", "PM Cashier သို့ လွှဲမည့် Credit ငွေပမာဏ ထည့်သွင်းပါ။");
 
     const trustBalText = document.getElementById('stm-balance')?.textContent || '0';
@@ -379,10 +405,19 @@ async function saveStudentMoneyForm(e) {
     if (credit > availableFinanceCash) {
       return showToast("ERROR", `Finance Vault တွင် လက်ကျန်ငွေသား (${availableFinanceCash.toLocaleString()} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString()} MMK) ပိုမိုလွှဲပြောင်း၍ မရပါ!`);
     }
-  } else {
-    if (!studentId || (debit <= 0 && credit <= 0)) return showToast("ERROR", "ကျောင်းသား ID နှင့် ငွေပမာဏ အတိအကျ ထည့်ပါ။");
 
-    if (entryType === 'Withdraw' && credit > 0) {
+  } else {
+    // Regular Student Entry
+    if (!studentId) return showToast("ERROR", "ကျောင်းသား ID အတိအကျ ထည့်ပါ။");
+
+    if (entryType === 'Deposit') {
+      credit = 0; // 🛡️ Deposit တွင် Credit ကို လုံးဝ 0 သတ်မှတ်သည်
+      if (debit <= 0) return showToast("ERROR", "ကျောင်းသား အပ်ငွေ (Deposit) ပမာဏ ထည့်သွင်းပါ။");
+
+    } else if (entryType === 'Withdraw') {
+      debit = 0; // 🛡️ Withdraw တွင် Debit ကို လုံးဝ 0 သတ်မှတ်သည်
+      if (credit <= 0) return showToast("ERROR", "ကျောင်းသား ထုတ်ယူမည့် (Withdraw) ငွေပမာဏ ထည့်သွင်းပါ။");
+
       const liveBalText = document.getElementById('stm-wallet-live-amount')?.textContent || '0';
       const liveBal = parseFloat(liveBalText.replace(/[^0-9.-]+/g, "")) || 0;
       if (credit > liveBal) {

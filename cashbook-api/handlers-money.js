@@ -243,9 +243,12 @@ export async function saveStudentMoneyEntry(db, session, body) {
 
     } else {
       if (!studentId || studentId <= 0) return { success: false, message: "ကျောင်းသား ID အတိအကျ ထည့်သွင်းပေးပါ။" };
-      if (debit <= 0 && credit <= 0) return { success: false, message: "အပ်ငွေ (Deposit) သို့မဟုတ် ထုတ်ငွေ (Withdraw) ပမာဏ ထည့်သွင်းပေးပါ။" };
 
-      if (rawType.toLowerCase().includes('withdraw') && credit > 0) {
+      // 🛡️ ACTION TYPE LOCK: Deposit ဖြစ်ပါက Debit သာ စစ်ဆေးပြီး Credit ကို 0 သတ်မှတ်သည်
+      if (rawType.toLowerCase().includes('withdraw')) {
+        debit = 0; // Force debit to 0
+        if (credit <= 0) return { success: false, message: "ထုတ်ယူမည့်ငွေ (Withdraw) ပမာဏ ထည့်သွင်းပေးပါ။" };
+
         const stuBalRow = await db.prepare(
           "SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND student_id = ?"
         ).bind(cleanFy, `FY ${cleanFy}`, studentId).first();
@@ -257,6 +260,10 @@ export async function saveStudentMoneyEntry(db, session, body) {
             message: `ငွေထုတ်ယူခွင့် မပြုပါ! ကျောင်းသားတွင် လက်ရှိမုန့်ဖိုးလက်ကျန် (${curStuBal.toLocaleString('en-US')} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString('en-US')} MMK) ပိုမိုထုတ်ယူခွင့် မရှိပါ။`
           };
         }
+      } else {
+        // 🌟 DEPOSIT အဖြစ် သတ်မှတ်ခြင်း
+        credit = 0; // Force credit to 0 (ဘယ်သောအခါမှ Deposit တွင် Credit ဝင်ခွင့်မရှိပါ)
+        if (debit <= 0) return { success: false, message: "အပ်ငွေ (Deposit) ပမာဏ ထည့်သွင်းပေးပါ။" };
       }
 
       const noStu = await generateFyNo(db, 'student_money', cleanFy);
