@@ -204,21 +204,32 @@ export async function lookupStudentForPos(db, body) {
     const cleanFy = fyVal.replace(/^FY\s*/i, '');
     const stuIdNum = parseInt(rawInput, 10) || 0;
 
-    // အဆင့် ၁ - ကျောင်းသားအား ID, FYID, NFC တို့ဖြင့် ဦးစွာ တိကျစွာ ရှာဖွေခြင်း
-    const student = await db.prepare(`
-      SELECT student_id as studentId, name, class, fyid 
-      FROM students 
-      WHERE (student_id = ? OR id = ? OR fyid = ? OR nfc_tag_id = ?) LIMIT 1
-    `).bind(stuIdNum, stuIdNum, rawInput, rawInput).first();
+    let student = null;
+
+    // 🎯 FIX: 'students' အစား 'student' (အနည်းကိန်း) သို့ ပြင်ဆင်ပြီး nfc_tag_id မရှိသေးပါကပါ အလိုအလျောက် fallback လုပ်မည့် စနစ်
+    try {
+      student = await db.prepare(`
+        SELECT student_id as studentId, id, name, class, fyid 
+        FROM student 
+        WHERE (student_id = ? OR id = ? OR fyid = ? OR nfc_tag_id = ?) LIMIT 1
+      `).bind(stuIdNum, stuIdNum, rawInput, rawInput).first();
+    } catch (e) {
+      // nfc_tag_id column မရှိသေးပါက standard query ဖြင့်သာ ရှာဖွေခြင်း
+      student = await db.prepare(`
+        SELECT student_id as studentId, id, name, class, fyid 
+        FROM student 
+        WHERE (student_id = ? OR id = ? OR fyid = ?) LIMIT 1
+      `).bind(stuIdNum, stuIdNum, rawInput).first();
+    }
 
     if (!student) {
       return { success: false, message: "ကျောင်းသား ရှာမတွေ့ပါ။ ID သို့မဟုတ် QR စစ်ဆေးပါ။" };
     }
 
-    const realStudentId = student.studentId;
+    const realStudentId = parseInt(student.studentId || student.id, 10);
     const realFyid = student.fyid || rawInput;
 
-    // အဆင့် ၂ - ရရှိလာသော အမှန်တကယ် Student ID ဖြင့် လက်ကျန်ငွေနှင့် ယနေ့သုံးငွေကို တစ်ပြိုင်နက် ဆွဲယူခြင်း
+    // ⚡ O(1) Composite Batch: ကျောင်းသား မုန့်ဖိုးလက်ကျန် နှင့် ယနေ့ သုံးစွဲပြီးငွေ ဆွဲယူခြင်း
     const [balRow, spentRow] = await db.batch([
       db.prepare(`
         SELECT COALESCE(SUM(debit - credit), 0) as bal 
@@ -227,7 +238,6 @@ export async function lookupStudentForPos(db, body) {
           AND (student_id = ? OR CAST(student_id AS TEXT) = ? OR (fyid IS NOT NULL AND fyid = ?))
       `).bind(cleanFy, `FY ${cleanFy}`, realStudentId, String(realStudentId), realFyid),
 
-      // 🎯 FIX: stuIdNum အစား အစစ်အမှန် realStudentId ဖြင့် စစ်ဆေးသဖြင့် QR ဖတ်လည်း ၁၀၀% အလုပ်လုပ်သည်
       db.prepare(`
         SELECT COALESCE(SUM(total_amount), 0) as todaySpent 
         FROM pos_sales_orders 
