@@ -732,6 +732,25 @@ export default {
         case 'getCanteenSettlements':
           if (!can(userSession, 'ledger_read') && !can(userSession, 'canteen_settle')) return forbidden(corsHeaders);
           result = await CanteenPosHandlers.getCanteenSettlements(db, body); break;
+
+        // ==========================================================
+        // 💡 CANTEEN POS & MANAGEMENT EXTENSIONS
+        // ==========================================================
+        case 'getCanteenDashboardMetrics':
+          if (!can(userSession, 'pos_read') && !can(userSession, 'ledger_read')) return forbidden(corsHeaders);
+          result = await CanteenPosHandlers.getCanteenDashboardMetrics(db, body); break;
+
+        case 'getPosPurchasesHistory':
+          if (!can(userSession, 'pos_read') && !can(userSession, 'ledger_read')) return forbidden(corsHeaders);
+          result = await CanteenPosHandlers.getPosPurchasesHistory(db, body); break;
+
+        case 'getPosStockInventory':
+          if (!can(userSession, 'pos_read') && !can(userSession, 'ledger_read')) return forbidden(corsHeaders);
+          result = await CanteenPosHandlers.getPosStockInventory(db, body); break;
+
+        case 'updatePosItemQuick':
+          if (!can(userSession, 'pos_admin') && !can(userSession, 'ledger_write')) return forbidden(corsHeaders);
+          result = await CanteenPosHandlers.updatePosItemQuick(db, userSession, body); break;
         // ==========================================================
 
         case 'getStudentData':

@@ -1,23 +1,144 @@
 /**
  * ==============================================================================
- * GOLDEN ERP SYSTEM - CANTEEN POS CLIENT CONTROLLER
+ * GOLDEN ERP SYSTEM - CANTEEN POS & MANAGEMENT CLIENT CONTROLLER
  * File: js/canteen-pos.js (Location: cashbook-frontend/js/canteen-pos.js)
  * 
- * 💡 Features:
- *   1. ⚡ IN-MEMORY CART: O(1) LocalStorage item lookup & real-time aggregation
- *   2. 🛡️ STUDENT RADAR: 10,000 MMK daily cap warning progress bar
- *   3. 🖨️ POS THERMAL RECEIPT: 80mm ESC-POS printer slip generator
- *   4. ⌨️ HARDWARE SCANNER & HOTKEYS: F2 (Wallet), F4 (Cash), Esc (Clear Cart)
+ * 💡 Architecture & Blueprint V4:
+ *   1. 🏛️ MULTI-VIEW ROUTER: Dashboard, POS Register, Stock Inventory & Purchases
+ *   2. 📊 EXECUTIVE DASHBOARD: 1-Batch Atomic Metrics (Today & All-Time KPI Cards)
+ *   3. 📦 REAL-TIME STOCK AUDITOR: Low-Stock Alerts & Quick Price/Stock Editor
+ *   4. 🛒 PURCHASES & SUPPLIERS: Server-Side Paginated Multi-Filter Audit
+ *   5. ⚡ IN-MEMORY CART & RADAR: O(1) Fast Scanner, 10,000 MMK Guard & Thermal Receipt
  * ==============================================================================
  */
 
-// 🎯 Application State
+// 🎯 Application Global States
 let gSession = null;
-let gItemsCache = [];       // Local Product Catalog Cache
+let gActiveView = 'pos';     // 'dashboard', 'pos', 'stock', 'purchases'
+let gItemsCache = [];       // O(1) Local Product Catalog Cache
+let gSuppliersCache = [];   // Suppliers Master Cache
 let gCart = [];             // Dynamic In-Memory Cart State Array
 let gCurrentStudent = null; // Scanned Student Object
 let gPaymentMode = 'Student Pocket Money'; // 'Student Pocket Money' or 'Cash'
 let isSubmitting = false;
+
+// Pagination & Filter States for Purchases
+let gPurchasesPage = 1;
+const gPurchasesLimit = 20;
+let gPurchasesTotalRows = 0;
+let gPurSearchTimeout = null;
+let gStockSearchTimeout = null;
+
+// Safe Escape Helper
+const esc = window.escapeHtml || (s => s ? String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : '');
+const escAttr = window.escapeJsAttr || (s => s ? String(s).replace(/'/g, "\\'") : '');
+
+// ==============================================================================
+// 💡 1. CORE INITIALIZATION & ROLE-BASED WORKSPACE ROUTER
+// ==============================================================================
+window.addEventListener('DOMContentLoaded', async () => {
+  const userStr = localStorage.getItem('golden_user') || localStorage.getItem('user');
+  const token = localStorage.getItem('golden_auth_token') || localStorage.getItem('token');
+
+  if (!userStr || !token) {
+    window.location.href = '/';
+    return;
+  }
+
+  gSession = JSON.parse(userStr);
+  const role = (gSession.role || 'Cashier').trim();
+
+  // Role Display
+  const roleBadge = document.getElementById('pos-role-badge');
+  if (roleBadge) roleBadge.textContent = role.toUpperCase();
+  const sideRole = document.getElementById('side-user-role');
+  if (sideRole) sideRole.textContent = role.toUpperCase();
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const dateEl = document.getElementById('pos-today-date');
+  if (dateEl) dateEl.textContent = todayStr;
+  const sideDateEl = document.getElementById('side-today-date');
+  if (sideDateEl) sideDateEl.textContent = todayStr;
+
+  // 🎯 COUNTER ROLE ISOLATION: Counter 1, 2, 3 များသည် Fullscreen POS သာ သုံးရမည် (Sidebar ပိတ်ထားမည်)
+  if (role.startsWith('counter')) {
+    const sidebar = document.getElementById('canteen-sidebar');
+    if (sidebar) sidebar.classList.add('hidden');
+    const toggleBtn = document.getElementById('btn-toggle-sidebar');
+    if (toggleBtn) toggleBtn.classList.add('hidden');
+    const btnAdmin = document.getElementById('btn-admin-stock');
+    if (btnAdmin) btnAdmin.classList.add('hidden');
+    switchCanteenView('pos');
+  } else if (role === 'canteen_cashier') {
+    // Canteen Cashier: အဝယ်စာရင်းသွင်းခွင့် ပိတ်ထားမည်
+    const btnAdmin = document.getElementById('btn-admin-stock');
+    if (btnAdmin) btnAdmin.classList.add('hidden');
+    switchCanteenView('pos');
+  } else {
+    // Canteen Admin / Owner: ပင်မ Dashboard သို့ ဦးစွာ ပို့ဆောင်မည်
+    switchCanteenView('dashboard');
+  }
+
+  // Bind Keyboard Hotkeys
+  window.addEventListener('keydown', handleGlobalHotkeys);
+
+  // Background Data Pre-fetch
+  await Promise.all([
+    loadItemsCatalog(false),
+    loadSuppliersList()
+  ]);
+  
+  focusScanner();
+});
+
+// 🎯 View Switcher Router
+function switchCanteenView(viewName) {
+  gActiveView = viewName;
+  const views = ['dashboard', 'pos', 'stock', 'purchases'];
+
+  views.forEach(v => {
+    const el = document.getElementById(`view-${v}`);
+    const navBtn = document.getElementById(`nav-btn-${v}`);
+    if (el) el.classList.toggle('hidden', v !== viewName);
+    
+    if (navBtn) {
+      if (v === viewName) {
+        navBtn.className = "w-full px-3 py-2.5 rounded-xl transition flex items-center gap-3 bg-emerald-600 text-white shadow-lg shadow-emerald-900/30";
+      } else {
+        navBtn.className = "w-full px-3 py-2.5 rounded-xl transition flex items-center gap-3 text-slate-400 hover:text-white hover:bg-slate-800/50";
+      }
+    }
+  });
+
+  const titleEl = document.getElementById('canteen-view-title');
+  if (titleEl) {
+    const titles = {
+      dashboard: 'CANTEEN EXECUTIVE DASHBOARD',
+      pos: 'CANTEEN POS REGISTER TERMINAL',
+      stock: 'REAL-TIME STOCK INVENTORY AUDITOR',
+      purchases: 'PURCHASES & SUPPLIERS AUDIT HISTORY'
+    };
+    titleEl.textContent = titles[viewName] || 'CANTEEN POS SYSTEM';
+  }
+
+  // Load Data by View
+  if (viewName === 'dashboard') loadCanteenDashboard();
+  else if (viewName === 'stock') loadStockInventory();
+  else if (viewName === 'purchases') loadPurchasesHistory(1);
+  else if (viewName === 'pos') focusScanner();
+}
+
+function refreshActiveCanteenView() {
+  if (gActiveView === 'dashboard') loadCanteenDashboard();
+  else if (gActiveView === 'stock') loadStockInventory();
+  else if (gActiveView === 'purchases') loadPurchasesHistory(gPurchasesPage);
+  else if (gActiveView === 'pos') loadItemsCatalog(true);
+}
+
+function toggleCanteenSidebar() {
+  const sidebar = document.getElementById('canteen-sidebar');
+  if (sidebar) sidebar.classList.toggle('hidden');
+}
 
 // Center Toast Alert Engine
 function showToast(type, msg) {
@@ -35,56 +156,14 @@ function showToast(type, msg) {
   setTimeout(() => { if (box) box.innerHTML = ''; }, 3200);
 }
 
-// 🚀 Initialize App on Load
-window.addEventListener('DOMContentLoaded', async () => {
-  const userStr = localStorage.getItem('golden_user') || localStorage.getItem('user');
-  const token = localStorage.getItem('golden_auth_token') || localStorage.getItem('token');
-
-  if (!userStr || !token) {
-    window.location.href = '/';
-    return;
-  }
-
-  gSession = JSON.parse(userStr);
-  const role = gSession.role || 'Cashier';
-
-  const roleBadge = document.getElementById('pos-role-badge');
-  if (roleBadge) roleBadge.textContent = role.toUpperCase();
-
-  const titleEl = document.getElementById('pos-terminal-title');
-  if (titleEl) {
-    if (role === 'canteen_admin') titleEl.textContent = 'CANTEEN ADMIN TERMINAL';
-    else if (role.startsWith('counter')) titleEl.textContent = `CANTEEN POS (${role.toUpperCase()})`;
-    else titleEl.textContent = 'CANTEEN POS TERMINAL';
-  }
-
-  // Admin Tools Guard
-  if (role !== 'canteen_admin' && role !== 'Owner' && role !== 'Admin') {
-    const btnAdmin = document.getElementById('btn-admin-stock');
-    if (btnAdmin) btnAdmin.classList.add('hidden');
-  }
-
-  const d = new Date();
-  const dateEl = document.getElementById('pos-today-date');
-  if (dateEl) {
-    dateEl.textContent = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  }
-
-  // Keyboard Shortcut Bindings
-  window.addEventListener('keydown', handleGlobalHotkeys);
-
-  // Load Catalog & Focus Scanner
-  await loadItemsCatalog(false);
-  focusScanner();
-});
-
 function focusScanner() {
   const input = document.getElementById('pos-barcode-input');
-  if (input) input.focus();
+  if (input && gActiveView === 'pos') input.focus();
 }
 
 // 🎯 Global Hotkeys (F2: Wallet, F4: Cash, Esc: Clear)
 function handleGlobalHotkeys(e) {
+  if (gActiveView !== 'pos') return;
   if (e.key === 'F2') {
     e.preventDefault();
     setPaymentMode('Student Pocket Money');
@@ -99,7 +178,314 @@ function handleGlobalHotkeys(e) {
   }
 }
 
-// 🚀 O(1) Local Product Catalog Loader
+// ==============================================================================
+// 💡 2. EXECUTIVE DASHBOARD CONTROLLER (VIEW 1)
+// ==============================================================================
+async function loadCanteenDashboard() {
+  try {
+    const res = await callApi('getCanteenDashboardMetrics', {}, 'GET');
+    if (res && res.success && res.data) {
+      const { today, allTime, lowStockCount, recentOrders, date } = res.data;
+
+      // Date & Settlement Badge
+      document.getElementById('dash-date-label').textContent = date || new Date().toISOString().slice(0, 10);
+      const settleBadge = document.getElementById('dash-settle-badge');
+      if (today.isSettled) {
+        settleBadge.className = "px-3 py-1 rounded-xl text-xs font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono";
+        settleBadge.textContent = `SETTLED (${today.settlement?.settlementNo || 'DONE'})`;
+      } else {
+        settleBadge.className = "px-3 py-1 rounded-xl text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono animate-pulse";
+        settleBadge.textContent = "PENDING CLEARING (ငွေရှင်းရန်ကျန်)";
+      }
+
+      // Today KPI Cards
+      document.getElementById('dash-today-sales').textContent = `${Number(today.totalSales).toLocaleString()} MMK`;
+      document.getElementById('dash-today-orders').textContent = `${today.totalOrders} Invoices Today`;
+      document.getElementById('dash-today-wallet').textContent = `${Number(today.pocketMoneyShare).toLocaleString()} MMK`;
+      document.getElementById('dash-today-cash').textContent = `${Number(today.cashSalesShare).toLocaleString()} MMK`;
+      document.getElementById('dash-today-profit').textContent = `+${Number(today.totalProfit).toLocaleString()} MMK`;
+
+      // All-Time Cumulative
+      document.getElementById('dash-all-sales').textContent = `${Number(allTime.totalSales).toLocaleString()} MMK`;
+      document.getElementById('dash-all-wallet').textContent = `${Number(allTime.pocketMoneyShare).toLocaleString()} MMK`;
+      document.getElementById('dash-all-cash').textContent = `${Number(allTime.cashSalesShare).toLocaleString()} MMK`;
+      document.getElementById('dash-all-orders').textContent = `${Number(allTime.totalOrders).toLocaleString()} Invoices`;
+
+      // Low Stock Alert Badge
+      const lowStockAlert = document.getElementById('dash-low-stock-alert');
+      if (lowStockCount > 0) {
+        lowStockAlert.textContent = `⚠️ Low Stock: ${lowStockCount} မျိုး`;
+        lowStockAlert.classList.remove('hidden');
+      } else {
+        lowStockAlert.classList.add('hidden');
+      }
+
+      // Render Recent Orders Table
+      const tbody = document.getElementById('dash-recent-orders-body');
+      if (tbody) {
+        tbody.innerHTML = '';
+        if (recentOrders.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-slate-500 font-bold">အရောင်းမှတ်တမ်း မရှိသေးပါ။</td></tr>`;
+        } else {
+          recentOrders.forEach((o, idx) => {
+            const isWallet = (o.paymentMethod === 'Student Pocket Money');
+            tbody.innerHTML += `
+              <tr class="hover:bg-slate-800/40 text-xs border-b border-slate-800/40">
+                <td class="text-center font-mono py-2.5 px-3 text-slate-500">${idx + 1}</td>
+                <td class="font-mono font-bold text-sky-400 py-2.5 px-3">${esc(o.invoiceNo)}</td>
+                <td class="py-2.5 px-3">
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isWallet ? 'bg-indigo-500/20 text-indigo-300' : 'bg-emerald-500/20 text-emerald-300'}">
+                    ${isWallet ? 'Wallet' : 'Cash'}
+                  </span>
+                </td>
+                <td class="font-mono py-2.5 px-3 text-slate-300">${o.studentId ? `ID ${o.studentId}` : '-'}</td>
+                <td class="py-2.5 px-3 truncate max-w-xs text-slate-300">${esc(o.itemsSummary)}</td>
+                <td class="text-right font-mono font-bold text-white py-2.5 px-3">${Number(o.totalAmount).toLocaleString()} MMK</td>
+                <td class="text-right font-mono font-bold text-teal-400 py-2.5 px-3">+${Number(o.netProfit).toLocaleString()}</td>
+              </tr>
+            `;
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Dashboard Load Error:", err);
+  }
+}
+
+// ==============================================================================
+// 💡 3. REAL-TIME STOCK INVENTORY AUDITOR (VIEW 3)
+// ==============================================================================
+async function loadStockInventory() {
+  const searchVal = document.getElementById('stock-search')?.value.trim() || '';
+  const category = document.getElementById('stock-category-filter')?.value || '';
+  const stockStatus = document.getElementById('stock-status-filter')?.value || 'all';
+
+  try {
+    const res = await callApi('getPosStockInventory', { searchVal, category, stockStatus }, 'GET');
+    if (res && res.success) {
+      const items = res.data || [];
+      const summary = res.summary || {};
+
+      document.getElementById('stock-total-items').textContent = `${summary.totalItems || 0} မျိုး`;
+      document.getElementById('stock-total-qty').textContent = `${Number(summary.totalStockQty || 0).toLocaleString()} ခု`;
+      document.getElementById('stock-total-val').textContent = `${Number(summary.totalStockValue || 0).toLocaleString()} MMK`;
+      document.getElementById('stock-alert-count').textContent = `${(summary.outOfStockCount || 0) + (summary.lowStockCount || 0)} မျိုး`;
+
+      const tbody = document.getElementById('stock-table-body');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      if (items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-slate-500 font-bold">ရှာဖွေမှုနှင့် ကိုက်ညီသော ပစ္စည်း မရှိပါ။</td></tr>`;
+        return;
+      }
+
+      items.forEach((item, idx) => {
+        let badgeHtml = '';
+        if (item.currentStock <= 0) {
+          badgeHtml = '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-500/20 text-rose-400 border border-rose-500/30">OUT OF STOCK</span>';
+        } else if (item.currentStock <= 10) {
+          badgeHtml = '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30">LOW STOCK</span>';
+        } else {
+          badgeHtml = '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">HEALTHY</span>';
+        }
+
+        tbody.innerHTML += `
+          <tr class="hover:bg-slate-800/40 text-xs border-b border-slate-800/40">
+            <td class="text-center font-mono py-2.5 px-3 text-slate-500">${idx + 1}</td>
+            <td class="font-mono text-slate-300 py-2.5 px-3">${esc(item.barcode)}</td>
+            <td class="font-bold text-white py-2.5 px-3">${esc(item.itemName)}</td>
+            <td class="text-slate-400 py-2.5 px-3">${esc(item.category)}</td>
+            <td class="text-right font-mono text-slate-400 py-2.5 px-3">${Number(item.costPrice).toLocaleString()}</td>
+            <td class="text-right font-mono font-bold text-emerald-400 py-2.5 px-3">${Number(item.sellingPrice).toLocaleString()} MMK</td>
+            <td class="text-center font-mono font-black py-2.5 px-3 text-sm ${item.currentStock <= 0 ? 'text-rose-400' : (item.currentStock <= 10 ? 'text-amber-400' : 'text-slate-200')}">
+              ${item.currentStock}
+            </td>
+            <td class="text-center py-2.5 px-3">${badgeHtml}</td>
+            <td class="text-center py-2.5 px-3">
+              <button onclick="openQuickEditModal('${escAttr(item.barcode)}')" class="p-1.5 text-teal-400 hover:text-teal-300 hover:bg-teal-500/10 rounded-lg transition" title="Edit Price & Stock">
+                <i class="fa-solid fa-pen-to-square"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      });
+    }
+  } catch (err) {
+    console.error("Stock Inventory Load Error:", err);
+  }
+}
+
+// 🎯 Quick Stock & Price Modal
+function openQuickEditModal(barcode) {
+  const item = gItemsCache.find(it => it.barcode === barcode);
+  if (!item) return;
+
+  document.getElementById('qe-item-name').textContent = item.itemName;
+  document.getElementById('qe-barcode').textContent = item.barcode;
+  document.getElementById('qe-stock').value = item.currentStock || 0;
+  document.getElementById('qe-cost').value = item.costPrice || 0;
+  document.getElementById('qe-price').value = item.sellingPrice || 0;
+
+  document.getElementById('pos-quick-edit-modal')?.classList.remove('hidden');
+}
+
+async function submitQuickEdit() {
+  const barcode = document.getElementById('qe-barcode')?.textContent.trim();
+  const currentStock = parseFloat(document.getElementById('qe-stock')?.value || 0);
+  const costPrice = parseFloat(document.getElementById('qe-cost')?.value || 0);
+  const sellingPrice = parseFloat(document.getElementById('qe-price')?.value || 0);
+
+  if (!barcode) return;
+
+  try {
+    const res = await callApi('updatePosItemQuick', { barcode, currentStock, costPrice, sellingPrice });
+    if (res && res.success) {
+      showToast("SUCCESS", "ပစ္စည်းအချက်အလက် ပြင်ဆင်ပြီးပါပြီ။");
+      closeModal('pos-quick-edit-modal');
+      await Promise.all([loadStockInventory(), loadItemsCatalog(false)]);
+    } else {
+      showToast("ERROR", res?.message || "ပြင်ဆင်မှု မအောင်မြင်ပါ။");
+    }
+  } catch (err) {
+    showToast("ERROR", err.message);
+  }
+}
+
+// ==============================================================================
+// 💡 4. PURCHASES HISTORY & SUPPLIERS MANAGER (VIEW 4)
+// ==============================================================================
+function onSearchPurchasesDebounced() {
+  clearTimeout(gPurSearchTimeout);
+  gPurSearchTimeout = setTimeout(() => { loadPurchasesHistory(1); }, 250);
+}
+
+function clearPurchasesFilter() {
+  document.getElementById('pur-search').value = '';
+  document.getElementById('pur-supplier-filter').value = '';
+  document.getElementById('pur-date-from').value = '';
+  document.getElementById('pur-date-to').value = '';
+  loadPurchasesHistory(1);
+}
+
+function changePurchasesPage(delta) {
+  loadPurchasesHistory(gPurchasesPage + delta);
+}
+
+async function loadPurchasesHistory(page = 1) {
+  gPurchasesPage = Math.max(1, page);
+  const searchVal = document.getElementById('pur-search')?.value.trim() || '';
+  const supplierId = document.getElementById('pur-supplier-filter')?.value || '';
+  const dateFrom = document.getElementById('pur-date-from')?.value || '';
+  const dateTo = document.getElementById('pur-date-to')?.value || '';
+
+  try {
+    const res = await callApi('getPosPurchasesHistory', {
+      searchVal, supplierId, dateFrom, dateTo,
+      page: gPurchasesPage, limit: gPurchasesLimit
+    }, 'GET');
+
+    if (res && res.success) {
+      const records = res.data || [];
+      gPurchasesTotalRows = res.totalRows || 0;
+
+      const tbody = document.getElementById('pur-table-body');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      if (records.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-slate-500 font-bold">အဝယ်စာရင်း မရှိပါ။</td></tr>`;
+      } else {
+        records.forEach((r, idx) => {
+          const displayNo = gPurchasesTotalRows - ((gPurchasesPage - 1) * gPurchasesLimit + idx);
+          tbody.innerHTML += `
+            <tr class="hover:bg-slate-800/40 text-xs border-b border-slate-800/40">
+              <td class="text-center font-mono py-2.5 px-3 text-slate-500">${displayNo}</td>
+              <td class="font-mono text-slate-300 py-2.5 px-3">${esc(r.date)}</td>
+              <td class="font-mono font-bold text-amber-400 py-2.5 px-3">${esc(r.purchaseNo)}</td>
+              <td class="font-bold text-slate-200 py-2.5 px-3">${esc(r.supplierName)}</td>
+              <td class="py-2.5 px-3">
+                <span class="font-bold text-white block">${esc(r.itemName)}</span>
+                <span class="text-[10px] font-mono text-slate-400 block">${esc(r.barcode)}</span>
+              </td>
+              <td class="text-center font-mono font-black text-white py-2.5 px-3">${r.qty}</td>
+              <td class="text-right font-mono text-slate-400 py-2.5 px-3">${Number(r.costPrice).toLocaleString()}</td>
+              <td class="text-right font-mono font-bold text-emerald-400 py-2.5 px-3">${Number(r.sellingPrice).toLocaleString()}</td>
+              <td class="text-right font-mono font-black text-amber-300 py-2.5 px-3">${Number(r.totalCost).toLocaleString()} MMK</td>
+            </tr>
+          `;
+        });
+      }
+
+      // Pagination Sync
+      const start = (gPurchasesPage - 1) * gPurchasesLimit + 1;
+      const end = Math.min(start + gPurchasesLimit - 1, gPurchasesTotalRows);
+      const info = document.getElementById('pur-pagination-info');
+      if (info) info.textContent = gPurchasesTotalRows === 0 ? "Showing 0 entries" : `Showing ${start} to ${end} of ${gPurchasesTotalRows} entries`;
+
+      const prevBtn = document.getElementById('pur-btn-prev');
+      const nextBtn = document.getElementById('pur-btn-next');
+      if (prevBtn) prevBtn.disabled = (gPurchasesPage <= 1);
+      if (nextBtn) nextBtn.disabled = (end >= gPurchasesTotalRows);
+    }
+  } catch (err) {
+    console.error("Purchases History Load Error:", err);
+  }
+}
+
+// 🎯 Load Suppliers for Filter & Modal
+async function loadSuppliersList() {
+  try {
+    const res = await callApi('getPosSuppliers', {}, 'GET');
+    if (res && res.success) {
+      gSuppliersCache = res.data || [];
+      const filterSelect = document.getElementById('pur-supplier-filter');
+      const modalSelect = document.getElementById('m-supplier-id');
+
+      const options = gSuppliersCache.map(s => `<option value="${s.id}">${esc(s.supplierName)}</option>`).join('');
+      
+      if (filterSelect) {
+        filterSelect.innerHTML = `<option value="">All Suppliers (ကုန်သည်အားလုံး)</option>` + options;
+      }
+      if (modalSelect) {
+        modalSelect.innerHTML = `<option value="">-- ရွေးချယ်ပါ (အထွေထွေ) --</option>` + options;
+      }
+    }
+  } catch (e) {
+    console.warn("Suppliers Load Warning:", e.message);
+  }
+}
+
+function openSupplierModal() {
+  document.getElementById('sup-name').value = '';
+  document.getElementById('sup-phone').value = '';
+  document.getElementById('pos-supplier-modal')?.classList.remove('hidden');
+}
+
+async function submitNewSupplier() {
+  const name = document.getElementById('sup-name')?.value.trim();
+  const phoneNo = document.getElementById('sup-phone')?.value.trim();
+
+  if (!name) return showToast("ERROR", "ကုန်သည်အမည် ထည့်သွင်းပါ။");
+
+  try {
+    const res = await callApi('savePosSupplier', { supplierName: name, phoneNo });
+    if (res && res.success) {
+      showToast("SUCCESS", "ကုန်သည်အသစ် ထည့်သွင်းပြီးပါပြီ။");
+      closeModal('pos-supplier-modal');
+      await loadSuppliersList();
+    } else {
+      showToast("ERROR", res?.message || "မအောင်မြင်ပါ။");
+    }
+  } catch (err) {
+    showToast("ERROR", err.message);
+  }
+}
+
+// ==============================================================================
+// 💡 5. IN-MEMORY CART & BARCODE SCANNER LOGIC (VIEW 2)
+// ==============================================================================
 async function loadItemsCatalog(isManualRefresh) {
   try {
     const res = await callApi('getPosItems', { onlyActive: true }, 'GET');
@@ -112,10 +498,6 @@ async function loadItemsCatalog(isManualRefresh) {
   }
 }
 
-// ==============================================================================
-// 💡 1. IN-MEMORY CART & BARCODE SCANNER LOGIC
-// ==============================================================================
-
 function handleBarcodeInput(e) {
   const val = e.target.value.trim();
   const dropdown = document.getElementById('pos-search-dropdown');
@@ -126,7 +508,6 @@ function handleBarcodeInput(e) {
     return;
   }
 
-  // Live search autocomplete
   if (val.length >= 2) {
     const matches = gItemsCache.filter(it => 
       it.itemName.toLowerCase().includes(val.toLowerCase()) || 
@@ -135,10 +516,10 @@ function handleBarcodeInput(e) {
 
     if (matches.length > 0) {
       dropdown.innerHTML = matches.map(m => `
-        <div onclick="selectDropdownItem('${m.barcode}')" class="p-2.5 hover:bg-slate-800/80 cursor-pointer border-b border-slate-800/60 flex items-center justify-between text-xs">
+        <div onclick="selectDropdownItem('${escAttr(m.barcode)}')" class="p-2.5 hover:bg-slate-800/80 cursor-pointer border-b border-slate-800/60 flex items-center justify-between text-xs">
           <div>
-            <span class="font-bold text-white">${m.itemName}</span>
-            <span class="text-[10px] font-mono text-slate-400 block">${m.barcode}</span>
+            <span class="font-bold text-white">${esc(m.itemName)}</span>
+            <span class="text-[10px] font-mono text-slate-400 block">${esc(m.barcode)}</span>
           </div>
           <span class="font-mono font-bold text-emerald-400">${Number(m.sellingPrice).toLocaleString()} MMK</span>
         </div>
@@ -168,7 +549,6 @@ function searchAndAddItem(targetCode) {
     return;
   }
 
-  // Auto-Aggregation: Barcode ရှိပြီးသားဖြစ်ပါက Qty++
   const existing = gCart.find(ci => ci.barcode === item.barcode);
   if (existing) {
     if (item.currentStock > 0 && existing.qty + 1 > item.currentStock) {
@@ -216,11 +596,10 @@ function renderCart() {
     list.innerHTML += `
       <div class="p-3 bg-[#080f1e]/80 border border-slate-800 rounded-xl flex items-center justify-between gap-3 text-xs">
         <div class="min-w-0 flex-1">
-          <h4 class="font-bold text-white truncate">${item.name}</h4>
+          <h4 class="font-bold text-white truncate">${esc(item.name)}</h4>
           <span class="text-[10px] font-mono text-slate-400">${Number(item.price).toLocaleString()} MMK</span>
         </div>
 
-        <!-- Qty Stepper Controls -->
         <div class="flex items-center gap-1.5 shrink-0 bg-[#060c18] border border-slate-800 rounded-lg p-1">
           <button onclick="changeCartQty(${idx}, -1)" class="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold text-xs">-</button>
           <input type="number" value="${item.qty}" min="1" max="${item.maxStock}" onchange="setCartQty(${idx}, this.value)" class="w-10 bg-transparent text-center font-mono font-bold text-white text-xs outline-none">
@@ -242,10 +621,7 @@ function renderCart() {
 function changeCartQty(idx, delta) {
   if (!gCart[idx]) return;
   const target = gCart[idx].qty + delta;
-  if (target <= 0) {
-    removeCartItem(idx);
-    return;
-  }
+  if (target <= 0) return removeCartItem(idx);
   if (target > gCart[idx].maxStock) {
     showToast("ERROR", `လက်ကျန် Stock (${gCart[idx].maxStock}) ကျော်လွန်၍ မရပါ!`);
     return;
@@ -295,9 +671,8 @@ function updateBillTotals() {
 }
 
 // ==============================================================================
-// 💡 2. STUDENT RADAR & 10,000 MMK CAP VERIFIER
+// 💡 6. STUDENT RADAR & 10,000 MMK CAP VERIFIER
 // ==============================================================================
-
 function setPaymentMode(mode) {
   gPaymentMode = mode;
   const btnWallet = document.getElementById('btn-mode-wallet');
@@ -397,9 +772,8 @@ function getCartTotalAmount() {
 }
 
 // ==============================================================================
-// 💡 3. ATOMIC CHECKOUT & RECEIPT PRINTER
+// 💡 7. ATOMIC CHECKOUT & RECEIPT PRINTER
 // ==============================================================================
-
 async function executeCheckout() {
   if (isSubmitting) return;
 
@@ -420,7 +794,6 @@ async function executeCheckout() {
 
   const itemsSummary = itemsListText.join(', ');
 
-  // Pocket Money Mode Validation
   if (gPaymentMode === 'Student Pocket Money') {
     if (!gCurrentStudent) {
       return showToast("ERROR", "မုန့်ဖိုးဖြတ်တောက်ရန် ကျောင်းသား ID Scan အရင်ဖတ်ပေးပါ!");
@@ -461,10 +834,8 @@ async function executeCheckout() {
     if (res && res.success) {
       showToast("SUCCESS", `အရောင်း အောင်မြင်ပါပြီ! Invoice: ${res.invoiceNo}`);
       
-      // Print Receipt Slip
       printPosReceipt(res.invoiceNo, totalAmount, itemsSummary, gPaymentMode, gCurrentStudent);
 
-      // Reset States
       gCart = [];
       gCurrentStudent = null;
       const stuInp = document.getElementById('pos-student-input');
@@ -484,12 +855,10 @@ async function executeCheckout() {
   }
 }
 
-// 🖨️ Thermal POS Receipt Slip Generator (Line 874 Syntax Bug Fixed Here)
 function printPosReceipt(invoiceNo, totalAmt, itemsSummary, method, student) {
   const today = new Date().toISOString().slice(0, 10);
   const cashierName = gSession?.name || 'Cashier';
 
-  // 🎯 Fixed: Clean Logical OR without invalid escape characters
   const studentInfoRow = student 
     ? `<tr><td colspan="2">Student: [${student.fyid || student.studentId}] ${student.name}</td></tr>` 
     : '';
@@ -538,9 +907,8 @@ function printPosReceipt(invoiceNo, totalAmt, itemsSummary, method, student) {
 }
 
 // ==============================================================================
-// 💡 4. SMART PRICING ENGINE & ITEM MODAL
+// 💡 8. SMART PRICING ENGINE & ITEM / PURCHASE MODAL
 // ==============================================================================
-
 function openItemModal() {
   document.getElementById('m-barcode').value = '';
   document.getElementById('m-item-name').value = '';
@@ -548,6 +916,8 @@ function openItemModal() {
   document.getElementById('m-cost-price').value = '';
   document.getElementById('m-selling-price').value = '';
   document.getElementById('m-suggested-price').textContent = '0 MMK';
+  
+  loadSuppliersList();
   document.getElementById('pos-item-modal')?.classList.remove('hidden');
 }
 
@@ -587,6 +957,7 @@ async function submitPosPurchase(e) {
     barcode: document.getElementById('m-barcode').value.trim(),
     itemName: document.getElementById('m-item-name').value.trim(),
     category: document.getElementById('m-category').value,
+    supplierId: parseInt(document.getElementById('m-supplier-id')?.value, 10) || null,
     qty: parseFloat(document.getElementById('m-qty').value || 1),
     costPrice: parseFloat(document.getElementById('m-cost-price').value || 0),
     markupPercent: parseFloat(document.getElementById('m-markup-percent').value || 20),
@@ -598,7 +969,8 @@ async function submitPosPurchase(e) {
     if (res && res.success) {
       showToast("SUCCESS", "အဝယ်စာရင်းနှင့် ဈေးနှုန်း မှတ်တမ်းတင်ပြီးပါပြီ။");
       closeModal('pos-item-modal');
-      await loadItemsCatalog(false);
+      await Promise.all([loadItemsCatalog(false), loadStockInventory()]);
+      if (gActiveView === 'purchases') loadPurchasesHistory(1);
     } else {
       showToast("ERROR", res?.message || "မအောင်မြင်ပါ။");
     }
@@ -608,9 +980,8 @@ async function submitPosPurchase(e) {
 }
 
 // ==============================================================================
-// 💡 5. EVENING SETTLEMENT MODAL
+// 💡 9. EVENING SETTLEMENT MODAL
 // ==============================================================================
-
 async function openSettlementModal() {
   try {
     const res = await callApi('getCanteenDailySummary', { date: new Date().toISOString().slice(0, 10) }, 'GET');
@@ -624,7 +995,7 @@ async function openSettlementModal() {
 
       const actionBox = document.getElementById('set-action-box');
       if (dt.isSettled) {
-        actionBox.innerHTML = `<div class="p-3 text-center bg-emerald-950/40 text-emerald-400 border border-emerald-500/30 rounded-xl font-bold font-sans">ဤရက်စွဲအတွက် Finance နှင့် ငွေရှင်းပြီးဖြစ်ပါသည် (${dt.settlement?.settlement_no})</div>`;
+        actionBox.innerHTML = `<div class="p-3 text-center bg-emerald-950/40 text-emerald-400 border border-emerald-500/30 rounded-xl font-bold font-sans">ဤရက်စွဲအတွက် Finance နှင့် ငွေရှင်းပြီးဖြစ်ပါသည် (${dt.settlement?.settlement_no || dt.settlement?.settlementNo})</div>`;
       } else {
         actionBox.innerHTML = `<button onclick="confirmCanteenSettlement(${dt.pocketMoneyShare}, ${dt.cashSalesShare})" class="w-full py-3.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-black text-xs shadow-lg shadow-amber-950 active:scale-95 transition font-sans">Finance မှ ငွေထုတ်ပေးရှင်းလင်းပြီးကြောင်း အတည်ပြုမည်</button>`;
       }
@@ -652,6 +1023,7 @@ async function confirmCanteenSettlement(pocketShare, cashShare) {
     if (res && res.success) {
       showToast("SUCCESS", "ငွေရှင်းလင်းမှု မှတ်တမ်းတင်ပြီးပါပြီ။");
       closeModal('pos-settlement-modal');
+      if (gActiveView === 'dashboard') loadCanteenDashboard();
     } else {
       showToast("ERROR", res?.message || "မအောင်မြင်ပါ။");
     }
@@ -674,3 +1046,36 @@ function logoutPos() {
   localStorage.removeItem('user');
   window.location.href = '/';
 }
+
+// 💡 EXPOSE GLOBALLY
+window.switchCanteenView = switchCanteenView;
+window.refreshActiveCanteenView = refreshActiveCanteenView;
+window.toggleCanteenSidebar = toggleCanteenSidebar;
+window.loadCanteenDashboard = loadCanteenDashboard;
+window.loadStockInventory = loadStockInventory;
+window.openQuickEditModal = openQuickEditModal;
+window.submitQuickEdit = submitQuickEdit;
+window.loadPurchasesHistory = loadPurchasesHistory;
+window.onSearchPurchasesDebounced = onSearchPurchasesDebounced;
+window.clearPurchasesFilter = clearPurchasesFilter;
+window.changePurchasesPage = changePurchasesPage;
+window.openSupplierModal = openSupplierModal;
+window.submitNewSupplier = submitNewSupplier;
+window.openItemModal = openItemModal;
+window.lookupExistingBarcode = lookupExistingBarcode;
+window.triggerSmartPriceCalc = triggerSmartPriceCalc;
+window.submitPosPurchase = submitPosPurchase;
+window.openSettlementModal = openSettlementModal;
+window.confirmCanteenSettlement = confirmCanteenSettlement;
+window.closeModal = closeModal;
+window.logoutPos = logoutPos;
+window.searchAndAddItem = searchAndAddItem;
+window.selectDropdownItem = selectDropdownItem;
+window.handleBarcodeInput = handleBarcodeInput;
+window.clearCart = clearCart;
+window.changeCartQty = changeCartQty;
+window.setCartQty = setCartQty;
+window.removeCartItem = removeCartItem;
+window.setPaymentMode = setPaymentMode;
+window.lookupStudentRadar = lookupStudentRadar;
+window.executeCheckout = executeCheckout;
