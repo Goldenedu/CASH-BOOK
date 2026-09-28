@@ -7,8 +7,8 @@
  *              🎯 Floating Point Safe Comparison (ROUND to 2 Decimals),
  *              Fail-Closed WebCrypto JWT & PBKDF2 Password Security (100k Iterations),
  *              Server-Side Brute-Force Lockout Defense,
- *              🛡️ Standalone Zero-Dependency D1 Audit Logger
- *              ⚡ SPMMS 3-LEDGERS: VIRTUAL WALLET, CANTEEN, PM CASHIER WITH RECONCILIATION
+ *              🛡️ Standalone Zero-Dependency D1 Audit Logger,
+ *              ⚡ SPMMS 3-LEDGERS & CANTEEN POS ISOLATED DOMAIN SECURITY
  * ==============================================================================
  */
 
@@ -31,51 +31,56 @@ import * as CanteenPosHandlers from './handlers-canteen-pos.js';
 // 💡 1. DOMAIN-SPECIFIC SERVER-SIDE RBAC PERMISSION MATRIX
 // ==============================================================================
 const ROLE_PERMS = {
-  Owner: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: true, grade_matrix: true, backup_dispatch: true },
-  Admin: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: true, grade_matrix: true, backup_dispatch: true },
-  Finance: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: true },
-  Accountant: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: true },
+  // ပင်မ Finance & Executive Roles
+  Owner: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: true, grade_matrix: true, backup_dispatch: true, pos_read: true, pos_write: true, pos_admin: true, canteen_settle: true },
+  Admin: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: true, grade_matrix: true, backup_dispatch: true, pos_read: true, pos_write: true, pos_admin: true, canteen_settle: true },
+  Finance: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: true, pos_read: true, pos_write: true, pos_admin: true, canteen_settle: true },
+  Accountant: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: true, pos_read: true, pos_write: true, pos_admin: true, canteen_settle: true },
+  
+  // HR & Cashier Sub-Ledgers
   HR: { ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false, student_read: false, student_write: false, staff_read: true, staff_write: true, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: true, settings_write: false, grade_matrix: true, backup_dispatch: false },
   "HR Staff": { ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false, student_read: false, student_write: false, staff_read: true, staff_write: true, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: true, settings_write: false, grade_matrix: true, backup_dispatch: false },
   Cashier: { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: true, uniform_write: false, promo_read: true, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
   "Main Cashier": { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: true, uniform_write: false, promo_read: true, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
   
-  // 💡 POS & SPMMS Roles
+  // 🛡️ CANTEEN POS ISOLATED ROLES: Finance စာရင်းများသို့ လုံးဝ ဝင်ရောက်ခွင့်မပြုပါ
   canteen_admin: { 
-    ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, 
+    ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false, 
     student_read: true, student_write: false, staff_read: false, staff_write: false, 
     uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, 
-    report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: false,
+    report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false,
     pos_read: true, pos_write: true, pos_admin: true, canteen_settle: true 
   },
   canteen_cashier: { 
-    ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, 
+    ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false, 
     student_read: true, student_write: false, staff_read: false, staff_write: false, 
     uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, 
     report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false,
     pos_read: true, pos_write: true, pos_admin: false, canteen_settle: true 
   },
   counter1: { 
-    ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, 
+    ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false, 
     student_read: true, student_write: false, staff_read: false, staff_write: false, 
     uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, 
     report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false,
     pos_read: true, pos_write: true, pos_admin: false, canteen_settle: false 
   },
   counter2: { 
-    ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, 
+    ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false, 
     student_read: true, student_write: false, staff_read: false, staff_write: false, 
     uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, 
     report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false,
     pos_read: true, pos_write: true, pos_admin: false, canteen_settle: false 
   },
   counter3: { 
-    ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, 
+    ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false, 
     student_read: true, student_write: false, staff_read: false, staff_write: false, 
     uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, 
     report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false,
     pos_read: true, pos_write: true, pos_admin: false, canteen_settle: false 
   },
+
+  // PM Cashiers
   pm_cashier1: { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
   pm_cashier2: { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
   
@@ -263,7 +268,7 @@ async function resetLoginAttempts(db, username) {
 }
 
 // ==============================================================================
-// 💡 5. SAFE GLOBAL RECALCULATOR ENGINE (⚡ QUOTA-SHIELD & TRANSIT-SAFE)
+// 💡 5. SAFE GLOBAL RECALCULATOR ENGINE
 // ==============================================================================
 async function executeAutoRecalculateAll(db, body = {}) {
   const rawBook = body.bookName || body.tableName || body.book || "";
@@ -297,7 +302,6 @@ async function executeAutoRecalculateAll(db, body = {}) {
   for (const tbl of targetTables) {
     try {
       if (tbl === 'student_money') {
-        // 🎯 FIX: student_id IS NULL ဖြစ်သော Transfer row များကို Balance = 0 သတ်မှတ်ပြီး ကျောင်းသားတစ်ဦးချင်းကိုသာ Partition တွက်ချက်ခြင်း
         if (targetFy) {
           if (fromDate) {
             await db.prepare(`
@@ -417,7 +421,6 @@ async function executeAutoRecalculateAll(db, body = {}) {
           `).run();
         }
       } else {
-        // bank, cash, office, canteen_book, pm_cashier_book etc
         if (targetFy) {
           if (fromDate) {
             const baseRow = await db.prepare(`SELECT no, balances FROM ${tbl} WHERE fy IN (?, ?) AND date < ? ORDER BY date DESC, id DESC LIMIT 1`).bind(targetFy, `FY ${targetFy}`, fromDate).first();
@@ -581,7 +584,9 @@ export default {
           return new Response(JSON.stringify({ success: false, message: "Username သို့မဟုတ် Password မှားယွင်းနေပါသည်။" }), { headers: corsHeaders });
         }
 
+        // 🛡️ SECURITY LOCKDOWN: Finance Dashboard အား Canteen အကောင့်များ လုံးဝ ဝင်ကြည့်ခွင့်မပြုပါ
         case 'getDashboardData':
+          if (!can(userSession, 'ledger_read')) return forbidden(corsHeaders, "Finance Dashboard အား ကြည့်ရှုခွင့် မရှိပါ။");
           result = await DashboardHandlers.getDashboardData(db, body); break;
 
         case 'getBankCashData':
@@ -643,17 +648,16 @@ export default {
           result = await CashierHandlers.deleteCashierEntry(db, userSession, body); break;
 
         // ==========================================================
-        // 💡 SPMMS 3-LEDGERS SYSTEM API ROUTES (STRICT ZERO-ESCALATION RBAC)
+        // 💡 SPMMS 3-LEDGERS SYSTEM API ROUTES (FINANCE CONTROLLED)
         // ==========================================================
         case 'getStudentMoneyData':
         case 'getStudentMoneySummary':
-          if (!can(userSession, 'ledger_read') && !can(userSession, 'student_read') && !can(userSession, 'cashier_read')) return forbidden(corsHeaders);
+          if (!can(userSession, 'ledger_read') && !can(userSession, 'cashier_read')) return forbidden(corsHeaders);
           if (action === 'getStudentMoneySummary') result = await StudentMoneyHandlers.getStudentMoneySummary(db, body);
           else result = await StudentMoneyHandlers.getStudentMoneyData(db, body);
           break;
 
         case 'saveStudentMoneyEntry':
-          // 🛡️ SECURITY ENFORCED: Finance ပင်မငွေစာရင်းအုပ်အား Admin/Finance/Accountant (ledger_write) သာ ခွင့်ပြုသည်
           if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders, "Student Money ပင်မစာအုပ်တွင် စာရင်းသွင်းခွင့် မရှိပါ။");
           result = await StudentMoneyHandlers.saveStudentMoneyEntry(db, userSession, body); break;
 
@@ -673,7 +677,6 @@ export default {
 
         case 'getPmCashierBookData':
           if (!can(userSession, 'ledger_read') && !can(userSession, 'cashier_read')) return forbidden(corsHeaders);
-          // 🎯 FIX: userSession ကို argument အဖြစ် မဖြစ်မနေ ထည့်ပေးရပါမည်
           result = await StudentMoneyHandlers.getPmCashierBookData(db, body, userSession); 
           break;
         case 'savePmCashierBookEntry':
@@ -688,7 +691,7 @@ export default {
           result = await StudentMoneyHandlers.getSpmmsReconciliation(db, body); break;
 
         // ==========================================================
-        // 💡 CANTEEN POS SYSTEM API ROUTES
+        // 💡 CANTEEN POS & MANAGEMENT EXTENSIONS (ISOLATED SYSTEM)
         // ==========================================================
         case 'getPosItems':
           if (!can(userSession, 'pos_read') && !can(userSession, 'ledger_read')) return forbidden(corsHeaders);
@@ -702,12 +705,20 @@ export default {
           if (!can(userSession, 'pos_admin') && !can(userSession, 'ledger_write')) return forbidden(corsHeaders);
           result = await CanteenPosHandlers.savePosPurchase(db, userSession, body); break;
 
+        // 🎯 NEW: Purchases Manipulation (Edit / Delete with Stock Rollback)
+        case 'updatePosPurchase':
+          if (!can(userSession, 'pos_admin') && !can(userSession, 'ledger_write')) return forbidden(corsHeaders);
+          result = await CanteenPosHandlers.updatePosPurchase(db, userSession, body); break;
+
+        case 'deletePosPurchase':
+          if (!can(userSession, 'pos_admin') && !can(userSession, 'ledger_write')) return forbidden(corsHeaders);
+          result = await CanteenPosHandlers.deletePosPurchase(db, userSession, body); break;
+
         case 'lookupStudentForPos':
           if (!can(userSession, 'pos_read') && !can(userSession, 'cashier_read')) return forbidden(corsHeaders);
           result = await CanteenPosHandlers.lookupStudentForPos(db, body); break;
 
         case 'checkoutPosSale':
-          // 🎯 FIX: pos_write သို့မဟုတ် pos_sell ရှိသူတိုင်း ရောင်းချခွင့် ပြုမည်
           if (!can(userSession, 'pos_sell') && !can(userSession, 'pos_write') && !can(userSession, 'cashier_write')) {
             return forbidden(corsHeaders);
           }
@@ -722,6 +733,10 @@ export default {
           if (!can(userSession, 'canteen_settle') && !can(userSession, 'ledger_write')) return forbidden(corsHeaders);
           result = await CanteenPosHandlers.saveCanteenSettlement(db, userSession, body); break;
 
+        case 'getCanteenSettlements':
+          if (!can(userSession, 'canteen_settle') && !can(userSession, 'pos_read') && !can(userSession, 'ledger_read')) return forbidden(corsHeaders);
+          result = await CanteenPosHandlers.getCanteenSettlements(db, body); break;
+
         case 'getPosSuppliers':
           result = await CanteenPosHandlers.getPosSuppliers(db); break;
 
@@ -729,13 +744,6 @@ export default {
           if (!can(userSession, 'pos_admin') && !can(userSession, 'ledger_write')) return forbidden(corsHeaders);
           result = await CanteenPosHandlers.savePosSupplier(db, userSession, body); break;
 
-        case 'getCanteenSettlements':
-          if (!can(userSession, 'ledger_read') && !can(userSession, 'canteen_settle')) return forbidden(corsHeaders);
-          result = await CanteenPosHandlers.getCanteenSettlements(db, body); break;
-
-        // ==========================================================
-        // 💡 CANTEEN POS & MANAGEMENT EXTENSIONS
-        // ==========================================================
         case 'getCanteenDashboardMetrics':
           if (!can(userSession, 'pos_read') && !can(userSession, 'ledger_read')) return forbidden(corsHeaders);
           result = await CanteenPosHandlers.getCanteenDashboardMetrics(db, body); break;
@@ -751,8 +759,10 @@ export default {
         case 'updatePosItemQuick':
           if (!can(userSession, 'pos_admin') && !can(userSession, 'ledger_write')) return forbidden(corsHeaders);
           result = await CanteenPosHandlers.updatePosItemQuick(db, userSession, body); break;
-        // ==========================================================
 
+        // ==========================================================
+        // 💡 STUDENT, STAFF, UNIFORM, PROMOTION & REPORTS ROUTES
+        // ==========================================================
         case 'getStudentData':
         case 'lookupStudentById':
           if (!can(userSession, 'student_read')) return forbidden(corsHeaders);
@@ -876,7 +886,6 @@ export default {
     }
   },
 
-  // 🛡️ Scheduled Cron Trigger for Auto Audit Logs Cleanup
   async scheduled(event, env, ctx) {
     try {
       const db = env.DB || env.school_db;

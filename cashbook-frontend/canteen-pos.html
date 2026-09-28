@@ -107,7 +107,7 @@
   <!-- ============================================================================== -->
   <div class="flex-1 flex flex-col h-full overflow-hidden">
     
-    <!-- Top Action Bar -->
+    <!-- Top Action Bar (Persistent Across All Roles & Screens) -->
     <header class="bg-[#080f1e]/90 backdrop-blur-md border-b border-slate-800/80 px-4 py-2.5 flex items-center justify-between shrink-0 z-40">
       <div class="flex items-center gap-3">
         <button id="btn-toggle-sidebar" onclick="toggleCanteenSidebar()" class="w-8 h-8 rounded-lg bg-slate-800 text-slate-300 flex items-center justify-center text-xs lg:hidden">
@@ -119,14 +119,20 @@
         </div>
       </div>
 
-      <!-- Quick Context Tools -->
+      <!-- Quick Context Tools & PERSISTENT LOGOUT BUTTON -->
       <div class="flex items-center gap-2">
         <button id="btn-admin-stock" onclick="openItemModal()" class="px-3 py-1.5 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-700/60 text-slate-200 text-xs font-bold flex items-center gap-1.5 transition active:scale-95">
           <i class="fa-solid fa-box text-emerald-400 text-xs"></i>
           <span>ပစ္စည်း / အဝယ်သွင်း</span>
         </button>
+        
         <button onclick="refreshActiveCanteenView()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-xs transition active:scale-95" title="Refresh">
           <i class="fa-solid fa-arrows-rotate"></i>
+        </button>
+
+        <!-- 🎯 PERSISTENT LOGOUT: ကောင်တာ ၁၊ ၂၊ ၃ အပါအဝင် မည်သည့်နေရာမှမဆို အမြဲထွက်နိုင်စေခြင်း -->
+        <button onclick="logoutPos()" class="w-8 h-8 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 flex items-center justify-center text-xs transition active:scale-95" title="Logout (စနစ်မှထွက်မည်)">
+          <i class="fa-solid fa-power-off"></i>
         </button>
       </div>
     </header>
@@ -182,18 +188,18 @@
           </div>
         </div>
 
-        <!-- All-Time Cumulative Section -->
+        <!-- All-Time Cumulative Section (With Total Stock Investment Capital) -->
         <div class="glass-card p-4 rounded-2xl border border-slate-800 space-y-3">
           <div class="flex justify-between items-center border-b border-slate-800 pb-2">
             <h4 class="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
-              <i class="fa-solid fa-chart-line text-emerald-400"></i> သမိုင်းဝင် အရောင်းစာရင်းချုပ် (ALL-TIME CUMULATIVE)
+              <i class="fa-solid fa-chart-line text-emerald-400"></i> သမိုင်းဝင် အရောင်းစာရင်းချုပ်နှင့် ရင်းနှီးငွေ (ALL-TIME & CAPITAL)
             </h4>
             <span id="dash-low-stock-alert" class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 hidden">
               ⚠️ Low Stock: 0 မျိုး
             </span>
           </div>
 
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs font-mono">
             <div>
               <span class="text-[10px] text-slate-500 block font-sans">စုစုပေါင်း အရောင်းရငွေ:</span>
               <strong id="dash-all-sales" class="text-sm font-black text-white">0 MMK</strong>
@@ -209,6 +215,11 @@
             <div>
               <span class="text-[10px] text-slate-500 block font-sans">စုစုပေါင်း ပြေစာစောင်ရေ:</span>
               <strong id="dash-all-orders" class="text-sm font-black text-slate-300">0 Invoices</strong>
+            </div>
+            <!-- 🎯 ရင်းနှီးငွေတန်ဖိုး စုစုပေါင်း Card -->
+            <div class="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
+              <span class="text-[10px] text-amber-400 font-bold block font-sans uppercase">စုစုပေါင်း ပစ္စည်းရင်းနှီးငွေ:</span>
+              <strong id="dash-stock-capital" class="text-sm font-black text-amber-300">0 MMK</strong>
             </div>
           </div>
         </div>
@@ -411,7 +422,7 @@
           </div>
         </div>
 
-        <!-- Filter & Search Toolbar -->
+        <!-- Filter & Search Toolbar with CSV Export -->
         <div class="flex flex-col sm:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-3 rounded-xl gap-3">
           <div class="flex items-center gap-2 w-full sm:w-auto">
             <div class="relative w-full sm:w-64">
@@ -435,6 +446,10 @@
           </div>
 
           <div class="flex items-center gap-2">
+            <!-- 🎯 CSV EXPORT BUTTON -->
+            <button onclick="exportStockInventoryCSV()" class="px-3 py-1.5 bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow" title="Export to CSV">
+              <i class="fa-solid fa-file-export text-emerald-400 text-xs"></i> Export CSV
+            </button>
             <button onclick="openItemModal()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-black transition flex items-center gap-1.5 shadow">
               <i class="fa-solid fa-plus text-[10px]"></i> အဝယ်/ပစ္စည်းသစ်သွင်း
             </button>
@@ -464,7 +479,7 @@
       </section>
 
       <!-- ────────────────────────────────────────────────────────────────────────── -->
-      <!-- 🛒 VIEW 4: PURCHASES & SUPPLIERS HISTORY AUDITOR                           -->
+      <!-- 🛒 VIEW 4: PURCHASES & SUPPLIERS HISTORY AUDITOR (WITH ACTIONS)            -->
       <!-- ────────────────────────────────────────────────────────────────────────── -->
       <section id="view-purchases" class="space-y-4 hidden">
         
@@ -496,20 +511,21 @@
           </div>
         </div>
 
-        <!-- Purchases Table Grid -->
+        <!-- Purchases Table Grid with Action Column -->
         <div class="table-container bg-[#080e1c] border border-slate-800 rounded-xl overflow-x-auto">
-          <table class="w-full text-left text-xs border-collapse min-w-[950px]">
+          <table class="w-full text-left text-xs border-collapse min-w-[1000px]">
             <thead class="bg-[#0e172a] text-slate-400 text-[11px]">
               <tr>
                 <th class="py-2.5 px-3 w-12 text-center">စဉ်</th>
-                <th class="py-2.5 px-3 w-28">ရက်စွဲ</th>
+                <th class="py-2.5 px-3 w-24">ရက်စွဲ</th>
                 <th class="py-2.5 px-3 w-32">PO NUMBER</th>
                 <th class="py-2.5 px-3 w-36">ကုန်သည်အမည်</th>
                 <th class="py-2.5 px-3">ပစ္စည်းအမည် / BARCODE</th>
-                <th class="py-2.5 px-3 text-center w-20">QTY</th>
+                <th class="py-2.5 px-3 text-center w-16">QTY</th>
                 <th class="py-2.5 px-3 text-right w-24">ဝယ်ဈေး</th>
                 <th class="py-2.5 px-3 text-right w-24 text-emerald-400 font-bold">ရောင်းဈေး</th>
                 <th class="py-2.5 px-3 text-right w-28 font-mono text-amber-400">ကျသင့်ငွေ</th>
+                <th class="py-2.5 px-3 text-center w-20 right-0 sticky bg-[#0e172a] border-l border-slate-800">ACTION</th>
               </tr>
             </thead>
             <tbody id="pur-table-body" class="divide-y divide-slate-800/40 text-slate-300"></tbody>
@@ -656,22 +672,32 @@
     </div>
   </div>
 
-  <!-- MODAL 3: QUICK ADD SUPPLIER -->
+  <!-- MODAL 3: QUICK ADD SUPPLIER (FULL PROFILE: PH NO & ADDRESS) -->
   <div id="pos-supplier-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
     <div class="bg-[#0e172a] border border-slate-800 rounded-3xl w-full max-w-sm shadow-2xl p-5 space-y-4">
       <div class="flex justify-between items-center border-b border-slate-800 pb-2">
-        <h3 class="text-xs font-black text-white uppercase">Add New Supplier (ကုန်သည်သစ်)</h3>
+        <h3 class="text-xs font-black text-white uppercase flex items-center gap-1.5">
+          <i class="fa-solid fa-truck-field text-amber-400"></i> Add Supplier (ကုန်သည်သစ်)
+        </h3>
         <button onclick="closeModal('pos-supplier-modal')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
       </div>
 
       <div class="space-y-3 text-xs">
         <div class="space-y-1">
           <label class="font-bold text-slate-400">ကုန်သည် / ဆိုင်အမည်</label>
-          <input type="text" id="sup-name" placeholder="e.g. ရွှေမြန်မာ မုန့်တိုက်" class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3 py-2 text-white font-bold outline-none">
+          <input type="text" id="sup-name" placeholder="e.g. ရွှေမြန်မာ မုန့်တိုက်" class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3 py-2 text-white font-bold outline-none focus:border-amber-500">
+        </div>
+        <div class="space-y-1">
+          <label class="font-bold text-slate-400">ဆက်သွယ်ရမည့်သူ (Contact Person)</label>
+          <input type="text" id="sup-contact" placeholder="e.g. ဦးစိုးနိုင်" class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-500">
         </div>
         <div class="space-y-1">
           <label class="font-bold text-slate-400">ဖုန်းနံပါတ်</label>
-          <input type="text" id="sup-phone" placeholder="09xxxxxxxxx" class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3 py-2 text-white outline-none">
+          <input type="text" id="sup-phone" placeholder="09xxxxxxxxx" class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-500">
+        </div>
+        <div class="space-y-1">
+          <label class="font-bold text-slate-400">ဆိုင်လိပ်စာ / မှတ်ချက်</label>
+          <textarea id="sup-address" rows="2" placeholder="ဆိုင်တည်နေရာ လိပ်စာ..." class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-500"></textarea>
         </div>
         <button onclick="submitNewSupplier()" class="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold text-xs shadow-md transition active:scale-95">
           ကုန်သည်အမည် သိမ်းဆည်းမည်
@@ -680,7 +706,69 @@
     </div>
   </div>
 
-  <!-- MODAL 4: EVENING CANTEEN SETTLEMENT -->
+  <!-- MODAL 4: EDIT PURCHASE MODAL (ADMIN MANIPULATION) -->
+  <div id="pos-edit-purchase-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-[#0e172a] border border-slate-800 rounded-3xl w-full max-w-md shadow-2xl p-5 space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+        <h3 class="text-xs font-black text-white uppercase flex items-center gap-1.5">
+          <i class="fa-solid fa-pen-to-square text-amber-400"></i> Edit Purchase (အဝယ်စာရင်း ပြင်ဆင်ခြင်း)
+        </h3>
+        <button onclick="closeModal('pos-edit-purchase-modal')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <form onsubmit="submitEditPurchase(event)" class="space-y-3 text-xs">
+        <input type="hidden" id="edit-pur-id">
+        <div>
+          <span id="edit-pur-item-name" class="font-bold text-white block">Item Name</span>
+          <span id="edit-pur-no" class="font-mono text-[10px] text-amber-400 block">PO Number</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="font-bold text-slate-400">ရက်စွဲ</label>
+            <input type="date" id="edit-pur-date" required class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3 py-2 text-white outline-none">
+          </div>
+          <div class="space-y-1">
+            <label class="font-bold text-slate-400">ကုန်သည်</label>
+            <select id="edit-pur-supplier" class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3 py-2 text-white font-bold outline-none"></select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="font-bold text-slate-400">အဝယ် Qty</label>
+            <input type="number" id="edit-pur-qty" step="any" min="1" required class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3 py-2 text-white font-mono font-bold text-right outline-none">
+          </div>
+          <div class="space-y-1">
+            <label class="font-bold text-amber-400">ဝယ်ဈေး Cost</label>
+            <input type="number" id="edit-pur-cost" step="any" min="0" required class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3 py-2 text-amber-400 font-mono font-bold text-right outline-none">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="font-bold text-slate-400">Markup %</label>
+            <input type="number" id="edit-pur-markup" value="20" class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3 py-2 text-sky-400 font-mono font-bold text-right outline-none">
+          </div>
+          <div class="space-y-1">
+            <label class="font-bold text-emerald-400">ရောင်းဈေး</label>
+            <input type="number" id="edit-pur-selling" step="any" min="0" required class="w-full bg-[#070e1c] border border-emerald-500/50 rounded-xl px-3 py-2 text-emerald-400 font-mono font-black text-right outline-none">
+          </div>
+        </div>
+
+        <div class="space-y-1">
+          <label class="font-bold text-slate-400">မှတ်ချက်</label>
+          <input type="text" id="edit-pur-remark" class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3 py-2 text-white outline-none">
+        </div>
+
+        <button type="submit" class="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold text-xs shadow-md transition active:scale-95">
+          အဝယ်စာရင်း အတည်ပြု သိမ်းဆည်းမည်
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 5: EVENING CANTEEN SETTLEMENT -->
   <div id="pos-settlement-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
     <div class="bg-[#0e172a] border border-slate-800 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
       <div class="px-5 py-4 border-b border-slate-800 flex justify-between items-center bg-[#091122]">

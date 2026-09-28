@@ -5,9 +5,9 @@
  * 
  * 💡 Architecture & Blueprint V4:
  *   1. 🏛️ MULTI-VIEW ROUTER: Dashboard, POS Register, Stock Inventory & Purchases
- *   2. 📊 EXECUTIVE DASHBOARD: 1-Batch Atomic Metrics (Today & All-Time KPI Cards)
- *   3. 📦 REAL-TIME STOCK AUDITOR: Low-Stock Alerts & Quick Price/Stock Editor
- *   4. 🛒 PURCHASES & SUPPLIERS: Server-Side Paginated Multi-Filter Audit
+ *   2. 📊 EXECUTIVE DASHBOARD: 1-Batch Atomic Metrics (Today, All-Time & Stock Capital)
+ *   3. 📦 REAL-TIME STOCK AUDITOR: Low-Stock Alerts, Inline Editor & CSV Export
+ *   4. 🛒 PURCHASES & SUPPLIERS: Server-Side Paginated Multi-Filter & Full Edit/Delete
  *   5. ⚡ IN-MEMORY CART & RADAR: O(1) Fast Scanner, 10,000 MMK Guard & Thermal Receipt
  * ==============================================================================
  */
@@ -17,6 +17,8 @@ let gSession = null;
 let gActiveView = 'pos';     // 'dashboard', 'pos', 'stock', 'purchases'
 let gItemsCache = [];       // O(1) Local Product Catalog Cache
 let gSuppliersCache = [];   // Suppliers Master Cache
+let gStockInventoryData = []; // Cached Stock List for CSV Export
+let gPurchasesData = [];    // Cached Purchases for Edit/Delete
 let gCart = [];             // Dynamic In-Memory Cart State Array
 let gCurrentStudent = null; // Scanned Student Object
 let gPaymentMode = 'Student Pocket Money'; // 'Student Pocket Money' or 'Cash'
@@ -27,7 +29,6 @@ let gPurchasesPage = 1;
 const gPurchasesLimit = 20;
 let gPurchasesTotalRows = 0;
 let gPurSearchTimeout = null;
-let gStockSearchTimeout = null;
 
 // Safe Escape Helper
 const esc = window.escapeHtml || (s => s ? String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : '');
@@ -79,8 +80,18 @@ window.addEventListener('DOMContentLoaded', async () => {
     switchCanteenView('dashboard');
   }
 
+  if (role === 'canteen_cashier') {
+    // Stock နှင့် Purchases view များထဲရှိ Add/Edit ခလုတ်များကိုပါ ဝှက်ပေးခြင်း
+    document.querySelectorAll('#view-stock button[onclick="openItemModal()"], #view-purchases button[onclick="openItemModal()"]').forEach(b => b.classList.add('hidden'));
+  }
   // Bind Keyboard Hotkeys
   window.addEventListener('keydown', handleGlobalHotkeys);
+
+  // Hook Edit Purchase Smart Price Calculator Listeners
+  const editCostInput = document.getElementById('edit-pur-cost');
+  const editMarkupInput = document.getElementById('edit-pur-markup');
+  if (editCostInput) editCostInput.addEventListener('input', triggerEditPurSmartPriceCalc);
+  if (editMarkupInput) editMarkupInput.addEventListener('input', triggerEditPurSmartPriceCalc);
 
   // Background Data Pre-fetch
   await Promise.all([
@@ -185,7 +196,7 @@ async function loadCanteenDashboard() {
   try {
     const res = await callApi('getCanteenDashboardMetrics', {}, 'GET');
     if (res && res.success && res.data) {
-      const { today, allTime, lowStockCount, recentOrders, date } = res.data;
+      const { today, allTime, totalStockCapital, lowStockCount, recentOrders, date } = res.data;
 
       // Date & Settlement Badge
       document.getElementById('dash-date-label').textContent = date || new Date().toISOString().slice(0, 10);
@@ -205,11 +216,18 @@ async function loadCanteenDashboard() {
       document.getElementById('dash-today-cash').textContent = `${Number(today.cashSalesShare).toLocaleString()} MMK`;
       document.getElementById('dash-today-profit').textContent = `+${Number(today.totalProfit).toLocaleString()} MMK`;
 
-      // All-Time Cumulative
+      // All-Time Cumulative & Total Stock Capital
       document.getElementById('dash-all-sales').textContent = `${Number(allTime.totalSales).toLocaleString()} MMK`;
       document.getElementById('dash-all-wallet').textContent = `${Number(allTime.pocketMoneyShare).toLocaleString()} MMK`;
       document.getElementById('dash-all-cash').textContent = `${Number(allTime.cashSalesShare).toLocaleString()} MMK`;
       document.getElementById('dash-all-orders').textContent = `${Number(allTime.totalOrders).toLocaleString()} Invoices`;
+
+      // 🎯 ပစ္စည်းစုစုပေါင်း ရင်းနှီးငွေတန်ဖိုး ချိတ်ဆက်ပြသခြင်း
+      const capitalEl = document.getElementById('dash-stock-capital');
+      if (capitalEl) {
+        const capitalVal = totalStockCapital !== undefined ? totalStockCapital : (allTime.totalStockCapital || 0);
+        capitalEl.textContent = `${Number(capitalVal).toLocaleString()} MMK`;
+      }
 
       // Low Stock Alert Badge
       const lowStockAlert = document.getElementById('dash-low-stock-alert');
@@ -266,6 +284,7 @@ async function loadStockInventory() {
     if (res && res.success) {
       const items = res.data || [];
       const summary = res.summary || {};
+      gStockInventoryData = items; // Cache for CSV Export
 
       document.getElementById('stock-total-items').textContent = `${summary.totalItems || 0} မျိုး`;
       document.getElementById('stock-total-qty').textContent = `${Number(summary.totalStockQty || 0).toLocaleString()} ခု`;
@@ -317,6 +336,38 @@ async function loadStockInventory() {
   }
 }
 
+// 🎯 Stock Inventory CSV Export (UTF-8 BOM Supported)
+async function exportStockInventoryCSV() {
+  try {
+    const items = gStockInventoryData.length > 0 ? gStockInventoryData : gItemsCache;
+    if (!items || items.length === 0) {
+      return showToast("ERROR", "ထုတ်ယူရန် Stock စာရင်း မရှိပါ။");
+    }
+
+    let csv = "NO,BARCODE,ITEM_NAME,CATEGORY,COST_PRICE,SELLING_PRICE,CURRENT_STOCK,STOCK_VALUE,STATUS\n";
+    const safeCell = s => `"${String(s || '').replace(/"/g, '""')}"`;
+
+    items.forEach((item, idx) => {
+      let statusText = 'HEALTHY';
+      if (item.currentStock <= 0) statusText = 'OUT OF STOCK';
+      else if (item.currentStock <= 10) statusText = 'LOW STOCK';
+
+      const sValue = Number(item.costPrice || 0) * Number(item.currentStock || 0);
+
+      csv += `${idx + 1},${safeCell(item.barcode)},${safeCell(item.itemName)},${safeCell(item.category)},${item.costPrice || 0},${item.sellingPrice || 0},${item.currentStock || 0},${sValue},${safeCell(statusText)}\n`;
+    });
+
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `Canteen_Stock_Inventory_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    showToast("SUCCESS", "Stock စာရင်း CSV ထုတ်ယူမှု အောင်မြင်ပါသည်။");
+  } catch (err) {
+    showToast("ERROR", "CSV ထုတ်ယူရာတွင် အမှားဖြစ်ပေါ်ခဲ့သည်: " + err.message);
+  }
+}
+
 // 🎯 Quick Stock & Price Modal
 function openQuickEditModal(barcode) {
   const item = gItemsCache.find(it => it.barcode === barcode);
@@ -354,7 +405,7 @@ async function submitQuickEdit() {
 }
 
 // ==============================================================================
-// 💡 4. PURCHASES HISTORY & SUPPLIERS MANAGER (VIEW 4)
+// 💡 4. PURCHASES HISTORY, SUPPLIERS & MANIPULATION (VIEW 4)
 // ==============================================================================
 function onSearchPurchasesDebounced() {
   clearTimeout(gPurSearchTimeout);
@@ -388,6 +439,7 @@ async function loadPurchasesHistory(page = 1) {
 
     if (res && res.success) {
       const records = res.data || [];
+      gPurchasesData = records; // Cache for edit
       gPurchasesTotalRows = res.totalRows || 0;
 
       const tbody = document.getElementById('pur-table-body');
@@ -395,16 +447,33 @@ async function loadPurchasesHistory(page = 1) {
       tbody.innerHTML = '';
 
       if (records.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-slate-500 font-bold">အဝယ်စာရင်း မရှိပါ။</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="text-center py-8 text-slate-500 font-bold">အဝယ်စာရင်း မရှိပါ။</td></tr>`;
       } else {
+        const canManage = (gSession?.role === 'canteen_admin' || gSession?.role === 'Owner' || gSession?.role === 'Admin');
+
         records.forEach((r, idx) => {
           const displayNo = gPurchasesTotalRows - ((gPurchasesPage - 1) * gPurchasesLimit + idx);
+
+          const actionHtml = canManage ? `
+            <div class="flex items-center justify-center gap-1.5">
+              <button onclick="openEditPurchaseModal('${escAttr(r.id)}')" class="p-1 text-amber-400 hover:text-amber-300 transition" title="ပြင်ဆင်မည်">
+                <i class="fa-solid fa-pen-to-square"></i>
+              </button>
+              <button onclick="deletePurchaseEntry('${escAttr(r.id)}', '${escAttr(r.purchaseNo)}')" class="p-1 text-rose-400 hover:text-rose-300 transition" title="ဖျက်မည်">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </div>
+          ` : '<span class="text-slate-600">-</span>';
+
           tbody.innerHTML += `
             <tr class="hover:bg-slate-800/40 text-xs border-b border-slate-800/40">
               <td class="text-center font-mono py-2.5 px-3 text-slate-500">${displayNo}</td>
               <td class="font-mono text-slate-300 py-2.5 px-3">${esc(r.date)}</td>
               <td class="font-mono font-bold text-amber-400 py-2.5 px-3">${esc(r.purchaseNo)}</td>
-              <td class="font-bold text-slate-200 py-2.5 px-3">${esc(r.supplierName)}</td>
+              <td class="font-bold text-slate-200 py-2.5 px-3">
+                <span>${esc(r.supplierName)}</span>
+                ${r.supplierPhone && r.supplierPhone !== '-' ? `<span class="text-[10px] text-slate-500 block font-mono">Ph: ${esc(r.supplierPhone)}</span>` : ''}
+              </td>
               <td class="py-2.5 px-3">
                 <span class="font-bold text-white block">${esc(r.itemName)}</span>
                 <span class="text-[10px] font-mono text-slate-400 block">${esc(r.barcode)}</span>
@@ -413,6 +482,7 @@ async function loadPurchasesHistory(page = 1) {
               <td class="text-right font-mono text-slate-400 py-2.5 px-3">${Number(r.costPrice).toLocaleString()}</td>
               <td class="text-right font-mono font-bold text-emerald-400 py-2.5 px-3">${Number(r.sellingPrice).toLocaleString()}</td>
               <td class="text-right font-mono font-black text-amber-300 py-2.5 px-3">${Number(r.totalCost).toLocaleString()} MMK</td>
+              <td class="text-center py-2.5 px-3 right-0 sticky bg-[#080e1c] border-l border-slate-800">${actionHtml}</td>
             </tr>
           `;
         });
@@ -434,7 +504,96 @@ async function loadPurchasesHistory(page = 1) {
   }
 }
 
-// 🎯 Load Suppliers for Filter & Modal
+// 🎯 Edit Purchase Modal Controller
+function openEditPurchaseModal(id) {
+  const item = gPurchasesData.find(p => String(p.id) === String(id));
+  if (!item) return showToast("ERROR", "အဝယ်စာရင်း အချက်အလက် မတွေ့ပါ။");
+
+  document.getElementById('edit-pur-id').value = item.id;
+  document.getElementById('edit-pur-no').textContent = item.purchaseNo;
+  document.getElementById('edit-pur-item-name').textContent = `${item.itemName} (${item.barcode})`;
+  document.getElementById('edit-pur-date').value = item.date;
+
+  const supSelect = document.getElementById('edit-pur-supplier');
+  if (supSelect) supSelect.value = item.supplierId || '';
+
+  document.getElementById('edit-pur-qty').value = item.qty;
+  document.getElementById('edit-pur-cost').value = item.costPrice;
+  document.getElementById('edit-pur-markup').value = item.markupPercent || 20;
+  document.getElementById('edit-pur-selling').value = item.sellingPrice;
+  document.getElementById('edit-pur-remark').value = item.remark || '';
+
+  document.getElementById('pos-edit-purchase-modal')?.classList.remove('hidden');
+}
+
+function triggerEditPurSmartPriceCalc() {
+  const cost = parseFloat(document.getElementById('edit-pur-cost')?.value || 0);
+  const markup = parseFloat(document.getElementById('edit-pur-markup')?.value || 20);
+  if (cost <= 0) return;
+  const rawPrice = cost * (1 + markup / 100);
+  const rounded = Math.ceil(rawPrice / 50) * 50;
+  const sellingInput = document.getElementById('edit-pur-selling');
+  if (sellingInput) sellingInput.value = rounded;
+}
+
+async function submitEditPurchase(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  const id = parseInt(document.getElementById('edit-pur-id')?.value, 10);
+  const purchaseNo = document.getElementById('edit-pur-no')?.textContent.trim();
+  const date = document.getElementById('edit-pur-date')?.value;
+  const supplierId = parseInt(document.getElementById('edit-pur-supplier')?.value, 10) || null;
+  const qty = parseFloat(document.getElementById('edit-pur-qty')?.value || 1);
+  const costPrice = parseFloat(document.getElementById('edit-pur-cost')?.value || 0);
+  const markupPercent = parseFloat(document.getElementById('edit-pur-markup')?.value || 20);
+  const sellingPrice = parseFloat(document.getElementById('edit-pur-selling')?.value || 0);
+  const remark = document.getElementById('edit-pur-remark')?.value.trim();
+
+  if (!id && !purchaseNo) return showToast("ERROR", "အဝယ်စာရင်း အချက်အလက် မပြည့်စုံပါ။");
+  if (qty <= 0 || costPrice <= 0) return showToast("ERROR", "Qty နှင့် ဝယ်ဈေး အတိအကျ ထည့်သွင်းပါ။");
+
+  try {
+    const res = await callApi('updatePosPurchase', {
+      id, purchaseNo, date, supplierId, qty, costPrice, markupPercent, sellingPrice, remark
+    });
+    if (res && res.success) {
+      showToast("SUCCESS", res.message || "အဝယ်စာရင်း ပြင်ဆင်ပြီးပါပြီ။");
+      closeModal('pos-edit-purchase-modal');
+      await Promise.all([
+        loadPurchasesHistory(gPurchasesPage),
+        loadItemsCatalog(false),
+        loadStockInventory()
+      ]);
+    } else {
+      showToast("ERROR", res?.message || "ပြင်ဆင်မှု မအောင်မြင်ပါ။");
+    }
+  } catch (err) {
+    showToast("ERROR", err.message);
+  }
+}
+
+async function deletePurchaseEntry(id, purchaseNo) {
+  if (!confirm(`အဝယ်ဘောက်ချာ (${purchaseNo}) အား ဖျက်သိမ်းမည်မှာ သေချာပါသလား?\n\nသတိပြုရန်: ဤအဝယ်တွင် ပါဝင်သော ပစ္စည်းအရေအတွက်ကို လက်ကျန် Stock ထဲမှ အလိုအလျောက် ပြန်လည်နုတ်ယူညှိနှိုင်းသွားပါမည်။`)) {
+    return;
+  }
+
+  try {
+    const res = await callApi('deletePosPurchase', { id: parseInt(id, 10), purchaseNo });
+    if (res && res.success) {
+      showToast("SUCCESS", res.message || "အဝယ်စာရင်း ဖျက်သိမ်းပြီးပါပြီ။");
+      await Promise.all([
+        loadPurchasesHistory(gPurchasesPage),
+        loadItemsCatalog(false),
+        loadStockInventory()
+      ]);
+    } else {
+      showToast("ERROR", res?.message || "ဖျက်သိမ်းမှု မအောင်မြင်ပါ။");
+    }
+  } catch (err) {
+    showToast("ERROR", err.message);
+  }
+}
+
+// 🎯 Load Suppliers for Filter & Modals
 async function loadSuppliersList() {
   try {
     const res = await callApi('getPosSuppliers', {}, 'GET');
@@ -442,15 +601,16 @@ async function loadSuppliersList() {
       gSuppliersCache = res.data || [];
       const filterSelect = document.getElementById('pur-supplier-filter');
       const modalSelect = document.getElementById('m-supplier-id');
+      const editPurSupplier = document.getElementById('edit-pur-supplier');
 
-      const options = gSuppliersCache.map(s => `<option value="${s.id}">${esc(s.supplierName)}</option>`).join('');
+      const options = gSuppliersCache.map(s => {
+        const phText = s.phoneNo ? ` (${s.phoneNo})` : '';
+        return `<option value="${s.id}">${esc(s.supplierName)}${esc(phText)}</option>`;
+      }).join('');
       
-      if (filterSelect) {
-        filterSelect.innerHTML = `<option value="">All Suppliers (ကုန်သည်အားလုံး)</option>` + options;
-      }
-      if (modalSelect) {
-        modalSelect.innerHTML = `<option value="">-- ရွေးချယ်ပါ (အထွေထွေ) --</option>` + options;
-      }
+      if (filterSelect) filterSelect.innerHTML = `<option value="">All Suppliers (ကုန်သည်အားလုံး)</option>` + options;
+      if (modalSelect) modalSelect.innerHTML = `<option value="">-- ရွေးချယ်ပါ (အထွေထွေ) --</option>` + options;
+      if (editPurSupplier) editPurSupplier.innerHTML = `<option value="">-- ရွေးချယ်ပါ (အထွေထွေ) --</option>` + options;
     }
   } catch (e) {
     console.warn("Suppliers Load Warning:", e.message);
@@ -459,18 +619,22 @@ async function loadSuppliersList() {
 
 function openSupplierModal() {
   document.getElementById('sup-name').value = '';
+  document.getElementById('sup-contact').value = '';
   document.getElementById('sup-phone').value = '';
+  document.getElementById('sup-address').value = '';
   document.getElementById('pos-supplier-modal')?.classList.remove('hidden');
 }
 
 async function submitNewSupplier() {
   const name = document.getElementById('sup-name')?.value.trim();
+  const contactPerson = document.getElementById('sup-contact')?.value.trim();
   const phoneNo = document.getElementById('sup-phone')?.value.trim();
+  const address = document.getElementById('sup-address')?.value.trim();
 
   if (!name) return showToast("ERROR", "ကုန်သည်အမည် ထည့်သွင်းပါ။");
 
   try {
-    const res = await callApi('savePosSupplier', { supplierName: name, phoneNo });
+    const res = await callApi('savePosSupplier', { supplierName: name, contactPerson, phoneNo, address });
     if (res && res.success) {
       showToast("SUCCESS", "ကုန်သည်အသစ် ထည့်သွင်းပြီးပါပြီ။");
       closeModal('pos-supplier-modal');
@@ -1053,12 +1217,17 @@ window.refreshActiveCanteenView = refreshActiveCanteenView;
 window.toggleCanteenSidebar = toggleCanteenSidebar;
 window.loadCanteenDashboard = loadCanteenDashboard;
 window.loadStockInventory = loadStockInventory;
+window.exportStockInventoryCSV = exportStockInventoryCSV;
 window.openQuickEditModal = openQuickEditModal;
 window.submitQuickEdit = submitQuickEdit;
 window.loadPurchasesHistory = loadPurchasesHistory;
 window.onSearchPurchasesDebounced = onSearchPurchasesDebounced;
 window.clearPurchasesFilter = clearPurchasesFilter;
 window.changePurchasesPage = changePurchasesPage;
+window.openEditPurchaseModal = openEditPurchaseModal;
+window.triggerEditPurSmartPriceCalc = triggerEditPurSmartPriceCalc;
+window.submitEditPurchase = submitEditPurchase;
+window.deletePurchaseEntry = deletePurchaseEntry;
 window.openSupplierModal = openSupplierModal;
 window.submitNewSupplier = submitNewSupplier;
 window.openItemModal = openItemModal;
