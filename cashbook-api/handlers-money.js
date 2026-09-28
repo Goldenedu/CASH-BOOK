@@ -195,8 +195,10 @@ export async function saveStudentMoneyEntry(db, session, body) {
     const pmcUniqueId = `PMC_${rawCore}`;
     
     const rawType = String(body.entryType || 'Deposit').trim();
-    const debit = safeAmount(body.debit);
-    const credit = safeAmount(body.credit);
+    
+    // 🎯 FIX: const အစား let သို့ ပြောင်းလဲခြင်း (Reassign Error ကာကွယ်ရန်)
+    let debit = safeAmount(body.debit);
+    let credit = safeAmount(body.credit);
     const studentId = parseInt(body.studentId, 10) || null;
     const method = body.method || 'Cash';
     
