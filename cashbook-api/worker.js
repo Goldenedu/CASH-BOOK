@@ -506,7 +506,9 @@ export default {
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, token, authToken, role",
       "Access-Control-Max-Age": "86400",
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      // 🎯 FIX: Real-time ငွေစာရင်းများ ဘယ်သောအခါမှ Browser Cache မဖြစ်စေရန် တားမြစ်ခြင်း
+      "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"
     };
 
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });

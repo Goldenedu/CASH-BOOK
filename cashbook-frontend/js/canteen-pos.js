@@ -862,7 +862,8 @@ async function lookupStudentRadar() {
   if (!val) return;
 
   try {
-    const res = await callApi('lookupStudentForPos', { studentId: val }, 'GET');
+    // 🎯 FIX: GET အစား POST သုံးပြီး Cache-Buster (_t) ထည့်သွင်းကာ Real-Time ဒေတာ အမြဲရယူခြင်း
+    const res = await callApi('lookupStudentForPos', { studentId: val, _t: Date.now() }, 'POST');
     if (res && res.success && res.data) {
       gCurrentStudent = res.data;
       renderStudentCard();
