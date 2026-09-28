@@ -651,12 +651,14 @@ export async function deleteCanteenBookEntry(db, session, body) {
     const existing = await db.prepare("SELECT fy, date, category, uniqueid FROM canteen_book WHERE uniqueid = ?").bind(uid).first();
     if (!existing) return { success: false, message: "ဖျက်မည့် စာရင်း ရှာမတွေ့ပါ။" };
 
-    const coreId = uid.replace(/^(STM_|PMC_|CAN_)+/i, '');
-    const exactKeys = [uid, coreId, `CAN_${coreId}`, `STM_${coreId}`, `STM_CAN_${coreId}`];
+    const coreId = uid.replace(/^(STM_|PMC_|CAN_|POS_)+/i, '');
+    const exactKeys = [uid, coreId, `CAN_${coreId}`, `STM_${coreId}`, `STM_CAN_${coreId}`, `POS_${coreId}`];
 
+    // 🎯 FIX: pos_sales_orders ပါ တစ်ပါတည်း ဖျက်သိမ်းခြင်း
     const batchStatements = [
       db.prepare(`DELETE FROM canteen_book WHERE uniqueid IN (${exactKeys.map(() => '?').join(',')})`).bind(...exactKeys),
-      db.prepare(`DELETE FROM student_money WHERE uniqueid IN (${exactKeys.map(() => '?').join(',')})`).bind(...exactKeys)
+      db.prepare(`DELETE FROM student_money WHERE uniqueid IN (${exactKeys.map(() => '?').join(',')})`).bind(...exactKeys),
+      db.prepare(`DELETE FROM pos_sales_orders WHERE uniqueid IN (${exactKeys.map(() => '?').join(',')})`).bind(...exactKeys)
     ];
 
     await db.batch(batchStatements);

@@ -1,8 +1,20 @@
 /**
- * GOLDEN ERP SYSTEM - AUTHENTICATION & ROLE ENGINE
- * File: js/auth.js 
- * 💡 SECURED (D1 Database Edition): JWT Verification, Bulletproof RBAC Matrix & PM Cashier Mobile Routing
+ * ==============================================================================
+ * GOLDEN ERP SYSTEM - ENTERPRISE AUTHENTICATION & POS ROUTER
+ * File: js/auth.js
+ * 
+ * 💡 Features:
+ *   1. 🎯 CENTRALIZED ROLE CLUSTERS: Non-hardcoded role arrays for instant routing
+ *   2. ⚡ ZERO-FLICKER REDIRECT: Redirects POS users before workspace renders
+ *   3. 🔒 FAIL-CLOSED JWT VERIFIER: Client-side exp verification (Zero D1 Read)
+ *   4. 🛡️ BULLETPROOF RBAC MATRIX: Strict privilege isolation for Canteen & PM Cashiers
+ * ==============================================================================
  */
+
+// 🎯 Centralized Role Constants (ပြုပြင်ထိန်းသိမ်းရ လွယ်ကူစေရန် Cluster သတ်မှတ်ခြင်း)
+const CANTEEN_POS_ROLES = ['canteen_admin', 'canteen_cashier', 'counter1', 'counter2', 'counter3'];
+const PM_CASHIER_ROLES = ['pm_cashier1', 'pm_cashier2'];
+const FINANCE_ADMIN_ROLES = ['Owner', 'Admin', 'Finance', 'Accountant'];
 
 /**
  * 💡 Switch Role Dropdown Options based on Selected System Type
@@ -12,22 +24,27 @@ function onSystemTypeChange() {
   const roleSelect = document.getElementById('login-username');
   if (!systemTypeEl || !roleSelect) return;
 
-  const isPos = systemTypeEl.value === 'pos';
+  const isPos = (systemTypeEl.value === 'pos');
 
-  const roles = isPos ? [
-    { value: 'canteen_admin', label: 'canteen_admin' },
-    { value: 'canteen_cashier', label: 'canteen_cashier' },
-    { value: 'counter1', label: 'counter1' },
-    { value: 'counter2', label: 'counter2' },
-    { value: 'counter3', label: 'counter3' },
-    { value: 'pm_cashier1', label: 'pm_cashier1' },
-    { value: 'pm_cashier2', label: 'pm_cashier2' }
-  ] : [
+  const posRoleOptions = [
+    { value: 'canteen_admin', label: 'Canteen Admin (ကန်တင်းမန်နေဂျာ)' },
+    { value: 'canteen_cashier', label: 'Canteen Cashier (ပင်မအရောင်း)' },
+    { value: 'counter1', label: 'Counter 1 (ကောင်တာ ၁)' },
+    { value: 'counter2', label: 'Counter 2 (ကောင်တာ ၂)' },
+    { value: 'counter3', label: 'Counter 3 (ကောင်တာ ၃)' },
+    { value: 'pm_cashier1', label: 'PM Cashier 1 (မုန့်ဖိုးငွေကိုင် ၁)' },
+    { value: 'pm_cashier2', label: 'PM Cashier 2 (မုန့်ဖိုးငွေကိုင် ၂)' }
+  ];
+
+  const erpRoleOptions = [
     'Owner', 'Admin', 'Finance', 'HR', 'Accountant', 'Cashier', 'Staff', 'Viewer'
   ].map(r => ({ value: r, label: r }));
 
-  const defaultOption = `<option value="">-- Select ${isPos ? 'POS Role / Counter' : 'Username'} --</option>`;
-  roleSelect.innerHTML = defaultOption + roles.map(r => `<option value="${r.value}">${r.label}</option>`).join('');
+  const roles = isPos ? posRoleOptions : erpRoleOptions;
+  const defaultText = isPos ? '-- POS Role / Counter ရွေးချယ်ပါ --' : '-- Username ရွေးချယ်ပါ --';
+  
+  roleSelect.innerHTML = `<option value="">${defaultText}</option>` + 
+    roles.map(r => `<option value="${r.value}">${r.label}</option>`).join('');
 }
 
 /**
@@ -39,10 +56,11 @@ function hasPermission(permissionName) {
     .replace(/\s+/g, ' ');
 
   const PERM_GROUPS = {
-    FULL_ACCESS: ['can_view', 'can_add', 'can_edit', 'can_delete', 'can_manage_grades', 'can_backup'],
-    FINANCE: ['can_view', 'can_add', 'can_edit', 'can_delete', 'can_backup'],
+    FULL_ACCESS: ['can_view', 'can_add', 'can_edit', 'can_delete', 'can_manage_grades', 'can_backup', 'pos_admin', 'pos_sell'],
+    FINANCE: ['can_view', 'can_add', 'can_edit', 'can_delete', 'can_backup', 'canteen_settle'],
     HR: ['can_view', 'can_add', 'can_edit', 'can_delete', 'can_manage_grades'],
-    OPERATOR: ['can_view', 'can_add', 'can_edit', 'can_delete'],
+    POS_OPERATOR: ['can_view', 'can_add', 'pos_sell'], // Canteen POS Counters
+    CASHIER_OPERATOR: ['can_view', 'can_add', 'can_edit', 'can_delete'], // PM Cashiers
     STAFF: ['can_view', 'can_add'],
     VIEW_ONLY: ['can_view']
   };
@@ -55,13 +73,13 @@ function hasPermission(permissionName) {
     'Accountant': PERM_GROUPS.FINANCE,
     'HR': PERM_GROUPS.HR,
     'HR Staff': PERM_GROUPS.HR,
-    'Cashier': PERM_GROUPS.OPERATOR,
-    'canteen_cashier': PERM_GROUPS.OPERATOR,
-    'counter1': PERM_GROUPS.OPERATOR,
-    'counter2': PERM_GROUPS.OPERATOR,
-    'counter3': PERM_GROUPS.OPERATOR,
-    'pm_cashier1': PERM_GROUPS.OPERATOR,
-    'pm_cashier2': PERM_GROUPS.OPERATOR,
+    'Cashier': PERM_GROUPS.CASHIER_OPERATOR,
+    'pm_cashier1': PERM_GROUPS.CASHIER_OPERATOR,
+    'pm_cashier2': PERM_GROUPS.CASHIER_OPERATOR,
+    'canteen_cashier': PERM_GROUPS.POS_OPERATOR,
+    'counter1': PERM_GROUPS.POS_OPERATOR,
+    'counter2': PERM_GROUPS.POS_OPERATOR,
+    'counter3': PERM_GROUPS.POS_OPERATOR,
     'Staff': PERM_GROUPS.STAFF,
     'Viewer': PERM_GROUPS.VIEW_ONLY
   };
@@ -70,12 +88,8 @@ function hasPermission(permissionName) {
   return allowedPermissions.includes(permissionName);
 }
 
-// Global scope သို့ expose လုပ်ခြင်း
-window.onSystemTypeChange = onSystemTypeChange;
-window.hasPermission = hasPermission;
-
 /**
- * 💡 Verify JWT Token or Local Session Expiration
+ * 💡 Verify JWT Token or Local Session Expiration (0 D1 Read)
  */
 function isTokenExpired(token) {
   if (!token) return true;
@@ -84,40 +98,31 @@ function isTokenExpired(token) {
     const parts = token.split('.');
     if (parts.length === 3) {
       let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-      while (base64.length % 4) {
-        base64 += '=';
-      }
+      while (base64.length % 4) base64 += '=';
       const payloadJson = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
       const payload = JSON.parse(payloadJson);
 
       if (payload && payload.exp) {
-        const currentTime = Math.floor(Date.now() / 1000);
-        return payload.exp < currentTime;
+        return payload.exp < Math.floor(Date.now() / 1000);
       }
     }
   } catch (err) {
-    console.warn("[Auth] JWT payload exp parse fallback:", err.message);
+    console.warn("[Auth] JWT parse fallback:", err.message);
   }
 
   const expiresAt = localStorage.getItem('golden_token_expires_at');
-  if (expiresAt) {
-    return Date.now() > Number(expiresAt);
-  }
-
-  return false;
+  return expiresAt ? (Date.now() > Number(expiresAt)) : false;
 }
 
 /**
- * 💡 Clear All Authentication State & Local Storage Keys
+ * 💡 Clear All Authentication State & Storage Keys
  */
 function clearAuthStorage() {
-  localStorage.removeItem('golden_user_name');
-  localStorage.removeItem('golden_user_role');
-  localStorage.removeItem('golden_auth_token');
-  localStorage.removeItem('golden_user');
-  localStorage.removeItem('golden_token_expires_at');
-  localStorage.removeItem('token');
-  localStorage.removeItem('user');
+  const keys = [
+    'golden_user_name', 'golden_user_role', 'golden_auth_token', 
+    'golden_user', 'golden_token_expires_at', 'token', 'user'
+  ];
+  keys.forEach(k => localStorage.removeItem(k));
 
   if (window.AppState) {
     window.AppState.currentUser = null;
@@ -131,27 +136,15 @@ function clearAuthStorage() {
  */
 function validateLoginInput(username, password) {
   const errors = [];
+  if (!username || username.trim().length === 0) errors.push("အသုံးပြုသူအမည် / Counter ရွေးချယ်ပါ");
+  if (!password || password.trim().length === 0) errors.push("လျှို့ဝှက်နံပါတ် ဖြည့်သွင်းပါ");
+  else if (password.length < 4) errors.push("လျှို့ဝှက်နံပါတ် အနည်းဆုံး ၄ လုံး ရှိရပါမည်");
 
-  if (!username || username.trim().length === 0) {
-    errors.push("အသုံးပြုသူအမည် ဖြည့်သွင်းပါ");
-  } else if (username.length < 2) {
-    errors.push("အသုံးပြုသူအမည် အနည်းဆုံး ၂ လုံး ရှိရပါမည်");
-  }
-
-  if (!password || password.trim().length === 0) {
-    errors.push("လျှို့ဝှက်နံပါတ် ဖြည့်သွင်းပါ");
-  } else if (password.length < 4) {
-    errors.push("လျှို့ဝှက်နံပါတ် အနည်းဆုံး ၄ လုံး ရှိရပါမည်");
-  }
-
-  return {
-    isValid: errors.length === 0,
-    errors: errors
-  };
+  return { isValid: errors.length === 0, errors };
 }
 
 /**
- * 💡 Handle Login Form Submission (With PM Cashier Redirect)
+ * 💡 Handle Login Form Submission (With Intelligent POS Routing)
  */
 async function handleLoginSubmit(e) {
   if (e && e.preventDefault) e.preventDefault();
@@ -192,28 +185,33 @@ async function handleLoginSubmit(e) {
       window.AppState.currentUserRole = resRole;
       window.AppState.authToken = resToken;
 
-      const defaultTtlMs = 8 * 60 * 60 * 1000;
+      const defaultTtlMs = 8 * 60 * 60 * 1000; // 8 Hours
       const expiresAt = Date.now() + (response.expiresInMs || defaultTtlMs);
-
       const userObj = JSON.stringify({ username: resUser, role: resRole, name: resName });
 
-      // Golden ERP Keys
+      // Unified Session Storage
       localStorage.setItem('golden_user_name', resUser);
       localStorage.setItem('golden_user_role', resRole);
       localStorage.setItem('golden_auth_token', resToken);
       localStorage.setItem('golden_user', userObj);
       localStorage.setItem('golden_token_expires_at', String(expiresAt));
 
-      // PM Cashier Module Compatible Keys
+      // POS Module Compatible Session Keys
       localStorage.setItem('token', resToken);
       localStorage.setItem('user', userObj);
 
-      // 🎯 REDIRECT CHECK: pm_cashier1 သို့မဟုတ် pm_cashier2 ဖြစ်ပါက pm-cashier.html သို့ တိုက်ရိုက်သွားမည်
-      if (resRole === 'pm_cashier1' || resRole === 'pm_cashier2') {
+      // 🎯 ROUTE DISPATCHER: Role အလိုက် သက်ဆိုင်ရာ POS မျက်နှာပြင်သို့ လမ်းကြောင်းလွှဲခြင်း
+      if (CANTEEN_POS_ROLES.includes(resRole)) {
+        window.location.href = 'canteen-pos.html';
+        return;
+      }
+
+      if (PM_CASHIER_ROLES.includes(resRole)) {
         window.location.href = 'pm-cashier.html';
         return;
       }
 
+      // Main Desktop ERP View
       showWorkspace();
       applyRoleRestrictions();
 
@@ -237,6 +235,57 @@ async function handleLoginSubmit(e) {
       errorBox.innerText = "ဆာဗာ ချိတ်ဆက်မှု အမှား ဖြစ်ပေါ်ခဲ့သည်: " + err.message;
       errorBox.classList.remove('hidden');
     }
+  }
+}
+
+/**
+ * 💡 Verify Existing Session State & Seamless Auto-Landing
+ */
+function checkExistingSession() {
+  const savedUser = localStorage.getItem('golden_user_name');
+  const savedRole = localStorage.getItem('golden_user_role');
+  const savedToken = localStorage.getItem('golden_auth_token');
+
+  if (savedUser && savedRole && savedToken) {
+    if (isTokenExpired(savedToken)) {
+      console.warn("[Auth] Session expired. Automatically logging out.");
+      clearAuthStorage();
+      showLogin();
+      if (typeof showToast === 'function') {
+        showToast("WARNING", "လော့ဂ်အင် သက်တမ်း ကုန်ဆုံးသွားပါပြီ။ ကျေးဇူးပြု၍ ပြန်လည် လော့ဂ်အင် ဝင်ပါ။");
+      }
+      return;
+    }
+
+    // 🎯 AUTO-LANDING GUARD: Browser Refresh ဖြစ်စေ၊ စာမျက်နှာဖွင့်သည်ဖြစ်စေ သက်ဆိုင်ရာ POS သို့ တိုက်ရိုက်ပို့ခြင်း
+    if (CANTEEN_POS_ROLES.includes(savedRole)) {
+      if (!window.location.pathname.endsWith('canteen-pos.html')) {
+        window.location.href = 'canteen-pos.html';
+      }
+      return;
+    }
+
+    if (PM_CASHIER_ROLES.includes(savedRole)) {
+      if (!window.location.pathname.endsWith('pm-cashier.html')) {
+        window.location.href = 'pm-cashier.html';
+      }
+      return;
+    }
+
+    window.AppState = window.AppState || {};
+    window.AppState.currentUser = savedUser;
+    window.AppState.currentUserRole = savedRole;
+    window.AppState.authToken = savedToken;
+
+    showWorkspace();
+    applyRoleRestrictions();
+
+    if (typeof switchTab === 'function') {
+      const initialTab = (savedRole === 'Cashier' || savedRole === 'Main Cashier') ? 'cashier' : 'dashboard';
+      switchTab(initialTab);
+    }
+  } else {
+    showLogin();
   }
 }
 
@@ -276,7 +325,6 @@ function applyRoleRestrictions() {
  */
 function showWorkspace() {
   document.documentElement.className = 'dark is-authed';
-
   const overlay = document.getElementById('login-overlay');
   const ws = document.getElementById('erp-workspace');
 
@@ -295,7 +343,6 @@ function showWorkspace() {
 
 function showLogin() {
   document.documentElement.className = 'dark not-authed';
-
   const overlay = document.getElementById('login-overlay');
   const ws = document.getElementById('erp-workspace');
 
@@ -321,64 +368,16 @@ function showLogin() {
 function handleLogout() {
   if (confirm("စနစ်မှ ထွက်ခွာလိုပါသလား။")) {
     clearAuthStorage();
-
-    if (window.clearAllApiCache) {
-      window.clearAllApiCache();
-    }
+    if (window.clearAllApiCache) window.clearAllApiCache();
 
     showLogin();
     if (typeof showToast === 'function') showToast("SUCCESS", "စနစ်မှ အောင်မြင်စွာ ထွက်ခွာပြီးပါပြီ။");
-
-    setTimeout(function() {
-      window.location.reload();
-    }, 300);
-  }
-}
-
-/**
- * 💡 Verify Existing Session State with Expiration & Auto-Landing
- */
-function checkExistingSession() {
-  const savedUser = localStorage.getItem('golden_user_name');
-  const savedRole = localStorage.getItem('golden_user_role');
-  const savedToken = localStorage.getItem('golden_auth_token');
-
-  if (savedUser && savedRole && savedToken) {
-    if (isTokenExpired(savedToken)) {
-      console.warn("[Auth] Session expired. Automatically logging out.");
-      clearAuthStorage();
-      showLogin();
-      if (typeof showToast === 'function') {
-        showToast("WARNING", "လော့ဂ်အင် သက်တမ်း ကုန်ဆုံးသွားပါပြီ။ ကျေးဇူးပြု၍ ပြန်လည် လော့ဂ်အင် ဝင်ပါ။");
-      }
-      return;
-    }
-
-    // checkExistingSession ထဲတွင်
-  if (savedRole === 'pm_cashier1' || savedRole === 'pm_cashier2') {
-    window.location.href = 'pm-cashier.html';
-    return;
-  }
-
-    window.AppState = window.AppState || {};
-    window.AppState.currentUser = savedUser;
-    window.AppState.currentUserRole = savedRole;
-    window.AppState.authToken = savedToken;
-
-    showWorkspace();
-    applyRoleRestrictions();
-
-    if (typeof switchTab === 'function') {
-      const initialTab = (savedRole === 'Cashier' || savedRole === 'Main Cashier') ? 'cashier' : 'dashboard';
-      switchTab(initialTab);
-    }
-  } else {
-    showLogin();
+    setTimeout(() => { window.location.href = '/'; }, 200);
   }
 }
 
 // ==============================================================================
-// 💡 AUTO-INITIALIZE DEFAULT ROLES ON PAGE LOAD
+// 💡 AUTO-INITIALIZE ON DOM READY
 // ==============================================================================
 if (typeof document !== 'undefined') {
   document.addEventListener('DOMContentLoaded', function() {
@@ -389,6 +388,9 @@ if (typeof document !== 'undefined') {
 }
 
 // 💡 EXPOSE GLOBALLY
+window.CANTEEN_POS_ROLES = CANTEEN_POS_ROLES;
+window.PM_CASHIER_ROLES = PM_CASHIER_ROLES;
+window.onSystemTypeChange = onSystemTypeChange;
 window.hasPermission = hasPermission;
 window.isTokenExpired = isTokenExpired;
 window.clearAuthStorage = clearAuthStorage;

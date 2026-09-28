@@ -1375,6 +1375,241 @@ window.dismissCenterToast = function() {
 };
 
 // ==============================================================================
+// 💡 9. CANTEEN EVENING SETTLEMENT & PRINT ENGINE (ADMIN / FINANCE CONTROLLER)
+// ==============================================================================
+
+var gCanteenSettlementsData = [];
+
+// 🎯 Settlement Audit Modal ဖွင့်ခြင်း
+async function openAdminSettlementModal() {
+  const modal = document.getElementById('canteen-admin-settle-modal');
+  if (modal) modal.classList.remove('hidden');
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const targetDateEl = document.getElementById('adm-settle-date');
+  if (targetDateEl && !targetDateEl.value) targetDateEl.value = todayStr;
+
+  await loadAdminSettlementDailyStats();
+  await loadAdminSettlementHistory();
+}
+
+function closeAdminSettlementModal() {
+  document.getElementById('canteen-admin-settle-modal')?.classList.add('hidden');
+}
+
+// 🎯 ရွေးချယ်ထားသော ရက်စွဲအတွက် နေ့စဉ်အရောင်း အကျဉ်းချုပ် ရယူခြင်း
+async function loadAdminSettlementDailyStats() {
+  const dateVal = document.getElementById('adm-settle-date')?.value || new Date().toISOString().slice(0, 10);
+  try {
+    const res = await callApi('getCanteenDailySummary', { date: dateVal }, 'GET');
+    if (res && res.success && res.data) {
+      const dt = res.data;
+      document.getElementById('adm-set-orders').textContent = `${dt.totalOrders} စောင်`;
+      document.getElementById('adm-set-total').textContent = `${Number(dt.totalSales).toLocaleString('en-US')} MMK`;
+      document.getElementById('adm-set-cash').textContent = `${Number(dt.cashSalesShare).toLocaleString('en-US')} MMK`;
+      document.getElementById('adm-set-pocket').textContent = `${Number(dt.pocketMoneyShare).toLocaleString('en-US')} MMK`;
+      document.getElementById('adm-set-payout-input').value = dt.pocketMoneyShare;
+
+      const badge = document.getElementById('adm-set-status-badge');
+      const btnConfirm = document.getElementById('btn-adm-confirm-settle');
+
+      if (dt.isSettled) {
+        badge.className = "px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+        badge.textContent = `SETTLED (${dt.settlement?.settlement_no})`;
+        btnConfirm.disabled = true;
+        btnConfirm.classList.add('opacity-40', 'cursor-not-allowed');
+        btnConfirm.textContent = "ငွေရှင်းလင်းပြီးဖြစ်ပါသည်";
+      } else {
+        badge.className = "px-2 py-0.5 rounded text-[10px] font-black bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse";
+        badge.textContent = "PENDING CLEARING";
+        btnConfirm.disabled = (dt.pocketMoneyShare <= 0 && dt.totalSales <= 0);
+        btnConfirm.classList.remove('opacity-40', 'cursor-not-allowed');
+        btnConfirm.textContent = "Finance မှ ငွေထုတ်ပေးရှင်းလင်းမှု အတည်ပြုမည်";
+      }
+    }
+  } catch (e) {
+    console.error("Admin Settlement Summary Load Error:", e);
+  }
+}
+
+// 🎯 အရင်ရှင်းလင်းခဲ့ပြီးသော Settlement မှတ်တမ်းဟောင်းများ ဇယားပြသခြင်း
+async function loadAdminSettlementHistory() {
+  try {
+    const res = await callApi('getCanteenSettlements', { limit: 15 }, 'GET');
+    const tbody = document.getElementById('adm-settle-history-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (res && res.success && res.data && res.data.length > 0) {
+      gCanteenSettlementsData = res.data;
+      res.data.forEach((r, idx) => {
+        tbody.innerHTML += `
+          <tr class="hover:bg-slate-800/30 text-xs border-b border-slate-800/40">
+            <td class="text-center font-mono py-2.5 px-2 text-slate-400">${idx + 1}</td>
+            <td class="font-mono py-2.5 px-2 text-slate-300">${esc(r.date)}</td>
+            <td class="font-mono font-bold text-sky-400 py-2.5 px-2">${esc(r.settlementNo)}</td>
+            <td class="text-right font-mono text-slate-400 py-2.5 px-2">${Number(r.totalSalesAmount).toLocaleString('en-US')}</td>
+            <td class="text-right font-mono text-emerald-400 py-2.5 px-2">${Number(r.cashSalesShare).toLocaleString('en-US')}</td>
+            <td class="text-right font-mono font-bold text-amber-400 py-2.5 px-2">${Number(r.pocketMoneyShare).toLocaleString('en-US')}</td>
+            <td class="py-2.5 px-2 text-slate-400 truncate max-w-xs">${esc(r.receivedBy)}</td>
+            <td class="text-center py-2.5 px-2">
+              <button onclick="printCanteenSettlementVoucher('${escAttr(r.settlementNo)}')" class="p-1 text-sky-400 hover:text-sky-300 transition" title="ပြေစာထုတ်မည်">
+                <i class="fa-solid fa-print"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      });
+    } else {
+      tbody.innerHTML = `<tr><td colspan="8" class="text-center py-6 text-slate-500 font-bold">ရှင်းလင်းပြီး မှတ်တမ်း မရှိသေးပါ။</td></tr>`;
+    }
+  } catch (err) {
+    console.error("Settlement History Load Error:", err);
+  }
+}
+
+// 🎯 Finance မှ Canteen သို့ ငွေထုတ်ပေးရှင်းလင်းမှု အတည်ပြုခြင်း
+async function submitAdminSettlement() {
+  const dateVal = document.getElementById('adm-settle-date')?.value || new Date().toISOString().slice(0, 10);
+  const payout = parseFloat(document.getElementById('adm-set-payout-input')?.value || 0);
+  const pocketShareText = document.getElementById('adm-set-pocket')?.textContent || '0';
+  const pocketShare = parseFloat(pocketShareText.replace(/[^0-9.-]+/g, '')) || 0;
+  const cashShareText = document.getElementById('adm-set-cash')?.textContent || '0';
+  const cashShare = parseFloat(cashShareText.replace(/[^0-9.-]+/g, '')) || 0;
+  const receiver = (document.getElementById('adm-set-receiver')?.value || 'Canteen Manager').trim();
+
+  if (!confirm(`Finance မှ Canteen သို့ Pocket Money ရောင်းရငွေ လက်ငင်း (${Number(payout).toLocaleString('en-US')} MMK) ကို အမှန်တကယ် လက်ရောက် ပေးအပ်ပြီးပြီလား?`)) {
+    return;
+  }
+
+  const payload = {
+    date: dateVal,
+    pocketMoneyShare: pocketShare,
+    cashSalesShare: cashShare,
+    netPayoutAmount: payout,
+    receivedBy: receiver,
+    handedOverBy: (window.AppState?.currentUser || 'Finance Dept')
+  };
+
+  try {
+    if (typeof toggleLoading === 'function') toggleLoading(true);
+    const res = await callApi('saveCanteenSettlement', payload);
+    if (res && res.success) {
+      showToast("SUCCESS", `Canteen ငွေရှင်းလင်းမှု မှတ်တမ်းတင်ပြီးပါပြီ (${res.settlementNo})`);
+      await loadAdminSettlementDailyStats();
+      await loadAdminSettlementHistory();
+      printCanteenSettlementVoucher(res.settlementNo);
+    } else {
+      showToast("ERROR", res?.message || "မအောင်မြင်ပါ။");
+    }
+  } catch (e) {
+    showToast("ERROR", "ဆာဗာ အမှား: " + e.message);
+  } finally {
+    if (typeof toggleLoading === 'function') toggleLoading(false);
+  }
+}
+
+// 🖨️ A4 Dual-Copy Settlement Voucher Generator (Finance Copy + Canteen Copy)
+function printCanteenSettlementVoucher(settlementNo) {
+  let record = gCanteenSettlementsData.find(r => r.settlementNo === settlementNo);
+  
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const dateStr = record ? record.date : (document.getElementById('adm-settle-date')?.value || todayStr);
+  const totalSales = record ? record.totalSalesAmount : parseFloat(document.getElementById('adm-set-total')?.textContent.replace(/[^0-9.-]+/g, '') || 0);
+  const cashShare = record ? record.cashSalesShare : parseFloat(document.getElementById('adm-set-cash')?.textContent.replace(/[^0-9.-]+/g, '') || 0);
+  const pocketShare = record ? record.pocketMoneyShare : parseFloat(document.getElementById('adm-set-pocket')?.textContent.replace(/[^0-9.-]+/g, '') || 0);
+  const payout = record ? record.netPayoutAmount : parseFloat(document.getElementById('adm-set-payout-input')?.value || pocketShare);
+  const sNo = settlementNo || record?.settlementNo || 'SETTLE-' + dateStr.replace(/-/g, '') + '-01';
+  const handedBy = record ? record.handedOverBy : (window.AppState?.currentUser || 'Finance Dept');
+  const receivedBy = record ? record.receivedBy : (document.getElementById('adm-set-receiver')?.value || 'Canteen Manager');
+
+  const renderSingleSlip = (copyTitle) => `
+    <div style="border: 1.5px solid #1e293b; border-radius: 6px; padding: 18px 24px; background: #fff; color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-sizing: border-box;">
+      <div style="text-align: center; border-bottom: 1.5px solid #0f172a; padding-bottom: 6px; margin-bottom: 12px;">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 900; letter-spacing: 0.5px; text-transform: uppercase;">GOLDEN ERP CANTEEN MANAGEMENT SYSTEM</h2>
+        <p style="margin: 3px 0 0 0; font-size: 11px; font-weight: 800; color: #334155; text-decoration: underline;">${copyTitle}</p>
+      </div>
+
+      <table style="width: 100%; font-size: 11px; margin-bottom: 10px; border-collapse: collapse;">
+        <tr>
+          <td style="padding: 2px 0; width: 60%;"><strong>ရှင်းလင်းသည့်ရက်စွဲ :</strong> ${dateStr}</td>
+          <td style="padding: 2px 0; text-align: right;"><strong>Settlement No :</strong> ${sNo}</td>
+        </tr>
+        <tr>
+          <td style="padding: 2px 0;"><strong>ငွေလွှဲပေးအပ်သူ :</strong> ${handedBy} (ဗဟိုဘဏ္ဍာ)</td>
+          <td style="padding: 2px 0; text-align: right;"><strong>လက်ခံရရှိသူ :</strong> ${receivedBy} (ကန်တင်း)</td>
+        </tr>
+      </table>
+
+      <table style="width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 10px; border: 1px solid #334155;">
+        <thead>
+          <tr style="background-color: #f1f5f9; text-align: center; font-weight: 800; border-bottom: 1px solid #334155;">
+            <th style="border: 1px solid #334155; padding: 6px; width: 40px;">စဉ်</th>
+            <th style="border: 1px solid #334155; padding: 6px; text-align: left;">အကြောင်းအရာ</th>
+            <th style="border: 1px solid #334155; padding: 6px; width: 140px; text-align: right;">ပမာဏ (ကျပ်)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="border: 1px solid #334155; padding: 6px; text-align: center; font-family: monospace;">1</td>
+            <td style="border: 1px solid #334155; padding: 6px;">Canteen နေ့စဉ် စုစုပေါင်း အရောင်းရငွေ (Gross Sales)</td>
+            <td style="border: 1px solid #334155; padding: 6px; text-align: right; font-family: monospace; font-weight: bold;">${Number(totalSales).toLocaleString('en-US')} MMK</td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid #334155; padding: 6px; text-align: center; font-family: monospace;">2</td>
+            <td style="border: 1px solid #334155; padding: 6px;">ဆိုင်တွင် တိုက်ရိုက်ရရှိသော ငွေသား (Direct Cash Sales)</td>
+            <td style="border: 1px solid #334155; padding: 6px; text-align: right; font-family: monospace; color: #475569;">(-) ${Number(cashShare).toLocaleString('en-US')} MMK</td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid #334155; padding: 6px; text-align: center; font-family: monospace;">3</td>
+            <td style="border: 1px solid #334155; padding: 6px; font-weight: bold; color: #0284c7;">ကျောင်းသား မုန့်ဖိုးကတ်အရောင်း (Student Wallet Share)</td>
+            <td style="border: 1px solid #334155; padding: 6px; text-align: right; font-family: monospace; font-weight: bold; color: #0284c7;">${Number(pocketShare).toLocaleString('en-US')} MMK</td>
+          </tr>
+          <tr style="font-weight: 900; background: #fafafa;">
+            <td colspan="2" style="border: 1px solid #334155; padding: 8px 6px; text-align: right;">Finance မှ ကန်တင်းသို့ အမှန်တကယ် လက်ရောက်ပေးအပ်ငွေ :</td>
+            <td style="border: 1px solid #334155; padding: 8px 6px; text-align: right; font-family: monospace; font-size: 13px; color: #16a34a;">${Number(payout).toLocaleString('en-US')} MMK</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <table style="width: 100%; font-size: 10px; font-weight: 800; margin-top: 30px; text-align: center;">
+        <tr>
+          <td style="width: 45%;">
+            <div style="border-top: 1.5px dashed #475569; width: 85%; margin: 0 auto 4px auto;"></div>
+            ငွေလွှဲပေးအပ်သူ (Finance Officer)
+          </td>
+          <td style="width: 10%;"></td>
+          <td style="width: 45%;">
+            <div style="border-top: 1.5px dashed #475569; width: 85%; margin: 0 auto 4px auto;"></div>
+            ငွေလက်ခံရရှိသူ (Canteen Manager)
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
+
+  const fullPrintHtml = `
+    <!DOCTYPE html><html><head><title>Print Settlement - ${sNo}</title>
+    <style>
+      @page { size: A4 portrait; margin: 10mm 12mm; }
+      body { margin: 0; padding: 0; font-family: sans-serif; background: #fff; }
+      .cut-line { text-align: center; font-size: 10px; color: #64748b; font-family: monospace; margin: 12px 0; letter-spacing: 2px; }
+    </style></head><body>
+      ${renderSingleSlip("FINANCE AUDIT COPY (ဗဟိုဘဏ္ဍာ စာရင်းစစ်မိတ္တူ)")}
+      <div class="cut-line">✂ - - - - - - - - - - - - - - - - - - - - - Cut Here - - - - - - - - - - - - - - - - - - - - - ✂</div>
+      ${renderSingleSlip("CANTEEN RECEIPT COPY (ကန်တင်းတာဝန်ခံ သိမ်းဆည်းရန်ပြေစာ)")}
+    </body></html>
+  `;
+
+  const printWindow = window.open('', '_blank', 'width=850,height=950');
+  if (!printWindow) return showToast("ERROR", "Browser မှ Pop-up ပိတ်ထားသဖြင့် Print Window မဖွင့်နိုင်ပါ။");
+
+  printWindow.document.write(fullPrintHtml);
+  printWindow.document.close();
+  setTimeout(() => { printWindow.focus(); printWindow.print(); printWindow.close(); }, 400);
+}
+
+// ==============================================================================
 // 💡 GLOBAL EXPORTS (CLEAN & NON-DUPLICATE)
 // ==============================================================================
 window.switchStudentMoneySubTab = switchStudentMoneySubTab;
@@ -1422,3 +1657,9 @@ window.onDebitInputStudentMoney = onDebitInputStudentMoney;
 window.onCreditInputStudentMoney = onCreditInputStudentMoney;
 
 window.printRowTransferVoucher = printRowTransferVoucher;
+
+window.openAdminSettlementModal = openAdminSettlementModal;
+window.closeAdminSettlementModal = closeAdminSettlementModal;
+window.loadAdminSettlementDailyStats = loadAdminSettlementDailyStats;
+window.submitAdminSettlement = submitAdminSettlement;
+window.printCanteenSettlementVoucher = printCanteenSettlementVoucher;

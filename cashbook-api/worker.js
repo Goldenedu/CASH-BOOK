@@ -25,6 +25,7 @@ import * as StudentMoneyHandlers from './handlers-money.js';
 import * as SettingsHandlers from './handlers-settings.js';
 import * as DashboardHandlers from './handlers-dashboard.js';
 import { validateLedgerInput } from './validation.js';
+import * as CanteenPosHandlers from './handlers-canteen-pos.js';
 
 // ==============================================================================
 // 💡 1. DOMAIN-SPECIFIC SERVER-SIDE RBAC PERMISSION MATRIX
@@ -40,11 +41,41 @@ const ROLE_PERMS = {
   "Main Cashier": { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: true, uniform_write: false, promo_read: true, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
   
   // 💡 POS & SPMMS Roles
-  canteen_admin: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: false },
-  canteen_cashier: { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
-  counter1: { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
-  counter2: { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
-  counter3: { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
+  canteen_admin: { 
+    ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, 
+    student_read: true, student_write: false, staff_read: false, staff_write: false, 
+    uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, 
+    report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: false,
+    pos_read: true, pos_write: true, pos_admin: true, canteen_settle: true 
+  },
+  canteen_cashier: { 
+    ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, 
+    student_read: true, student_write: false, staff_read: false, staff_write: false, 
+    uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, 
+    report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false,
+    pos_read: true, pos_write: true, pos_admin: false, canteen_settle: true 
+  },
+  counter1: { 
+    ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, 
+    student_read: true, student_write: false, staff_read: false, staff_write: false, 
+    uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, 
+    report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false,
+    pos_read: true, pos_write: true, pos_admin: false, canteen_settle: false 
+  },
+  counter2: { 
+    ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, 
+    student_read: true, student_write: false, staff_read: false, staff_write: false, 
+    uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, 
+    report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false,
+    pos_read: true, pos_write: true, pos_admin: false, canteen_settle: false 
+  },
+  counter3: { 
+    ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, 
+    student_read: true, student_write: false, staff_read: false, staff_write: false, 
+    uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, 
+    report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false,
+    pos_read: true, pos_write: true, pos_admin: false, canteen_settle: false 
+  },
   pm_cashier1: { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
   pm_cashier2: { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
   
@@ -655,6 +686,52 @@ export default {
         case 'getSpmmsReconciliation':
           if (!can(userSession, 'report_read') && !can(userSession, 'ledger_read')) return forbidden(corsHeaders);
           result = await StudentMoneyHandlers.getSpmmsReconciliation(db, body); break;
+
+        // ==========================================================
+        // 💡 CANTEEN POS SYSTEM API ROUTES
+        // ==========================================================
+        case 'getPosItems':
+          if (!can(userSession, 'pos_read') && !can(userSession, 'ledger_read')) return forbidden(corsHeaders);
+          result = await CanteenPosHandlers.getPosItems(db, body); break;
+
+        case 'savePosItem':
+          if (!can(userSession, 'pos_admin') && !can(userSession, 'ledger_write')) return forbidden(corsHeaders);
+          result = await CanteenPosHandlers.savePosItem(db, userSession, body); break;
+
+        case 'savePosPurchase':
+          if (!can(userSession, 'pos_admin') && !can(userSession, 'ledger_write')) return forbidden(corsHeaders);
+          result = await CanteenPosHandlers.savePosPurchase(db, userSession, body); break;
+
+        case 'lookupStudentForPos':
+          if (!can(userSession, 'pos_read') && !can(userSession, 'cashier_read')) return forbidden(corsHeaders);
+          result = await CanteenPosHandlers.lookupStudentForPos(db, body); break;
+
+        case 'checkoutPosSale':
+          // 🎯 FIX: pos_write သို့မဟုတ် pos_sell ရှိသူတိုင်း ရောင်းချခွင့် ပြုမည်
+          if (!can(userSession, 'pos_sell') && !can(userSession, 'pos_write') && !can(userSession, 'cashier_write')) {
+            return forbidden(corsHeaders);
+          }
+          result = await CanteenPosHandlers.checkoutPosSale(db, userSession, body); 
+          break;
+
+        case 'getCanteenDailySummary':
+          if (!can(userSession, 'pos_read') && !can(userSession, 'ledger_read')) return forbidden(corsHeaders);
+          result = await CanteenPosHandlers.getCanteenDailySummary(db, body); break;
+
+        case 'saveCanteenSettlement':
+          if (!can(userSession, 'canteen_settle') && !can(userSession, 'ledger_write')) return forbidden(corsHeaders);
+          result = await CanteenPosHandlers.saveCanteenSettlement(db, userSession, body); break;
+
+        case 'getPosSuppliers':
+          result = await CanteenPosHandlers.getPosSuppliers(db); break;
+
+        case 'savePosSupplier':
+          if (!can(userSession, 'pos_admin') && !can(userSession, 'ledger_write')) return forbidden(corsHeaders);
+          result = await CanteenPosHandlers.savePosSupplier(db, userSession, body); break;
+
+        case 'getCanteenSettlements':
+          if (!can(userSession, 'ledger_read') && !can(userSession, 'canteen_settle')) return forbidden(corsHeaders);
+          result = await CanteenPosHandlers.getCanteenSettlements(db, body); break;
         // ==========================================================
 
         case 'getStudentData':
