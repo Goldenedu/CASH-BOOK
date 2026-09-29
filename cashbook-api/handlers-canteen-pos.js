@@ -3,13 +3,14 @@
  * GOLDEN ERP SYSTEM - CANTEEN POS HANDLERS (CLOUDFLARE D1 ENTERPRISE EDITION)
  * File: handlers-canteen-pos.js (Location: cashbook-api/handlers-canteen-pos.js)
  * 
- * 💡 Features & Architectural Blueprint V5:
- *   1. 📊 OPTIMIZED DASHBOARD: 4-Batch Atomic Aggregator (Recent Sales Removed to Save D1 Quota)
+ * 💡 Features & Architectural Blueprint V6:
+ *   1. 📊 LIVE DASHBOARD: 1-Batch Atomic Metrics (Sales, Stock Capital & Spoilage Loss)
  *   2. 🧾 PAGINATED SALES ORDERS: 20-Row Server-Side Pagination & ID DESC Sorting
- *   3. 📦 PAGINATED STOCK INVENTORY: 20-Row Pagination, Barcode & Real-Time Stock Valuation
- *   4. 🛒 PURCHASES & SUPPLIER AUDIT: Filterable Server-Side 20-Row Paginated Purchases
- *   5. 🔄 ATOMIC ROLLBACK: Edit & Delete Purchases with Stock Delta Reversal
- *   6. ⚡ ZERO FULL-TABLE-SCANS: Index-Only Lookups & Fail-Closed Validation
+ *   3. 📦 PAGINATED STOCK INVENTORY: 20-Row Pagination, Full Barcode & Valuation
+ *   4. 🛒 PURCHASES AUDITOR: 20-Row Pagination with Auto Stock-Rollback on Edit/Delete
+ *   5. ⚠️ WASTAGE & LOSS LEDGER: Multi-item Cost-basis Loss & Atomic Stock Deduction
+ *   6. ⚙️ DYNAMIC POS SETTINGS: Dynamic Daily Allowance Cap (Zero Extra Roundtrips)
+ *   7. 🛡️ ATOMIC ZERO-OVERDRAFT: Multi-counter Safe Concurrency Checks
  * ==============================================================================
  */
 
@@ -47,15 +48,14 @@ export function calculateSmartPrice(costPrice, markupPercent = 20, roundTo = 50)
 }
 
 // ==============================================================================
-// 💡 2. CANTEEN EXECUTIVE DASHBOARD METRICS (OPTIMIZED 4-BATCH AGGREGATOR)
-// 🎯 Recent Sales ဖယ်ထုတ်ထားသဖြင့် D1 Read Quota ကို အထူးချွေတာပေးသည်
+// 💡 2. CANTEEN EXECUTIVE DASHBOARD METRICS (OPTIMIZED 5-BATCH AGGREGATOR)
 // ==============================================================================
 export async function getCanteenDashboardMetrics(db, body) {
   try {
     const todayStr = getMyanmarDateString();
     const date = String(body.date || todayStr).trim();
 
-    // 🚀 D1 ULTRA QUOTA-SHIELD: Query (၄) ခုသာ Single Batch ဖြင့် ၁ ကြိမ်တည်း အပြီးဆွဲယူသည်
+    // 🚀 D1 ULTRA QUOTA-SHIELD: Query (၅) ခုသာ Single Batch ဖြင့် ၁ ကြိမ်တည်း အပြီးဆွဲယူသည်
     const batchQueries = [
       // ၁။ ယနေ့ အရောင်းစာရင်း (Orders, Sales, Wallet Share, Cash Share, Net Margin)
       db.prepare(`
@@ -96,17 +96,29 @@ export async function getCanteenDashboardMetrics(db, body) {
           COALESCE(SUM(CASE WHEN current_stock > 0 THEN (cost_price * current_stock) ELSE 0 END), 0) as totalStockCapital
         FROM pos_items_master 
         WHERE is_active = 1
-      `)
+      `),
+
+      // ၅။ အပျက်/အပျောက် ဆုံးရှုံးမှုတန်ဖိုး (ယနေ့ နှင့် သမိုင်းဝင် ဆုံးရှုံးငွေ)
+      db.prepare(`
+        SELECT 
+          COALESCE(SUM(CASE WHEN date = ? THEN total_loss_cost ELSE 0 END), 0) as todayLossCost,
+          COALESCE(SUM(total_loss_cost), 0) as allTimeLossCost
+        FROM pos_waste_records
+      `).bind(date)
     ];
 
-    const [todayRes, settleRes, allTimeRes, stockRes] = await db.batch(batchQueries);
+    const [todayRes, settleRes, allTimeRes, stockRes, wasteRes] = await db.batch(batchQueries);
 
     const todayStats = todayRes.results[0] || {};
     const settle = settleRes.results[0] || null;
     const allTimeStats = allTimeRes.results[0] || {};
     const stockStats = stockRes.results[0] || {};
+    const wasteStats = wasteRes.results[0] || {};
+
     const lowStockCount = Number(stockStats.lowStockCount || 0);
     const totalStockCapital = parseFloat(stockStats.totalStockCapital || 0);
+    const todayLossCost = parseFloat(wasteStats.todayLossCost || 0);
+    const allTimeLossCost = parseFloat(wasteStats.allTimeLossCost || 0);
 
     return {
       success: true,
@@ -118,6 +130,7 @@ export async function getCanteenDashboardMetrics(db, body) {
           pocketMoneyShare: parseFloat(todayStats.pocketMoneyShare || 0),
           cashSalesShare: parseFloat(todayStats.cashSalesShare || 0),
           totalProfit: parseFloat(todayStats.totalProfit || 0),
+          todayLossCost,
           isSettled: Boolean(settle),
           settlement: settle
         },
@@ -127,10 +140,13 @@ export async function getCanteenDashboardMetrics(db, body) {
           pocketMoneyShare: parseFloat(allTimeStats.allTimePocketShare || 0),
           cashSalesShare: parseFloat(allTimeStats.allTimeCashShare || 0),
           totalProfit: parseFloat(allTimeStats.allTimeProfit || 0),
-          totalStockCapital: totalStockCapital
+          totalStockCapital,
+          allTimeLossCost
         },
         totalStockCapital,
-        lowStockCount
+        lowStockCount,
+        todayLossCost,
+        allTimeLossCost
       }
     };
   } catch (err) {
@@ -140,7 +156,6 @@ export async function getCanteenDashboardMetrics(db, body) {
 
 // ==============================================================================
 // 💡 3. REAL-TIME STOCK INVENTORY AUDITOR (PAGINATED 20 ROWS PER PAGE)
-// 🎯 Barcode အပြည့်အစုံပါဝင်ပြီး နောက်ဆုံးသွင်းထားသော ပစ္စည်းများ အပေါ်ဆုံးတွင် ပေါ်သည်
 // ==============================================================================
 export async function getPosStockInventory(db, body) {
   try {
@@ -174,7 +189,6 @@ export async function getPosStockInventory(db, body) {
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-    // 🚀 D1 Batch: Summary Count Query နှင့် Paginated Rows Query အား ၁ ကြိမ်တည်း Run သည်
     const [summaryRes, rowsRes] = await db.batch([
       db.prepare(`
         SELECT 
@@ -220,7 +234,7 @@ export async function getPosStockInventory(db, body) {
 }
 
 // ------------------------------------------------------------------------------
-// 💡 QUICK STOCK & PRICE ADJUSTMENT (အမြန်ပြင်ဆင်မှု - Admin Only)
+// 💡 QUICK STOCK & PRICE ADJUSTMENT (Admin Only)
 // ------------------------------------------------------------------------------
 export async function updatePosItemQuick(db, session, body) {
   try {
@@ -440,8 +454,7 @@ export async function deletePosPurchase(db, session, body) {
 }
 
 // ==============================================================================
-// 💡 5. SALES ORDERS HISTORY AUDITOR (PAGINATED 20 ROWS PER PAGE) — NEW
-// 🎯 အရောင်းစာရင်း ၂၀ စောင်စီ ခွဲထုတ်ပြသပြီး နောက်ဆုံးရောင်းရငွေ အပေါ်ဆုံးတွင် ပေါ်သည်
+// 💡 5. SALES ORDERS HISTORY AUDITOR (PAGINATED 20 ROWS PER PAGE)
 // ==============================================================================
 export async function getPosSalesOrdersHistory(db, body) {
   try {
@@ -518,7 +531,208 @@ export async function getPosSalesOrdersHistory(db, body) {
 }
 
 // ==============================================================================
-// 💡 6. POS CATALOG & PRICING
+// 💡 6. WASTAGE & LOSS LEDGER (အပျက်/အပျောက်စာရင်း - 20 ROWS PER PAGE)
+// ==============================================================================
+export async function getPosWasteHistory(db, body) {
+  try {
+    const page = Math.max(1, parseInt(body.page || 1, 10));
+    const limit = Math.min(100, Math.max(1, parseInt(body.limit || 20, 10)));
+    const offset = (page - 1) * limit;
+
+    const reason = String(body.reason || "").trim();
+    const dateFrom = String(body.dateFrom || "").trim();
+    const dateTo = String(body.dateTo || "").trim();
+    const searchVal = String(body.searchVal || "").trim();
+
+    let whereClauses = [];
+    let params = [];
+
+    if (reason) {
+      whereClauses.push(`reason = ?`);
+      params.push(reason);
+    }
+    if (dateFrom) {
+      whereClauses.push(`date >= ?`);
+      params.push(dateFrom);
+    }
+    if (dateTo) {
+      whereClauses.push(`date <= ?`);
+      params.push(dateTo);
+    }
+    if (searchVal) {
+      whereClauses.push(`(waste_no LIKE ? OR items_summary LIKE ? OR remark LIKE ? OR reported_by LIKE ?)`);
+      const p = `%${searchVal}%`;
+      params.push(p, p, p, p);
+    }
+
+    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    const [countRes, rowsRes] = await db.batch([
+      db.prepare(`
+        SELECT COUNT(id) as totalRows, 
+               COALESCE(SUM(total_loss_cost), 0) as totalLossAmount,
+               COALESCE(SUM(total_items_qty), 0) as totalLossQty
+        FROM pos_waste_records
+        ${whereSql}
+      `).bind(...params),
+
+      db.prepare(`
+        SELECT id, waste_no as wasteNo, date, reason, total_loss_cost as totalLossCost,
+               total_items_qty as totalItemsQty, items_summary as itemsSummary, remark,
+               reported_by as reportedBy, uniqueid as uniqueId, created_at as createdAt
+        FROM pos_waste_records
+        ${whereSql}
+        ORDER BY id DESC
+        LIMIT ? OFFSET ?
+      `).bind(...params, limit, offset)
+    ]);
+
+    const stats = countRes.results[0] || {};
+    const totalRows = stats.totalRows || 0;
+    const totalLossAmount = parseFloat(stats.totalLossAmount || 0);
+    const totalLossQty = parseFloat(stats.totalLossQty || 0);
+
+    return {
+      success: true,
+      data: rowsRes.results || [],
+      totalRows,
+      totalLossAmount,
+      totalLossQty,
+      page,
+      limit
+    };
+  } catch (err) {
+    return { success: false, message: "အပျက်/အပျောက်စာရင်း ဆွဲယူ၍ မရပါ: " + err.message };
+  }
+}
+
+// ------------------------------------------------------------------------------
+// 💡 အပျက်/အပျောက် စာရင်း သွင်းယူခြင်း (Multi-Item Commit + Atomic Stock Deduct)
+// ------------------------------------------------------------------------------
+export async function savePosWasteEntry(db, session, body) {
+  try {
+    const entryDate = getMyanmarDateString(body.date);
+    const reason = String(body.reason || 'ပျက်စီးကွဲရှ').trim();
+    const items = Array.isArray(body.items) ? body.items : [];
+    const remark = String(body.remark || '').trim();
+
+    if (items.length === 0) {
+      return { success: false, message: "အပျက်စာရင်းသွင်းမည့် ပစ္စည်း အနည်းဆုံး ၁ ခု ရွေးချယ်ပါ။" };
+    }
+
+    let totalLossCost = 0;
+    let totalItemsQty = 0;
+    const summaryParts = [];
+    const stockDeductions = [];
+
+    for (const it of items) {
+      const bCode = String(it.barcode || '').trim();
+      const name = String(it.name || it.itemName || 'ပစ္စည်း').trim();
+      const q = safeAmount(it.qty);
+      const cost = safeAmount(it.costPrice || it.cost);
+
+      if (!bCode || q <= 0) continue;
+
+      totalItemsQty += q;
+      totalLossCost += (q * cost);
+      summaryParts.push(`${name} x ${q}`);
+      stockDeductions.push({ barcode: bCode, qty: q });
+    }
+
+    totalLossCost = Math.round(totalLossCost * 100) / 100;
+
+    if (totalItemsQty <= 0) {
+      return { success: false, message: "ပစ္စည်းအရေအတွက် ထည့်သွင်းထားခြင်း မရှိပါ။" };
+    }
+
+    const itemsSummary = summaryParts.join(', ');
+    const rawCore = body.uniqueId ? String(body.uniqueId).trim().replace(/^WST_/i, '') : generateUniqueId('').replace(/^_/, '');
+    const wasteUniqueId = `WST_${rawCore}`;
+    const wasteNo = `WST-${entryDate.replace(/-/g, '')}-${generateUniqueId('').slice(-3).toUpperCase()}`;
+
+    // ⚡ Atomic Batch: ၁ ကြိမ်တည်းဖြင့် Waste Row သွင်းပြီး Stock Master ထဲမှ နုတ်ယူသည်
+    const batchStatements = [
+      db.prepare(`
+        INSERT INTO pos_waste_records (waste_no, date, reason, total_loss_cost, total_items_qty, items_summary, remark, reported_by, uniqueid)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(wasteNo, entryDate, reason, totalLossCost, totalItemsQty, itemsSummary, remark, session?.name || 'Cashier', wasteUniqueId)
+    ];
+
+    for (const sd of stockDeductions) {
+      batchStatements.push(
+        db.prepare(`
+          UPDATE pos_items_master 
+          SET current_stock = current_stock - ?, updated_at = datetime('now') 
+          WHERE barcode = ?
+        `).bind(sd.qty, sd.barcode)
+      );
+    }
+
+    await db.batch(batchStatements);
+
+    return {
+      success: true,
+      wasteNo,
+      totalLossCost,
+      totalItemsQty,
+      message: "အပျက်/အပျောက်စာရင်း အောင်မြင်စွာ မှတ်တမ်းတင်ပြီးပါပြီ။"
+    };
+  } catch (err) {
+    return { success: false, message: "အပျက်စာရင်း မှတ်တမ်းတင်မှု မအောင်မြင်ပါ: " + err.message };
+  }
+}
+
+// ==============================================================================
+// 💡 7. DYNAMIC POS SETTINGS (ALLOWANCE CAP & SYSTEM SETTINGS)
+// ==============================================================================
+export async function getPosSettings(db) {
+  try {
+    const res = await db.prepare("SELECT setting_key as settingKey, setting_value as settingValue, description, updated_at as updatedAt FROM pos_settings").all();
+    const settingsMap = {};
+    (res.results || []).forEach(r => {
+      settingsMap[r.settingKey] = r.settingValue;
+    });
+
+    if (!settingsMap.daily_spending_cap) {
+      settingsMap.daily_spending_cap = '10000';
+    }
+
+    return { success: true, data: settingsMap, list: res.results || [] };
+  } catch (err) {
+    return { success: false, message: "Settings ဆွဲယူ၍ မရပါ: " + err.message };
+  }
+}
+
+export async function updatePosSettings(db, session, body) {
+  try {
+    const key = String(body.settingKey || body.key || '').trim();
+    const val = String(body.settingValue || body.value || '').trim();
+
+    if (!key) return { success: false, message: "Setting Key မပါဝင်ပါ။" };
+
+    if (key === 'daily_spending_cap') {
+      const numVal = parseInt(val, 10);
+      if (isNaN(numVal) || numVal < 0) {
+        return { success: false, message: "ကျောင်းသား တစ်နေ့တာ ကန့်သတ်ငွေသည် အနည်းဆုံး 0 MMK သို့မဟုတ် အထက် ဖြစ်ရပါမည်။" };
+      }
+    }
+
+    await db.prepare(`
+      INSERT INTO pos_settings (setting_key, setting_value, updated_at)
+      VALUES (?, ?, datetime('now'))
+      ON CONFLICT(setting_key) DO UPDATE SET
+        setting_value = excluded.setting_value,
+        updated_at = datetime('now')
+    `).bind(key, val).run();
+
+    return { success: true, message: "စနစ်ဆက်တင်အား အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။" };
+  } catch (err) {
+    return { success: false, message: "Settings ပြင်ဆင်မှု မအောင်မြင်ပါ: " + err.message };
+  }
+}
+
+// ==============================================================================
+// 💡 8. POS CATALOG & PRICING
 // ==============================================================================
 export async function getPosItems(db, body) {
   try {
@@ -606,9 +820,6 @@ export async function savePosItem(db, session, body) {
   }
 }
 
-// ------------------------------------------------------------------------------
-// 💡 အဝယ်စာရင်း သွင်းယူခြင်း (Cashier & Admin နှစ်ဦးစလုံး အသုံးပြုနိုင်သည်)
-// ------------------------------------------------------------------------------
 export async function savePosPurchase(db, session, body) {
   try {
     const entryDate = getMyanmarDateString(body.date);
@@ -661,7 +872,7 @@ export async function savePosPurchase(db, session, body) {
 }
 
 // ==============================================================================
-// 💡 7. STUDENT POCKET MONEY RADAR (QR-SAFE O(1) LOOKUP)
+// 💡 9. STUDENT POCKET MONEY RADAR (PIGGYBACKED DYNAMIC CAP - ZERO EXTRA READS)
 // ==============================================================================
 export async function lookupStudentForPos(db, body) {
   try {
@@ -695,7 +906,8 @@ export async function lookupStudentForPos(db, body) {
     const realStudentId = parseInt(student.studentId || student.id, 10);
     const realFyid = student.fyid || rawInput;
 
-    const [balRow, spentRow] = await db.batch([
+    // 🚀 D1 ULTRA QUOTA-SHIELD: Balance, Spent နှင့် Dynamic Cap တို့ကို ၁ ကြိမ်တည်း ဆွဲယူသည်
+    const [balRow, spentRow, capRow] = await db.batch([
       db.prepare(`
         SELECT COALESCE(SUM(debit - credit), 0) as bal 
         FROM student_money 
@@ -707,13 +919,15 @@ export async function lookupStudentForPos(db, body) {
         SELECT COALESCE(SUM(total_amount), 0) as todaySpent 
         FROM pos_sales_orders 
         WHERE student_id = ? AND date = ? AND payment_method = 'Student Pocket Money'
-      `).bind(realStudentId, todayStr)
+      `).bind(realStudentId, todayStr),
+
+      db.prepare(`SELECT setting_value as capVal FROM pos_settings WHERE setting_key = 'daily_spending_cap' LIMIT 1`)
     ]);
 
     const currentBalance = parseFloat(balRow.results[0]?.bal || 0);
     const todaySpent = parseFloat(spentRow.results[0]?.todaySpent || 0);
-    const dailyCap = 10000;
-    const remainingQuota = Math.max(0, dailyCap - todaySpent);
+    const dynamicCap = parseFloat(capRow.results[0]?.capVal || 10000);
+    const remainingQuota = Math.max(0, dynamicCap - todaySpent);
 
     return {
       success: true,
@@ -725,7 +939,7 @@ export async function lookupStudentForPos(db, body) {
         currentBalance,
         todaySpent,
         remainingQuota,
-        dailyCap
+        dailyCap: dynamicCap
       }
     };
   } catch (err) {
@@ -734,7 +948,7 @@ export async function lookupStudentForPos(db, body) {
 }
 
 // ==============================================================================
-// 💡 8. ATOMIC SINGLE BATCH POS CHECKOUT
+// 💡 10. ATOMIC SINGLE BATCH POS CHECKOUT (DYNAMIC CAP + ATOMIC STOCK LOCK)
 // ==============================================================================
 export async function checkoutPosSale(db, session, body) {
   try {
@@ -775,7 +989,8 @@ export async function checkoutPosSale(db, session, body) {
         return { success: false, message: "မုန့်ဖိုးအကောင့်ဖြင့် ဝယ်ယူရန် ကျောင်းသား ID လိုအပ်ပါသည်။" };
       }
 
-      const [balRes, spentRes] = await db.batch([
+      // 🚀 Single Batch Verification (Balance + Spent + Dynamic Cap)
+      const [balRes, spentRes, capRes] = await db.batch([
         db.prepare(`
           SELECT COALESCE(SUM(debit - credit), 0) as bal 
           FROM student_money 
@@ -786,12 +1001,14 @@ export async function checkoutPosSale(db, session, body) {
           SELECT COALESCE(SUM(total_amount), 0) as todaySpent 
           FROM pos_sales_orders 
           WHERE student_id = ? AND date = ? AND payment_method = 'Student Pocket Money'
-        `).bind(studentId, entryDate)
+        `).bind(studentId, entryDate),
+
+        db.prepare(`SELECT setting_value as capVal FROM pos_settings WHERE setting_key = 'daily_spending_cap' LIMIT 1`)
       ]);
 
       const curStuBal = parseFloat(balRes.results[0]?.bal || 0);
       const todaySpent = parseFloat(spentRes.results[0]?.todaySpent || 0);
-      const DAILY_CAP = 10000;
+      const dynamicCap = parseFloat(capRes.results[0]?.capVal || 10000);
 
       if (totalAmount > curStuBal) {
         return { 
@@ -800,11 +1017,11 @@ export async function checkoutPosSale(db, session, body) {
         };
       }
 
-      if ((todaySpent + totalAmount) > DAILY_CAP) {
-        const remaining = Math.max(0, DAILY_CAP - todaySpent);
+      if ((todaySpent + totalAmount) > dynamicCap) {
+        const remaining = Math.max(0, dynamicCap - todaySpent);
         return { 
           success: false, 
-          message: `တစ်ရက် မုန့်ဖိုးကန့်သတ်ချက် (10,000 MMK) ကျော်လွန်နေပါသည်! ယနေ့ (${todaySpent.toLocaleString('en-US')} MMK) သုံးပြီးဖြစ်၍ (${remaining.toLocaleString('en-US')} MMK) သာ ဝယ်ယူခွင့် ကျန်ပါတော့သည်။` 
+          message: `တစ်ရက် မုန့်ဖိုးကန့်သတ်ချက် (${dynamicCap.toLocaleString('en-US')} MMK) ကျော်လွန်နေပါသည်! ယနေ့ (${todaySpent.toLocaleString('en-US')} MMK) သုံးပြီးဖြစ်၍ (${remaining.toLocaleString('en-US')} MMK) သာ ဝယ်ယူခွင့် ကျန်ပါတော့သည်။` 
         };
       }
     }
@@ -842,6 +1059,7 @@ export async function checkoutPosSale(db, session, body) {
       );
     }
 
+    // 🎯 Multi-Counter Concurrency Safe Atomic Stock Deduction
     for (const item of stockDeductions) {
       const bCode = String(item.barcode || "").trim();
       const q = safeAmount(item.qty);
@@ -849,11 +1067,11 @@ export async function checkoutPosSale(db, session, body) {
         batchStatements.push(
           db.prepare(`
             UPDATE pos_items_master 
-           SET current_stock = current_stock - ?, updated_at = datetime('now') 
-           WHERE barcode = ? AND current_stock >= ?
-         `).bind(q, bCode, q)
+            SET current_stock = current_stock - ?, updated_at = datetime('now') 
+            WHERE barcode = ? AND current_stock >= ?
+          `).bind(q, bCode, q)
         );
-     }
+      }
     }
 
     await db.batch(batchStatements);
@@ -877,7 +1095,7 @@ export async function checkoutPosSale(db, session, body) {
 }
 
 // ==============================================================================
-// 💡 9. EVENING CANTEEN SETTLEMENT (ညနေပိုင်း ငွေသားရှင်းလင်းမှု)
+// 💡 11. EVENING CANTEEN SETTLEMENT (ညနေပိုင်း ငွေသားရှင်းလင်းမှု)
 // ==============================================================================
 export async function getCanteenDailySummary(db, body) {
   try {
@@ -992,7 +1210,7 @@ export async function getCanteenSettlements(db, body) {
 }
 
 // ==============================================================================
-// 💡 10. SUPPLIERS MASTER (FULL PROFILE: PH NO & ADDRESS)
+// 💡 12. SUPPLIERS MASTER (FULL PROFILE: PH NO & ADDRESS)
 // ==============================================================================
 export async function getPosSuppliers(db) {
   try {

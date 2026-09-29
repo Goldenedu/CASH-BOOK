@@ -113,3 +113,42 @@ CREATE TABLE IF NOT EXISTS canteen_settlements (
 
 CREATE INDEX IF NOT EXISTS idx_canteen_settle_date ON canteen_settlements(date);
 CREATE INDEX IF NOT EXISTS idx_canteen_settle_uid ON canteen_settlements(uniqueid);
+
+-- ------------------------------------------------------------------------------
+-- ၁။ အပျက်/အပျောက်/သက်တမ်းလွန် ကုန်ကျစရိတ် မှတ်တမ်းဇယား (POS Waste Records)
+-- 💡 အရောင်းစာရင်းနှင့် မရောထွေးဘဲ ဝယ်ရင်းဈေး (Cost Price) ဖြင့် သီးခြားထိန်းချုပ်သည်။
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS pos_waste_records (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  waste_no TEXT UNIQUE NOT NULL,                       -- e.g. WST-20260929-001
+  date TEXT NOT NULL,                                  -- YYYY-MM-DD
+  reason TEXT NOT NULL,                                -- သက်တမ်းလွန် / ပျက်စီးကွဲရှ / ပျောက်ဆုံး / အခြား
+  total_loss_cost REAL NOT NULL CHECK (total_loss_cost >= 0), -- ဝယ်ရင်းဈေးဖြင့် တွက်ချက်ထားသော ဆုံးရှုံးမှုတန်ဖိုး
+  total_items_qty REAL NOT NULL CHECK (total_items_qty > 0),  -- ဆုံးရှုံးသွားသော စုစုပေါင်းအရေအတွက်
+  items_summary TEXT NOT NULL,                         -- e.g. "ပေါင်မုန့် x 2, ပဲနို့ x 1"
+  remark TEXT,                                         -- အသေးစိတ် အကြောင်းပြချက်
+  reported_by TEXT NOT NULL DEFAULT 'Cashier',         -- စာရင်းသွင်းသူ ဝန်ထမ်းအမည်
+  uniqueid TEXT UNIQUE NOT NULL,                       -- Idempotency Core Key
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ⚡ အပျက်စာရင်း ရက်စွဲနှင့် Unique ID အမြန်ဆုံး ရှာဖွေနိုင်ရန် Indexes
+CREATE INDEX IF NOT EXISTS idx_pos_waste_date ON pos_waste_records(date);
+CREATE INDEX IF NOT EXISTS idx_pos_waste_uid ON pos_waste_records(uniqueid);
+
+-- ------------------------------------------------------------------------------
+-- ၂။ စနစ်ဆက်တင် မာစတာဇယား (POS System Settings)
+-- 💡 ကျောင်းသား Daily Allowance Cap အား Dynamic ထိန်းချုပ်မည့် Table
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS pos_settings (
+  setting_key TEXT PRIMARY KEY,
+  setting_value TEXT NOT NULL,
+  description TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- 🎯 မူလစံသတ်မှတ်ချက်အဖြစ် တစ်ရက် ၁၀,၀၀၀ MMK အား ထည့်သွင်းထားခြင်း
+INSERT INTO pos_settings (setting_key, setting_value, description)
+VALUES 
+  ('daily_spending_cap', '10000', 'ကျောင်းသားတစ်ဦး တစ်ရက် အများဆုံး မုန့်ဖိုးသုံးစွဲခွင့် ကန့်သတ်ငွေ (MMK)')
+ON CONFLICT(setting_key) DO NOTHING;

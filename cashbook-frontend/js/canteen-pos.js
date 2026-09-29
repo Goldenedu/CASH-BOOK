@@ -3,29 +3,32 @@
  * GOLDEN ERP SYSTEM - CANTEEN POS & MANAGEMENT CLIENT CONTROLLER
  * File: js/canteen-pos.js (Location: cashbook-frontend/js/canteen-pos.js)
  * 
- * 💡 Architecture & Blueprint V5:
- *   1. 🏛️ MULTI-VIEW ROUTER: Dashboard, POS Register, Sales Orders, Stock & Purchases
- *   2. 📊 LIVE DASHBOARD: 1-Batch Atomic Metrics (Recent Sales Removed to Save D1 Quota)
+ * 💡 Architecture & Blueprint V6:
+ *   1. 🏛️ MULTI-VIEW ROUTER: Dashboard, POS Register, Sales, Stock, Purchases & Waste
+ *   2. 📊 LIVE DASHBOARD: 1-Batch Atomic Metrics (Sales, Stock Capital & Spoilage Loss)
  *   3. 🧾 PAGINATED SALES ORDERS: 20-Row Server-Side Pagination & Thermal Slip Reprint
  *   4. 📦 REAL-TIME STOCK AUDITOR: 20-Row Pagination, Full Barcode & CSV Export
  *   5. 🛒 PURCHASES AUDIT: 20-Row Pagination with Auto Stock-Rollback on Edit/Delete
- *   6. 🛡️ GRANULAR RBAC: Cashier can Purchase, but CANNOT Edit Stock or Purchases
- *   7. ⚡ ZERO-CACHE PIPELINE: POST + Timestamp Cache-Busters for Instant Multi-Device Sync
- *   8. 🎯 D1 QUOTA SHIELD: Zero D1 Catalog Re-fetches on POS Checkout
+ *   6. ⚠️ WASTAGE & LOSS LEDGER: Multi-item Cost-basis Loss & In-Memory Fast Cart
+ *   7. ⚙️ DYNAMIC POS SETTINGS: Cached Daily Allowance Cap (Zero Extra D1 Reads)
+ *   8. 🛡️ GRANULAR RBAC: Cashier can Purchase & Record Waste, but CANNOT Edit Stock
  * ==============================================================================
  */
 
 // 🎯 Application Global States
 let gSession = null;
-let gActiveView = 'pos';     // 'dashboard', 'pos', 'sales', 'stock', 'purchases'
+let gActiveView = 'pos';     // 'dashboard', 'pos', 'sales', 'stock', 'purchases', 'waste'
 let gItemsCache = [];       // O(1) Local Product Catalog Cache
 let gSuppliersCache = [];   // Suppliers Master Cache
 let gStockInventoryData = []; // Cached Stock List for CSV Export
 let gPurchasesData = [];    // Cached Purchases for Edit/Delete
 let gSalesOrdersData = [];  // Cached Sales Orders for Reprint Slip
+let gWasteData = [];        // Cached Waste Records
 let gCart = [];             // Dynamic In-Memory Cart State Array
+let gWasteCart = [];        // 🎯 In-Memory Wastage Cart
 let gCurrentStudent = null; // Scanned Student Object
 let gPaymentMode = 'Student Pocket Money'; // 'Student Pocket Money' or 'Cash'
+let gDailySpendingCap = 10000; // 🎯 Cached Daily Cap (Zero Repetitive D1 Reads)
 let isSubmitting = false;
 
 // 🎯 Pagination & Filter States (20 Rows Per Page)
@@ -43,6 +46,11 @@ let gSalesPage = 1;
 const gSalesLimit = 20;
 let gSalesTotalRows = 0;
 let gSalesSearchTimeout = null;
+
+let gWastePage = 1;
+const gWasteLimit = 20;
+let gWasteTotalRows = 0;
+let gWasteSearchTimeout = null;
 
 // Safe Escape Helper
 const esc = window.escapeHtml || (s => s ? String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : '');
@@ -83,9 +91,13 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (toggleBtn) toggleBtn.classList.add('hidden');
     const btnAdmin = document.getElementById('btn-admin-stock');
     if (btnAdmin) btnAdmin.classList.add('hidden');
+    const btnHeaderWaste = document.getElementById('btn-header-waste');
+    if (btnHeaderWaste) btnHeaderWaste.classList.add('hidden');
     switchCanteenView('pos');
   } else if (role === 'canteen_cashier') {
-    // Cashier အား အဝယ်သွင်းခွင့် ဖွင့်ထားမည်ဖြစ်ပြီး Stock ပြင်ခွင့်ကို Table Render တွင် ပိတ်ဆို့မည်
+    // 🎯 Cashier သည် အဝယ်စာရင်းနှင့် အပျက်စာရင်း သွင်းခွင့်ရှိသည် (Settings ပြင်ခွင့် မရှိပါ)
+    const btnSettings = document.getElementById('btn-side-settings');
+    if (btnSettings) btnSettings.classList.add('hidden');
     switchCanteenView('pos');
   } else {
     // Canteen Admin / Owner: ပင်မ Dashboard သို့ ဦးစွာ ပို့ဆောင်မည်
@@ -95,12 +107,18 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Bind Keyboard Hotkeys
   window.addEventListener('keydown', handleGlobalHotkeys);
 
-  // 🎯 Dropdown အပြင်ဘက်ကို ကလစ်နှိပ်ပါက Dropdown အလိုအလျောက် ပိတ်မည့် Listener
+  // 🎯 Dropdowns အပြင်ဘက်ကို ကလစ်နှိပ်ပါက အလိုအလျောက် ပိတ်မည့် Global Listener
   document.addEventListener('click', (e) => {
     const barcodeInput = document.getElementById('pos-barcode-input');
     const dropdown = document.getElementById('pos-search-dropdown');
     if (dropdown && !dropdown.contains(e.target) && e.target !== barcodeInput) {
       dropdown.classList.add('hidden');
+    }
+
+    const wasteInput = document.getElementById('waste-barcode-input');
+    const wasteDropdown = document.getElementById('waste-search-dropdown');
+    if (wasteDropdown && !wasteDropdown.contains(e.target) && e.target !== wasteInput) {
+      wasteDropdown.classList.add('hidden');
     }
   });
 
@@ -113,16 +131,17 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Background Data Pre-fetch (Zero-Cache POST)
   await Promise.all([
     loadItemsCatalog(false),
-    loadSuppliersList()
+    loadSuppliersList(),
+    loadPosSettings()
   ]);
   
   focusScanner();
 });
 
-// 🎯 View Switcher Router (5 Core Views)
+// 🎯 View Switcher Router (6 Core Views)
 function switchCanteenView(viewName) {
   gActiveView = viewName;
-  const views = ['dashboard', 'pos', 'sales', 'stock', 'purchases'];
+  const views = ['dashboard', 'pos', 'sales', 'stock', 'purchases', 'waste'];
 
   views.forEach(v => {
     const el = document.getElementById(`view-${v}`);
@@ -145,7 +164,8 @@ function switchCanteenView(viewName) {
       pos: 'CANTEEN POS REGISTER TERMINAL',
       sales: 'CANTEEN SALES ORDERS HISTORY',
       stock: 'REAL-TIME STOCK INVENTORY AUDITOR',
-      purchases: 'PURCHASES & SUPPLIERS AUDIT HISTORY'
+      purchases: 'PURCHASES & SUPPLIERS AUDIT HISTORY',
+      waste: 'CANTEEN WASTAGE & LOSS AUDITOR'
     };
     titleEl.textContent = titles[viewName] || 'CANTEEN POS SYSTEM';
   }
@@ -155,6 +175,7 @@ function switchCanteenView(viewName) {
   else if (viewName === 'sales') loadSalesOrdersHistory(1);
   else if (viewName === 'stock') loadStockInventory(1);
   else if (viewName === 'purchases') loadPurchasesHistory(1);
+  else if (viewName === 'waste') loadWasteHistory(1);
   else if (viewName === 'pos') focusScanner();
 }
 
@@ -168,6 +189,7 @@ async function refreshActiveCanteenView() {
     else if (gActiveView === 'sales') await loadSalesOrdersHistory(gSalesPage);
     else if (gActiveView === 'stock') await loadStockInventory(gStockPage);
     else if (gActiveView === 'purchases') await loadPurchasesHistory(gPurchasesPage);
+    else if (gActiveView === 'waste') await loadWasteHistory(gWastePage);
     else if (gActiveView === 'pos') await loadItemsCatalog(true);
 
     showToast("SUCCESS", "အချက်အလက်များ အသစ်ရယူပြီးပါပြီ။");
@@ -226,7 +248,7 @@ async function loadCanteenDashboard() {
   try {
     const res = await callApi('getCanteenDashboardMetrics', { _t: Date.now() }, 'POST');
     if (res && res.success && res.data) {
-      const { today, allTime, totalStockCapital, lowStockCount, date } = res.data;
+      const { today, allTime, totalStockCapital, lowStockCount, todayLossCost, allTimeLossCost, date } = res.data;
 
       const dateLabel = document.getElementById('dash-date-label');
       if (dateLabel) dateLabel.textContent = date || new Date().toISOString().slice(0, 10);
@@ -247,6 +269,10 @@ async function loadCanteenDashboard() {
       document.getElementById('dash-today-wallet').textContent = `${Number(today.pocketMoneyShare || 0).toLocaleString()} MMK`;
       document.getElementById('dash-today-cash').textContent = `${Number(today.cashSalesShare || 0).toLocaleString()} MMK`;
       document.getElementById('dash-today-profit').textContent = `+${Number(today.totalProfit || 0).toLocaleString()} MMK`;
+      
+      // ⚠️ Wastage Loss Metrics
+      const todayLossEl = document.getElementById('dash-today-loss');
+      if (todayLossEl) todayLossEl.textContent = `-${Number(todayLossCost || 0).toLocaleString()} MMK`;
 
       document.getElementById('dash-all-sales').textContent = `${Number(allTime.totalSales || 0).toLocaleString()} MMK`;
       document.getElementById('dash-all-wallet').textContent = `${Number(allTime.pocketMoneyShare || 0).toLocaleString()} MMK`;
@@ -258,6 +284,9 @@ async function loadCanteenDashboard() {
         const capitalVal = totalStockCapital !== undefined ? totalStockCapital : (allTime.totalStockCapital || 0);
         capitalEl.textContent = `${Number(capitalVal).toLocaleString()} MMK`;
       }
+
+      const allLossEl = document.getElementById('dash-all-loss');
+      if (allLossEl) allLossEl.textContent = `${Number(allTimeLossCost || 0).toLocaleString()} MMK`;
 
       const lowStockAlert = document.getElementById('dash-low-stock-alert');
       if (lowStockAlert) {
@@ -980,7 +1009,7 @@ function updateBillTotals() {
 }
 
 // ==============================================================================
-// 💡 7. STUDENT RADAR & 10,000 MMK CAP VERIFIER
+// 💡 7. STUDENT RADAR & DYNAMIC ALLOWANCE CAP VERIFIER
 // ==============================================================================
 function setPaymentMode(mode) {
   gPaymentMode = mode;
@@ -1010,6 +1039,7 @@ async function lookupStudentRadar() {
     const res = await callApi('lookupStudentForPos', { studentId: val, _t: Date.now() }, 'POST');
     if (res && res.success && res.data) {
       gCurrentStudent = res.data;
+      if (res.data.dailyCap) gDailySpendingCap = Number(res.data.dailyCap);
       renderStudentCard();
       showToast("SUCCESS", `ကျောင်းသား: ${gCurrentStudent.name}`);
       focusScanner();
@@ -1026,23 +1056,29 @@ async function lookupStudentRadar() {
 function renderStudentCard() {
   if (!gCurrentStudent) return resetStudentCard();
 
+  const cap = gDailySpendingCap || gCurrentStudent.dailyCap || 10000;
+
   document.getElementById('radar-student-name').textContent = gCurrentStudent.name;
   document.getElementById('radar-student-info').textContent = `Class: ${gCurrentStudent.studentClass || '-'} | FYID: ${gCurrentStudent.fyid || '-'}`;
   document.getElementById('radar-wallet-bal').textContent = `${Number(gCurrentStudent.currentBalance).toLocaleString()} MMK`;
-  document.getElementById('radar-today-spent').textContent = `${Number(gCurrentStudent.todaySpent).toLocaleString()} / ${Number(gCurrentStudent.dailyCap).toLocaleString()}`;
+  document.getElementById('radar-today-spent').textContent = `${Number(gCurrentStudent.todaySpent).toLocaleString()} / ${Number(cap).toLocaleString()}`;
   document.getElementById('radar-badge-status').textContent = "ACTIVE WALLET";
   document.getElementById('radar-badge-status').className = "px-2 py-0.5 rounded text-[9px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-mono";
+
+  const capHeader = document.getElementById('radar-cap-header');
+  if (capHeader) capHeader.textContent = `DAILY ${Number(cap).toLocaleString()} MMK CAP:`;
 
   const totalBill = getCartTotalAmount();
   evaluateStudentCapWarning(totalBill);
 }
 
 function resetStudentCard() {
+  const cap = gDailySpendingCap || 10000;
   document.getElementById('radar-student-name').textContent = "ကျောင်းသား ရွေးချယ်ပါ";
   document.getElementById('radar-student-info').textContent = "Class: - | ID: -";
   document.getElementById('radar-wallet-bal').textContent = "0 MMK";
-  document.getElementById('radar-today-spent').textContent = "0 / 10,000";
-  document.getElementById('radar-cap-text').textContent = "ကျန်ခွဲတမ်း: 10,000 MMK";
+  document.getElementById('radar-today-spent').textContent = `0 / ${Number(cap).toLocaleString()}`;
+  document.getElementById('radar-cap-text').textContent = `ကျန်ခွဲတမ်း: ${Number(cap).toLocaleString()} MMK`;
   document.getElementById('radar-progress-bar').style.width = "0%";
   document.getElementById('radar-progress-bar').className = "h-full bg-emerald-500";
   document.getElementById('radar-badge-status').textContent = "STANDBY";
@@ -1053,7 +1089,7 @@ function evaluateStudentCapWarning(currentBillAmount) {
   if (!gCurrentStudent || gPaymentMode !== 'Student Pocket Money') return;
 
   const spent = gCurrentStudent.todaySpent || 0;
-  const cap = gCurrentStudent.dailyCap || 10000;
+  const cap = gDailySpendingCap || gCurrentStudent.dailyCap || 10000;
   const combined = spent + currentBillAmount;
   const percentage = Math.min(100, (combined / cap) * 100);
   const remainingQuota = Math.max(0, cap - spent);
@@ -1113,10 +1149,10 @@ async function executeCheckout() {
     }
 
     const spent = gCurrentStudent.todaySpent || 0;
-    const cap = gCurrentStudent.dailyCap || 10000;
+    const cap = gDailySpendingCap || gCurrentStudent.dailyCap || 10000;
     if ((spent + totalAmount) > cap) {
       const remaining = Math.max(0, cap - spent);
-      return showToast("ERROR", `တစ်ရက် ၁၀,၀၀၀ ကျပ် ကန့်သတ်ချက် ကျော်လွန်နေပါသည်! (ကျန်ခွဲတမ်း: ${remaining.toLocaleString()} MMK)`);
+      return showToast("ERROR", `တစ်ရက် ${Number(cap).toLocaleString()} ကျပ် ကန့်သတ်ချက် ကျော်လွန်နေပါသည်! (ကျန်ခွဲတမ်း: ${remaining.toLocaleString()} MMK)`);
     }
   }
 
@@ -1234,8 +1270,9 @@ function openItemModal() {
   document.getElementById('m-item-name').value = '';
   document.getElementById('m-qty').value = '1';
   document.getElementById('m-cost-price').value = '';
-  document.getElementById('m-selling-price').value = '';
+  document.getElementById('m-markup-percent').value = '20';
   document.getElementById('m-suggested-price').textContent = '0 MMK';
+  document.getElementById('m-selling-price').value = '';
   
   loadSuppliersList();
   document.getElementById('pos-item-modal')?.classList.remove('hidden');
@@ -1249,23 +1286,27 @@ function lookupExistingBarcode() {
     document.getElementById('m-category').value = existing.category || 'Snack';
     document.getElementById('m-cost-price').value = existing.costPrice;
     document.getElementById('m-markup-percent').value = existing.markupPercent || 20;
-    document.getElementById('m-selling-price').value = existing.sellingPrice;
     triggerSmartPriceCalc();
   }
 }
 
+// 🎯 FIX: အတည်ပြုရောင်းဈေးသို့ အကြံပြုရောင်းဈေးတန်ဖိုးကို အလိုအလျောက် တိုက်ရိုက်ထည့်သွင်းပေးခြင်း
 function triggerSmartPriceCalc() {
-  const cost = parseFloat(document.getElementById('m-cost-price').value || 0);
-  const markup = parseFloat(document.getElementById('m-markup-percent').value || 20);
-  if (cost <= 0) return;
+  const cost = parseFloat(document.getElementById('m-cost-price')?.value || 0);
+  const markup = parseFloat(document.getElementById('m-markup-percent')?.value || 20);
+  if (cost <= 0) {
+    document.getElementById('m-suggested-price').textContent = '0 MMK';
+    return;
+  }
 
   const rawPrice = cost * (1 + markup / 100);
   const rounded = Math.ceil(rawPrice / 50) * 50;
 
   document.getElementById('m-suggested-price').textContent = `${rounded.toLocaleString()} MMK`;
   
+  // 🎯 Auto-Sync အတည်ပြုရောင်းဈေး တိုက်ရိုက် Override
   const sellingInput = document.getElementById('m-selling-price');
-  if (!sellingInput.value || sellingInput.value == '0') {
+  if (sellingInput) {
     sellingInput.value = rounded;
   }
 }
@@ -1305,7 +1346,335 @@ async function submitPosPurchase(e) {
 }
 
 // ==============================================================================
-// 💡 10. EVENING SETTLEMENT MODAL
+// ⚠️ 10. WASTAGE & LOSS LEDGER CONTROLLER (IN-MEMORY CART & 20-ROW AUDIT)
+// ==============================================================================
+function openWasteModal() {
+  document.getElementById('waste-barcode-input').value = '';
+  document.getElementById('m-waste-remark').value = '';
+  document.getElementById('m-waste-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('m-waste-reason').value = 'ပျက်စီးကွဲရှ';
+  gWasteCart = [];
+  renderWasteCart();
+  document.getElementById('pos-waste-modal')?.classList.remove('hidden');
+}
+
+function handleWasteBarcodeInput(e) {
+  const val = e.target.value.trim();
+  const dropdown = document.getElementById('waste-search-dropdown');
+
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    searchAndAddWasteItem(val);
+    return;
+  }
+
+  // Live in-memory matching (Zero D1 reads)
+  if (val.length >= 2) {
+    const matches = gItemsCache.filter(it => 
+      it.itemName.toLowerCase().includes(val.toLowerCase()) || 
+      it.barcode.toLowerCase().includes(val.toLowerCase())
+    );
+
+    if (matches.length > 0) {
+      dropdown.innerHTML = matches.map(m => `
+        <div onclick="selectDropdownWasteItem('${escAttr(m.barcode)}')" class="p-2 hover:bg-slate-800 cursor-pointer border-b border-slate-700/60 flex items-center justify-between text-xs bg-[#0c1527] transition">
+          <div>
+            <span class="font-bold text-white">${esc(m.itemName)}</span>
+            <span class="text-[10px] font-mono text-slate-400 block">${esc(m.barcode)}</span>
+          </div>
+          <span class="font-mono text-slate-300">Cost: ${Number(m.costPrice || 0).toLocaleString()} MMK</span>
+        </div>
+      `).join('');
+      dropdown.classList.remove('hidden');
+    } else {
+      dropdown.classList.add('hidden');
+    }
+  } else {
+    dropdown.classList.add('hidden');
+  }
+}
+
+function selectDropdownWasteItem(barcode) {
+  document.getElementById('waste-search-dropdown')?.classList.add('hidden');
+  searchAndAddWasteItem(barcode);
+}
+
+function searchAndAddWasteItem(targetCode) {
+  const input = document.getElementById('waste-barcode-input');
+  const code = (targetCode || input.value || '').trim();
+  if (!code) return;
+
+  const item = gItemsCache.find(it => it.barcode === code || it.itemName.toLowerCase() === code.toLowerCase());
+  if (!item) {
+    showToast("ERROR", `ပစ္စည်း ရှာမတွေ့ပါ: ${code}`);
+    return;
+  }
+
+  const existing = gWasteCart.find(wi => wi.barcode === item.barcode);
+  if (existing) {
+    existing.qty += 1;
+  } else {
+    gWasteCart.push({
+      barcode: item.barcode,
+      name: item.itemName,
+      costPrice: Number(item.costPrice || 0),
+      currentStock: Number(item.currentStock || 0),
+      qty: 1
+    });
+  }
+
+  input.value = '';
+  document.getElementById('waste-search-dropdown')?.classList.add('hidden');
+  renderWasteCart();
+}
+
+function renderWasteCart() {
+  const list = document.getElementById('waste-items-list');
+  const emptyBox = document.getElementById('waste-items-empty');
+  const badge = document.getElementById('waste-cart-badge');
+
+  if (gWasteCart.length === 0) {
+    list.innerHTML = '';
+    if (emptyBox) list.appendChild(emptyBox);
+    badge.textContent = "0 items";
+    document.getElementById('waste-modal-total-qty').textContent = "0 ခု";
+    document.getElementById('waste-modal-total-cost').textContent = "0 MMK";
+    return;
+  }
+
+  list.innerHTML = '';
+  let totalQty = 0;
+  let totalCost = 0;
+
+  gWasteCart.forEach((item, idx) => {
+    const subtotal = item.qty * item.costPrice;
+    totalQty += item.qty;
+    totalCost += subtotal;
+
+    list.innerHTML += `
+      <div class="p-2 bg-[#080f1e]/80 border border-slate-800 rounded-lg flex items-center justify-between gap-2 text-xs">
+        <div class="min-w-0 flex-1">
+          <h5 class="font-bold text-white truncate">${esc(item.name)}</h5>
+          <span class="text-[10px] font-mono text-slate-400">ဝယ်ရင်းဈေး: ${Number(item.costPrice).toLocaleString()} MMK</span>
+        </div>
+
+        <div class="flex items-center gap-1 shrink-0 bg-[#060c18] border border-slate-800 rounded-md p-0.5">
+          <button type="button" onclick="changeWasteCartQty(${idx}, -1)" class="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs">-</button>
+          <input type="number" value="${item.qty}" min="1" onchange="setWasteCartQty(${idx}, this.value)" class="w-8 bg-transparent text-center font-mono font-bold text-white text-xs outline-none">
+          <button type="button" onclick="changeWasteCartQty(${idx}, 1)" class="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs">+</button>
+        </div>
+
+        <div class="text-right shrink-0 min-w-[70px]">
+          <strong class="font-mono text-rose-400 font-bold block">${Number(subtotal).toLocaleString()}</strong>
+          <button type="button" onclick="removeWasteCartItem(${idx})" class="text-[10px] text-slate-500 hover:text-rose-400 transition"><i class="fa-solid fa-trash"></i></button>
+        </div>
+      </div>
+    `;
+  });
+
+  badge.textContent = `${gWasteCart.length} items`;
+  document.getElementById('waste-modal-total-qty').textContent = `${totalQty} ခု`;
+  document.getElementById('waste-modal-total-cost').textContent = `${Number(totalCost).toLocaleString()} MMK`;
+}
+
+function changeWasteCartQty(idx, delta) {
+  if (!gWasteCart[idx]) return;
+  const target = gWasteCart[idx].qty + delta;
+  if (target <= 0) return removeWasteCartItem(idx);
+  gWasteCart[idx].qty = target;
+  renderWasteCart();
+}
+
+function setWasteCartQty(idx, val) {
+  const q = parseInt(val, 10) || 1;
+  if (q <= 0) return removeWasteCartItem(idx);
+  gWasteCart[idx].qty = q;
+  renderWasteCart();
+}
+
+function removeWasteCartItem(idx) {
+  gWasteCart.splice(idx, 1);
+  renderWasteCart();
+}
+
+async function submitPosWaste() {
+  if (gWasteCart.length === 0) {
+    return showToast("ERROR", "အပျက်စာရင်းသွင်းမည့် ပစ္စည်း အနည်းဆုံး ၁ ခု ရွေးချယ်ပါ။");
+  }
+
+  const payload = {
+    date: document.getElementById('m-waste-date').value || new Date().toISOString().slice(0, 10),
+    reason: document.getElementById('m-waste-reason').value,
+    remark: document.getElementById('m-waste-remark').value.trim(),
+    items: gWasteCart,
+    uniqueId: 'WST_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)
+  };
+
+  try {
+    const res = await callApi('savePosWasteEntry', payload);
+    if (res && res.success) {
+      showToast("SUCCESS", res.message || "အပျက်/အပျောက်စာရင်း အောင်မြင်စွာ မှတ်တမ်းတင်ပြီးပါပြီ။");
+      closeModal('pos-waste-modal');
+
+      // 🎯 Local Cache Stock ထဲမှ ချက်ချင်းနုတ်ယူသည် (Zero D1 Read)
+      gWasteCart.forEach(wi => {
+        const item = gItemsCache.find(it => it.barcode === wi.barcode);
+        if (item) item.currentStock = Math.max(0, Number(item.currentStock || 0) - wi.qty);
+      });
+
+      gWasteCart = [];
+      await Promise.all([
+        loadWasteHistory(1),
+        loadStockInventory(gStockPage),
+        loadCanteenDashboard()
+      ]);
+    } else {
+      showToast("ERROR", res?.message || "မအောင်မြင်ပါ။");
+    }
+  } catch (err) {
+    showToast("ERROR", err.message);
+  }
+}
+
+// 🎯 Waste History View (20 Rows Paginated)
+function onSearchWasteDebounced() {
+  clearTimeout(gWasteSearchTimeout);
+  gWasteSearchTimeout = setTimeout(() => { loadWasteHistory(1); }, 250);
+}
+
+function clearWasteFilter() {
+  document.getElementById('waste-search').value = '';
+  document.getElementById('waste-reason-filter').value = '';
+  document.getElementById('waste-date-from').value = '';
+  document.getElementById('waste-date-to').value = '';
+  loadWasteHistory(1);
+}
+
+function changeWastePage(delta) {
+  loadWasteHistory(gWastePage + delta);
+}
+
+async function loadWasteHistory(page = 1) {
+  gWastePage = Math.max(1, page);
+  const searchVal = document.getElementById('waste-search')?.value.trim() || '';
+  const reason = document.getElementById('waste-reason-filter')?.value || '';
+  const dateFrom = document.getElementById('waste-date-from')?.value || '';
+  const dateTo = document.getElementById('waste-date-to')?.value || '';
+
+  try {
+    const res = await callApi('getPosWasteHistory', {
+      searchVal, reason, dateFrom, dateTo,
+      page: gWastePage, limit: gWasteLimit, _t: Date.now()
+    }, 'POST');
+
+    if (res && res.success) {
+      const records = res.data || [];
+      gWasteData = records;
+      gWasteTotalRows = res.totalRows || 0;
+
+      const totalLossBadge = document.getElementById('waste-total-loss-badge');
+      if (totalLossBadge) totalLossBadge.textContent = `${Number(res.totalLossAmount || 0).toLocaleString()} MMK`;
+
+      const tbody = document.getElementById('waste-table-body');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      if (records.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-slate-500 font-bold">အပျက်/အပျောက်စာရင်း မရှိပါ။</td></tr>`;
+      } else {
+        records.forEach((r, idx) => {
+          const displayNo = gWasteTotalRows - ((gWastePage - 1) * gWasteLimit + idx);
+
+          tbody.innerHTML += `
+            <tr class="hover:bg-slate-800/40 text-xs border-b border-slate-800/40">
+              <td class="text-center font-mono py-2.5 px-3 text-slate-500">${displayNo}</td>
+              <td class="font-mono text-slate-300 py-2.5 px-3">${esc(r.date)}</td>
+              <td class="font-mono font-bold text-rose-400 py-2.5 px-3">${esc(r.wasteNo)}</td>
+              <td class="text-center py-2.5 px-3">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                  ${esc(r.reason)}
+                </span>
+              </td>
+              <td class="py-2.5 px-3 text-white font-bold">${esc(r.itemsSummary)}</td>
+              <td class="text-center font-mono font-black text-white py-2.5 px-3">${r.totalItemsQty}</td>
+              <td class="text-right font-mono font-bold text-rose-400 py-2.5 px-3">${Number(r.totalLossCost).toLocaleString()} MMK</td>
+              <td class="py-2.5 px-3 text-slate-400">${esc(r.reportedBy)}</td>
+              <td class="py-2.5 px-3 text-slate-400 truncate max-w-xs">${esc(r.remark || '-')}</td>
+            </tr>
+          `;
+        });
+      }
+
+      const start = (gWastePage - 1) * gWasteLimit + 1;
+      const end = Math.min(start + gWasteLimit - 1, gWasteTotalRows);
+      const info = document.getElementById('waste-pagination-info');
+      if (info) info.textContent = gWasteTotalRows === 0 ? "Showing 0 entries" : `Showing ${start} to ${end} of ${gWasteTotalRows} entries`;
+
+      const prevBtn = document.getElementById('waste-btn-prev');
+      const nextBtn = document.getElementById('waste-btn-next');
+      if (prevBtn) prevBtn.disabled = (gWastePage <= 1);
+      if (nextBtn) nextBtn.disabled = (end >= gWasteTotalRows);
+    }
+  } catch (err) {
+    console.error("Waste History Load Error:", err);
+  }
+}
+
+// ==============================================================================
+// ⚙️ 11. DYNAMIC POS SETTINGS (CACHED ALLOWANCE CAP CONTROLLER)
+// ==============================================================================
+async function loadPosSettings() {
+  try {
+    const res = await callApi('getPosSettings', { _t: Date.now() }, 'POST');
+    if (res && res.success && res.data) {
+      if (res.data.daily_spending_cap) {
+        gDailySpendingCap = Number(res.data.daily_spending_cap);
+      }
+    }
+  } catch (e) {
+    console.warn("Settings Cache Load Warning:", e.message);
+  }
+}
+
+function openSettingsModal() {
+  const role = (gSession?.role || '').trim();
+  if (role !== 'canteen_admin' && role !== 'Owner' && role !== 'Admin') {
+    return showToast("ERROR", "ဆက်တင် ပြင်ဆင်ခွင့် မရှိပါ။ (Admin Only)");
+  }
+
+  document.getElementById('m-set-daily-cap').value = gDailySpendingCap;
+  document.getElementById('pos-settings-modal')?.classList.remove('hidden');
+}
+
+async function submitPosSettings(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  const capVal = document.getElementById('m-set-daily-cap')?.value.trim();
+  if (!capVal || isNaN(capVal)) return showToast("ERROR", "ကျောင်းသား တစ်နေ့တာ ကန့်သတ်ငွေ အတိအကျ ထည့်သွင်းပါ။");
+
+  try {
+    const res = await callApi('updatePosSettings', {
+      settingKey: 'daily_spending_cap',
+      settingValue: String(capVal)
+    });
+
+    if (res && res.success) {
+      gDailySpendingCap = Number(capVal);
+      showToast("SUCCESS", `Daily Cap ကို ${Number(capVal).toLocaleString()} MMK သို့ ပြင်ဆင်ပြီးပါပြီ။`);
+      closeModal('pos-settings-modal');
+      
+      // Real-time UI reflection
+      if (gCurrentStudent) renderStudentCard();
+      else resetStudentCard();
+    } else {
+      showToast("ERROR", res?.message || "မအောင်မြင်ပါ။");
+    }
+  } catch (err) {
+    showToast("ERROR", err.message);
+  }
+}
+
+// ==============================================================================
+// 💡 12. EVENING SETTLEMENT MODAL
 // ==============================================================================
 async function openSettlementModal() {
   try {
@@ -1402,6 +1771,26 @@ window.openItemModal = openItemModal;
 window.lookupExistingBarcode = lookupExistingBarcode;
 window.triggerSmartPriceCalc = triggerSmartPriceCalc;
 window.submitPosPurchase = submitPosPurchase;
+
+// ⚠️ Waste & Damage Exports
+window.openWasteModal = openWasteModal;
+window.handleWasteBarcodeInput = handleWasteBarcodeInput;
+window.searchAndAddWasteItem = searchAndAddWasteItem;
+window.selectDropdownWasteItem = selectDropdownWasteItem;
+window.changeWasteCartQty = changeWasteCartQty;
+window.setWasteCartQty = setWasteCartQty;
+window.removeWasteCartItem = removeWasteCartItem;
+window.submitPosWaste = submitPosWaste;
+window.loadWasteHistory = loadWasteHistory;
+window.onSearchWasteDebounced = onSearchWasteDebounced;
+window.clearWasteFilter = clearWasteFilter;
+window.changeWastePage = changeWastePage;
+
+// ⚙️ Settings Exports
+window.openSettingsModal = openSettingsModal;
+window.submitPosSettings = submitPosSettings;
+window.loadPosSettings = loadPosSettings;
+
 window.openSettlementModal = openSettlementModal;
 window.confirmCanteenSettlement = confirmCanteenSettlement;
 window.closeModal = closeModal;
