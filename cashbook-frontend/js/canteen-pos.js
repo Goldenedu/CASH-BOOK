@@ -85,8 +85,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (btnAdmin) btnAdmin.classList.add('hidden');
     switchCanteenView('pos');
   } else if (role === 'canteen_cashier') {
-    // 🎯 Cashier သည် အဝယ်စာရင်း သွင်းခွင့်ရှိသည် (btn-admin-stock အား ဖွင့်ထားမည်)
-    // သို့သော် Stock ပြင်ဆင်ခွင့်ကို Table Render အဆင့်တွင် ပိတ်ဆို့ထားမည်
+    // Cashier အား အဝယ်သွင်းခွင့် ဖွင့်ထားမည်ဖြစ်ပြီး Stock ပြင်ခွင့်ကို Table Render တွင် ပိတ်ဆို့မည်
     switchCanteenView('pos');
   } else {
     // Canteen Admin / Owner: ပင်မ Dashboard သို့ ဦးစွာ ပို့ဆောင်မည်
@@ -96,7 +95,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Bind Keyboard Hotkeys
   window.addEventListener('keydown', handleGlobalHotkeys);
 
-  // 🎯 Close search dropdown on click outside
+  // 🎯 Dropdown အပြင်ဘက်ကို ကလစ်နှိပ်ပါက Dropdown အလိုအလျောက် ပိတ်မည့် Listener
   document.addEventListener('click', (e) => {
     const barcodeInput = document.getElementById('pos-barcode-input');
     const dropdown = document.getElementById('pos-search-dropdown');
@@ -229,7 +228,6 @@ async function loadCanteenDashboard() {
     if (res && res.success && res.data) {
       const { today, allTime, totalStockCapital, lowStockCount, date } = res.data;
 
-      // Date & Settlement Badge
       const dateLabel = document.getElementById('dash-date-label');
       if (dateLabel) dateLabel.textContent = date || new Date().toISOString().slice(0, 10);
       
@@ -244,27 +242,23 @@ async function loadCanteenDashboard() {
         }
       }
 
-      // Today KPI Cards
       document.getElementById('dash-today-sales').textContent = `${Number(today.totalSales || 0).toLocaleString()} MMK`;
       document.getElementById('dash-today-orders').textContent = `${today.totalOrders || 0} Invoices Today`;
       document.getElementById('dash-today-wallet').textContent = `${Number(today.pocketMoneyShare || 0).toLocaleString()} MMK`;
       document.getElementById('dash-today-cash').textContent = `${Number(today.cashSalesShare || 0).toLocaleString()} MMK`;
       document.getElementById('dash-today-profit').textContent = `+${Number(today.totalProfit || 0).toLocaleString()} MMK`;
 
-      // All-Time Cumulative & Total Stock Capital
       document.getElementById('dash-all-sales').textContent = `${Number(allTime.totalSales || 0).toLocaleString()} MMK`;
       document.getElementById('dash-all-wallet').textContent = `${Number(allTime.pocketMoneyShare || 0).toLocaleString()} MMK`;
       document.getElementById('dash-all-cash').textContent = `${Number(allTime.cashSalesShare || 0).toLocaleString()} MMK`;
       document.getElementById('dash-all-orders').textContent = `${Number(allTime.totalOrders || 0).toLocaleString()} Invoices`;
 
-      // Total Stock Investment Capital
       const capitalEl = document.getElementById('dash-stock-capital');
       if (capitalEl) {
         const capitalVal = totalStockCapital !== undefined ? totalStockCapital : (allTime.totalStockCapital || 0);
         capitalEl.textContent = `${Number(capitalVal).toLocaleString()} MMK`;
       }
 
-      // Low Stock Alert Badge
       const lowStockAlert = document.getElementById('dash-low-stock-alert');
       if (lowStockAlert) {
         if (lowStockCount > 0) {
@@ -356,7 +350,6 @@ async function loadSalesOrdersHistory(page = 1) {
         });
       }
 
-      // Pagination Controls Sync
       const start = (gSalesPage - 1) * gSalesLimit + 1;
       const end = Math.min(start + gSalesLimit - 1, gSalesTotalRows);
       const info = document.getElementById('sales-pagination-info');
@@ -372,7 +365,6 @@ async function loadSalesOrdersHistory(page = 1) {
   }
 }
 
-// 🖨️ Reprint Sales Slip Generator
 function reprintSalesSlip(invoiceNo) {
   const order = gSalesOrdersData.find(o => o.invoiceNo === invoiceNo);
   if (!order) return showToast("ERROR", "ပြေစာ အချက်အလက် မတွေ့ပါ။");
@@ -461,7 +453,6 @@ async function loadStockInventory(page = 1) {
         });
       }
 
-      // Pagination Sync
       const start = (gStockPage - 1) * gStockLimit + 1;
       const end = Math.min(start + gStockLimit - 1, gStockTotalRows);
       const info = document.getElementById('stock-pagination-info');
@@ -634,7 +625,6 @@ async function loadPurchasesHistory(page = 1) {
         });
       }
 
-      // Pagination Controls Sync
       const start = (gPurchasesPage - 1) * gPurchasesLimit + 1;
       const end = Math.min(start + gPurchasesLimit - 1, gPurchasesTotalRows);
       const info = document.getElementById('pur-pagination-info');
@@ -1153,7 +1143,6 @@ async function executeCheckout() {
     if (res && res.success) {
       showToast("SUCCESS", `အရောင်း အောင်မြင်ပါပြီ! Invoice: ${res.invoiceNo}`);
       
-      // Print Slip
       printPosReceipt(res.invoiceNo, totalAmount, itemsSummary, gPaymentMode, gCurrentStudent);
 
       // 🎯 D1 Quota Guard: D1 သို့ Catalog အသစ်မဆွဲဘဲ Local Memory Stock ကိုသာ နုတ်ယူသည်
@@ -1171,6 +1160,10 @@ async function executeCheckout() {
       renderCart();
 
     } else {
+      // 🎯 Multi-Counter Conflict: အကယ်၍ အခြား counter က အရင်ရောင်းသွား၍ လက်ကျန်မရှိတော့ပါက Cache အသစ်ဆွဲသည်
+      if (res?.message && res.message.includes('လက်ကျန်')) {
+        await loadItemsCatalog(false);
+      }
       showToast("ERROR", res?.message || "အရောင်း မအောင်မြင်ပါ။");
     }
   } catch (err) {
