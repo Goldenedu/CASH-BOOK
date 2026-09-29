@@ -1401,7 +1401,7 @@ function closeAdminSettlementModal() {
 async function loadAdminSettlementDailyStats() {
   const dateVal = document.getElementById('adm-settle-date')?.value || new Date().toISOString().slice(0, 10);
   try {
-    const res = await callApi('getCanteenDailySummary', { date: dateVal }, 'GET');
+    const res = await callApi('getCanteenDailySummary', { date: dateVal }, 'POST');
     if (res && res.success && res.data) {
       const dt = res.data;
       document.getElementById('adm-set-orders').textContent = `${dt.totalOrders} စောင်`;
@@ -1413,15 +1413,22 @@ async function loadAdminSettlementDailyStats() {
       const badge = document.getElementById('adm-set-status-badge');
       const btnConfirm = document.getElementById('btn-adm-confirm-settle');
 
+      // 🔒 CLOSURE INTERLOCK
       if (dt.isSettled) {
         badge.className = "px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
-        badge.textContent = `SETTLED (${dt.settlement?.settlement_no})`;
+        badge.textContent = `SETTLED (${dt.settlement?.settlement_no || dt.settlement?.settlementNo})`;
         btnConfirm.disabled = true;
         btnConfirm.classList.add('opacity-40', 'cursor-not-allowed');
         btnConfirm.textContent = "ငွေရှင်းလင်းပြီးဖြစ်ပါသည်";
+      } else if (!dt.isClosed) {
+        badge.className = "px-2 py-0.5 rounded text-[10px] font-black bg-rose-500/10 text-rose-400 border border-rose-500/20 animate-pulse";
+        badge.textContent = "REGISTER NOT CLOSED (ဆိုင်မပိတ်ရသေးပါ)";
+        btnConfirm.disabled = true;
+        btnConfirm.classList.add('opacity-40', 'cursor-not-allowed');
+        btnConfirm.textContent = "ဆိုင်မပိတ်သေးသဖြင့် ငွေရှင်း၍ မရပါ";
       } else {
         badge.className = "px-2 py-0.5 rounded text-[10px] font-black bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse";
-        badge.textContent = "PENDING CLEARING";
+        badge.textContent = `REGISTER CLOSED (${dt.closure?.closedBy || 'Ready'})`;
         btnConfirm.disabled = (dt.pocketMoneyShare <= 0 && dt.totalSales <= 0);
         btnConfirm.classList.remove('opacity-40', 'cursor-not-allowed');
         btnConfirm.textContent = "Finance မှ ငွေထုတ်ပေးရှင်းလင်းမှု အတည်ပြုမည်";

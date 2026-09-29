@@ -149,27 +149,41 @@ export async function getStudentMoneyData(db, body) {
 export async function getStudentMoneySummary(db, body) {
   try {
     const fy = normalizeFyStr(body.fy || getCurrentAcademicYear()).replace(/^FY\s*/i, '');
+    const todayStr = getMyanmarDateString();
     const searchVal = String(body.searchVal || "").trim();
 
-    let whereClauses = [`(fy IN (?, ?)) AND student_id IS NOT NULL`];
-    let params = [fy, `FY ${fy}`];
+    let whereClauses = [`(sm.fy IN (?, ?)) AND sm.student_id IS NOT NULL`];
+    let params = [fy, `FY ${fy}`, todayStr];
 
     if (searchVal) {
-      whereClauses.push(`(fyid_name LIKE ? OR fyid LIKE ? OR CAST(student_id AS TEXT) LIKE ?)`);
+      whereClauses.push(`(sm.fyid_name LIKE ? OR sm.fyid LIKE ? OR CAST(sm.student_id AS TEXT) LIKE ?)`);
       const p = `%${searchVal}%`;
       params.push(p, p, p);
     }
 
+    // 🎯 FIX: Offline POS သုံးချိန်တွင် Cap မကျော်စေရန် todaySpent ကို ၁ ကြိမ်တည်းဖြင့် ပေါင်းစပ်ဆွဲယူခြင်း
     const query = `
-      SELECT student_id as studentId, MAX(fyid) as fyid, MAX(fyid_name) as fyidName, MAX(class) as class,
-             SUM(debit) as totalDeposit, SUM(credit) as totalWithdraw, SUM(debit - credit) as netBalance,
-             COUNT(student_id) as transactionCount
-      FROM student_money WHERE ${whereClauses.join(' AND ')}
-      GROUP BY student_id ORDER BY netBalance DESC
+      SELECT sm.student_id as studentId, MAX(sm.fyid) as fyid, MAX(sm.fyid_name) as fyidName, MAX(sm.class) as class,
+             SUM(sm.debit) as totalDeposit, SUM(sm.credit) as totalWithdraw, SUM(sm.debit - sm.credit) as netBalance,
+             COUNT(sm.student_id) as transactionCount,
+             COALESCE(today_orders.todaySpent, 0) as todaySpent
+      FROM student_money sm
+      LEFT JOIN (
+        SELECT student_id, SUM(total_amount) as todaySpent 
+        FROM pos_sales_orders 
+        WHERE date = ? AND payment_method = 'Student Pocket Money'
+        GROUP BY student_id
+      ) today_orders ON today_orders.student_id = sm.student_id
+      WHERE ${whereClauses.join(' AND ')}
+      GROUP BY sm.student_id ORDER BY netBalance DESC
     `;
     
     const rowsRes = await db.prepare(query).bind(...params).all();
-    const formatted = (rowsRes.results || []).map((r, i) => ({ no: i + 1, ...r }));
+    const formatted = (rowsRes.results || []).map((r, i) => ({ 
+      no: i + 1, 
+      ...r,
+      todaySpent: parseFloat(r.todaySpent || 0)
+    }));
 
     let tD = 0, tW = 0, tB = 0;
     formatted.forEach(r => { tD += r.totalDeposit; tW += r.totalWithdraw; tB += r.netBalance; });
@@ -302,17 +316,17 @@ export async function deleteStudentMoneyEntry(db, session, body) {
     const existing = await db.prepare("SELECT fy, date, student_id, remark, uniqueid FROM student_money WHERE uniqueid = ?").bind(uid).first();
     if (!existing) return { success: false, message: "ဖျက်မည့် စာရင်း ရှာမတွေ့ပါ။" };
 
-    const coreId = uid.replace(/^(STM_|PMC_|CAN_)+/i, '');
+    const coreId = uid.replace(/^(STM_|PMC_|CAN_|POS_|OFF_)+/i, '');
     const cleanFy = existing.fy ? existing.fy.replace(/^FY\s*/i, '') : '';
     const isTransferOrCashier = existing.student_id === null || (existing.remark && existing.remark.includes('PM Cashier'));
 
-    // ⚡ EXACT LOOKUP (No LIKE '%...%' scans)
-    const exactKeys = [uid, coreId, `STM_${coreId}`, `PMC_${coreId}`, `CAN_${coreId}`, `PMC_STM_${coreId}`, `STM_PMC_${coreId}`];
+    const exactKeys = [uid, coreId, `STM_${coreId}`, `PMC_${coreId}`, `CAN_${coreId}`, `POS_${coreId}`, `OFF_${coreId}`];
 
     const batchStatements = [
       db.prepare(`DELETE FROM student_money WHERE uniqueid IN (${exactKeys.map(() => '?').join(',')})`).bind(...exactKeys),
       db.prepare(`DELETE FROM pm_cashier_book WHERE uniqueid IN (${exactKeys.map(() => '?').join(',')})`).bind(...exactKeys),
-      db.prepare(`DELETE FROM canteen_book WHERE uniqueid IN (${exactKeys.map(() => '?').join(',')})`).bind(...exactKeys)
+      db.prepare(`DELETE FROM canteen_book WHERE uniqueid IN (${exactKeys.map(() => '?').join(',')})`).bind(...exactKeys),
+      db.prepare(`DELETE FROM pos_sales_orders WHERE uniqueid IN (${exactKeys.map(() => '?').join(',')})`).bind(...exactKeys)
     ];
 
     await db.batch(batchStatements);

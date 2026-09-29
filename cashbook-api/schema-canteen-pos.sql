@@ -152,3 +152,27 @@ INSERT INTO pos_settings (setting_key, setting_value, description)
 VALUES 
   ('daily_spending_cap', '10000', 'ကျောင်းသားတစ်ဦး တစ်ရက် အများဆုံး မုန့်ဖိုးသုံးစွဲခွင့် ကန့်သတ်ငွေ (MMK)')
 ON CONFLICT(setting_key) DO NOTHING;
+
+-- ------------------------------------------------------------------------------
+-- ၁။ ကန်တင်း နေ့စဉ် ဆိုင်ပိတ်သိမ်းမှု မှတ်တမ်းဇယား (Canteen Day Closures)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS canteen_day_closures (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  date TEXT UNIQUE NOT NULL,                           -- YYYY-MM-DD (တစ်ရက်လျှင် ၁ ကြိမ်သာ ပိတ်ရမည်)
+  closed_at TEXT NOT NULL DEFAULT (datetime('now')),   -- ပိတ်သည့် အချိန်
+  closed_by TEXT NOT NULL,                             -- ပိတ်သိမ်းသည့် ဝန်ထမ်းအမည်
+  total_sales REAL NOT NULL DEFAULT 0,                 -- ထိုနေ့ စုစုပေါင်း အရောင်း
+  cash_sales REAL NOT NULL DEFAULT 0,                  -- ငွေသား အရောင်း
+  wallet_sales REAL NOT NULL DEFAULT 0,                -- မုန့်ဖိုးကတ် အရောင်း
+  total_orders INTEGER NOT NULL DEFAULT 0,             -- စုစုပေါင်း ပြေစာစောင်ရေ
+  status TEXT NOT NULL DEFAULT 'CLOSED',               -- 'CLOSED'
+  remark TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_canteen_closure_date ON canteen_day_closures(date);
+
+-- ------------------------------------------------------------------------------
+-- ၂။ Offline Sync Batch ပေးပို့မှုများတွင် Idempotency ထိန်းသိမ်းရန် Index
+-- ------------------------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_pos_sales_uniqueid ON pos_sales_orders(uniqueid);

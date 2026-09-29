@@ -31,12 +31,12 @@
   <script src="js/config.js"></script>
   <script src="js/api.js"></script>
 </head>
-<body class="text-slate-100 min-h-screen flex select-none bg-[#050b14]">
+<body class="text-slate-100 h-screen flex overflow-hidden select-none bg-[#050b14]">
 
   <!-- ============================================================================== -->
-  <!-- 💡 1. CANTEEN HUB NAVIGATION SIDEBAR                                           -->
+  <!-- 💡 1. CANTEEN HUB NAVIGATION SIDEBAR (FIXED PINNED SIDEBAR - NEVER SCROLLS)   -->
   <!-- ============================================================================== -->
-  <aside id="canteen-sidebar" class="w-64 bg-[#080f1e] border-r border-slate-800/80 flex flex-col justify-between shrink-0 transition-all duration-300 z-50">
+  <aside id="canteen-sidebar" class="w-64 bg-[#080f1e] border-r border-slate-800/80 flex flex-col justify-between shrink-0 h-screen z-50 overflow-y-auto custom-scroll">
     <div>
       <!-- Brand Header -->
       <div class="p-4 border-b border-slate-800/80 flex items-center gap-3">
@@ -49,7 +49,7 @@
         </div>
       </div>
 
-      <!-- Navigation Links (6 Core Views + Clearing + Settings) -->
+      <!-- Navigation Links -->
       <nav class="p-3 space-y-1 text-xs font-bold">
         <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 px-3 py-1">OPERATIONS</div>
         
@@ -80,7 +80,7 @@
           <span>Purchases (အဝယ်စာရင်း)</span>
         </button>
 
-        <!-- ⚠️ NEW: Waste & Damage Tab -->
+        <!-- Waste & Damage Tab -->
         <button id="nav-btn-waste" onclick="switchCanteenView('waste')" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-400 hover:text-white hover:bg-slate-800/50">
           <i class="fa-solid fa-dumpster-fire w-4 text-center text-rose-400"></i>
           <span>Waste & Loss (အပျက်/အပျောက်)</span>
@@ -88,12 +88,17 @@
 
         <div class="text-[9px] font-black uppercase tracking-widest text-slate-500 px-3 py-1 pt-2.5">CLEARING & CONTROLS</div>
 
+        <!-- 🔒 ဆိုင်ပိတ်သိမ်းခြင်း ခလုတ် -->
+        <button id="nav-btn-close-day" onclick="openDayCloseModal()" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-400 hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20">
+          <i class="fa-solid fa-lock w-4 text-center text-amber-400"></i>
+          <span>Close Register (ဆိုင်ပိတ်မည်)</span>
+        </button>
+
         <button onclick="openSettlementModal()" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-400 hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20">
           <i class="fa-solid fa-coins w-4 text-center text-amber-400"></i>
           <span>Evening Clearing (ညနေစာရင်းရှင်း)</span>
         </button>
 
-        <!-- ⚙️ NEW: POS System Settings Button -->
         <button id="btn-side-settings" onclick="openSettingsModal()" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-400 hover:text-sky-300 hover:bg-sky-500/10 border border-transparent hover:border-sky-500/20">
           <i class="fa-solid fa-sliders w-4 text-center text-sky-400"></i>
           <span>Settings (မုန့်ဖိုးကန့်သတ်ငွေ)</span>
@@ -104,8 +109,8 @@
     <!-- Sidebar Bottom -->
     <div class="p-3 border-t border-slate-800/80 bg-[#060c18] space-y-2">
       <div class="px-2 py-1 flex items-center justify-between text-[10px] font-mono text-slate-400">
-        <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Isolated Node</span>
-        <span id="side-today-date">2026-09-29</span>
+        <span id="pos-network-status" class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> ONLINE</span>
+        <span id="side-today-date">2026-09-30</span>
       </div>
       <button onclick="logoutPos()" class="w-full py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2">
         <i class="fa-solid fa-power-off text-xs"></i>
@@ -115,12 +120,12 @@
   </aside>
 
   <!-- ============================================================================== -->
-  <!-- 💡 2. MAIN APPLICATION WORKSPACE AREA                                         -->
+  <!-- 💡 2. MAIN APPLICATION WORKSPACE (INDEPENDENT INTERNAL SCROLLBOX)              -->
   <!-- ============================================================================== -->
-  <div class="flex-1 flex flex-col min-h-screen overflow-x-hidden">
+  <div class="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
     
-    <!-- Top Action Bar -->
-    <header class="bg-[#080f1e]/95 backdrop-blur-md border-b border-slate-800/80 px-4 py-2.5 flex items-center justify-between shrink-0 sticky top-0 z-40">
+    <!-- Top Action Bar (Pinned Fixed Header) -->
+    <header class="bg-[#080f1e]/95 backdrop-blur-md border-b border-slate-800/80 px-4 py-2.5 flex items-center justify-between shrink-0 z-40">
       <div class="flex items-center gap-3">
         <button id="btn-toggle-sidebar" onclick="toggleCanteenSidebar()" class="w-8 h-8 rounded-lg bg-slate-800 text-slate-300 flex items-center justify-center text-xs lg:hidden">
           <i class="fa-solid fa-bars"></i>
@@ -131,7 +136,16 @@
         </div>
       </div>
 
+      <!-- Header Tools (Pending Sync Button Directly to the Left of Admin Stock) -->
       <div class="flex items-center gap-2">
+        
+        <!-- ⏳ PENDING OFFLINE ORDERS BUTTON -->
+        <button id="btn-pending-sync" onclick="openPendingSyncModal()" class="px-3 py-1.5 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-bold flex items-center gap-1.5 transition active:scale-95 shadow">
+          <i class="fa-solid fa-clock-rotate-left text-amber-400 text-xs"></i>
+          <span>Pending (<span id="pending-count" class="font-mono text-amber-400 font-black">0</span>)</span>
+        </button>
+
+        <!-- 📦 ပစ္စည်း / အဝယ်သွင်း -->
         <button id="btn-admin-stock" onclick="openItemModal()" class="px-3 py-1.5 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-700/60 text-slate-200 text-xs font-bold flex items-center gap-1.5 transition active:scale-95">
           <i class="fa-solid fa-box text-emerald-400 text-xs"></i>
           <span>ပစ္စည်း / အဝယ်သွင်း</span>
@@ -140,6 +154,12 @@
         <button id="btn-header-waste" onclick="openWasteModal()" class="px-3 py-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/40 border border-rose-500/30 text-rose-300 text-xs font-bold flex items-center gap-1.5 transition active:scale-95">
           <i class="fa-solid fa-dumpster-fire text-rose-400 text-xs"></i>
           <span>အပျက်စာရင်းသွင်း</span>
+        </button>
+
+        <!-- 🔒 ဆိုင်ပိတ်သိမ်းမှု အမြန်ခလုတ် -->
+        <button id="btn-header-close-day" onclick="openDayCloseModal()" class="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-1.5 transition active:scale-95">
+          <i class="fa-solid fa-store-slash text-amber-400 text-xs"></i>
+          <span id="header-close-status-text">ဆိုင်ပိတ်မည်</span>
         </button>
         
         <button id="btn-global-refresh" onclick="refreshActiveCanteenView()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-xs transition active:scale-95" title="Refresh">
@@ -152,11 +172,11 @@
       </div>
     </header>
 
-    <!-- Content Workspace Container -->
+    <!-- Content Workspace Container (Only this container scrolls down!) -->
     <div class="flex-1 p-3 md:p-4 space-y-4 overflow-y-auto custom-scroll">
       
       <!-- ────────────────────────────────────────────────────────────────────────── -->
-      <!-- 📊 VIEW 1: DASHBOARD (WITH WASTAGE LOSS METRICS)                            -->
+      <!-- 📊 VIEW 1: DASHBOARD                                                       -->
       <!-- ────────────────────────────────────────────────────────────────────────── -->
       <section id="view-dashboard" class="space-y-4 hidden">
         <div class="flex justify-between items-center bg-[#0c1830] border border-indigo-500/30 p-4 rounded-2xl shadow-xl">
@@ -164,17 +184,19 @@
             <div class="p-3 rounded-xl bg-indigo-500/20 text-indigo-400 text-xl"><i class="fa-solid fa-calendar-check"></i></div>
             <div>
               <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">TODAY'S OPERATIONS OVERVIEW</span>
-              <h3 id="dash-date-label" class="text-sm font-black text-white font-mono mt-0.5">2026-09-29</h3>
+              <h3 id="dash-date-label" class="text-sm font-black text-white font-mono mt-0.5">2026-09-30</h3>
             </div>
           </div>
-          <div>
+          <div class="flex items-center gap-2">
+            <span id="dash-closure-badge" class="px-3 py-1 rounded-xl text-xs font-black bg-slate-800 text-slate-300 border border-slate-700 font-mono">
+              REGISTER OPEN
+            </span>
             <span id="dash-settle-badge" class="px-3 py-1 rounded-xl text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono">
               PENDING CLEARING
             </span>
           </div>
         </div>
 
-        <!-- Today Metrics 5-Cards Grid -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <div class="glass-card p-4 rounded-xl border border-slate-800">
             <span class="text-[10px] text-slate-400 uppercase font-bold block">ယနေ့ စုစုပေါင်း အရောင်းရငွေ</span>
@@ -200,7 +222,6 @@
             <span class="text-[10px] text-slate-500 font-sans mt-0.5 block">Gross Sales - Cost Price</span>
           </div>
 
-          <!-- ⚠️ NEW: Today Wastage Loss Metric -->
           <div class="glass-card p-4 rounded-xl border border-rose-500/30 bg-rose-950/15">
             <span class="text-[10px] text-rose-400 uppercase font-bold block">ယနေ့ အပျက်/ဆုံးရှုံးငွေ (LOSS)</span>
             <h3 id="dash-today-loss" class="text-xl font-black text-rose-400 font-mono mt-1">-0 MMK</h3>
@@ -208,7 +229,6 @@
           </div>
         </div>
 
-        <!-- Cumulative Section -->
         <div class="glass-card p-4 rounded-2xl border border-slate-800 space-y-3">
           <div class="flex justify-between items-center border-b border-slate-800 pb-2">
             <h4 class="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
@@ -388,9 +408,10 @@
               </div>
             </div>
 
+            <!-- 🎯 ငွေရှင်းခလုတ် (F8 Shortcut Key ချိတ်ဆက်ထားသည်) -->
             <button id="btn-checkout" onclick="executeCheckout()" class="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-black text-xs md:text-sm shadow-xl shadow-emerald-950 flex items-center justify-center gap-2 active:scale-98 transition disabled:opacity-40 disabled:pointer-events-none">
               <i class="fa-solid fa-circle-check text-base"></i>
-              <span id="btn-checkout-label">အတည်ပြု ငွေရှင်းမည် (CHECKOUT)</span>
+              <span id="btn-checkout-label">အတည်ပြု ငွေရှင်းမည် (CHECKOUT - F8)</span>
             </button>
           </div>
         </div>
@@ -901,7 +922,7 @@
     </div>
   </div>
 
-  <!-- ⚠️ MODAL 6: RECORD WASTE & DAMAGE (MULTI-ITEM ENTRY - NEW) -->
+  <!-- ⚠️ MODAL 5: RECORD WASTE & DAMAGE (MULTI-ITEM CART) -->
   <div id="pos-waste-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
     <div class="bg-[#0e172a] border border-slate-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-150">
       <div class="px-5 py-4 border-b border-slate-800 flex justify-between items-center bg-[#150a15]">
@@ -912,8 +933,6 @@
       </div>
 
       <div class="p-5 space-y-3.5 overflow-y-auto custom-scroll text-xs">
-        
-        <!-- Search & Add Bar -->
         <div class="glass-card p-2.5 rounded-xl border border-slate-800 flex items-center gap-2 relative z-30">
           <div class="relative flex-1">
             <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-barcode text-xs"></i></span>
@@ -928,7 +947,6 @@
           </button>
         </div>
 
-        <!-- Waste Items List Container -->
         <div class="glass-card rounded-xl border border-slate-800 flex flex-col min-h-[160px] max-h-[220px] overflow-hidden">
           <div class="px-3 py-1.5 bg-[#080f1e] border-b border-slate-800 flex justify-between text-[11px] font-bold text-slate-400">
             <span>ရွေးချယ်ထားသော ပစ္စည်းများ</span>
@@ -942,7 +960,6 @@
           </div>
         </div>
 
-        <!-- Loss Reason & Details -->
         <div class="grid grid-cols-2 gap-3">
           <div class="space-y-1">
             <label class="font-bold text-slate-400 uppercase">ဆုံးရှုံးရသည့် အကြောင်းပြချက်</label>
@@ -964,7 +981,6 @@
           <input type="text" id="m-waste-remark" placeholder="e.g. သယ်ယူစဉ် ပုလင်းကွဲသွားခြင်း..." class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-rose-500">
         </div>
 
-        <!-- Loss Cost Summary Widget -->
         <div class="p-3 bg-rose-950/20 border border-rose-500/30 rounded-2xl flex items-center justify-between font-mono">
           <div>
             <span class="text-[10px] text-slate-400 block font-sans">စုစုပေါင်း ပစ္စည်းအရေအတွက်:</span>
@@ -983,7 +999,7 @@
     </div>
   </div>
 
-  <!-- ⚙️ MODAL 7: POS SYSTEM SETTINGS (DAILY ALLOWANCE CAP - NEW) -->
+  <!-- ⚙️ MODAL 6: POS SYSTEM SETTINGS (DAILY ALLOWANCE CAP) -->
   <div id="pos-settings-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
     <div class="bg-[#0e172a] border border-slate-800 rounded-3xl w-full max-w-sm shadow-2xl p-5 space-y-4 animate-in zoom-in-95 duration-150">
       <div class="flex justify-between items-center border-b border-slate-800 pb-2">
@@ -1014,7 +1030,116 @@
     </div>
   </div>
 
-  <!-- MODAL 5: EVENING CANTEEN SETTLEMENT -->
+  <!-- 🔒 MODAL 7: CANTEEN DAY CLOSE (ဆိုင်ပိတ်သိမ်းခြင်း) -->
+  <div id="pos-closure-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-[#0e172a] border border-slate-800 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
+      <div class="px-5 py-4 border-b border-slate-800 flex justify-between items-center bg-[#181108]">
+        <h3 class="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-2">
+          <i class="fa-solid fa-store-slash text-amber-500"></i> ကန်တင်း နေ့စဉ် ဆိုင်ပိတ်သိမ်းခြင်း (Day Close)
+        </h3>
+        <button onclick="closeModal('pos-closure-modal')" class="text-slate-400 hover:text-white p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="p-5 space-y-4 text-xs font-mono">
+        <div id="closure-stats-card" class="p-3.5 bg-black/40 border border-slate-800 rounded-2xl space-y-2">
+          <div class="flex justify-between text-slate-400 font-sans">
+            <span>ပိတ်သိမ်းမည့်ရက်စွဲ:</span>
+            <strong id="close-modal-date" class="text-white font-mono">-</strong>
+          </div>
+          <div class="flex justify-between text-slate-400 font-sans">
+            <span>ယနေ့ အရောင်းစောင်ရေ:</span>
+            <strong id="close-modal-orders" class="text-white">0 Orders</strong>
+          </div>
+          <div class="flex justify-between text-slate-400 font-sans">
+            <span>စုစုပေါင်း အရောင်းရငွေ:</span>
+            <strong id="close-modal-total" class="text-emerald-400 text-sm font-black">0 MMK</strong>
+          </div>
+          <div class="flex justify-between text-slate-400 font-sans pt-1 border-t border-slate-800">
+            <span>ငွေသားရောင်းရငွေ (Cash):</span>
+            <strong id="close-modal-cash" class="text-slate-300">0 MMK</strong>
+          </div>
+          <div class="flex justify-between text-slate-400 font-sans">
+            <span class="text-indigo-400 font-bold">မုန့်ဖိုးကတ်ရောင်းရငွေ (Wallet):</span>
+            <strong id="close-modal-wallet" class="text-indigo-400 font-bold">0 MMK</strong>
+          </div>
+        </div>
+
+        <div class="p-3 bg-amber-950/20 border border-amber-500/20 rounded-xl space-y-1">
+          <p class="text-[10px] text-amber-300 font-sans leading-relaxed">
+            ⚠️ <strong>သတိပြုရန်:</strong> ဆိုင်ပိတ်သိမ်းပြီးပါက ယနေ့ရက်စွဲအတွက် အရောင်းပြေစာအသစ်များ ဖွင့်၍ ရတော့မည်မဟုတ်ပါ။ ကန်တင်းဆိုင်ပိတ်ပြီးမှသာ Finance က Pocket Money ရောင်းရငွေကို ထုတ်ပေးရှင်းလင်းခွင့် ရှိပါမည်။
+          </p>
+        </div>
+
+        <div class="space-y-1 font-sans">
+          <label class="font-bold text-slate-400">မှတ်ချက် (Optional)</label>
+          <input type="text" id="close-modal-remark" placeholder="e.g. ပုံမှန်ဆိုင်ပိတ်သိမ်းခြင်း..." class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-500 text-xs">
+        </div>
+
+        <div id="closure-action-box">
+          <button id="btn-confirm-day-close" onclick="executeCanteenDayClose()" class="w-full py-3.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl font-black text-xs shadow-lg shadow-amber-950 active:scale-95 transition font-sans">
+            အတည်ပြု ဆိုင်ပိတ်သိမ်းမည် (CLOSE REGISTER)
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⏳ MODAL 8: PENDING OFFLINE TRANSACTIONS MANAGER -->
+  <div id="pos-pending-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-[#0e172a] border border-slate-800 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
+      <div class="px-5 py-4 border-b border-slate-800 flex justify-between items-center bg-[#091122]">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center text-sm">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+          </div>
+          <div>
+            <h3 class="text-xs font-black text-white uppercase tracking-wider">Pending Offline Transactions (မရောက်သေးသော အရောင်းများ)</h3>
+            <p class="text-[10px] font-mono text-slate-400">D1 Database သို့ Sync ပေးပို့ရန် ကျန်ရှိနေသော အော့ဖ်လိုင်းပြေစာများ</p>
+          </div>
+        </div>
+        <button onclick="closeModal('pos-pending-modal')" class="text-slate-400 hover:text-white p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="p-4 flex-1 overflow-y-auto custom-scroll space-y-3 text-xs">
+        <div class="flex justify-between items-center bg-black/30 p-3 rounded-xl border border-slate-800 text-xs font-mono">
+          <div>
+            <span class="text-[10px] text-slate-400 font-sans block">Pending စုစုပေါင်း:</span>
+            <strong id="pending-modal-orders" class="text-white text-sm">0 စောင်</strong>
+          </div>
+          <div class="text-right">
+            <span class="text-[10px] text-amber-400 font-sans block font-bold">ရောင်းရငွေပေါင်း:</span>
+            <strong id="pending-modal-amount" class="text-emerald-400 text-base font-black">0 MMK</strong>
+          </div>
+        </div>
+
+        <div class="table-container bg-[#080e1c] border border-slate-800 rounded-xl overflow-x-auto max-h-[360px]">
+          <table class="w-full text-left text-xs border-collapse min-w-[550px]">
+            <thead class="bg-[#0e172a] text-slate-400 text-[11px] sticky top-0">
+              <tr>
+                <th class="py-2.5 px-3 w-10 text-center">စဉ်</th>
+                <th class="py-2.5 px-3 w-28">INVOICE NO</th>
+                <th class="py-2.5 px-3 w-24">METHOD</th>
+                <th class="py-2.5 px-3">ITEMS SUMMARY</th>
+                <th class="py-2.5 px-3 text-right w-24">AMOUNT</th>
+                <th class="py-2.5 px-3 text-center w-20">STATUS</th>
+              </tr>
+            </thead>
+            <tbody id="pending-orders-table-body" class="divide-y divide-slate-800/40 text-slate-300"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="p-4 border-t border-slate-800 bg-[#091122] flex items-center justify-between gap-3">
+        <p class="text-[10px] text-slate-400 font-sans">💡 အင်တာနက်လိုင်း ပြန်ရသည်နှင့် စနစ်မှ အလိုအလျောက် Sync ပြုလုပ်ပေးပါမည်။</p>
+        <button id="btn-trigger-sync" onclick="triggerManualOfflineSync()" class="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-black text-xs shadow-lg shadow-emerald-950 flex items-center gap-2 active:scale-95 transition">
+          <i class="fa-solid fa-cloud-arrow-up"></i>
+          <span>Sync Now (D1 သို့ ပေးပို့မည်)</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 9: EVENING CANTEEN SETTLEMENT (CLOSURE INTERLOCKED) -->
   <div id="pos-settlement-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
     <div class="bg-[#0e172a] border border-slate-800 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
       <div class="px-5 py-4 border-b border-slate-800 flex justify-between items-center bg-[#091122]">
@@ -1025,6 +1150,13 @@
       </div>
 
       <div class="p-5 space-y-4 text-xs font-mono">
+        
+        <!-- Closure Status Interlock Alert -->
+        <div id="set-closure-status-box" class="p-2.5 rounded-xl border text-[11px] font-sans flex items-center gap-2">
+          <i id="set-closure-icon" class="fa-solid fa-circle-exclamation text-amber-400"></i>
+          <span id="set-closure-text">ကန်တင်းဆိုင်ပိတ်သိမ်းမှု အခြေအနေ စစ်ဆေးနေပါသည်...</span>
+        </div>
+
         <div class="space-y-2 p-3.5 bg-black/40 border border-slate-800 rounded-2xl">
           <div class="flex justify-between text-slate-400 font-sans">
             <span>နေ့စဉ်ရောင်းချမှု အကြိမ်ပေါင်း:</span>
@@ -1052,7 +1184,7 @@
         </div>
 
         <div id="set-action-box">
-          <button onclick="confirmCanteenSettlement()" class="w-full py-3.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-black text-xs shadow-lg shadow-amber-950 active:scale-95 transition font-sans">
+          <button id="btn-confirm-settlement" onclick="confirmCanteenSettlement()" class="w-full py-3.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-black text-xs shadow-lg shadow-amber-950 active:scale-95 transition font-sans disabled:opacity-40 disabled:pointer-events-none">
             Finance မှ ငွေထုတ်ပေးရှင်းလင်းပြီးကြောင်း အတည်ပြုမည်
           </button>
         </div>
@@ -1062,7 +1194,12 @@
 
   <div id="pos-toast-box" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[999999] pointer-events-none w-11/12 max-w-sm"></div>
 
-  <!-- 💡 Canteen POS Controller JS -->
-  <script src="js/canteen-pos.js"></script>
+  <!-- 💡 Canteen Modular Client Controllers (Method B) -->
+  <script src="js/canteen/canteen-db.js"></script>
+  <script src="js/canteen/canteen-state.js"></script>
+  <script src="js/canteen/canteen-pos.js"></script>
+  <script src="js/canteen/canteen-inventory.js"></script>
+  <script src="js/canteen/canteen-waste.js"></script>
+  <script src="js/canteen/canteen-closing.js"></script>
 </body>
 </html>
