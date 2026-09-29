@@ -227,6 +227,7 @@ function focusScanner() {
 // 🎯 Global Hotkeys (F2: Wallet, F4: Cash, Esc: Clear)
 function handleGlobalHotkeys(e) {
   if (gActiveView !== 'pos') return;
+  
   if (e.key === 'F2') {
     e.preventDefault();
     setPaymentMode('Student Pocket Money');
@@ -235,6 +236,10 @@ function handleGlobalHotkeys(e) {
     e.preventDefault();
     setPaymentMode('Cash');
     focusScanner();
+  } else if (e.key === 'F8') {
+    // 🎯 F8 နှိပ်ပါက တိုက်ရိုက် Checkout လုပ်မည်
+    e.preventDefault();
+    executeCheckout();
   } else if (e.key === 'Escape') {
     clearCart(false);
     focusScanner();
