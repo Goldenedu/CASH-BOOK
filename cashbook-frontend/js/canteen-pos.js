@@ -11,6 +11,7 @@
  *   5. 🛒 PURCHASES AUDIT: 20-Row Pagination with Auto Stock-Rollback on Edit/Delete
  *   6. 🛡️ GRANULAR RBAC: Cashier can Purchase, but CANNOT Edit Stock or Purchases
  *   7. ⚡ ZERO-CACHE PIPELINE: POST + Timestamp Cache-Busters for Instant Multi-Device Sync
+ *   8. 🎯 D1 QUOTA SHIELD: Zero D1 Catalog Re-fetches on POS Checkout
  * ==============================================================================
  */
 
@@ -94,6 +95,15 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // Bind Keyboard Hotkeys
   window.addEventListener('keydown', handleGlobalHotkeys);
+
+  // 🎯 Close search dropdown on click outside
+  document.addEventListener('click', (e) => {
+    const barcodeInput = document.getElementById('pos-barcode-input');
+    const dropdown = document.getElementById('pos-search-dropdown');
+    if (dropdown && !dropdown.contains(e.target) && e.target !== barcodeInput) {
+      dropdown.classList.add('hidden');
+    }
+  });
 
   // Hook Edit Purchase Smart Price Calculator Listeners
   const editCostInput = document.getElementById('edit-pur-cost');
@@ -215,7 +225,6 @@ function handleGlobalHotkeys(e) {
 // ==============================================================================
 async function loadCanteenDashboard() {
   try {
-    // 🎯 POST with Cache-Buster (_t) ensures 100% fresh queries across all laptops
     const res = await callApi('getCanteenDashboardMetrics', { _t: Date.now() }, 'POST');
     if (res && res.success && res.data) {
       const { today, allTime, totalStockCapital, lowStockCount, date } = res.data;
@@ -320,7 +329,6 @@ async function loadSalesOrdersHistory(page = 1) {
         tbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-slate-500 font-bold">အရောင်းမှတ်တမ်း မရှိပါ။</td></tr>`;
       } else {
         records.forEach((r, idx) => {
-          // 🎯 Display No: အသစ်သွင်းထားသော စာရင်းများ ထိပ်ဆုံးတွင် အကြီးဆုံး No ဖြင့် ပေါ်မည်
           const displayNo = gSalesTotalRows - ((gSalesPage - 1) * gSalesLimit + idx);
           const isWallet = (r.paymentMethod === 'Student Pocket Money');
 
@@ -794,7 +802,7 @@ async function submitNewSupplier() {
 }
 
 // ==============================================================================
-// 💡 6. IN-MEMORY CART & BARCODE SCANNER LOGIC (VIEW 2)
+// 💡 6. IN-MEMORY CART & BARCODE SCANNER LOGIC (VIEW 2 - ZERO D1 READ ON SCAN)
 // ==============================================================================
 async function loadItemsCatalog(isManualRefresh) {
   try {
@@ -818,6 +826,7 @@ function handleBarcodeInput(e) {
     return;
   }
 
+  // 🎯 In-Memory Fast Match (Zero D1 Calls)
   if (val.length >= 2) {
     const matches = gItemsCache.filter(it => 
       it.itemName.toLowerCase().includes(val.toLowerCase()) || 
@@ -826,7 +835,7 @@ function handleBarcodeInput(e) {
 
     if (matches.length > 0) {
       dropdown.innerHTML = matches.map(m => `
-        <div onclick="selectDropdownItem('${escAttr(m.barcode)}')" class="p-2.5 hover:bg-slate-800/80 cursor-pointer border-b border-slate-800/60 flex items-center justify-between text-xs">
+        <div onclick="selectDropdownItem('${escAttr(m.barcode)}')" class="p-2.5 hover:bg-slate-800 cursor-pointer border-b border-slate-700/60 flex items-center justify-between text-xs bg-[#0c1527] transition">
           <div>
             <span class="font-bold text-white">${esc(m.itemName)}</span>
             <span class="text-[10px] font-mono text-slate-400 block">${esc(m.barcode)}</span>
@@ -1008,7 +1017,6 @@ async function lookupStudentRadar() {
   if (!val) return;
 
   try {
-    // 🎯 POST with Cache-Buster (_t) ensures real-time fresh balance
     const res = await callApi('lookupStudentForPos', { studentId: val, _t: Date.now() }, 'POST');
     if (res && res.success && res.data) {
       gCurrentStudent = res.data;
@@ -1083,7 +1091,7 @@ function getCartTotalAmount() {
 }
 
 // ==============================================================================
-// 💡 8. ATOMIC CHECKOUT & RECEIPT PRINTER
+// 💡 8. ATOMIC CHECKOUT & RECEIPT PRINTER (ZERO D1 CATALOG READ ON SALE)
 // ==============================================================================
 async function executeCheckout() {
   if (isSubmitting) return;
@@ -1148,6 +1156,12 @@ async function executeCheckout() {
       // Print Slip
       printPosReceipt(res.invoiceNo, totalAmount, itemsSummary, gPaymentMode, gCurrentStudent);
 
+      // 🎯 D1 Quota Guard: D1 သို့ Catalog အသစ်မဆွဲဘဲ Local Memory Stock ကိုသာ နုတ်ယူသည်
+      stockDeductions.forEach(sd => {
+        const item = gItemsCache.find(it => it.barcode === sd.barcode);
+        if (item) item.currentStock = Math.max(0, Number(item.currentStock || 0) - sd.qty);
+      });
+
       // Reset Active Cart
       gCart = [];
       gCurrentStudent = null;
@@ -1155,14 +1169,6 @@ async function executeCheckout() {
       if (stuInp) stuInp.value = '';
       resetStudentCard();
       renderCart();
-
-      // 🎯 BACKGROUND INVALIDATION: အရောင်းပြီးတိုင်း ဒေတာများအားလုံး အချိန်နှင့်တပြေးညီ အလိုအလျောက် Sync ပြုလုပ်ခြင်း
-      Promise.all([
-        loadItemsCatalog(false),
-        loadCanteenDashboard(),
-        loadSalesOrdersHistory(1),
-        loadStockInventory(gStockPage)
-      ]).catch(e => console.warn("Background Sync Warning:", e));
 
     } else {
       showToast("ERROR", res?.message || "အရောင်း မအောင်မြင်ပါ။");
@@ -1271,6 +1277,7 @@ function triggerSmartPriceCalc() {
   }
 }
 
+// 🎯 ပစ္စည်းသစ်သွင်းခြင်း သို့မဟုတ် အဝယ်သွင်းပြီးမှသာ D1 မှ Catalog အသစ် ပြန်ဆွဲတင်မည်
 async function submitPosPurchase(e) {
   e.preventDefault();
   const payload = {

@@ -847,9 +847,13 @@ export async function checkoutPosSale(db, session, body) {
       const q = safeAmount(item.qty);
       if (bCode && q > 0) {
         batchStatements.push(
-          db.prepare(`UPDATE pos_items_master SET current_stock = current_stock - ?, updated_at = datetime('now') WHERE barcode = ?`).bind(q, bCode)
+          db.prepare(`
+            UPDATE pos_items_master 
+           SET current_stock = current_stock - ?, updated_at = datetime('now') 
+           WHERE barcode = ? AND current_stock >= ?
+         `).bind(q, bCode, q)
         );
-      }
+     }
     }
 
     await db.batch(batchStatements);
