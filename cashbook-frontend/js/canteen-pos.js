@@ -6,12 +6,12 @@
  * 💡 Architecture & Blueprint V6:
  *   1. 🏛️ MULTI-VIEW ROUTER: Dashboard, POS Register, Sales, Stock, Purchases & Waste
  *   2. 📊 LIVE DASHBOARD: 1-Batch Atomic Metrics (Sales, Stock Capital & Spoilage Loss)
- *   3. 🧾 PAGINATED SALES ORDERS: 20-Row Server-Side Pagination & Thermal Slip Reprint
+ *   3. 🧾 PAGINATED SALES ORDERS: 20-Row Server-Side Pagination & Manual Slip Reprint
  *   4. 📦 REAL-TIME STOCK AUDITOR: 20-Row Pagination, Full Barcode & CSV Export
  *   5. 🛒 PURCHASES AUDIT: 20-Row Pagination with Auto Stock-Rollback on Edit/Delete
  *   6. ⚠️ WASTAGE & LOSS LEDGER: Multi-item Cost-basis Loss & In-Memory Fast Cart
  *   7. ⚙️ DYNAMIC POS SETTINGS: Cached Daily Allowance Cap (Zero Extra D1 Reads)
- *   8. 🛡️ GRANULAR RBAC: Cashier can Purchase & Record Waste, but CANNOT Edit Stock
+ *   8. ⚡ ZERO-FLICKER FAST POS: F8 Direct Checkout & No Automatic Print Popup
  * ==============================================================================
  */
 
@@ -25,10 +25,10 @@ let gPurchasesData = [];    // Cached Purchases for Edit/Delete
 let gSalesOrdersData = [];  // Cached Sales Orders for Reprint Slip
 let gWasteData = [];        // Cached Waste Records
 let gCart = [];             // Dynamic In-Memory Cart State Array
-let gWasteCart = [];        // 🎯 In-Memory Wastage Cart
+let gWasteCart = [];        // In-Memory Wastage Cart
 let gCurrentStudent = null; // Scanned Student Object
 let gPaymentMode = 'Student Pocket Money'; // 'Student Pocket Money' or 'Cash'
-let gDailySpendingCap = 10000; // 🎯 Cached Daily Cap (Zero Repetitive D1 Reads)
+let gDailySpendingCap = 10000; // Cached Daily Cap (Zero Repetitive D1 Reads)
 let isSubmitting = false;
 
 // 🎯 Pagination & Filter States (20 Rows Per Page)
@@ -95,19 +95,17 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (btnHeaderWaste) btnHeaderWaste.classList.add('hidden');
     switchCanteenView('pos');
   } else if (role === 'canteen_cashier') {
-    // 🎯 Cashier သည် အဝယ်စာရင်းနှင့် အပျက်စာရင်း သွင်းခွင့်ရှိသည် (Settings ပြင်ခွင့် မရှိပါ)
     const btnSettings = document.getElementById('btn-side-settings');
     if (btnSettings) btnSettings.classList.add('hidden');
     switchCanteenView('pos');
   } else {
-    // Canteen Admin / Owner: ပင်မ Dashboard သို့ ဦးစွာ ပို့ဆောင်မည်
     switchCanteenView('dashboard');
   }
 
   // Bind Keyboard Hotkeys
   window.addEventListener('keydown', handleGlobalHotkeys);
 
-  // 🎯 Dropdowns အပြင်ဘက်ကို ကလစ်နှိပ်ပါက အလိုအလျောက် ပိတ်မည့် Global Listener
+  // Close search dropdown on click outside
   document.addEventListener('click', (e) => {
     const barcodeInput = document.getElementById('pos-barcode-input');
     const dropdown = document.getElementById('pos-search-dropdown');
@@ -224,10 +222,9 @@ function focusScanner() {
   if (input && gActiveView === 'pos') input.focus();
 }
 
-// 🎯 Global Hotkeys (F2: Wallet, F4: Cash, Esc: Clear)
+// 🎯 Global Hotkeys (F2: Wallet, F4: Cash, F8: Checkout, Esc: Clear)
 function handleGlobalHotkeys(e) {
   if (gActiveView !== 'pos') return;
-  
   if (e.key === 'F2') {
     e.preventDefault();
     setPaymentMode('Student Pocket Money');
@@ -237,7 +234,7 @@ function handleGlobalHotkeys(e) {
     setPaymentMode('Cash');
     focusScanner();
   } else if (e.key === 'F8') {
-    // 🎯 F8 နှိပ်ပါက တိုက်ရိုက် Checkout လုပ်မည်
+    // 🎯 F8 နှိပ်ပါက ကီးဘုတ်မှ တိုက်ရိုက် ငွေရှင်းမည်
     e.preventDefault();
     executeCheckout();
   } else if (e.key === 'Escape') {
@@ -275,7 +272,7 @@ async function loadCanteenDashboard() {
       document.getElementById('dash-today-cash').textContent = `${Number(today.cashSalesShare || 0).toLocaleString()} MMK`;
       document.getElementById('dash-today-profit').textContent = `+${Number(today.totalProfit || 0).toLocaleString()} MMK`;
       
-      // ⚠️ Wastage Loss Metrics
+      // Wastage Loss Metrics
       const todayLossEl = document.getElementById('dash-today-loss');
       if (todayLossEl) todayLossEl.textContent = `-${Number(todayLossCost || 0).toLocaleString()} MMK`;
 
@@ -1026,12 +1023,12 @@ function setPaymentMode(mode) {
     btnWallet.className = "py-2 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 bg-indigo-600 text-white shadow-lg shadow-indigo-600/30";
     btnCash.className = "py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 text-slate-400 hover:text-white";
     radar.classList.remove('opacity-40', 'pointer-events-none');
-    document.getElementById('btn-checkout-label').textContent = "မုန့်ဖိုးဖြင့် ရှင်းမည် (CHECKOUT)";
+    document.getElementById('btn-checkout-label').textContent = "မုန့်ဖိုးဖြင့် ရှင်းမည် (CHECKOUT - F8)";
   } else {
     btnCash.className = "py-2 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 bg-emerald-600 text-white shadow-lg shadow-emerald-600/30";
     btnWallet.className = "py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 text-slate-400 hover:text-white";
     radar.classList.add('opacity-40', 'pointer-events-none');
-    document.getElementById('btn-checkout-label').textContent = "ငွေသားဖြင့် ရှင်းမည် (CHECKOUT)";
+    document.getElementById('btn-checkout-label').textContent = "ငွေသားဖြင့် ရှင်းမည် (CHECKOUT - F8)";
   }
 }
 
@@ -1122,7 +1119,7 @@ function getCartTotalAmount() {
 }
 
 // ==============================================================================
-// 💡 8. ATOMIC CHECKOUT & RECEIPT PRINTER (ZERO D1 CATALOG READ ON SALE)
+// 💡 8. ATOMIC CHECKOUT (NO POPUP PRINT - FAST LANE FOR SCHOOL POS)
 // ==============================================================================
 async function executeCheckout() {
   if (isSubmitting) return;
@@ -1184,9 +1181,9 @@ async function executeCheckout() {
     if (res && res.success) {
       showToast("SUCCESS", `အရောင်း အောင်မြင်ပါပြီ! Invoice: ${res.invoiceNo}`);
       
-      printPosReceipt(res.invoiceNo, totalAmount, itemsSummary, gPaymentMode, gCurrentStudent);
+      // 🎯 ကျောင်းကန်တင်းအတွက် Auto-print ပိတ်ထားသည် (Sales Orders မှ လိုအပ်မှသာ ထုတ်မည်)
 
-      // 🎯 D1 Quota Guard: D1 သို့ Catalog အသစ်မဆွဲဘဲ Local Memory Stock ကိုသာ နုတ်ယူသည်
+      // D1 Quota Guard: D1 သို့ Catalog အသစ်မဆွဲဘဲ Local Memory Stock ကိုသာ နုတ်ယူသည်
       stockDeductions.forEach(sd => {
         const item = gItemsCache.find(it => it.barcode === sd.barcode);
         if (item) item.currentStock = Math.max(0, Number(item.currentStock || 0) - sd.qty);
@@ -1201,7 +1198,6 @@ async function executeCheckout() {
       renderCart();
 
     } else {
-      // 🎯 Multi-Counter Conflict: အကယ်၍ အခြား counter က အရင်ရောင်းသွား၍ လက်ကျန်မရှိတော့ပါက Cache အသစ်ဆွဲသည်
       if (res?.message && res.message.includes('လက်ကျန်')) {
         await loadItemsCatalog(false);
       }
@@ -1309,14 +1305,12 @@ function triggerSmartPriceCalc() {
 
   document.getElementById('m-suggested-price').textContent = `${rounded.toLocaleString()} MMK`;
   
-  // 🎯 Auto-Sync အတည်ပြုရောင်းဈေး တိုက်ရိုက် Override
   const sellingInput = document.getElementById('m-selling-price');
   if (sellingInput) {
     sellingInput.value = rounded;
   }
 }
 
-// 🎯 ပစ္စည်းသစ်သွင်းခြင်း သို့မဟုတ် အဝယ်သွင်းပြီးမှသာ D1 မှ Catalog အသစ် ပြန်ဆွဲတင်မည်
 async function submitPosPurchase(e) {
   e.preventDefault();
   const payload = {
@@ -1373,7 +1367,6 @@ function handleWasteBarcodeInput(e) {
     return;
   }
 
-  // Live in-memory matching (Zero D1 reads)
   if (val.length >= 2) {
     const matches = gItemsCache.filter(it => 
       it.itemName.toLowerCase().includes(val.toLowerCase()) || 
@@ -1667,7 +1660,6 @@ async function submitPosSettings(e) {
       showToast("SUCCESS", `Daily Cap ကို ${Number(capVal).toLocaleString()} MMK သို့ ပြင်ဆင်ပြီးပါပြီ။`);
       closeModal('pos-settings-modal');
       
-      // Real-time UI reflection
       if (gCurrentStudent) renderStudentCard();
       else resetStudentCard();
     } else {
