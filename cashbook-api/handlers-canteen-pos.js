@@ -1,16 +1,15 @@
 /**
  * ==============================================================================
  * GOLDEN ERP SYSTEM - CANTEEN POS HANDLERS (CLOUDFLARE D1 ENTERPRISE EDITION)
- * File: handlers-canteen-pos.js
+ * File: handlers-canteen-pos.js (Location: cashbook-api/handlers-canteen-pos.js)
  * 
- * 💡 Features & Architectural Blueprint V4:
- *   1. 📊 EXECUTIVE DASHBOARD: 1-Batch Atomic Aggregator for Today, All-Time & Total Stock Capital
- *   2. 🛒 PURCHASES & SUPPLIER AUDIT: Filterable Server-Side Paginated Purchases
- *   3. 🔄 PURCHASES MANIPULATION: Edit & Delete Purchase with Auto-Stock Rollback
- *   4. 📦 REAL-TIME STOCK INVENTORY: Stock Health Levels & Low-Stock Alerts
- *   5. ⚡ QUICK STOCK & PRICE ADJUSTMENT: Direct In-Line Master Updates
- *   6. 🛡️ DAILY 10,000 MMK CAP: Fast QR-Safe Student Spending Enforcement
- *   7. ⚡ QUOTA-SHIELD: O(1) Atomic Checkout & Zero Full-Table-Scans
+ * 💡 Features & Architectural Blueprint V5:
+ *   1. 📊 OPTIMIZED DASHBOARD: 4-Batch Atomic Aggregator (Recent Sales Removed to Save D1 Quota)
+ *   2. 🧾 PAGINATED SALES ORDERS: 20-Row Server-Side Pagination & ID DESC Sorting
+ *   3. 📦 PAGINATED STOCK INVENTORY: 20-Row Pagination, Barcode & Real-Time Stock Valuation
+ *   4. 🛒 PURCHASES & SUPPLIER AUDIT: Filterable Server-Side 20-Row Paginated Purchases
+ *   5. 🔄 ATOMIC ROLLBACK: Edit & Delete Purchases with Stock Delta Reversal
+ *   6. ⚡ ZERO FULL-TABLE-SCANS: Index-Only Lookups & Fail-Closed Validation
  * ==============================================================================
  */
 
@@ -48,14 +47,15 @@ export function calculateSmartPrice(costPrice, markupPercent = 20, roundTo = 50)
 }
 
 // ==============================================================================
-// 💡 2. CANTEEN EXECUTIVE DASHBOARD METRICS (SINGLE BATCH AGGREGATOR)
+// 💡 2. CANTEEN EXECUTIVE DASHBOARD METRICS (OPTIMIZED 4-BATCH AGGREGATOR)
+// 🎯 Recent Sales ဖယ်ထုတ်ထားသဖြင့် D1 Read Quota ကို အထူးချွေတာပေးသည်
 // ==============================================================================
 export async function getCanteenDashboardMetrics(db, body) {
   try {
     const todayStr = getMyanmarDateString();
     const date = String(body.date || todayStr).trim();
 
-    // 🚀 D1 ULTRA QUOTA-SHIELD: Query (၅) ခုကို Single Batch ဖြင့် ၁ ကြိမ်တည်း အပြီးဆွဲယူသည်
+    // 🚀 D1 ULTRA QUOTA-SHIELD: Query (၄) ခုသာ Single Batch ဖြင့် ၁ ကြိမ်တည်း အပြီးဆွဲယူသည်
     const batchQueries = [
       // ၁။ ယနေ့ အရောင်းစာရင်း (Orders, Sales, Wallet Share, Cash Share, Net Margin)
       db.prepare(`
@@ -89,26 +89,17 @@ export async function getCanteenDashboardMetrics(db, body) {
         FROM pos_sales_orders
       `),
 
-      // ၄။ Stock သတိပေးချက်နှင့် စုစုပေါင်း ရင်းနှီးငွေတန်ဖိုး (Capital Investment) အား ၁ ကြိမ်တည်းဖြင့် ပေါင်းစပ်တွက်ချက်ခြင်း
+      // ၄။ Stock သတိပေးချက်နှင့် စုစုပေါင်း ရင်းနှီးငွေတန်ဖိုး (Capital Investment)
       db.prepare(`
         SELECT 
           COALESCE(SUM(CASE WHEN current_stock <= 10 THEN 1 ELSE 0 END), 0) as lowStockCount,
           COALESCE(SUM(CASE WHEN current_stock > 0 THEN (cost_price * current_stock) ELSE 0 END), 0) as totalStockCapital
         FROM pos_items_master 
         WHERE is_active = 1
-      `),
-
-      // ၅။ နောက်ဆုံး ရောင်းချခဲ့သော စာရင်း (၁၀) စောင်
-      db.prepare(`
-        SELECT id, invoice_no as invoiceNo, date, payment_method as paymentMethod,
-               student_id as studentId, total_amount as totalAmount, net_profit as netProfit,
-               items_summary as itemsSummary, created_by as createdBy, created_at as createdAt
-        FROM pos_sales_orders 
-        ORDER BY id DESC LIMIT 10
       `)
     ];
 
-    const [todayRes, settleRes, allTimeRes, stockRes, recentRes] = await db.batch(batchQueries);
+    const [todayRes, settleRes, allTimeRes, stockRes] = await db.batch(batchQueries);
 
     const todayStats = todayRes.results[0] || {};
     const settle = settleRes.results[0] || null;
@@ -116,7 +107,6 @@ export async function getCanteenDashboardMetrics(db, body) {
     const stockStats = stockRes.results[0] || {};
     const lowStockCount = Number(stockStats.lowStockCount || 0);
     const totalStockCapital = parseFloat(stockStats.totalStockCapital || 0);
-    const recentOrders = recentRes.results || [];
 
     return {
       success: true,
@@ -140,8 +130,7 @@ export async function getCanteenDashboardMetrics(db, body) {
           totalStockCapital: totalStockCapital
         },
         totalStockCapital,
-        lowStockCount,
-        recentOrders
+        lowStockCount
       }
     };
   } catch (err) {
@@ -150,7 +139,135 @@ export async function getCanteenDashboardMetrics(db, body) {
 }
 
 // ==============================================================================
-// 💡 3. PURCHASES & SUPPLIER HISTORY AUDITOR (အဝယ်စာရင်းနှင့် ကုန်သည်မှတ်တမ်း)
+// 💡 3. REAL-TIME STOCK INVENTORY AUDITOR (PAGINATED 20 ROWS PER PAGE)
+// 🎯 Barcode အပြည့်အစုံပါဝင်ပြီး နောက်ဆုံးသွင်းထားသော ပစ္စည်းများ အပေါ်ဆုံးတွင် ပေါ်သည်
+// ==============================================================================
+export async function getPosStockInventory(db, body) {
+  try {
+    const category = String(body.category || "").trim();
+    const stockStatus = String(body.stockStatus || "all").trim();
+    const searchVal = String(body.searchVal || "").trim();
+
+    const page = Math.max(1, parseInt(body.page || 1, 10));
+    const limit = Math.min(100, Math.max(1, parseInt(body.limit || 20, 10)));
+    const offset = (page - 1) * limit;
+
+    let whereClauses = [];
+    let params = [];
+
+    if (category) {
+      whereClauses.push(`category = ?`);
+      params.push(category);
+    }
+
+    if (stockStatus === 'low_stock') {
+      whereClauses.push(`current_stock > 0 AND current_stock <= 10`);
+    } else if (stockStatus === 'out_of_stock') {
+      whereClauses.push(`current_stock <= 0`);
+    }
+
+    if (searchVal) {
+      whereClauses.push(`(item_name LIKE ? OR barcode LIKE ?)`);
+      const p = `%${searchVal}%`;
+      params.push(p, p);
+    }
+
+    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    // 🚀 D1 Batch: Summary Count Query နှင့် Paginated Rows Query အား ၁ ကြိမ်တည်း Run သည်
+    const [summaryRes, rowsRes] = await db.batch([
+      db.prepare(`
+        SELECT 
+          COUNT(id) as totalRows,
+          COALESCE(SUM(current_stock), 0) as totalStockQty,
+          COALESCE(SUM(cost_price * current_stock), 0) as totalStockValue,
+          COALESCE(SUM(CASE WHEN current_stock <= 0 THEN 1 ELSE 0 END), 0) as outOfStockCount,
+          COALESCE(SUM(CASE WHEN current_stock > 0 AND current_stock <= 10 THEN 1 ELSE 0 END), 0) as lowStockCount
+        FROM pos_items_master ${whereSql}
+      `).bind(...params),
+
+      db.prepare(`
+        SELECT id, barcode, item_name as itemName, category, cost_price as costPrice,
+               markup_percent as markupPercent, selling_price as sellingPrice,
+               current_stock as currentStock, is_active as isActive, updated_at as updatedAt,
+               (cost_price * current_stock) as stockValue
+        FROM pos_items_master ${whereSql}
+        ORDER BY id DESC
+        LIMIT ? OFFSET ?
+      `).bind(...params, limit, offset)
+    ]);
+
+    const summaryData = summaryRes.results[0] || {};
+    const totalRows = summaryData.totalRows || 0;
+
+    return {
+      success: true,
+      data: rowsRes.results || [],
+      totalRows,
+      page,
+      limit,
+      summary: {
+        totalItems: totalRows,
+        totalStockQty: Number(summaryData.totalStockQty || 0),
+        totalStockValue: parseFloat(summaryData.totalStockValue || 0),
+        outOfStockCount: Number(summaryData.outOfStockCount || 0),
+        lowStockCount: Number(summaryData.lowStockCount || 0)
+      }
+    };
+  } catch (err) {
+    return { success: false, message: "Stock စာရင်း ဆွဲယူ၍ မရပါ: " + err.message };
+  }
+}
+
+// ------------------------------------------------------------------------------
+// 💡 QUICK STOCK & PRICE ADJUSTMENT (အမြန်ပြင်ဆင်မှု - Admin Only)
+// ------------------------------------------------------------------------------
+export async function updatePosItemQuick(db, session, body) {
+  try {
+    const barcode = String(body.barcode || "").trim();
+    if (!barcode) return { success: false, message: "Barcode မပါဝင်ပါ။" };
+
+    const updates = [];
+    const params = [];
+
+    if (body.sellingPrice !== undefined) {
+      updates.push(`selling_price = ?`);
+      params.push(safeAmount(body.sellingPrice));
+    }
+    if (body.costPrice !== undefined) {
+      updates.push(`cost_price = ?`);
+      params.push(safeAmount(body.costPrice));
+    }
+    if (body.currentStock !== undefined) {
+      updates.push(`current_stock = ?`);
+      params.push(Number(body.currentStock) || 0);
+    }
+    if (body.isActive !== undefined) {
+      updates.push(`is_active = ?`);
+      params.push(body.isActive ? 1 : 0);
+    }
+
+    if (updates.length === 0) {
+      return { success: false, message: "ပြင်ဆင်ရန် အချက်အလက် မပါဝင်ပါ။" };
+    }
+
+    updates.push(`updated_at = datetime('now')`);
+    params.push(barcode);
+
+    await db.prepare(`
+      UPDATE pos_items_master 
+      SET ${updates.join(', ')} 
+      WHERE barcode = ?
+    `).bind(...params).run();
+
+    return { success: true, message: "ပစ္စည်းအချက်အလက် ပြင်ဆင်ပြီးပါပြီ။" };
+  } catch (err) {
+    return { success: false, message: "ပြင်ဆင်မှု မအောင်မြင်ပါ: " + err.message };
+  }
+}
+
+// ==============================================================================
+// 💡 4. PURCHASES HISTORY & SUPPLIER AUDITOR (PAGINATED 20 ROWS PER PAGE)
 // ==============================================================================
 export async function getPosPurchasesHistory(db, body) {
   try {
@@ -208,7 +325,7 @@ export async function getPosPurchasesHistory(db, body) {
         LEFT JOIN pos_items_master m ON p.item_barcode = m.barcode
         LEFT JOIN pos_suppliers s ON p.supplier_id = s.id
         ${whereSql}
-        ORDER BY p.date DESC, p.id DESC
+        ORDER BY p.id DESC
         LIMIT ? OFFSET ?
       `).bind(...params, limit, offset)
     ]);
@@ -238,7 +355,6 @@ export async function updatePosPurchase(db, session, body) {
     const purchaseNo = String(body.purchaseNo || "").trim();
     if (!id && !purchaseNo) return { success: false, message: "ပြင်ဆင်မည့် အဝယ်စာရင်း ID သို့မဟုတ် PO Number မပါဝင်ပါ။" };
 
-    // မူလအဝယ်စာရင်း အချက်အလက် ဦးစွာ ရယူခြင်း
     const existing = await db.prepare(
       "SELECT id, purchase_no, item_barcode, qty, cost_price, selling_price FROM pos_purchases WHERE id = ? OR purchase_no = ?"
     ).bind(id || 0, purchaseNo || "").first();
@@ -260,9 +376,8 @@ export async function updatePosPurchase(db, session, body) {
     }
 
     const totalCost = Math.round(newQty * newCostPrice * 100) / 100;
-    const deltaQty = newQty - Number(existing.qty || 0); // Stock အတိုး/အလျှော့ ကွာခြားချက်
+    const deltaQty = newQty - Number(existing.qty || 0);
 
-    // ⚡ Atomic Batch: အဝယ်စာရင်း ပြင်ဆင်ပြီး Master Table ရှိ Stock & Price အား ကွာခြားချက်အတိုင်း ပြန်ညှိခြင်း
     const batchStatements = [
       db.prepare(`
         UPDATE pos_purchases 
@@ -307,7 +422,6 @@ export async function deletePosPurchase(db, session, body) {
 
     const rollbackQty = safeAmount(existing.qty);
 
-    // ⚡ Atomic Batch: အဝယ်စာရင်း ဖျက်ပစ်ပြီး Master Table ရှိ Stock ကို ထိုအရေအတွက်အတိုင်း ပြန်နုတ်ယူခြင်း
     const batchStatements = [
       db.prepare("DELETE FROM pos_purchases WHERE id = ?").bind(existing.id),
       db.prepare(`
@@ -326,128 +440,85 @@ export async function deletePosPurchase(db, session, body) {
 }
 
 // ==============================================================================
-// 💡 4. REAL-TIME STOCK INVENTORY AUDITOR (လက်ကျန်စစ်ဆေးရေး)
+// 💡 5. SALES ORDERS HISTORY AUDITOR (PAGINATED 20 ROWS PER PAGE) — NEW
+// 🎯 အရောင်းစာရင်း ၂၀ စောင်စီ ခွဲထုတ်ပြသပြီး နောက်ဆုံးရောင်းရငွေ အပေါ်ဆုံးတွင် ပေါ်သည်
 // ==============================================================================
-export async function getPosStockInventory(db, body) {
+export async function getPosSalesOrdersHistory(db, body) {
   try {
-    const category = String(body.category || "").trim();
-    const stockStatus = String(body.stockStatus || "all").trim();
+    const page = Math.max(1, parseInt(body.page || 1, 10));
+    const limit = Math.min(100, Math.max(1, parseInt(body.limit || 20, 10)));
+    const offset = (page - 1) * limit;
+
     const searchVal = String(body.searchVal || "").trim();
+    const dateFrom = String(body.dateFrom || "").trim();
+    const dateTo = String(body.dateTo || "").trim();
+    const paymentMethod = String(body.paymentMethod || "").trim();
 
     let whereClauses = [];
     let params = [];
 
-    if (category) {
-      whereClauses.push(`category = ?`);
-      params.push(category);
+    if (dateFrom) {
+      whereClauses.push(`date >= ?`);
+      params.push(dateFrom);
     }
-
-    if (stockStatus === 'low_stock') {
-      whereClauses.push(`current_stock > 0 AND current_stock <= 10`);
-    } else if (stockStatus === 'out_of_stock') {
-      whereClauses.push(`current_stock <= 0`);
+    if (dateTo) {
+      whereClauses.push(`date <= ?`);
+      params.push(dateTo);
     }
-
+    if (paymentMethod) {
+      whereClauses.push(`payment_method = ?`);
+      params.push(paymentMethod);
+    }
     if (searchVal) {
-      whereClauses.push(`(item_name LIKE ? OR barcode LIKE ?)`);
+      whereClauses.push(`(invoice_no LIKE ? OR items_summary LIKE ? OR CAST(student_id AS TEXT) LIKE ? OR created_by LIKE ?)`);
       const p = `%${searchVal}%`;
-      params.push(p, p);
+      params.push(p, p, p, p);
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-    const query = `
-      SELECT id, barcode, item_name as itemName, category, cost_price as costPrice,
-             markup_percent as markupPercent, selling_price as sellingPrice,
-             current_stock as currentStock, is_active as isActive, updated_at as updatedAt,
-             (cost_price * current_stock) as stockValue
-      FROM pos_items_master ${whereSql}
-      ORDER BY 
-        CASE WHEN current_stock <= 0 THEN 1 WHEN current_stock <= 10 THEN 2 ELSE 3 END ASC,
-        item_name ASC
-      LIMIT 1000
-    `;
+    const [countRes, rowsRes] = await db.batch([
+      db.prepare(`
+        SELECT COUNT(id) as totalRows, 
+               COALESCE(SUM(total_amount), 0) as totalSalesAmount,
+               COALESCE(SUM(net_profit), 0) as totalProfitAmount
+        FROM pos_sales_orders
+        ${whereSql}
+      `).bind(...params),
 
-    const res = await db.prepare(query).bind(...params).all();
-    const items = res.results || [];
+      db.prepare(`
+        SELECT id, invoice_no as invoiceNo, date, payment_method as paymentMethod,
+               student_id as studentId, total_amount as totalAmount, total_cost as totalCost,
+               net_profit as netProfit, items_summary as itemsSummary, canteen_vr_no as canteenVrNo,
+               uniqueid as uniqueId, created_by as createdBy, created_at as createdAt
+        FROM pos_sales_orders
+        ${whereSql}
+        ORDER BY id DESC
+        LIMIT ? OFFSET ?
+      `).bind(...params, limit, offset)
+    ]);
 
-    let totalStockQty = 0;
-    let totalStockValue = 0;
-    let outOfStockCount = 0;
-    let lowStockCount = 0;
-
-    items.forEach(it => {
-      totalStockQty += Number(it.currentStock || 0);
-      totalStockValue += Number(it.stockValue || 0);
-      if (it.currentStock <= 0) outOfStockCount++;
-      else if (it.currentStock <= 10) lowStockCount++;
-    });
+    const stats = countRes.results[0] || {};
+    const totalRows = stats.totalRows || 0;
+    const totalSalesAmount = parseFloat(stats.totalSalesAmount || 0);
+    const totalProfitAmount = parseFloat(stats.totalProfitAmount || 0);
 
     return {
       success: true,
-      data: items,
-      summary: {
-        totalItems: items.length,
-        totalStockQty,
-        totalStockValue,
-        outOfStockCount,
-        lowStockCount
-      }
+      data: rowsRes.results || [],
+      totalRows,
+      totalSalesAmount,
+      totalProfitAmount,
+      page,
+      limit
     };
   } catch (err) {
-    return { success: false, message: "Stock စာရင်း ဆွဲယူ၍ မရပါ: " + err.message };
-  }
-}
-
-// ------------------------------------------------------------------------------
-// 💡 QUICK STOCK & PRICE ADJUSTMENT (အမြန်ပြင်ဆင်မှု)
-// ------------------------------------------------------------------------------
-export async function updatePosItemQuick(db, session, body) {
-  try {
-    const barcode = String(body.barcode || "").trim();
-    if (!barcode) return { success: false, message: "Barcode မပါဝင်ပါ။" };
-
-    const updates = [];
-    const params = [];
-
-    if (body.sellingPrice !== undefined) {
-      updates.push(`selling_price = ?`);
-      params.push(safeAmount(body.sellingPrice));
-    }
-    if (body.costPrice !== undefined) {
-      updates.push(`cost_price = ?`);
-      params.push(safeAmount(body.costPrice));
-    }
-    if (body.currentStock !== undefined) {
-      updates.push(`current_stock = ?`);
-      params.push(Number(body.currentStock) || 0);
-    }
-    if (body.isActive !== undefined) {
-      updates.push(`is_active = ?`);
-      params.push(body.isActive ? 1 : 0);
-    }
-
-    if (updates.length === 0) {
-      return { success: false, message: "ပြင်ဆင်ရန် အချက်အလက် မပါဝင်ပါ။" };
-    }
-
-    updates.push(`updated_at = datetime('now')`);
-    params.push(barcode);
-
-    await db.prepare(`
-      UPDATE pos_items_master 
-      SET ${updates.join(', ')} 
-      WHERE barcode = ?
-    `).bind(...params).run();
-
-    return { success: true, message: "ပစ္စည်းအချက်အလက် ပြင်ဆင်ပြီးပါပြီ။" };
-  } catch (err) {
-    return { success: false, message: "ပြင်ဆင်မှု မအောင်မြင်ပါ: " + err.message };
+    return { success: false, message: "အရောင်းမှတ်တမ်းများ ဆွဲယူ၍ မရပါ: " + err.message };
   }
 }
 
 // ==============================================================================
-// 💡 5. POS CATALOG & PRICING
+// 💡 6. POS CATALOG & PRICING
 // ==============================================================================
 export async function getPosItems(db, body) {
   try {
@@ -536,7 +607,7 @@ export async function savePosItem(db, session, body) {
 }
 
 // ------------------------------------------------------------------------------
-// 💡 အဝယ်စာရင်း သွင်းယူခြင်း (Upsert into Master + Insert Purchase)
+// 💡 အဝယ်စာရင်း သွင်းယူခြင်း (Cashier & Admin နှစ်ဦးစလုံး အသုံးပြုနိုင်သည်)
 // ------------------------------------------------------------------------------
 export async function savePosPurchase(db, session, body) {
   try {
@@ -578,7 +649,7 @@ export async function savePosPurchase(db, session, body) {
       db.prepare(`
         INSERT INTO pos_purchases (purchase_no, date, supplier_id, item_barcode, qty, cost_price, markup_percent, selling_price, total_cost, remark, created_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(purchaseNo, entryDate, body.supplierId || null, barcode, qty, costPrice, markupPercent, sellingPrice, totalCost, body.remark || '', session?.name || 'Admin')
+      `).bind(purchaseNo, entryDate, body.supplierId || null, barcode, qty, costPrice, markupPercent, sellingPrice, totalCost, body.remark || '', session?.name || 'Cashier')
     ];
 
     await db.batch(batchStatements);
@@ -590,7 +661,7 @@ export async function savePosPurchase(db, session, body) {
 }
 
 // ==============================================================================
-// 💡 6. STUDENT POCKET MONEY RADAR (QR-SAFE O(1) LOOKUP)
+// 💡 7. STUDENT POCKET MONEY RADAR (QR-SAFE O(1) LOOKUP)
 // ==============================================================================
 export async function lookupStudentForPos(db, body) {
   try {
@@ -663,7 +734,7 @@ export async function lookupStudentForPos(db, body) {
 }
 
 // ==============================================================================
-// 💡 7. ATOMIC SINGLE BATCH POS CHECKOUT
+// 💡 8. ATOMIC SINGLE BATCH POS CHECKOUT
 // ==============================================================================
 export async function checkoutPosSale(db, session, body) {
   try {
@@ -802,7 +873,7 @@ export async function checkoutPosSale(db, session, body) {
 }
 
 // ==============================================================================
-// 💡 8. EVENING CANTEEN SETTLEMENT (ညနေပိုင်း ငွေသားရှင်းလင်းမှု)
+// 💡 9. EVENING CANTEEN SETTLEMENT (ညနေပိုင်း ငွေသားရှင်းလင်းမှု)
 // ==============================================================================
 export async function getCanteenDailySummary(db, body) {
   try {
@@ -917,7 +988,7 @@ export async function getCanteenSettlements(db, body) {
 }
 
 // ==============================================================================
-// 💡 9. SUPPLIERS MASTER (FULL PROFILE: PH NO & ADDRESS)
+// 💡 10. SUPPLIERS MASTER (FULL PROFILE: PH NO & ADDRESS)
 // ==============================================================================
 export async function getPosSuppliers(db) {
   try {

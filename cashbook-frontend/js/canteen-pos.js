@@ -3,32 +3,45 @@
  * GOLDEN ERP SYSTEM - CANTEEN POS & MANAGEMENT CLIENT CONTROLLER
  * File: js/canteen-pos.js (Location: cashbook-frontend/js/canteen-pos.js)
  * 
- * 💡 Architecture & Blueprint V4:
- *   1. 🏛️ MULTI-VIEW ROUTER: Dashboard, POS Register, Stock Inventory & Purchases
- *   2. 📊 EXECUTIVE DASHBOARD: 1-Batch Atomic Metrics (Today, All-Time & Stock Capital)
- *   3. 📦 REAL-TIME STOCK AUDITOR: Low-Stock Alerts, Inline Editor & CSV Export
- *   4. 🛒 PURCHASES & SUPPLIERS: Server-Side Paginated Multi-Filter & Full Edit/Delete
- *   5. ⚡ IN-MEMORY CART & RADAR: O(1) Fast Scanner, 10,000 MMK Guard & Thermal Receipt
+ * 💡 Architecture & Blueprint V5:
+ *   1. 🏛️ MULTI-VIEW ROUTER: Dashboard, POS Register, Sales Orders, Stock & Purchases
+ *   2. 📊 LIVE DASHBOARD: 1-Batch Atomic Metrics (Recent Sales Removed to Save D1 Quota)
+ *   3. 🧾 PAGINATED SALES ORDERS: 20-Row Server-Side Pagination & Thermal Slip Reprint
+ *   4. 📦 REAL-TIME STOCK AUDITOR: 20-Row Pagination, Full Barcode & CSV Export
+ *   5. 🛒 PURCHASES AUDIT: 20-Row Pagination with Auto Stock-Rollback on Edit/Delete
+ *   6. 🛡️ GRANULAR RBAC: Cashier can Purchase, but CANNOT Edit Stock or Purchases
+ *   7. ⚡ ZERO-CACHE PIPELINE: POST + Timestamp Cache-Busters for Instant Multi-Device Sync
  * ==============================================================================
  */
 
 // 🎯 Application Global States
 let gSession = null;
-let gActiveView = 'pos';     // 'dashboard', 'pos', 'stock', 'purchases'
+let gActiveView = 'pos';     // 'dashboard', 'pos', 'sales', 'stock', 'purchases'
 let gItemsCache = [];       // O(1) Local Product Catalog Cache
 let gSuppliersCache = [];   // Suppliers Master Cache
 let gStockInventoryData = []; // Cached Stock List for CSV Export
 let gPurchasesData = [];    // Cached Purchases for Edit/Delete
+let gSalesOrdersData = [];  // Cached Sales Orders for Reprint Slip
 let gCart = [];             // Dynamic In-Memory Cart State Array
 let gCurrentStudent = null; // Scanned Student Object
 let gPaymentMode = 'Student Pocket Money'; // 'Student Pocket Money' or 'Cash'
 let isSubmitting = false;
 
-// Pagination & Filter States for Purchases
+// 🎯 Pagination & Filter States (20 Rows Per Page)
+let gStockPage = 1;
+const gStockLimit = 20;
+let gStockTotalRows = 0;
+let gStockSearchTimeout = null;
+
 let gPurchasesPage = 1;
 const gPurchasesLimit = 20;
 let gPurchasesTotalRows = 0;
 let gPurSearchTimeout = null;
+
+let gSalesPage = 1;
+const gSalesLimit = 20;
+let gSalesTotalRows = 0;
+let gSalesSearchTimeout = null;
 
 // Safe Escape Helper
 const esc = window.escapeHtml || (s => s ? String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : '');
@@ -71,19 +84,14 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (btnAdmin) btnAdmin.classList.add('hidden');
     switchCanteenView('pos');
   } else if (role === 'canteen_cashier') {
-    // Canteen Cashier: အဝယ်စာရင်းသွင်းခွင့် ပိတ်ထားမည်
-    const btnAdmin = document.getElementById('btn-admin-stock');
-    if (btnAdmin) btnAdmin.classList.add('hidden');
+    // 🎯 Cashier သည် အဝယ်စာရင်း သွင်းခွင့်ရှိသည် (btn-admin-stock အား ဖွင့်ထားမည်)
+    // သို့သော် Stock ပြင်ဆင်ခွင့်ကို Table Render အဆင့်တွင် ပိတ်ဆို့ထားမည်
     switchCanteenView('pos');
   } else {
     // Canteen Admin / Owner: ပင်မ Dashboard သို့ ဦးစွာ ပို့ဆောင်မည်
     switchCanteenView('dashboard');
   }
 
-  if (role === 'canteen_cashier') {
-    // Stock နှင့် Purchases view များထဲရှိ Add/Edit ခလုတ်များကိုပါ ဝှက်ပေးခြင်း
-    document.querySelectorAll('#view-stock button[onclick="openItemModal()"], #view-purchases button[onclick="openItemModal()"]').forEach(b => b.classList.add('hidden'));
-  }
   // Bind Keyboard Hotkeys
   window.addEventListener('keydown', handleGlobalHotkeys);
 
@@ -93,7 +101,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (editCostInput) editCostInput.addEventListener('input', triggerEditPurSmartPriceCalc);
   if (editMarkupInput) editMarkupInput.addEventListener('input', triggerEditPurSmartPriceCalc);
 
-  // Background Data Pre-fetch
+  // Background Data Pre-fetch (Zero-Cache POST)
   await Promise.all([
     loadItemsCatalog(false),
     loadSuppliersList()
@@ -102,10 +110,10 @@ window.addEventListener('DOMContentLoaded', async () => {
   focusScanner();
 });
 
-// 🎯 View Switcher Router
+// 🎯 View Switcher Router (5 Core Views)
 function switchCanteenView(viewName) {
   gActiveView = viewName;
-  const views = ['dashboard', 'pos', 'stock', 'purchases'];
+  const views = ['dashboard', 'pos', 'sales', 'stock', 'purchases'];
 
   views.forEach(v => {
     const el = document.getElementById(`view-${v}`);
@@ -114,9 +122,9 @@ function switchCanteenView(viewName) {
     
     if (navBtn) {
       if (v === viewName) {
-        navBtn.className = "w-full px-3 py-2.5 rounded-xl transition flex items-center gap-3 bg-emerald-600 text-white shadow-lg shadow-emerald-900/30";
+        navBtn.className = "w-full px-3 py-2 rounded-xl transition flex items-center gap-3 bg-emerald-600 text-white shadow-lg shadow-emerald-900/30";
       } else {
-        navBtn.className = "w-full px-3 py-2.5 rounded-xl transition flex items-center gap-3 text-slate-400 hover:text-white hover:bg-slate-800/50";
+        navBtn.className = "w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-400 hover:text-white hover:bg-slate-800/50";
       }
     }
   });
@@ -126,24 +134,37 @@ function switchCanteenView(viewName) {
     const titles = {
       dashboard: 'CANTEEN EXECUTIVE DASHBOARD',
       pos: 'CANTEEN POS REGISTER TERMINAL',
+      sales: 'CANTEEN SALES ORDERS HISTORY',
       stock: 'REAL-TIME STOCK INVENTORY AUDITOR',
       purchases: 'PURCHASES & SUPPLIERS AUDIT HISTORY'
     };
     titleEl.textContent = titles[viewName] || 'CANTEEN POS SYSTEM';
   }
 
-  // Load Data by View
+  // Load Fresh Data by View
   if (viewName === 'dashboard') loadCanteenDashboard();
-  else if (viewName === 'stock') loadStockInventory();
+  else if (viewName === 'sales') loadSalesOrdersHistory(1);
+  else if (viewName === 'stock') loadStockInventory(1);
   else if (viewName === 'purchases') loadPurchasesHistory(1);
   else if (viewName === 'pos') focusScanner();
 }
 
-function refreshActiveCanteenView() {
-  if (gActiveView === 'dashboard') loadCanteenDashboard();
-  else if (gActiveView === 'stock') loadStockInventory();
-  else if (gActiveView === 'purchases') loadPurchasesHistory(gPurchasesPage);
-  else if (gActiveView === 'pos') loadItemsCatalog(true);
+// 🎯 Persistent Header Refresh Engine
+async function refreshActiveCanteenView() {
+  const refreshBtn = document.getElementById('btn-global-refresh');
+  if (refreshBtn) refreshBtn.classList.add('animate-spin');
+
+  try {
+    if (gActiveView === 'dashboard') await loadCanteenDashboard();
+    else if (gActiveView === 'sales') await loadSalesOrdersHistory(gSalesPage);
+    else if (gActiveView === 'stock') await loadStockInventory(gStockPage);
+    else if (gActiveView === 'purchases') await loadPurchasesHistory(gPurchasesPage);
+    else if (gActiveView === 'pos') await loadItemsCatalog(true);
+
+    showToast("SUCCESS", "အချက်အလက်များ အသစ်ရယူပြီးပါပြီ။");
+  } finally {
+    if (refreshBtn) refreshBtn.classList.remove('animate-spin');
+  }
 }
 
 function toggleCanteenSidebar() {
@@ -190,39 +211,44 @@ function handleGlobalHotkeys(e) {
 }
 
 // ==============================================================================
-// 💡 2. EXECUTIVE DASHBOARD CONTROLLER (VIEW 1)
+// 💡 2. EXECUTIVE DASHBOARD CONTROLLER (VIEW 1 - LIVE & QUOTA SAFE)
 // ==============================================================================
 async function loadCanteenDashboard() {
   try {
-    const res = await callApi('getCanteenDashboardMetrics', {}, 'GET');
+    // 🎯 POST with Cache-Buster (_t) ensures 100% fresh queries across all laptops
+    const res = await callApi('getCanteenDashboardMetrics', { _t: Date.now() }, 'POST');
     if (res && res.success && res.data) {
-      const { today, allTime, totalStockCapital, lowStockCount, recentOrders, date } = res.data;
+      const { today, allTime, totalStockCapital, lowStockCount, date } = res.data;
 
       // Date & Settlement Badge
-      document.getElementById('dash-date-label').textContent = date || new Date().toISOString().slice(0, 10);
+      const dateLabel = document.getElementById('dash-date-label');
+      if (dateLabel) dateLabel.textContent = date || new Date().toISOString().slice(0, 10);
+      
       const settleBadge = document.getElementById('dash-settle-badge');
-      if (today.isSettled) {
-        settleBadge.className = "px-3 py-1 rounded-xl text-xs font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono";
-        settleBadge.textContent = `SETTLED (${today.settlement?.settlementNo || 'DONE'})`;
-      } else {
-        settleBadge.className = "px-3 py-1 rounded-xl text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono animate-pulse";
-        settleBadge.textContent = "PENDING CLEARING (ငွေရှင်းရန်ကျန်)";
+      if (settleBadge) {
+        if (today.isSettled) {
+          settleBadge.className = "px-3 py-1 rounded-xl text-xs font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono";
+          settleBadge.textContent = `SETTLED (${today.settlement?.settlementNo || 'DONE'})`;
+        } else {
+          settleBadge.className = "px-3 py-1 rounded-xl text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono animate-pulse";
+          settleBadge.textContent = "PENDING CLEARING (ငွေရှင်းရန်ကျန်)";
+        }
       }
 
       // Today KPI Cards
-      document.getElementById('dash-today-sales').textContent = `${Number(today.totalSales).toLocaleString()} MMK`;
-      document.getElementById('dash-today-orders').textContent = `${today.totalOrders} Invoices Today`;
-      document.getElementById('dash-today-wallet').textContent = `${Number(today.pocketMoneyShare).toLocaleString()} MMK`;
-      document.getElementById('dash-today-cash').textContent = `${Number(today.cashSalesShare).toLocaleString()} MMK`;
-      document.getElementById('dash-today-profit').textContent = `+${Number(today.totalProfit).toLocaleString()} MMK`;
+      document.getElementById('dash-today-sales').textContent = `${Number(today.totalSales || 0).toLocaleString()} MMK`;
+      document.getElementById('dash-today-orders').textContent = `${today.totalOrders || 0} Invoices Today`;
+      document.getElementById('dash-today-wallet').textContent = `${Number(today.pocketMoneyShare || 0).toLocaleString()} MMK`;
+      document.getElementById('dash-today-cash').textContent = `${Number(today.cashSalesShare || 0).toLocaleString()} MMK`;
+      document.getElementById('dash-today-profit').textContent = `+${Number(today.totalProfit || 0).toLocaleString()} MMK`;
 
       // All-Time Cumulative & Total Stock Capital
-      document.getElementById('dash-all-sales').textContent = `${Number(allTime.totalSales).toLocaleString()} MMK`;
-      document.getElementById('dash-all-wallet').textContent = `${Number(allTime.pocketMoneyShare).toLocaleString()} MMK`;
-      document.getElementById('dash-all-cash').textContent = `${Number(allTime.cashSalesShare).toLocaleString()} MMK`;
-      document.getElementById('dash-all-orders').textContent = `${Number(allTime.totalOrders).toLocaleString()} Invoices`;
+      document.getElementById('dash-all-sales').textContent = `${Number(allTime.totalSales || 0).toLocaleString()} MMK`;
+      document.getElementById('dash-all-wallet').textContent = `${Number(allTime.pocketMoneyShare || 0).toLocaleString()} MMK`;
+      document.getElementById('dash-all-cash').textContent = `${Number(allTime.cashSalesShare || 0).toLocaleString()} MMK`;
+      document.getElementById('dash-all-orders').textContent = `${Number(allTime.totalOrders || 0).toLocaleString()} Invoices`;
 
-      // 🎯 ပစ္စည်းစုစုပေါင်း ရင်းနှီးငွေတန်ဖိုး ချိတ်ဆက်ပြသခြင်း
+      // Total Stock Investment Capital
       const capitalEl = document.getElementById('dash-stock-capital');
       if (capitalEl) {
         const capitalVal = totalStockCapital !== undefined ? totalStockCapital : (allTime.totalStockCapital || 0);
@@ -231,38 +257,12 @@ async function loadCanteenDashboard() {
 
       // Low Stock Alert Badge
       const lowStockAlert = document.getElementById('dash-low-stock-alert');
-      if (lowStockCount > 0) {
-        lowStockAlert.textContent = `⚠️ Low Stock: ${lowStockCount} မျိုး`;
-        lowStockAlert.classList.remove('hidden');
-      } else {
-        lowStockAlert.classList.add('hidden');
-      }
-
-      // Render Recent Orders Table
-      const tbody = document.getElementById('dash-recent-orders-body');
-      if (tbody) {
-        tbody.innerHTML = '';
-        if (recentOrders.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-slate-500 font-bold">အရောင်းမှတ်တမ်း မရှိသေးပါ။</td></tr>`;
+      if (lowStockAlert) {
+        if (lowStockCount > 0) {
+          lowStockAlert.textContent = `⚠️ Low Stock: ${lowStockCount} မျိုး`;
+          lowStockAlert.classList.remove('hidden');
         } else {
-          recentOrders.forEach((o, idx) => {
-            const isWallet = (o.paymentMethod === 'Student Pocket Money');
-            tbody.innerHTML += `
-              <tr class="hover:bg-slate-800/40 text-xs border-b border-slate-800/40">
-                <td class="text-center font-mono py-2.5 px-3 text-slate-500">${idx + 1}</td>
-                <td class="font-mono font-bold text-sky-400 py-2.5 px-3">${esc(o.invoiceNo)}</td>
-                <td class="py-2.5 px-3">
-                  <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isWallet ? 'bg-indigo-500/20 text-indigo-300' : 'bg-emerald-500/20 text-emerald-300'}">
-                    ${isWallet ? 'Wallet' : 'Cash'}
-                  </span>
-                </td>
-                <td class="font-mono py-2.5 px-3 text-slate-300">${o.studentId ? `ID ${o.studentId}` : '-'}</td>
-                <td class="py-2.5 px-3 truncate max-w-xs text-slate-300">${esc(o.itemsSummary)}</td>
-                <td class="text-right font-mono font-bold text-white py-2.5 px-3">${Number(o.totalAmount).toLocaleString()} MMK</td>
-                <td class="text-right font-mono font-bold text-teal-400 py-2.5 px-3">+${Number(o.netProfit).toLocaleString()}</td>
-              </tr>
-            `;
-          });
+          lowStockAlert.classList.add('hidden');
         }
       }
     }
@@ -272,19 +272,136 @@ async function loadCanteenDashboard() {
 }
 
 // ==============================================================================
-// 💡 3. REAL-TIME STOCK INVENTORY AUDITOR (VIEW 3)
+// 💡 3. SALES ORDERS HISTORY CONTROLLER (VIEW 3 - 20 ROWS PER PAGE)
 // ==============================================================================
-async function loadStockInventory() {
+function onSearchSalesDebounced() {
+  clearTimeout(gSalesSearchTimeout);
+  gSalesSearchTimeout = setTimeout(() => { loadSalesOrdersHistory(1); }, 250);
+}
+
+function clearSalesFilter() {
+  document.getElementById('sales-search').value = '';
+  document.getElementById('sales-method-filter').value = '';
+  document.getElementById('sales-date-from').value = '';
+  document.getElementById('sales-date-to').value = '';
+  loadSalesOrdersHistory(1);
+}
+
+function changeSalesPage(delta) {
+  loadSalesOrdersHistory(gSalesPage + delta);
+}
+
+async function loadSalesOrdersHistory(page = 1) {
+  gSalesPage = Math.max(1, page);
+  const searchVal = document.getElementById('sales-search')?.value.trim() || '';
+  const paymentMethod = document.getElementById('sales-method-filter')?.value || '';
+  const dateFrom = document.getElementById('sales-date-from')?.value || '';
+  const dateTo = document.getElementById('sales-date-to')?.value || '';
+
+  try {
+    const res = await callApi('getPosSalesOrdersHistory', {
+      searchVal, paymentMethod, dateFrom, dateTo,
+      page: gSalesPage, limit: gSalesLimit, _t: Date.now()
+    }, 'POST');
+
+    if (res && res.success) {
+      const records = res.data || [];
+      gSalesOrdersData = records;
+      gSalesTotalRows = res.totalRows || 0;
+
+      const totalSalesBadge = document.getElementById('sales-total-amount-badge');
+      if (totalSalesBadge) totalSalesBadge.textContent = `${Number(res.totalSalesAmount || 0).toLocaleString()} MMK`;
+
+      const tbody = document.getElementById('sales-table-body');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      if (records.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-slate-500 font-bold">အရောင်းမှတ်တမ်း မရှိပါ။</td></tr>`;
+      } else {
+        records.forEach((r, idx) => {
+          // 🎯 Display No: အသစ်သွင်းထားသော စာရင်းများ ထိပ်ဆုံးတွင် အကြီးဆုံး No ဖြင့် ပေါ်မည်
+          const displayNo = gSalesTotalRows - ((gSalesPage - 1) * gSalesLimit + idx);
+          const isWallet = (r.paymentMethod === 'Student Pocket Money');
+
+          tbody.innerHTML += `
+            <tr class="hover:bg-slate-800/40 text-xs border-b border-slate-800/40">
+              <td class="text-center font-mono py-2.5 px-3 text-slate-500">${displayNo}</td>
+              <td class="font-mono text-slate-300 py-2.5 px-3">${esc(r.date)}</td>
+              <td class="font-mono font-bold text-sky-400 py-2.5 px-3">${esc(r.invoiceNo)}</td>
+              <td class="py-2.5 px-3">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isWallet ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'}">
+                  ${isWallet ? 'Wallet' : 'Cash'}
+                </span>
+              </td>
+              <td class="font-mono py-2.5 px-3 text-slate-300">${r.studentId ? `ID ${r.studentId}` : '-'}</td>
+              <td class="py-2.5 px-3 text-slate-200">${esc(r.itemsSummary)}</td>
+              <td class="text-right font-mono font-bold text-white py-2.5 px-3">${Number(r.totalAmount).toLocaleString()} MMK</td>
+              <td class="text-right font-mono font-bold text-teal-400 py-2.5 px-3">+${Number(r.netProfit).toLocaleString()}</td>
+              <td class="text-center py-2.5 px-3">
+                <button onclick="reprintSalesSlip('${escAttr(r.invoiceNo)}')" class="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition" title="Print Receipt">
+                  <i class="fa-solid fa-print"></i>
+                </button>
+              </td>
+            </tr>
+          `;
+        });
+      }
+
+      // Pagination Controls Sync
+      const start = (gSalesPage - 1) * gSalesLimit + 1;
+      const end = Math.min(start + gSalesLimit - 1, gSalesTotalRows);
+      const info = document.getElementById('sales-pagination-info');
+      if (info) info.textContent = gSalesTotalRows === 0 ? "Showing 0 entries" : `Showing ${start} to ${end} of ${gSalesTotalRows} entries`;
+
+      const prevBtn = document.getElementById('sales-btn-prev');
+      const nextBtn = document.getElementById('sales-btn-next');
+      if (prevBtn) prevBtn.disabled = (gSalesPage <= 1);
+      if (nextBtn) nextBtn.disabled = (end >= gSalesTotalRows);
+    }
+  } catch (err) {
+    console.error("Sales History Load Error:", err);
+  }
+}
+
+// 🖨️ Reprint Sales Slip Generator
+function reprintSalesSlip(invoiceNo) {
+  const order = gSalesOrdersData.find(o => o.invoiceNo === invoiceNo);
+  if (!order) return showToast("ERROR", "ပြေစာ အချက်အလက် မတွေ့ပါ။");
+
+  const stuObj = order.studentId ? { studentId: order.studentId, name: `Student ID ${order.studentId}` } : null;
+  printPosReceipt(order.invoiceNo, order.totalAmount, order.itemsSummary, order.paymentMethod, stuObj);
+}
+
+// ==============================================================================
+// 💡 4. REAL-TIME STOCK INVENTORY AUDITOR (VIEW 4 - 20 ROWS PER PAGE)
+// ==============================================================================
+function onSearchStockDebounced() {
+  clearTimeout(gStockSearchTimeout);
+  gStockSearchTimeout = setTimeout(() => { loadStockInventory(1); }, 250);
+}
+
+function changeStockPage(delta) {
+  loadStockInventory(gStockPage + delta);
+}
+
+async function loadStockInventory(page = 1) {
+  gStockPage = Math.max(1, page);
   const searchVal = document.getElementById('stock-search')?.value.trim() || '';
   const category = document.getElementById('stock-category-filter')?.value || '';
   const stockStatus = document.getElementById('stock-status-filter')?.value || 'all';
 
   try {
-    const res = await callApi('getPosStockInventory', { searchVal, category, stockStatus }, 'GET');
+    const res = await callApi('getPosStockInventory', {
+      searchVal, category, stockStatus,
+      page: gStockPage, limit: gStockLimit, _t: Date.now()
+    }, 'POST');
+
     if (res && res.success) {
       const items = res.data || [];
       const summary = res.summary || {};
-      gStockInventoryData = items; // Cache for CSV Export
+      gStockInventoryData = items;
+      gStockTotalRows = res.totalRows || 0;
 
       document.getElementById('stock-total-items').textContent = `${summary.totalItems || 0} မျိုး`;
       document.getElementById('stock-total-qty').textContent = `${Number(summary.totalStockQty || 0).toLocaleString()} ခု`;
@@ -297,39 +414,55 @@ async function loadStockInventory() {
 
       if (items.length === 0) {
         tbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-slate-500 font-bold">ရှာဖွေမှုနှင့် ကိုက်ညီသော ပစ္စည်း မရှိပါ။</td></tr>`;
-        return;
+      } else {
+        const canManageStock = (gSession?.role === 'canteen_admin' || gSession?.role === 'Owner' || gSession?.role === 'Admin');
+
+        items.forEach((item, idx) => {
+          const displayNo = gStockTotalRows - ((gStockPage - 1) * gStockLimit + idx);
+
+          let badgeHtml = '';
+          if (item.currentStock <= 0) {
+            badgeHtml = '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-500/20 text-rose-400 border border-rose-500/30">OUT OF STOCK</span>';
+          } else if (item.currentStock <= 10) {
+            badgeHtml = '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30">LOW STOCK</span>';
+          } else {
+            badgeHtml = '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">HEALTHY</span>';
+          }
+
+          const actionHtml = canManageStock ? `
+            <button onclick="openQuickEditModal('${escAttr(item.barcode)}')" class="p-1.5 text-teal-400 hover:text-teal-300 hover:bg-teal-500/10 rounded-lg transition" title="Edit Price & Stock">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+          ` : '<span class="text-slate-600">-</span>';
+
+          tbody.innerHTML += `
+            <tr class="hover:bg-slate-800/40 text-xs border-b border-slate-800/40">
+              <td class="text-center font-mono py-2.5 px-3 text-slate-500">${displayNo}</td>
+              <td class="font-mono text-slate-300 py-2.5 px-3 font-bold">${esc(item.barcode)}</td>
+              <td class="font-bold text-white py-2.5 px-3">${esc(item.itemName)}</td>
+              <td class="text-slate-400 py-2.5 px-3">${esc(item.category)}</td>
+              <td class="text-right font-mono text-slate-400 py-2.5 px-3">${Number(item.costPrice).toLocaleString()}</td>
+              <td class="text-right font-mono font-bold text-emerald-400 py-2.5 px-3">${Number(item.sellingPrice).toLocaleString()} MMK</td>
+              <td class="text-center font-mono font-black py-2.5 px-3 text-sm ${item.currentStock <= 0 ? 'text-rose-400' : (item.currentStock <= 10 ? 'text-amber-400' : 'text-slate-200')}">
+                ${item.currentStock}
+              </td>
+              <td class="text-center py-2.5 px-3">${badgeHtml}</td>
+              <td class="text-center py-2.5 px-3">${actionHtml}</td>
+            </tr>
+          `;
+        });
       }
 
-      items.forEach((item, idx) => {
-        let badgeHtml = '';
-        if (item.currentStock <= 0) {
-          badgeHtml = '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-500/20 text-rose-400 border border-rose-500/30">OUT OF STOCK</span>';
-        } else if (item.currentStock <= 10) {
-          badgeHtml = '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30">LOW STOCK</span>';
-        } else {
-          badgeHtml = '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">HEALTHY</span>';
-        }
+      // Pagination Sync
+      const start = (gStockPage - 1) * gStockLimit + 1;
+      const end = Math.min(start + gStockLimit - 1, gStockTotalRows);
+      const info = document.getElementById('stock-pagination-info');
+      if (info) info.textContent = gStockTotalRows === 0 ? "Showing 0 entries" : `Showing ${start} to ${end} of ${gStockTotalRows} entries`;
 
-        tbody.innerHTML += `
-          <tr class="hover:bg-slate-800/40 text-xs border-b border-slate-800/40">
-            <td class="text-center font-mono py-2.5 px-3 text-slate-500">${idx + 1}</td>
-            <td class="font-mono text-slate-300 py-2.5 px-3">${esc(item.barcode)}</td>
-            <td class="font-bold text-white py-2.5 px-3">${esc(item.itemName)}</td>
-            <td class="text-slate-400 py-2.5 px-3">${esc(item.category)}</td>
-            <td class="text-right font-mono text-slate-400 py-2.5 px-3">${Number(item.costPrice).toLocaleString()}</td>
-            <td class="text-right font-mono font-bold text-emerald-400 py-2.5 px-3">${Number(item.sellingPrice).toLocaleString()} MMK</td>
-            <td class="text-center font-mono font-black py-2.5 px-3 text-sm ${item.currentStock <= 0 ? 'text-rose-400' : (item.currentStock <= 10 ? 'text-amber-400' : 'text-slate-200')}">
-              ${item.currentStock}
-            </td>
-            <td class="text-center py-2.5 px-3">${badgeHtml}</td>
-            <td class="text-center py-2.5 px-3">
-              <button onclick="openQuickEditModal('${escAttr(item.barcode)}')" class="p-1.5 text-teal-400 hover:text-teal-300 hover:bg-teal-500/10 rounded-lg transition" title="Edit Price & Stock">
-                <i class="fa-solid fa-pen-to-square"></i>
-              </button>
-            </td>
-          </tr>
-        `;
-      });
+      const prevBtn = document.getElementById('stock-btn-prev');
+      const nextBtn = document.getElementById('stock-btn-next');
+      if (prevBtn) prevBtn.disabled = (gStockPage <= 1);
+      if (nextBtn) nextBtn.disabled = (end >= gStockTotalRows);
     }
   } catch (err) {
     console.error("Stock Inventory Load Error:", err);
@@ -339,7 +472,8 @@ async function loadStockInventory() {
 // 🎯 Stock Inventory CSV Export (UTF-8 BOM Supported)
 async function exportStockInventoryCSV() {
   try {
-    const items = gStockInventoryData.length > 0 ? gStockInventoryData : gItemsCache;
+    const res = await callApi('getPosStockInventory', { page: 1, limit: 1000, _t: Date.now() }, 'POST');
+    const items = res?.data || gItemsCache;
     if (!items || items.length === 0) {
       return showToast("ERROR", "ထုတ်ယူရန် Stock စာရင်း မရှိပါ။");
     }
@@ -368,9 +502,13 @@ async function exportStockInventoryCSV() {
   }
 }
 
-// 🎯 Quick Stock & Price Modal
+// 🎯 Quick Stock & Price Modal (Admin Only)
 function openQuickEditModal(barcode) {
-  const item = gItemsCache.find(it => it.barcode === barcode);
+  if (gSession?.role === 'canteen_cashier') {
+    return showToast("ERROR", "ငွေကိုင် (Cashier) အနေဖြင့် လက်ကျန်စာရင်းအား ပြင်ဆင်ခွင့် မရှိပါ။ Admin ထံ တင်ပြပါ။");
+  }
+
+  const item = gItemsCache.find(it => it.barcode === barcode) || gStockInventoryData.find(it => it.barcode === barcode);
   if (!item) return;
 
   document.getElementById('qe-item-name').textContent = item.itemName;
@@ -395,7 +533,7 @@ async function submitQuickEdit() {
     if (res && res.success) {
       showToast("SUCCESS", "ပစ္စည်းအချက်အလက် ပြင်ဆင်ပြီးပါပြီ။");
       closeModal('pos-quick-edit-modal');
-      await Promise.all([loadStockInventory(), loadItemsCatalog(false)]);
+      await Promise.all([loadStockInventory(gStockPage), loadItemsCatalog(false)]);
     } else {
       showToast("ERROR", res?.message || "ပြင်ဆင်မှု မအောင်မြင်ပါ။");
     }
@@ -405,7 +543,7 @@ async function submitQuickEdit() {
 }
 
 // ==============================================================================
-// 💡 4. PURCHASES HISTORY, SUPPLIERS & MANIPULATION (VIEW 4)
+// 💡 5. PURCHASES HISTORY, SUPPLIERS & MANIPULATION (VIEW 5)
 // ==============================================================================
 function onSearchPurchasesDebounced() {
   clearTimeout(gPurSearchTimeout);
@@ -434,12 +572,12 @@ async function loadPurchasesHistory(page = 1) {
   try {
     const res = await callApi('getPosPurchasesHistory', {
       searchVal, supplierId, dateFrom, dateTo,
-      page: gPurchasesPage, limit: gPurchasesLimit
-    }, 'GET');
+      page: gPurchasesPage, limit: gPurchasesLimit, _t: Date.now()
+    }, 'POST');
 
     if (res && res.success) {
       const records = res.data || [];
-      gPurchasesData = records; // Cache for edit
+      gPurchasesData = records;
       gPurchasesTotalRows = res.totalRows || 0;
 
       const tbody = document.getElementById('pur-table-body');
@@ -449,12 +587,12 @@ async function loadPurchasesHistory(page = 1) {
       if (records.length === 0) {
         tbody.innerHTML = `<tr><td colspan="10" class="text-center py-8 text-slate-500 font-bold">အဝယ်စာရင်း မရှိပါ။</td></tr>`;
       } else {
-        const canManage = (gSession?.role === 'canteen_admin' || gSession?.role === 'Owner' || gSession?.role === 'Admin');
+        const canManagePurchases = (gSession?.role === 'canteen_admin' || gSession?.role === 'Owner' || gSession?.role === 'Admin');
 
         records.forEach((r, idx) => {
           const displayNo = gPurchasesTotalRows - ((gPurchasesPage - 1) * gPurchasesLimit + idx);
 
-          const actionHtml = canManage ? `
+          const actionHtml = canManagePurchases ? `
             <div class="flex items-center justify-center gap-1.5">
               <button onclick="openEditPurchaseModal('${escAttr(r.id)}')" class="p-1 text-amber-400 hover:text-amber-300 transition" title="ပြင်ဆင်မည်">
                 <i class="fa-solid fa-pen-to-square"></i>
@@ -476,7 +614,7 @@ async function loadPurchasesHistory(page = 1) {
               </td>
               <td class="py-2.5 px-3">
                 <span class="font-bold text-white block">${esc(r.itemName)}</span>
-                <span class="text-[10px] font-mono text-slate-400 block">${esc(r.barcode)}</span>
+                <span class="text-[10px] font-mono text-slate-400 block font-bold">${esc(r.barcode)}</span>
               </td>
               <td class="text-center font-mono font-black text-white py-2.5 px-3">${r.qty}</td>
               <td class="text-right font-mono text-slate-400 py-2.5 px-3">${Number(r.costPrice).toLocaleString()}</td>
@@ -488,7 +626,7 @@ async function loadPurchasesHistory(page = 1) {
         });
       }
 
-      // Pagination Sync
+      // Pagination Controls Sync
       const start = (gPurchasesPage - 1) * gPurchasesLimit + 1;
       const end = Math.min(start + gPurchasesLimit - 1, gPurchasesTotalRows);
       const info = document.getElementById('pur-pagination-info');
@@ -506,6 +644,10 @@ async function loadPurchasesHistory(page = 1) {
 
 // 🎯 Edit Purchase Modal Controller
 function openEditPurchaseModal(id) {
+  if (gSession?.role === 'canteen_cashier') {
+    return showToast("ERROR", "ငွေကိုင် (Cashier) အနေဖြင့် အဝယ်စာရင်းဟောင်းများအား ပြင်ဆင်ခွင့် မရှိပါ။");
+  }
+
   const item = gPurchasesData.find(p => String(p.id) === String(id));
   if (!item) return showToast("ERROR", "အဝယ်စာရင်း အချက်အလက် မတွေ့ပါ။");
 
@@ -561,7 +703,7 @@ async function submitEditPurchase(e) {
       await Promise.all([
         loadPurchasesHistory(gPurchasesPage),
         loadItemsCatalog(false),
-        loadStockInventory()
+        loadStockInventory(gStockPage)
       ]);
     } else {
       showToast("ERROR", res?.message || "ပြင်ဆင်မှု မအောင်မြင်ပါ။");
@@ -572,6 +714,10 @@ async function submitEditPurchase(e) {
 }
 
 async function deletePurchaseEntry(id, purchaseNo) {
+  if (gSession?.role === 'canteen_cashier') {
+    return showToast("ERROR", "ငွေကိုင် (Cashier) အနေဖြင့် အဝယ်စာရင်းဟောင်းများအား ဖျက်သိမ်းခွင့် မရှိပါ။");
+  }
+
   if (!confirm(`အဝယ်ဘောက်ချာ (${purchaseNo}) အား ဖျက်သိမ်းမည်မှာ သေချာပါသလား?\n\nသတိပြုရန်: ဤအဝယ်တွင် ပါဝင်သော ပစ္စည်းအရေအတွက်ကို လက်ကျန် Stock ထဲမှ အလိုအလျောက် ပြန်လည်နုတ်ယူညှိနှိုင်းသွားပါမည်။`)) {
     return;
   }
@@ -583,7 +729,7 @@ async function deletePurchaseEntry(id, purchaseNo) {
       await Promise.all([
         loadPurchasesHistory(gPurchasesPage),
         loadItemsCatalog(false),
-        loadStockInventory()
+        loadStockInventory(gStockPage)
       ]);
     } else {
       showToast("ERROR", res?.message || "ဖျက်သိမ်းမှု မအောင်မြင်ပါ။");
@@ -596,7 +742,7 @@ async function deletePurchaseEntry(id, purchaseNo) {
 // 🎯 Load Suppliers for Filter & Modals
 async function loadSuppliersList() {
   try {
-    const res = await callApi('getPosSuppliers', {}, 'GET');
+    const res = await callApi('getPosSuppliers', { _t: Date.now() }, 'POST');
     if (res && res.success) {
       gSuppliersCache = res.data || [];
       const filterSelect = document.getElementById('pur-supplier-filter');
@@ -648,11 +794,11 @@ async function submitNewSupplier() {
 }
 
 // ==============================================================================
-// 💡 5. IN-MEMORY CART & BARCODE SCANNER LOGIC (VIEW 2)
+// 💡 6. IN-MEMORY CART & BARCODE SCANNER LOGIC (VIEW 2)
 // ==============================================================================
 async function loadItemsCatalog(isManualRefresh) {
   try {
-    const res = await callApi('getPosItems', { onlyActive: true }, 'GET');
+    const res = await callApi('getPosItems', { onlyActive: true, _t: Date.now() }, 'POST');
     if (res && res.success) {
       gItemsCache = res.data || [];
       if (isManualRefresh) showToast("SUCCESS", `ပစ္စည်း (${gItemsCache.length}) မျိုး အသစ်ရယူပြီးပါပြီ။`);
@@ -758,21 +904,21 @@ function renderCart() {
   gCart.forEach((item, idx) => {
     const subtotal = item.qty * item.price;
     list.innerHTML += `
-      <div class="p-3 bg-[#080f1e]/80 border border-slate-800 rounded-xl flex items-center justify-between gap-3 text-xs">
+      <div class="p-2.5 bg-[#080f1e]/80 border border-slate-800 rounded-xl flex items-center justify-between gap-3 text-xs">
         <div class="min-w-0 flex-1">
           <h4 class="font-bold text-white truncate">${esc(item.name)}</h4>
           <span class="text-[10px] font-mono text-slate-400">${Number(item.price).toLocaleString()} MMK</span>
         </div>
 
-        <div class="flex items-center gap-1.5 shrink-0 bg-[#060c18] border border-slate-800 rounded-lg p-1">
-          <button onclick="changeCartQty(${idx}, -1)" class="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold text-xs">-</button>
-          <input type="number" value="${item.qty}" min="1" max="${item.maxStock}" onchange="setCartQty(${idx}, this.value)" class="w-10 bg-transparent text-center font-mono font-bold text-white text-xs outline-none">
-          <button onclick="changeCartQty(${idx}, 1)" class="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold text-xs">+</button>
+        <div class="flex items-center gap-1 shrink-0 bg-[#060c18] border border-slate-800 rounded-lg p-0.5">
+          <button onclick="changeCartQty(${idx}, -1)" class="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold text-xs">-</button>
+          <input type="number" value="${item.qty}" min="1" max="${item.maxStock}" onchange="setCartQty(${idx}, this.value)" class="w-8 bg-transparent text-center font-mono font-bold text-white text-xs outline-none">
+          <button onclick="changeCartQty(${idx}, 1)" class="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold text-xs">+</button>
         </div>
 
-        <div class="text-right shrink-0 min-w-[80px]">
+        <div class="text-right shrink-0 min-w-[70px]">
           <strong class="font-mono text-emerald-400 font-bold block">${Number(subtotal).toLocaleString()}</strong>
-          <button onclick="removeCartItem(${idx})" class="text-[10px] text-slate-500 hover:text-rose-400 p-0.5 mt-0.5 transition"><i class="fa-solid fa-trash"></i></button>
+          <button onclick="removeCartItem(${idx})" class="text-[10px] text-slate-500 hover:text-rose-400 p-0.5 transition"><i class="fa-solid fa-trash"></i></button>
         </div>
       </div>
     `;
@@ -835,7 +981,7 @@ function updateBillTotals() {
 }
 
 // ==============================================================================
-// 💡 6. STUDENT RADAR & 10,000 MMK CAP VERIFIER
+// 💡 7. STUDENT RADAR & 10,000 MMK CAP VERIFIER
 // ==============================================================================
 function setPaymentMode(mode) {
   gPaymentMode = mode;
@@ -844,13 +990,13 @@ function setPaymentMode(mode) {
   const radar = document.getElementById('pos-student-radar');
 
   if (mode === 'Student Pocket Money') {
-    btnWallet.className = "py-2.5 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 bg-indigo-600 text-white shadow-lg shadow-indigo-600/30";
-    btnCash.className = "py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 text-slate-400 hover:text-white";
+    btnWallet.className = "py-2 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 bg-indigo-600 text-white shadow-lg shadow-indigo-600/30";
+    btnCash.className = "py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 text-slate-400 hover:text-white";
     radar.classList.remove('opacity-40', 'pointer-events-none');
     document.getElementById('btn-checkout-label').textContent = "မုန့်ဖိုးဖြင့် ရှင်းမည် (CHECKOUT)";
   } else {
-    btnCash.className = "py-2.5 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 bg-emerald-600 text-white shadow-lg shadow-emerald-600/30";
-    btnWallet.className = "py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 text-slate-400 hover:text-white";
+    btnCash.className = "py-2 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 bg-emerald-600 text-white shadow-lg shadow-emerald-600/30";
+    btnWallet.className = "py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 text-slate-400 hover:text-white";
     radar.classList.add('opacity-40', 'pointer-events-none');
     document.getElementById('btn-checkout-label').textContent = "ငွေသားဖြင့် ရှင်းမည် (CHECKOUT)";
   }
@@ -862,7 +1008,7 @@ async function lookupStudentRadar() {
   if (!val) return;
 
   try {
-    // 🎯 FIX: GET အစား POST သုံးပြီး Cache-Buster (_t) ထည့်သွင်းကာ Real-Time ဒေတာ အမြဲရယူခြင်း
+    // 🎯 POST with Cache-Buster (_t) ensures real-time fresh balance
     const res = await callApi('lookupStudentForPos', { studentId: val, _t: Date.now() }, 'POST');
     if (res && res.success && res.data) {
       gCurrentStudent = res.data;
@@ -937,7 +1083,7 @@ function getCartTotalAmount() {
 }
 
 // ==============================================================================
-// 💡 7. ATOMIC CHECKOUT & RECEIPT PRINTER
+// 💡 8. ATOMIC CHECKOUT & RECEIPT PRINTER
 // ==============================================================================
 async function executeCheckout() {
   if (isSubmitting) return;
@@ -999,15 +1145,25 @@ async function executeCheckout() {
     if (res && res.success) {
       showToast("SUCCESS", `အရောင်း အောင်မြင်ပါပြီ! Invoice: ${res.invoiceNo}`);
       
+      // Print Slip
       printPosReceipt(res.invoiceNo, totalAmount, itemsSummary, gPaymentMode, gCurrentStudent);
 
+      // Reset Active Cart
       gCart = [];
       gCurrentStudent = null;
       const stuInp = document.getElementById('pos-student-input');
       if (stuInp) stuInp.value = '';
       resetStudentCard();
       renderCart();
-      await loadItemsCatalog(false);
+
+      // 🎯 BACKGROUND INVALIDATION: အရောင်းပြီးတိုင်း ဒေတာများအားလုံး အချိန်နှင့်တပြေးညီ အလိုအလျောက် Sync ပြုလုပ်ခြင်း
+      Promise.all([
+        loadItemsCatalog(false),
+        loadCanteenDashboard(),
+        loadSalesOrdersHistory(1),
+        loadStockInventory(gStockPage)
+      ]).catch(e => console.warn("Background Sync Warning:", e));
+
     } else {
       showToast("ERROR", res?.message || "အရောင်း မအောင်မြင်ပါ။");
     }
@@ -1072,7 +1228,7 @@ function printPosReceipt(invoiceNo, totalAmt, itemsSummary, method, student) {
 }
 
 // ==============================================================================
-// 💡 8. SMART PRICING ENGINE & ITEM / PURCHASE MODAL
+// 💡 9. SMART PRICING ENGINE & ITEM / PURCHASE MODAL
 // ==============================================================================
 function openItemModal() {
   document.getElementById('m-barcode').value = '';
@@ -1134,8 +1290,12 @@ async function submitPosPurchase(e) {
     if (res && res.success) {
       showToast("SUCCESS", "အဝယ်စာရင်းနှင့် ဈေးနှုန်း မှတ်တမ်းတင်ပြီးပါပြီ။");
       closeModal('pos-item-modal');
-      await Promise.all([loadItemsCatalog(false), loadStockInventory()]);
-      if (gActiveView === 'purchases') loadPurchasesHistory(1);
+      await Promise.all([
+        loadItemsCatalog(false),
+        loadStockInventory(1),
+        loadPurchasesHistory(1),
+        loadCanteenDashboard()
+      ]);
     } else {
       showToast("ERROR", res?.message || "မအောင်မြင်ပါ။");
     }
@@ -1145,11 +1305,11 @@ async function submitPosPurchase(e) {
 }
 
 // ==============================================================================
-// 💡 9. EVENING SETTLEMENT MODAL
+// 💡 10. EVENING SETTLEMENT MODAL
 // ==============================================================================
 async function openSettlementModal() {
   try {
-    const res = await callApi('getCanteenDailySummary', { date: new Date().toISOString().slice(0, 10) }, 'GET');
+    const res = await callApi('getCanteenDailySummary', { date: new Date().toISOString().slice(0, 10), _t: Date.now() }, 'POST');
     if (res && res.success && res.data) {
       const dt = res.data;
       document.getElementById('set-orders').textContent = `${dt.totalOrders} Orders`;
@@ -1212,12 +1372,19 @@ function logoutPos() {
   window.location.href = '/';
 }
 
-// 💡 EXPOSE GLOBALLY
+// 💡 EXPOSE GLOBALLY FOR DOM EVENT HANDLERS
 window.switchCanteenView = switchCanteenView;
 window.refreshActiveCanteenView = refreshActiveCanteenView;
 window.toggleCanteenSidebar = toggleCanteenSidebar;
 window.loadCanteenDashboard = loadCanteenDashboard;
+window.loadSalesOrdersHistory = loadSalesOrdersHistory;
+window.onSearchSalesDebounced = onSearchSalesDebounced;
+window.clearSalesFilter = clearSalesFilter;
+window.changeSalesPage = changeSalesPage;
+window.reprintSalesSlip = reprintSalesSlip;
 window.loadStockInventory = loadStockInventory;
+window.onSearchStockDebounced = onSearchStockDebounced;
+window.changeStockPage = changeStockPage;
 window.exportStockInventoryCSV = exportStockInventoryCSV;
 window.openQuickEditModal = openQuickEditModal;
 window.submitQuickEdit = submitQuickEdit;
