@@ -6,13 +6,13 @@
  */
 
 // ------------------------------------------------------------------------------
-// 📊 0. LIVE CANTEEN DASHBOARD CONTROLLER (RESTORED & ENHANCED)
+// 📊 0. LIVE CANTEEN DASHBOARD CONTROLLER (NET LOSS FORMULA ENABLED)
 // ------------------------------------------------------------------------------
 async function loadCanteenDashboard() {
   try {
     const res = await callApi('getCanteenDashboardMetrics', { _t: Date.now() }, 'POST');
     if (res && res.success && res.data) {
-      const { today, allTime, totalStockCapital, lowStockCount, todayLossCost, allTimeLossCost, date } = res.data;
+      const { today, allTime, totalStockCapital, lowStockCount, todayLossCost, todaySurplusValue, todayNetLoss, allTimeLossCost, allTimeSurplusValue, allTimeNetLoss, date } = res.data;
 
       const dateLabel = document.getElementById('dash-date-label');
       if (dateLabel) dateLabel.textContent = date || new Date().toISOString().slice(0, 10);
@@ -20,10 +20,10 @@ async function loadCanteenDashboard() {
       const settleBadge = document.getElementById('dash-settle-badge');
       if (settleBadge) {
         if (today.isSettled) {
-          settleBadge.className = "px-3 py-1 rounded-xl text-xs font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono";
+          settleBadge.className = "px-3 py-1 rounded-xl text-xs font-black bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-mono";
           settleBadge.textContent = `SETTLED (${today.settlement?.settlementNo || 'DONE'})`;
         } else {
-          settleBadge.className = "px-3 py-1 rounded-xl text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono animate-pulse";
+          settleBadge.className = "px-3 py-1 rounded-xl text-xs font-black bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30 font-mono animate-pulse";
           settleBadge.textContent = "PENDING CLEARING";
         }
       }
@@ -31,10 +31,10 @@ async function loadCanteenDashboard() {
       const closureBadge = document.getElementById('dash-closure-badge');
       if (closureBadge) {
         if (today.isClosed) {
-          closureBadge.className = "px-3 py-1 rounded-xl text-xs font-black bg-rose-500/20 text-rose-400 border border-rose-500/30 font-mono";
+          closureBadge.className = "px-3 py-1 rounded-xl text-xs font-black bg-rose-500/20 text-rose-500 border border-rose-500/30 font-mono";
           closureBadge.textContent = `CLOSED (${today.closure?.closedBy || 'DONE'})`;
         } else {
-          closureBadge.className = "px-3 py-1 rounded-xl text-xs font-black bg-slate-800 text-slate-300 border border-slate-700 font-mono";
+          closureBadge.className = "px-3 py-1 rounded-xl text-xs font-black bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 font-mono";
           closureBadge.textContent = "REGISTER OPEN";
         }
       }
@@ -50,8 +50,26 @@ async function loadCanteenDashboard() {
       document.getElementById('dash-today-cash').textContent = `${Number(today.cashSalesShare || 0).toLocaleString()} MMK`;
       document.getElementById('dash-today-profit').textContent = `+${Number(today.totalProfit || 0).toLocaleString()} MMK`;
       
+      // 🎯 NET LOSS DASHBOARD RENDER (Waste - Surplus)
+      const wasteSubEl = document.getElementById('dash-today-waste-sub');
+      const surplusSubEl = document.getElementById('dash-today-surplus-sub');
+      if (wasteSubEl) wasteSubEl.textContent = Number(todayLossCost || 0).toLocaleString();
+      if (surplusSubEl) surplusSubEl.textContent = Number(todaySurplusValue || 0).toLocaleString();
+
       const todayLossEl = document.getElementById('dash-today-loss');
-      if (todayLossEl) todayLossEl.textContent = `-${Number(todayLossCost || 0).toLocaleString()} MMK`;
+      if (todayLossEl) {
+        const netVal = Number(todayNetLoss || 0);
+        if (netVal > 0) {
+          todayLossEl.className = "text-xl font-black text-rose-500 font-mono mt-1";
+          todayLossEl.textContent = `-${netVal.toLocaleString()} MMK`;
+        } else if (netVal < 0) {
+          todayLossEl.className = "text-xl font-black text-emerald-500 font-mono mt-1";
+          todayLossEl.textContent = `+${Math.abs(netVal).toLocaleString()} MMK`;
+        } else {
+          todayLossEl.className = "text-xl font-black text-slate-400 font-mono mt-1";
+          todayLossEl.textContent = `0 MMK`;
+        }
+      }
 
       document.getElementById('dash-all-sales').textContent = `${Number(allTime.totalSales || 0).toLocaleString()} MMK`;
       document.getElementById('dash-all-wallet').textContent = `${Number(allTime.pocketMoneyShare || 0).toLocaleString()} MMK`;
@@ -65,7 +83,19 @@ async function loadCanteenDashboard() {
       }
 
       const allLossEl = document.getElementById('dash-all-loss');
-      if (allLossEl) allLossEl.textContent = `${Number(allTimeLossCost || 0).toLocaleString()} MMK`;
+      if (allLossEl) {
+        const allNetVal = Number(allTimeNetLoss || 0);
+        if (allNetVal > 0) {
+          allLossEl.className = "text-sm font-black text-rose-500 font-mono";
+          allLossEl.textContent = `-${allNetVal.toLocaleString()} MMK`;
+        } else if (allNetVal < 0) {
+          allLossEl.className = "text-sm font-black text-emerald-500 font-mono";
+          allLossEl.textContent = `+${Math.abs(allNetVal).toLocaleString()} MMK`;
+        } else {
+          allLossEl.className = "text-sm font-black text-slate-400 font-mono";
+          allLossEl.textContent = `0 MMK`;
+        }
+      }
 
       const lowStockAlert = document.getElementById('dash-low-stock-alert');
       if (lowStockAlert) {
@@ -83,7 +113,7 @@ async function loadCanteenDashboard() {
 }
 
 // ------------------------------------------------------------------------------
-// 🔒 1. CANTEEN STORE DAY CLOSURE (ဆိုင်ပိတ်သိမ်းခြင်း)
+// 🔒 1. CANTEEN STORE DAY CLOSURE
 // ------------------------------------------------------------------------------
 async function openDayCloseModal() {
   const role = (gSession?.role || '').trim();
@@ -107,11 +137,11 @@ async function openDayCloseModal() {
       if (dt.isClosed) {
         btnClose.disabled = true;
         btnClose.textContent = "ယနေ့အတွက် ဆိုင်ပိတ်သိမ်းပြီးဖြစ်ပါသည်";
-        btnClose.className = "w-full py-3.5 bg-slate-800 text-slate-500 rounded-xl font-black text-xs cursor-not-allowed";
+        btnClose.className = "w-full py-3.5 bg-slate-200 dark:bg-slate-800 text-slate-400 rounded-xl font-black text-xs cursor-not-allowed";
       } else {
         btnClose.disabled = false;
         btnClose.textContent = "အတည်ပြု ဆိုင်ပိတ်သိမ်းမည် (CLOSE REGISTER)";
-        btnClose.className = "w-full py-3.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl font-black text-xs shadow-lg shadow-amber-950 active:scale-95 transition font-sans";
+        btnClose.className = "w-full py-3.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl font-black text-xs shadow-lg shadow-amber-950/20 active:scale-95 transition font-sans";
       }
 
       document.getElementById('pos-closure-modal')?.classList.remove('hidden');
@@ -169,25 +199,25 @@ async function renderPendingOrdersTable() {
   document.getElementById('pending-modal-amount').textContent = `${totalAmt.toLocaleString()} MMK`;
 
   if (pendingOrders.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-slate-500 font-bold">D1 သို့ ပေးပို့ရန် ကျန်ရှိသော အော့ဖ်လိုင်းအရောင်း မရှိပါ။</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-slate-400 font-bold">D1 သို့ ပေးပို့ရန် ကျန်ရှိသော အော့ဖ်လိုင်းအရောင်း မရှိပါ။</td></tr>`;
     return;
   }
 
   pendingOrders.forEach((o, idx) => {
     const isWallet = (o.paymentMethod === 'Student Pocket Money');
     tbody.innerHTML += `
-      <tr class="hover:bg-slate-800/40 text-xs border-b border-slate-800/40">
-        <td class="text-center font-mono py-2.5 px-3 text-slate-500">${idx + 1}</td>
-        <td class="font-mono font-bold text-amber-400 py-2.5 px-3">${esc(o.invoiceNo)}</td>
+      <tr class="hover:bg-slate-500/10 text-xs border-b border-[var(--border-color)]">
+        <td class="text-center font-mono py-2.5 px-3 text-slate-400">${idx + 1}</td>
+        <td class="font-mono font-bold text-amber-500 py-2.5 px-3">${esc(o.invoiceNo)}</td>
         <td class="py-2.5 px-3">
-          <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isWallet ? 'bg-indigo-500/20 text-indigo-300' : 'bg-emerald-500/20 text-emerald-300'}">
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isWallet ? 'bg-indigo-500/20 text-indigo-500' : 'bg-emerald-500/20 text-emerald-500'}">
             ${isWallet ? 'Wallet' : 'Cash'}
           </span>
         </td>
-        <td class="py-2.5 px-3 truncate max-w-xs text-slate-200">${esc(o.itemsSummary)}</td>
-        <td class="text-right font-mono font-bold text-white py-2.5 px-3">${Number(o.totalAmount).toLocaleString()} MMK</td>
+        <td class="py-2.5 px-3 truncate max-w-xs">${esc(o.itemsSummary)}</td>
+        <td class="text-right font-mono font-bold py-2.5 px-3">${Number(o.totalAmount).toLocaleString()} MMK</td>
         <td class="text-center py-2.5 px-3">
-          <span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/30">PENDING</span>
+          <span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-500/20 text-amber-500 border border-amber-500/30">PENDING</span>
         </td>
       </tr>
     `;
@@ -268,18 +298,18 @@ async function openSettlementModal() {
       const btnConfirm = document.getElementById('btn-confirm-settlement');
 
       if (dt.isSettled) {
-        box.className = "p-2.5 rounded-xl border text-[11px] font-sans flex items-center gap-2 bg-emerald-950/40 border-emerald-500/30 text-emerald-400";
-        icon.className = "fa-solid fa-circle-check text-emerald-400";
+        box.className = "p-2.5 rounded-xl border text-[11px] font-sans flex items-center gap-2 bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400";
+        icon.className = "fa-solid fa-circle-check text-emerald-500";
         text.textContent = `ဤရက်စွဲအတွက် Finance နှင့် ငွေရှင်းပြီးဖြစ်ပါသည် (${dt.settlement?.settlement_no || dt.settlement?.settlementNo})`;
         btnConfirm.disabled = true;
       } else if (!dt.isClosed) {
-        box.className = "p-2.5 rounded-xl border text-[11px] font-sans flex items-center gap-2 bg-rose-950/40 border-rose-500/30 text-rose-300";
-        icon.className = "fa-solid fa-triangle-exclamation text-rose-400";
+        box.className = "p-2.5 rounded-xl border text-[11px] font-sans flex items-center gap-2 bg-rose-500/10 border-rose-500/30 text-rose-500";
+        icon.className = "fa-solid fa-triangle-exclamation text-rose-500";
         text.textContent = "သတိပြုရန်: ကန်တင်းဘက်မှ ဆိုင်မပိတ်ရသေးပါ! ဆိုင်ပိတ်ပြီးမှသာ ငွေရှင်းပေးနိုင်ပါမည်။";
         btnConfirm.disabled = true;
       } else {
-        box.className = "p-2.5 rounded-xl border text-[11px] font-sans flex items-center gap-2 bg-emerald-950/40 border-emerald-500/30 text-emerald-400";
-        icon.className = "fa-solid fa-circle-check text-emerald-400";
+        box.className = "p-2.5 rounded-xl border text-[11px] font-sans flex items-center gap-2 bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400";
+        icon.className = "fa-solid fa-circle-check text-emerald-500";
         text.textContent = `ကန်တင်းဆိုင်ပိတ်သိမ်းပြီးဖြစ်ပါသည် (${dt.closure?.closedBy || 'Done'})။ ငွေရှင်းလင်းနိုင်ပါပြီ။`;
         btnConfirm.disabled = false;
       }
@@ -420,28 +450,28 @@ async function loadSalesOrdersHistory(page = 1) {
       tbody.innerHTML = '';
 
       if (records.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-slate-500 font-bold">အရောင်းမှတ်တမ်း မရှိပါ။</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-slate-400 font-bold">အရောင်းမှတ်တမ်း မရှိပါ။</td></tr>`;
       } else {
         records.forEach((r, idx) => {
           const displayNo = gSalesTotalRows - ((gSalesPage - 1) * gSalesLimit + idx);
           const isWallet = (r.paymentMethod === 'Student Pocket Money');
 
           tbody.innerHTML += `
-            <tr class="hover:bg-slate-800/40 text-xs border-b border-slate-800/40">
-              <td class="text-center font-mono py-2.5 px-3 text-slate-500">${displayNo}</td>
-              <td class="font-mono text-slate-300 py-2.5 px-3">${esc(r.date)}</td>
-              <td class="font-mono font-bold text-sky-400 py-2.5 px-3">${esc(r.invoiceNo)}</td>
+            <tr class="hover:bg-slate-500/10 text-xs border-b border-[var(--border-color)]">
+              <td class="text-center font-mono py-2.5 px-3 text-slate-400">${displayNo}</td>
+              <td class="font-mono text-slate-400 py-2.5 px-3">${esc(r.date)}</td>
+              <td class="font-mono font-bold text-sky-500 py-2.5 px-3">${esc(r.invoiceNo)}</td>
               <td class="py-2.5 px-3">
-                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isWallet ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'}">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isWallet ? 'bg-indigo-500/20 text-indigo-500' : 'bg-emerald-500/20 text-emerald-500'}">
                   ${isWallet ? 'Wallet' : 'Cash'}
                 </span>
               </td>
-              <td class="font-mono py-2.5 px-3 text-slate-300">${r.studentId ? `ID ${r.studentId}` : '-'}</td>
-              <td class="py-2.5 px-3 text-slate-200">${esc(r.itemsSummary)}</td>
-              <td class="text-right font-mono font-bold text-white py-2.5 px-3">${Number(r.totalAmount).toLocaleString()} MMK</td>
-              <td class="text-right font-mono font-bold text-teal-400 py-2.5 px-3">+${Number(r.netProfit).toLocaleString()}</td>
+              <td class="font-mono py-2.5 px-3 text-slate-400">${r.studentId ? `ID ${r.studentId}` : '-'}</td>
+              <td class="py-2.5 px-3 text-slate-300 font-bold">${esc(r.itemsSummary)}</td>
+              <td class="text-right font-mono font-bold py-2.5 px-3">${Number(r.totalAmount).toLocaleString()} MMK</td>
+              <td class="text-right font-mono font-bold text-teal-500 py-2.5 px-3">+${Number(r.netProfit).toLocaleString()}</td>
               <td class="text-center py-2.5 px-3">
-                <button onclick="reprintSalesSlip('${escAttr(r.invoiceNo)}')" class="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition" title="Print Receipt">
+                <button onclick="reprintSalesSlip('${escAttr(r.invoiceNo)}')" class="p-1.5 text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-lg transition" title="Print Receipt">
                   <i class="fa-solid fa-print"></i>
                 </button>
               </td>

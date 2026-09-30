@@ -176,3 +176,30 @@ CREATE INDEX IF NOT EXISTS idx_canteen_closure_date ON canteen_day_closures(date
 -- ၂။ Offline Sync Batch ပေးပို့မှုများတွင် Idempotency ထိန်းသိမ်းရန် Index
 -- ------------------------------------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_pos_sales_uniqueid ON pos_sales_orders(uniqueid);
+
+-- ------------------------------------------------------------------------------
+-- ၁။ အပိုပစ္စည်း စာရင်းဇယား (POS Surplus & Overage Records)
+-- 💡 စတော့အရေအတွက်သာ တိုးစေပြီး မူလရင်းနှီးငွေ (Capital Investment) မတိုးစေပါ
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS pos_surplus_records (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  surplus_no TEXT UNIQUE NOT NULL,                       -- e.g. SUR-20261001-001
+  date TEXT NOT NULL,                                  -- YYYY-MM-DD
+  reason TEXT NOT NULL,                                -- ရေတွက်မှုအပို / လက်ကျန်ပို / အခြား
+  total_surplus_value REAL NOT NULL CHECK (total_surplus_value >= 0), -- ဝယ်ရင်းဈေးဖြင့် တွက်ထားသော အပိုတန်ဖိုး
+  total_items_qty REAL NOT NULL CHECK (total_items_qty > 0),    -- အပိုရရှိသော ပစ္စည်းအရေအတွက်
+  items_summary TEXT NOT NULL,                         -- e.g. "ပေါင်မုန့် x 2, ပဲနို့ x 1"
+  items_json TEXT,                                     -- Rollback ပြုလုပ်နိုင်ရန် Items Detail JSON
+  remark TEXT,                                         -- အသေးစိတ် အကြောင်းပြချက်
+  reported_by TEXT NOT NULL DEFAULT 'Cashier',
+  uniqueid TEXT UNIQUE NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_pos_surplus_date ON pos_surplus_records(date);
+CREATE INDEX IF NOT EXISTS idx_pos_surplus_uid ON pos_surplus_records(uniqueid);
+
+-- ------------------------------------------------------------------------------
+-- ၂။ အပျက်စာရင်း ပြင်/ဖျက်ချိန်တွင် တိကျစွာ Rollback ပြုလုပ်နိုင်ရန် items_json Column ထည့်သွင်းခြင်း
+-- ------------------------------------------------------------------------------
+ALTER TABLE pos_waste_records ADD COLUMN items_json TEXT;

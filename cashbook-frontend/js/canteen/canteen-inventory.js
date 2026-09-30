@@ -5,7 +5,6 @@
  * ==============================================================================
  */
 
-// 🎯 Items Catalog Preloader (In-Memory + IndexedDB Backup)
 async function loadItemsCatalog(isManualRefresh) {
   if (navigator.onLine) {
     try {
@@ -20,12 +19,9 @@ async function loadItemsCatalog(isManualRefresh) {
       console.warn("[Catalog] Online load failed, falling back to IndexedDB...");
     }
   }
-
-  // Offline Fallback
   gItemsCache = await dbGetAllItems();
 }
 
-// 🎯 Stock Inventory View (20 Rows Paginated)
 function onSearchStockDebounced() {
   clearTimeout(gStockSearchTimeout);
   gStockSearchTimeout = setTimeout(() => { loadStockInventory(1); }, 250);
@@ -63,7 +59,7 @@ async function loadStockInventory(page = 1) {
       tbody.innerHTML = '';
 
       if (items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-slate-500 font-bold">ရှာဖွေမှုနှင့် ကိုက်ညီသော ပစ္စည်း မရှိပါ။</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-slate-400 font-bold">ရှာဖွေမှုနှင့် ကိုက်ညီသော ပစ္စည်း မရှိပါ။</td></tr>`;
       } else {
         const canManageStock = (gSession?.role === 'canteen_admin' || gSession?.role === 'Owner' || gSession?.role === 'Admin');
 
@@ -72,28 +68,28 @@ async function loadStockInventory(page = 1) {
 
           let badgeHtml = '';
           if (item.currentStock <= 0) {
-            badgeHtml = '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-500/20 text-rose-400 border border-rose-500/30">OUT OF STOCK</span>';
+            badgeHtml = '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-500/20 text-rose-500 border border-rose-500/30">OUT OF STOCK</span>';
           } else if (item.currentStock <= 10) {
-            badgeHtml = '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30">LOW STOCK</span>';
+            badgeHtml = '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-500/20 text-amber-500 border border-amber-500/30">LOW STOCK</span>';
           } else {
-            badgeHtml = '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">HEALTHY</span>';
+            badgeHtml = '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-500/20 text-emerald-500 border border-emerald-500/30">HEALTHY</span>';
           }
 
           const actionHtml = canManageStock ? `
-            <button onclick="openQuickEditModal('${escAttr(item.barcode)}')" class="p-1.5 text-teal-400 hover:text-teal-300 hover:bg-teal-500/10 rounded-lg transition" title="Edit Price & Stock">
+            <button onclick="openQuickEditModal('${escAttr(item.barcode)}')" class="p-1.5 text-teal-500 hover:bg-teal-500/10 rounded-lg transition" title="Edit Price & Stock">
               <i class="fa-solid fa-pen-to-square"></i>
             </button>
-          ` : '<span class="text-slate-600">-</span>';
+          ` : '<span class="text-slate-400">-</span>';
 
           tbody.innerHTML += `
-            <tr class="hover:bg-slate-800/40 text-xs border-b border-slate-800/40">
-              <td class="text-center font-mono py-2.5 px-3 text-slate-500">${displayNo}</td>
-              <td class="font-mono text-slate-300 py-2.5 px-3 font-bold">${esc(item.barcode)}</td>
-              <td class="font-bold text-white py-2.5 px-3">${esc(item.itemName)}</td>
+            <tr class="hover:bg-slate-500/10 text-xs border-b border-[var(--border-color)]">
+              <td class="text-center font-mono py-2.5 px-3 text-slate-400">${displayNo}</td>
+              <td class="font-mono text-slate-400 py-2.5 px-3 font-bold">${esc(item.barcode)}</td>
+              <td class="font-bold py-2.5 px-3">${esc(item.itemName)}</td>
               <td class="text-slate-400 py-2.5 px-3">${esc(item.category)}</td>
               <td class="text-right font-mono text-slate-400 py-2.5 px-3">${Number(item.costPrice).toLocaleString()}</td>
-              <td class="text-right font-mono font-bold text-emerald-400 py-2.5 px-3">${Number(item.sellingPrice).toLocaleString()} MMK</td>
-              <td class="text-center font-mono font-black py-2.5 px-3 text-sm ${item.currentStock <= 0 ? 'text-rose-400' : (item.currentStock <= 10 ? 'text-amber-400' : 'text-slate-200')}">
+              <td class="text-right font-mono font-bold text-emerald-500 py-2.5 px-3">${Number(item.sellingPrice).toLocaleString()} MMK</td>
+              <td class="text-center font-mono font-black py-2.5 px-3 text-sm ${item.currentStock <= 0 ? 'text-rose-500' : (item.currentStock <= 10 ? 'text-amber-500' : '')}">
                 ${item.currentStock}
               </td>
               <td class="text-center py-2.5 px-3">${badgeHtml}</td>
@@ -118,7 +114,6 @@ async function loadStockInventory(page = 1) {
   }
 }
 
-// 🎯 CSV Export
 async function exportStockInventoryCSV() {
   try {
     const res = await callApi('getPosStockInventory', { page: 1, limit: 1000, _t: Date.now() }, 'POST');
@@ -182,7 +177,14 @@ async function submitQuickEdit() {
   }
 }
 
-// 🎯 Purchases History View (20 Rows Paginated)
+// 🎯 Purchases: Today Filter Shortcut
+function setFilterPurchasesToday() {
+  const today = new Date().toISOString().slice(0, 10);
+  document.getElementById('pur-date-from').value = today;
+  document.getElementById('pur-date-to').value = today;
+  loadPurchasesHistory(1);
+}
+
 function onSearchPurchasesDebounced() {
   clearTimeout(gPurSearchTimeout);
   gPurSearchTimeout = setTimeout(() => { loadPurchasesHistory(1); }, 250);
@@ -200,6 +202,7 @@ function changePurchasesPage(delta) {
   loadPurchasesHistory(gPurchasesPage + delta);
 }
 
+// 🎯 Purchases History with Live Supplier Total Calculator
 async function loadPurchasesHistory(page = 1) {
   gPurchasesPage = Math.max(1, page);
   const searchVal = document.getElementById('pur-search')?.value.trim() || '';
@@ -218,12 +221,17 @@ async function loadPurchasesHistory(page = 1) {
       gPurchasesData = records;
       gPurchasesTotalRows = res.totalRows || 0;
 
+      // 🎯 Update Supplier-specific Total Purchase Badge
+      const totalPurchasesAmount = res.totalPurchasesAmount || 0;
+      const badgeEl = document.getElementById('pur-supplier-total-badge');
+      if (badgeEl) badgeEl.textContent = `${Number(totalPurchasesAmount).toLocaleString()} MMK`;
+
       const tbody = document.getElementById('pur-table-body');
       if (!tbody) return;
       tbody.innerHTML = '';
 
       if (records.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="10" class="text-center py-8 text-slate-500 font-bold">အဝယ်စာရင်း မရှိပါ။</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="text-center py-8 text-slate-400 font-bold">အဝယ်စာရင်း မရှိပါ။</td></tr>`;
       } else {
         const canManagePurchases = (gSession?.role === 'canteen_admin' || gSession?.role === 'Owner' || gSession?.role === 'Admin');
 
@@ -232,33 +240,33 @@ async function loadPurchasesHistory(page = 1) {
 
           const actionHtml = canManagePurchases ? `
             <div class="flex items-center justify-center gap-1.5">
-              <button onclick="openEditPurchaseModal('${escAttr(r.id)}')" class="p-1 text-amber-400 hover:text-amber-300 transition" title="ပြင်ဆင်မည်">
+              <button onclick="openEditPurchaseModal('${escAttr(r.id)}')" class="p-1 text-amber-500 hover:bg-amber-500/10 rounded transition" title="ပြင်ဆင်မည်">
                 <i class="fa-solid fa-pen-to-square"></i>
               </button>
-              <button onclick="deletePurchaseEntry('${escAttr(r.id)}', '${escAttr(r.purchaseNo)}')" class="p-1 text-rose-400 hover:text-rose-300 transition" title="ဖျက်မည်">
+              <button onclick="deletePurchaseEntry('${escAttr(r.id)}', '${escAttr(r.purchaseNo)}')" class="p-1 text-rose-500 hover:bg-rose-500/10 rounded transition" title="ဖျက်မည်">
                 <i class="fa-solid fa-trash"></i>
               </button>
             </div>
-          ` : '<span class="text-slate-600">-</span>';
+          ` : '<span class="text-slate-400">-</span>';
 
           tbody.innerHTML += `
-            <tr class="hover:bg-slate-800/40 text-xs border-b border-slate-800/40">
-              <td class="text-center font-mono py-2.5 px-3 text-slate-500">${displayNo}</td>
-              <td class="font-mono text-slate-300 py-2.5 px-3">${esc(r.date)}</td>
-              <td class="font-mono font-bold text-amber-400 py-2.5 px-3">${esc(r.purchaseNo)}</td>
-              <td class="font-bold text-slate-200 py-2.5 px-3">
+            <tr class="hover:bg-slate-500/10 text-xs border-b border-[var(--border-color)]">
+              <td class="text-center font-mono py-2.5 px-3 text-slate-400">${displayNo}</td>
+              <td class="font-mono text-slate-400 py-2.5 px-3">${esc(r.date)}</td>
+              <td class="font-mono font-bold text-amber-500 py-2.5 px-3">${esc(r.purchaseNo)}</td>
+              <td class="font-bold py-2.5 px-3">
                 <span>${esc(r.supplierName)}</span>
-                ${r.supplierPhone && r.supplierPhone !== '-' ? `<span class="text-[10px] text-slate-500 block font-mono">Ph: ${esc(r.supplierPhone)}</span>` : ''}
+                ${r.supplierPhone && r.supplierPhone !== '-' ? `<span class="text-[10px] text-slate-400 block font-mono">Ph: ${esc(r.supplierPhone)}</span>` : ''}
               </td>
               <td class="py-2.5 px-3">
-                <span class="font-bold text-white block">${esc(r.itemName)}</span>
+                <span class="font-bold block">${esc(r.itemName)}</span>
                 <span class="text-[10px] font-mono text-slate-400 block font-bold">${esc(r.barcode)}</span>
               </td>
-              <td class="text-center font-mono font-black text-white py-2.5 px-3">${r.qty}</td>
+              <td class="text-center font-mono font-black py-2.5 px-3">${r.qty}</td>
               <td class="text-right font-mono text-slate-400 py-2.5 px-3">${Number(r.costPrice).toLocaleString()}</td>
-              <td class="text-right font-mono font-bold text-emerald-400 py-2.5 px-3">${Number(r.sellingPrice).toLocaleString()}</td>
-              <td class="text-right font-mono font-black text-amber-300 py-2.5 px-3">${Number(r.totalCost).toLocaleString()} MMK</td>
-              <td class="text-center py-2.5 px-3 right-0 sticky bg-[#080e1c] border-l border-slate-800">${actionHtml}</td>
+              <td class="text-right font-mono font-bold text-emerald-500 py-2.5 px-3">${Number(r.sellingPrice).toLocaleString()}</td>
+              <td class="text-right font-mono font-black text-amber-500 py-2.5 px-3">${Number(r.totalCost).toLocaleString()} MMK</td>
+              <td class="text-center py-2.5 px-3 right-0 sticky bg-[var(--table-header)] border-l border-[var(--border-color)]">${actionHtml}</td>
             </tr>
           `;
         });
@@ -279,7 +287,6 @@ async function loadPurchasesHistory(page = 1) {
   }
 }
 
-// 🎯 Smart Pricing Calculator (Auto-Sync)
 function triggerSmartPriceCalc() {
   const cost = parseFloat(document.getElementById('m-cost-price')?.value || 0);
   const markup = parseFloat(document.getElementById('m-markup-percent')?.value || 20);
@@ -480,6 +487,7 @@ window.changeStockPage = changeStockPage;
 window.exportStockInventoryCSV = exportStockInventoryCSV;
 window.openQuickEditModal = openQuickEditModal;
 window.submitQuickEdit = submitQuickEdit;
+window.setFilterPurchasesToday = setFilterPurchasesToday;
 window.loadPurchasesHistory = loadPurchasesHistory;
 window.onSearchPurchasesDebounced = onSearchPurchasesDebounced;
 window.clearPurchasesFilter = clearPurchasesFilter;

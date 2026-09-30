@@ -14,18 +14,21 @@ var gStockInventoryData = [];
 var gPurchasesData = [];
 var gSalesOrdersData = [];
 var gWasteData = [];
+var gSurplusData = [];      // 🎯 Cached Surplus Records
 var gCart = [];
 var gWasteCart = [];
+var gSurplusCart = [];    // 🎯 In-Memory Surplus Cart
 var gCurrentStudent = null;
 var gPaymentMode = 'Student Pocket Money';
 var gDailySpendingCap = 10000;
 var isSubmitting = false;
 
-// Pagination Variables
+// Pagination Variables (20 Rows Per Page)
 var gStockPage = 1, gStockLimit = 20, gStockTotalRows = 0, gStockSearchTimeout = null;
 var gPurchasesPage = 1, gPurchasesLimit = 20, gPurchasesTotalRows = 0, gPurSearchTimeout = null;
 var gSalesPage = 1, gSalesLimit = 20, gSalesTotalRows = 0, gSalesSearchTimeout = null;
 var gWastePage = 1, gWasteLimit = 20, gWasteTotalRows = 0, gWasteSearchTimeout = null;
+var gSurplusPage = 1, gSurplusLimit = 20, gSurplusTotalRows = 0, gSurplusSearchTimeout = null;
 
 const esc = window.escapeHtml || (s => s ? String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : '');
 const escAttr = window.escapeJsAttr || (s => s ? String(s).replace(/'/g, "\\'") : '');
@@ -53,10 +56,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   const sideDateEl = document.getElementById('side-today-date');
   if (sideDateEl) sideDateEl.textContent = todayStr;
 
-  // Initialize IndexedDB V2
   await initCanteenDB();
-
-  // Monitor Online/Offline Status
   initNetworkMonitor();
 
   // Counter Role Isolation
@@ -65,6 +65,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-toggle-sidebar')?.classList.add('hidden');
     document.getElementById('btn-admin-stock')?.classList.add('hidden');
     document.getElementById('btn-header-waste')?.classList.add('hidden');
+    document.getElementById('btn-header-surplus')?.classList.add('hidden');
     document.getElementById('btn-header-close-day')?.classList.add('hidden');
     switchCanteenView('pos');
   } else if (role === 'canteen_cashier') {
@@ -76,6 +77,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   window.addEventListener('keydown', handleGlobalHotkeys);
 
+  // Close Dropdowns on outside click
   document.addEventListener('click', (e) => {
     const barcodeInput = document.getElementById('pos-barcode-input');
     const dropdown = document.getElementById('pos-search-dropdown');
@@ -88,9 +90,14 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (wasteDropdown && !wasteDropdown.contains(e.target) && e.target !== wasteInput) {
       wasteDropdown.classList.add('hidden');
     }
+
+    const surplusInput = document.getElementById('surplus-barcode-input');
+    const surplusDropdown = document.getElementById('surplus-search-dropdown');
+    if (surplusDropdown && !surplusDropdown.contains(e.target) && e.target !== surplusInput) {
+      surplusDropdown.classList.add('hidden');
+    }
   });
 
-  // 🚀 အော့ဖ်လိုင်းအတွက် ကျောင်းသားများကို Canteen API သစ်ဖြင့် ကြိုတင်ဆွဲယူသိမ်းဆည်းခြင်း
   await Promise.all([
     loadItemsCatalog(false),
     loadSuppliersList(),
@@ -102,6 +109,23 @@ window.addEventListener('DOMContentLoaded', async () => {
   focusScanner();
 });
 
+// ☀️ / 🌙 Dual-Theme Switcher Engine
+function toggleCanteenTheme() {
+  const html = document.documentElement;
+  const isDark = html.classList.contains('dark');
+  if (isDark) {
+    html.classList.remove('dark');
+    html.classList.add('light');
+    localStorage.setItem('canteen_pos_theme', 'light');
+    showToast("SUCCESS", "Light Mode သို့ ပြောင်းလဲထားပါသည်။");
+  } else {
+    html.classList.remove('light');
+    html.classList.add('dark');
+    localStorage.setItem('canteen_pos_theme', 'dark');
+    showToast("SUCCESS", "Dark Mode သို့ ပြောင်းလဲထားပါသည်။");
+  }
+}
+
 function initNetworkMonitor() {
   const updateStatus = () => {
     const el = document.getElementById('pos-network-status');
@@ -109,10 +133,10 @@ function initNetworkMonitor() {
     if (el) {
       if (isOnline) {
         el.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> ONLINE`;
-        el.className = "flex items-center gap-1.5 text-emerald-400 font-bold font-mono";
+        el.className = "flex items-center gap-1.5 text-emerald-500 font-bold font-mono";
       } else {
         el.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span> OFFLINE`;
-        el.className = "flex items-center gap-1.5 text-rose-400 font-bold font-mono";
+        el.className = "flex items-center gap-1.5 text-rose-500 font-bold font-mono";
       }
     }
   };
@@ -120,30 +144,26 @@ function initNetworkMonitor() {
   window.addEventListener('online', async () => {
     updateStatus();
     showToast("SUCCESS", "အင်တာနက်လိုင်း ပြန်လည်ရရှိပါပြီ။ အော့ဖ်လိုင်းအရောင်းများ Sync လုပ်ပါမည်။");
-    if (typeof autoSyncPendingOrders === 'function') {
-      await autoSyncPendingOrders();
-    }
+    if (typeof autoSyncPendingOrders === 'function') await autoSyncPendingOrders();
   });
 
   window.addEventListener('offline', () => {
     updateStatus();
-    showToast("ERROR", "အင်တာနက်လိုင်း ပြတ်တောက်သွားပါသည်။ Offline POS Mode ဖြင့် ရောင်းချနိုင်ပါသည်။");
+    showToast("ERROR", "အင်တာနက်လိုင်း ပြတ်တောက်သွားပါသည်။ Offline POS Mode သို့ ပြောင်းလဲထားပါသည်။");
   });
 
   updateStatus();
 }
 
-// 🎯 ကျောင်းသားအားလုံးကို Canteen API ဖြင့် Offline IndexedDB ထဲသို့ ထည့်သွင်းခြင်း
 async function cacheStudentDirectoryForOffline() {
   if (!navigator.onLine) return;
   try {
     const res = await callApi('getPosStudentsSnapshot', { _t: Date.now() }, 'POST');
     if (res && res.success && Array.isArray(res.data)) {
       await dbSaveStudents(res.data);
-      console.log(`[OfflineCache] ကျောင်းသား (${res.data.length}) ဦး အချက်အလက်များကို Offline Database တွင် သိမ်းဆည်းပြီးပါပြီ။`);
     }
   } catch (e) {
-    console.warn("[OfflineCache] Student directory preload warning:", e.message);
+    console.warn("[OfflineCache] Preload warning:", e.message);
   }
 }
 
@@ -156,16 +176,16 @@ async function updatePendingBadgeCount() {
   const btn = document.getElementById('btn-pending-sync');
   if (btn) {
     if (pendingOrders.length > 0) {
-      btn.className = "px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center gap-1.5 transition active:scale-95 shadow animate-pulse";
+      btn.className = "px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-500 text-xs font-bold flex items-center gap-1.5 transition active:scale-95 shadow animate-pulse";
     } else {
-      btn.className = "px-3 py-1.5 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-bold flex items-center gap-1.5 transition active:scale-95 shadow";
+      btn.className = "px-3 py-1.5 rounded-lg bg-slate-200/80 dark:bg-slate-800 border border-[var(--border-color)] text-xs font-bold flex items-center gap-1.5 transition active:scale-95 shadow-sm";
     }
   }
 }
 
 function switchCanteenView(viewName) {
   gActiveView = viewName;
-  const views = ['dashboard', 'pos', 'sales', 'stock', 'purchases', 'waste'];
+  const views = ['dashboard', 'pos', 'sales', 'stock', 'purchases', 'waste', 'surplus'];
 
   views.forEach(v => {
     const el = document.getElementById(`view-${v}`);
@@ -176,7 +196,7 @@ function switchCanteenView(viewName) {
       if (v === viewName) {
         navBtn.className = "w-full px-3 py-2 rounded-xl transition flex items-center gap-3 bg-emerald-600 text-white shadow-lg shadow-emerald-900/30";
       } else {
-        navBtn.className = "w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-400 hover:text-white hover:bg-slate-800/50";
+        navBtn.className = "w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50";
       }
     }
   });
@@ -189,7 +209,8 @@ function switchCanteenView(viewName) {
       sales: 'CANTEEN SALES ORDERS HISTORY',
       stock: 'REAL-TIME STOCK INVENTORY AUDITOR',
       purchases: 'PURCHASES & SUPPLIERS AUDIT HISTORY',
-      waste: 'CANTEEN WASTAGE & LOSS AUDITOR'
+      waste: 'CANTEEN WASTAGE & LOSS AUDITOR',
+      surplus: 'CANTEEN STOCK SURPLUS AUDITOR'
     };
     titleEl.textContent = titles[viewName] || 'CANTEEN POS SYSTEM';
   }
@@ -199,6 +220,7 @@ function switchCanteenView(viewName) {
   else if (viewName === 'stock' && typeof loadStockInventory === 'function') loadStockInventory(1);
   else if (viewName === 'purchases' && typeof loadPurchasesHistory === 'function') loadPurchasesHistory(1);
   else if (viewName === 'waste' && typeof loadWasteHistory === 'function') loadWasteHistory(1);
+  else if (viewName === 'surplus' && typeof loadSurplusHistory === 'function') loadSurplusHistory(1);
   else if (viewName === 'pos') focusScanner();
 }
 
@@ -212,6 +234,7 @@ function refreshActiveCanteenView() {
     else if (gActiveView === 'stock') loadStockInventory(gStockPage);
     else if (gActiveView === 'purchases') loadPurchasesHistory(gPurchasesPage);
     else if (gActiveView === 'waste') loadWasteHistory(gWastePage);
+    else if (gActiveView === 'surplus') loadSurplusHistory(gSurplusPage);
     else if (gActiveView === 'pos') {
       loadItemsCatalog(true);
       cacheStudentDirectoryForOffline();
@@ -273,9 +296,11 @@ function logoutPos() {
   window.location.href = '/';
 }
 
+// Window Exports
 window.switchCanteenView = switchCanteenView;
 window.refreshActiveCanteenView = refreshActiveCanteenView;
 window.toggleCanteenSidebar = toggleCanteenSidebar;
+window.toggleCanteenTheme = toggleCanteenTheme;
 window.showToast = showToast;
 window.focusScanner = focusScanner;
 window.closeModal = closeModal;
