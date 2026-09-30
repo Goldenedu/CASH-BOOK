@@ -1498,3 +1498,53 @@ export async function savePosSupplier(db, session, body) {
     return { success: false, message: err.message };
   }
 }
+
+// ------------------------------------------------------------------------------
+// 🎓 15. OFFLINE POS STUDENT DIRECTORY SNAPSHOT (1-BATCH FOR INDEXED-DB)
+// ------------------------------------------------------------------------------
+export async function getPosStudentsSnapshot(db) {
+  try {
+    const todayStr = getMyanmarDateString();
+    const currentFy = computeAcademicFy(todayStr).replace(/^FY\s*/i, '');
+
+    // 🚀 D1 Single Query: ကျောင်းသားအားလုံး + လက်ကျန်ငွေ + ယနေ့သုံးပြီးငွေအား ၁ ကြိမ်တည်း ဆွဲယူသည်
+    let query = `
+      SELECT 
+        s.student_id as studentId,
+        s.id,
+        s.name,
+        s.class as studentClass,
+        s.fyid,
+        s.nfc_tag_id as nfcTagId,
+        COALESCE(b.bal, 0) as currentBalance,
+        COALESCE(o.todaySpent, 0) as todaySpent
+      FROM student s
+      LEFT JOIN (
+        SELECT student_id, SUM(debit - credit) as bal
+        FROM student_money
+        WHERE fy IN (?, ?)
+        GROUP BY student_id
+      ) b ON (b.student_id = s.student_id OR b.student_id = s.id)
+      LEFT JOIN (
+        SELECT student_id, SUM(total_amount) as todaySpent
+        FROM pos_sales_orders
+        WHERE date = ? AND payment_method = 'Student Pocket Money'
+        GROUP BY student_id
+      ) o ON (o.student_id = s.student_id OR o.student_id = s.id)
+      ORDER BY s.student_id ASC
+    `;
+
+    let res;
+    try {
+      res = await db.prepare(query).bind(currentFy, `FY ${currentFy}`, todayStr).all();
+    } catch (colErr) {
+      // nfc_tag_id column မပါဝင်သော Database များအတွက် Fallback
+      query = query.replace('s.nfc_tag_id as nfcTagId,', "'' as nfcTagId,");
+      res = await db.prepare(query).bind(currentFy, `FY ${currentFy}`, todayStr).all();
+    }
+
+    return { success: true, data: res.results || [] };
+  } catch (err) {
+    return { success: false, message: "ကျောင်းသား စာရင်း ဆွဲယူ၍ မရပါ: " + err.message };
+  }
+}

@@ -5,7 +5,7 @@
  * ==============================================================================
  */
 
-// 🎯 Global Application Variables (Shared across modules)
+// 🎯 Global Application Variables
 var gSession = null;
 var gActiveView = 'pos';
 var gItemsCache = [];
@@ -21,17 +21,15 @@ var gPaymentMode = 'Student Pocket Money';
 var gDailySpendingCap = 10000;
 var isSubmitting = false;
 
-// Pagination Variables (20 Rows Per Page)
+// Pagination Variables
 var gStockPage = 1, gStockLimit = 20, gStockTotalRows = 0, gStockSearchTimeout = null;
 var gPurchasesPage = 1, gPurchasesLimit = 20, gPurchasesTotalRows = 0, gPurSearchTimeout = null;
 var gSalesPage = 1, gSalesLimit = 20, gSalesTotalRows = 0, gSalesSearchTimeout = null;
 var gWastePage = 1, gWasteLimit = 20, gWasteTotalRows = 0, gWasteSearchTimeout = null;
 
-// Safe Escape Helpers
 const esc = window.escapeHtml || (s => s ? String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : '');
 const escAttr = window.escapeJsAttr || (s => s ? String(s).replace(/'/g, "\\'") : '');
 
-// 🎯 DOMContentLoaded Bootstrap
 window.addEventListener('DOMContentLoaded', async () => {
   const userStr = localStorage.getItem('golden_user') || localStorage.getItem('user');
   const token = localStorage.getItem('golden_auth_token') || localStorage.getItem('token');
@@ -44,7 +42,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   gSession = JSON.parse(userStr);
   const role = (gSession.role || 'Cashier').trim();
 
-  // Role UI Badges
   const roleBadge = document.getElementById('pos-role-badge');
   if (roleBadge) roleBadge.textContent = role.toUpperCase();
   const sideRole = document.getElementById('side-user-role');
@@ -56,10 +53,10 @@ window.addEventListener('DOMContentLoaded', async () => {
   const sideDateEl = document.getElementById('side-today-date');
   if (sideDateEl) sideDateEl.textContent = todayStr;
 
-  // Initialize Offline IndexedDB
+  // Initialize IndexedDB V2
   await initCanteenDB();
 
-  // Network Online/Offline Monitoring
+  // Monitor Online/Offline Status
   initNetworkMonitor();
 
   // Counter Role Isolation
@@ -77,10 +74,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     switchCanteenView('dashboard');
   }
 
-  // Keyboard Hotkeys
   window.addEventListener('keydown', handleGlobalHotkeys);
 
-  // Close Dropdowns on outside click
   document.addEventListener('click', (e) => {
     const barcodeInput = document.getElementById('pos-barcode-input');
     const dropdown = document.getElementById('pos-search-dropdown');
@@ -95,7 +90,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Background Cache Load & Pending Badge Check
+  // 🚀 အော့ဖ်လိုင်းအတွက် ကျောင်းသားများကို Canteen API သစ်ဖြင့် ကြိုတင်ဆွဲယူသိမ်းဆည်းခြင်း
   await Promise.all([
     loadItemsCatalog(false),
     loadSuppliersList(),
@@ -107,7 +102,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   focusScanner();
 });
 
-// 🎯 Network Online / Offline Engine
 function initNetworkMonitor() {
   const updateStatus = () => {
     const el = document.getElementById('pos-network-status');
@@ -125,7 +119,7 @@ function initNetworkMonitor() {
 
   window.addEventListener('online', async () => {
     updateStatus();
-    showToast("SUCCESS", "အင်တာနက်လိုင်း ပြန်လည်ချိတ်ဆက်မိပါပြီ။ အော့ဖ်လိုင်းအရောင်းများ စတင် Sync ပြုလုပ်ပါမည်။");
+    showToast("SUCCESS", "အင်တာနက်လိုင်း ပြန်လည်ရရှိပါပြီ။ အော့ဖ်လိုင်းအရောင်းများ Sync လုပ်ပါမည်။");
     if (typeof autoSyncPendingOrders === 'function') {
       await autoSyncPendingOrders();
     }
@@ -133,27 +127,26 @@ function initNetworkMonitor() {
 
   window.addEventListener('offline', () => {
     updateStatus();
-    showToast("ERROR", "အင်တာနက်လိုင်း ပြတ်တောက်သွားပါသည်။ Offline POS Mode သို့ အလိုအလျောက် ပြောင်းလဲထားပါသည်။");
+    showToast("ERROR", "အင်တာနက်လိုင်း ပြတ်တောက်သွားပါသည်။ Offline POS Mode ဖြင့် ရောင်းချနိုင်ပါသည်။");
   });
 
   updateStatus();
 }
 
-// 🎯 Pre-cache Student directory for offline wallet scanning
+// 🎯 ကျောင်းသားအားလုံးကို Canteen API ဖြင့် Offline IndexedDB ထဲသို့ ထည့်သွင်းခြင်း
 async function cacheStudentDirectoryForOffline() {
   if (!navigator.onLine) return;
   try {
-    const currentFy = (typeof window.getCurrentAcademicYear === 'function') ? window.getCurrentAcademicYear() : '2026-2027';
-    const res = await callApi('getStudentMoneySummary', { fy: currentFy }, 'GET');
-    if (res && res.success && res.data) {
+    const res = await callApi('getPosStudentsSnapshot', { _t: Date.now() }, 'POST');
+    if (res && res.success && Array.isArray(res.data)) {
       await dbSaveStudents(res.data);
+      console.log(`[OfflineCache] ကျောင်းသား (${res.data.length}) ဦး အချက်အလက်များကို Offline Database တွင် သိမ်းဆည်းပြီးပါပြီ။`);
     }
   } catch (e) {
     console.warn("[OfflineCache] Student directory preload warning:", e.message);
   }
 }
 
-// 🎯 Update Pending Counter Badge in Header
 async function updatePendingBadgeCount() {
   const badge = document.getElementById('pending-count');
   if (!badge) return;
@@ -170,7 +163,6 @@ async function updatePendingBadgeCount() {
   }
 }
 
-// 🎯 Screen Viewport Switcher
 function switchCanteenView(viewName) {
   gActiveView = viewName;
   const views = ['dashboard', 'pos', 'sales', 'stock', 'purchases', 'waste'];
@@ -220,7 +212,10 @@ function refreshActiveCanteenView() {
     else if (gActiveView === 'stock') loadStockInventory(gStockPage);
     else if (gActiveView === 'purchases') loadPurchasesHistory(gPurchasesPage);
     else if (gActiveView === 'waste') loadWasteHistory(gWastePage);
-    else if (gActiveView === 'pos') loadItemsCatalog(true);
+    else if (gActiveView === 'pos') {
+      loadItemsCatalog(true);
+      cacheStudentDirectoryForOffline();
+    }
   } finally {
     if (refreshBtn) refreshBtn.classList.remove('animate-spin');
   }
@@ -278,7 +273,6 @@ function logoutPos() {
   window.location.href = '/';
 }
 
-// Global Exports
 window.switchCanteenView = switchCanteenView;
 window.refreshActiveCanteenView = refreshActiveCanteenView;
 window.toggleCanteenSidebar = toggleCanteenSidebar;
@@ -287,3 +281,4 @@ window.focusScanner = focusScanner;
 window.closeModal = closeModal;
 window.logoutPos = logoutPos;
 window.updatePendingBadgeCount = updatePendingBadgeCount;
+window.cacheStudentDirectoryForOffline = cacheStudentDirectoryForOffline;

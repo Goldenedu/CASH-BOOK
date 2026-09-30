@@ -776,6 +776,10 @@ export default {
           }
           result = await CanteenPosHandlers.updatePosItemQuick(db, userSession, body); break;
 
+        case 'getPosStudentsSnapshot':
+          if (!can(userSession, 'pos_read') && !can(userSession, 'student_read')) return forbidden(corsHeaders);
+          result = await CanteenPosHandlers.getPosStudentsSnapshot(db); break;
+
         // ==========================================================
         // ⚠️ WASTAGE & LOSS LEDGER ROUTES
         // ==========================================================
