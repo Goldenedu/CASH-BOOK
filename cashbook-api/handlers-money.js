@@ -151,17 +151,21 @@ export async function getStudentMoneySummary(db, body) {
     const fy = normalizeFyStr(body.fy || getCurrentAcademicYear()).replace(/^FY\s*/i, '');
     const todayStr = getMyanmarDateString();
     const searchVal = String(body.searchVal || "").trim();
+    const studentIdFilter = parseInt(body.studentId, 10) || 0;
 
+    // 🎯 FIX: SQL Query ထဲရှိ Placeholder အစဉ်လိုက်အတိုင်း [todayStr, fy, `FY ${fy}`] ဖြစ်ရမည်
     let whereClauses = [`(sm.fy IN (?, ?)) AND sm.student_id IS NOT NULL`];
-    let params = [fy, `FY ${fy}`, todayStr];
+    let params = [todayStr, fy, `FY ${fy}`];
 
-    if (searchVal) {
+    if (studentIdFilter > 0) {
+      whereClauses.push(`sm.student_id = ?`);
+      params.push(studentIdFilter);
+    } else if (searchVal) {
       whereClauses.push(`(sm.fyid_name LIKE ? OR sm.fyid LIKE ? OR CAST(sm.student_id AS TEXT) LIKE ?)`);
       const p = `%${searchVal}%`;
       params.push(p, p, p);
     }
 
-    // 🎯 FIX: Offline POS သုံးချိန်တွင် Cap မကျော်စေရန် todaySpent ကို ၁ ကြိမ်တည်းဖြင့် ပေါင်းစပ်ဆွဲယူခြင်း
     const query = `
       SELECT sm.student_id as studentId, MAX(sm.fyid) as fyid, MAX(sm.fyid_name) as fyidName, MAX(sm.class) as class,
              SUM(sm.debit) as totalDeposit, SUM(sm.credit) as totalWithdraw, SUM(sm.debit - sm.credit) as netBalance,

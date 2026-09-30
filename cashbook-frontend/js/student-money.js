@@ -356,9 +356,15 @@ async function onStudentIdOrFYChangeMoney() {
     if (classEl) classEl.value = matched.class || '';
 
     try {
-      const sumRes = await callApi('getStudentMoneySummary', { fy: fyVal, searchVal: actualFyid }, 'GET');
+      // 🎯 FIX: studentId ပါ တိုက်ရိုက် ထည့်သွင်းရှာဖွေခြင်း
+      const sumRes = await callApi('getStudentMoneySummary', { 
+        fy: fyVal, 
+        studentId: targetIdNum, 
+        searchVal: actualFyid 
+      }, 'GET');
+
       if (sumRes && sumRes.success && sumRes.data && sumRes.data.length > 0) {
-        const studentSum = sumRes.data.find(r => r.studentId === targetIdNum);
+        const studentSum = sumRes.data.find(r => Number(r.studentId) === targetIdNum);
         if (studentSum && liveBadge && liveAmountEl) {
           liveAmountEl.textContent = `${Number(studentSum.netBalance || 0).toLocaleString('en-US')} MMK`;
           liveBadge.classList.remove('hidden');
