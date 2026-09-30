@@ -39,7 +39,6 @@ async function lookupStudentRadar() {
         gCurrentStudent = res.data;
         if (res.data.dailyCap) gDailySpendingCap = Number(res.data.dailyCap);
         
-        // Cache to local IndexedDB for future offline usage
         await dbSaveStudents([res.data]);
         
         renderStudentCard();
@@ -379,7 +378,6 @@ async function executeCheckout() {
           orderSuccess = true;
           showToast("SUCCESS", `အရောင်း အောင်မြင်ပါပြီ! Invoice: ${res.invoiceNo || invoiceNo}`);
         } else if (res && res.message && (res.message.includes('ဆိုင်ပိတ်') || res.message.includes('မလုံလောက်') || res.message.includes('လက်ကျန်'))) {
-          // Hard Business Logic Rejection: Do not save offline!
           showToast("ERROR", res.message);
           return;
         }
@@ -396,7 +394,6 @@ async function executeCheckout() {
 
       await dbSavePendingOrder(payload);
 
-      // Deduct from IndexedDB student store directly
       if (gPaymentMode === 'Student Pocket Money' && gCurrentStudent) {
         await dbDeductStudentWallet(gCurrentStudent.studentId, totalAmount);
       }
@@ -429,6 +426,58 @@ async function executeCheckout() {
   }
 }
 
+// 🖨️ POS Thermal Receipt Printer
+function printPosReceipt(invoiceNo, totalAmt, itemsSummary, method, student) {
+  const today = new Date().toISOString().slice(0, 10);
+  const cashierName = gSession?.name || 'Cashier';
+
+  const studentInfoRow = student 
+    ? `<tr><td colspan="2">Student: [${student.fyid || student.studentId}] ${student.name}</td></tr>` 
+    : '';
+
+  const slipHtml = `
+    <!DOCTYPE html><html><head><title>Receipt - ${invoiceNo}</title>
+    <style>
+      @page { size: 80mm auto; margin: 0; }
+      body { font-family: -apple-system, sans-serif; font-size: 11px; width: 72mm; margin: 0 auto; padding: 10px 0; color: #000; }
+      .center { text-align: center; }
+      .line { border-top: 1px dashed #000; margin: 6px 0; }
+      table { width: 100%; border-collapse: collapse; font-size: 11px; }
+      td { padding: 2px 0; vertical-align: top; }
+    </style></head><body>
+      <div class="center">
+        <h3 style="margin:0; font-size:14px; font-weight:900;">GOLDEN SCHOOL CANTEEN</h3>
+        <p style="margin:2px 0;">Official Sales Receipt</p>
+      </div>
+      <div class="line"></div>
+      <table>
+        <tr><td>Inv: ${invoiceNo}</td><td style="text-align:right;">${today}</td></tr>
+        <tr><td>Cashier: ${cashierName}</td><td style="text-align:right;">${method === 'Cash' ? 'Cash' : 'Wallet'}</td></tr>
+        ${studentInfoRow}
+      </table>
+      <div class="line"></div>
+      <p style="margin:4px 0; font-size:11px;"><strong>Items:</strong> ${itemsSummary}</p>
+      <div class="line"></div>
+      <table>
+        <tr style="font-size:13px; font-weight:900;">
+          <td>TOTAL PAID:</td>
+          <td style="text-align:right;">${Number(totalAmt).toLocaleString()} MMK</td>
+        </tr>
+      </table>
+      <div class="line"></div>
+      <div class="center" style="font-size:10px; margin-top:8px;">
+        <p style="margin:0;">ကျေးဇူးတင်ပါသည် / Thank You!</p>
+      </div>
+    </body></html>
+  `;
+
+  const w = window.open('', '_blank', 'width=350,height=500');
+  if (!w) return;
+  w.document.write(slipHtml);
+  w.document.close();
+  setTimeout(() => { w.focus(); w.print(); w.close(); }, 350);
+}
+
 // Global Exports
 window.setPaymentMode = setPaymentMode;
 window.lookupStudentRadar = lookupStudentRadar;
@@ -440,3 +489,4 @@ window.changeCartQty = changeCartQty;
 window.setCartQty = setCartQty;
 window.removeCartItem = removeCartItem;
 window.executeCheckout = executeCheckout;
+window.printPosReceipt = printPosReceipt;

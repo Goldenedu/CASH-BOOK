@@ -507,7 +507,6 @@ export default {
       "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, token, authToken, role",
       "Access-Control-Max-Age": "86400",
       "Content-Type": "application/json",
-      // 🎯 Real-time ငွေစာရင်းများ ဘယ်သောအခါမှ Browser Cache မဖြစ်စေရန် တားမြစ်ခြင်း
       "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"
     };
 
@@ -518,7 +517,7 @@ export default {
       if (!db) return new Response(JSON.stringify({ success: false, message: "Database Binding Error: D1 Database (env.DB) မတွေ့ရှိပါ။" }), { status: 500, headers: corsHeaders });
 
       const authSecret = env.AUTH_SECRET;
-      if (!authSecret) return new Response(JSON.stringify({ success: false, message: "Server Configuration Error: AUTH_SECRET မသတ်မှတ်ရသေးပါ။ Cloudflare Worker Variables တွင် ထည့်သွင်းပေးပါ။" }), { status: 500, headers: corsHeaders });
+      if (!authSecret) return new Response(JSON.stringify({ success: false, message: "Server Configuration Error: AUTH_SECRET မသတ်မှတ်ရသေးပါ။" }), { status: 500, headers: corsHeaders });
 
       let body = {};
       let action = "";
@@ -653,10 +652,16 @@ export default {
         // 💡 SPMMS 3-LEDGERS SYSTEM API ROUTES
         // ==========================================================
         case 'getStudentMoneyData':
-        case 'getStudentMoneySummary':
           if (!can(userSession, 'ledger_read') && !can(userSession, 'cashier_read')) return forbidden(corsHeaders);
-          if (action === 'getStudentMoneySummary') result = await StudentMoneyHandlers.getStudentMoneySummary(db, body);
-          else result = await StudentMoneyHandlers.getStudentMoneyData(db, body);
+          result = await StudentMoneyHandlers.getStudentMoneyData(db, body);
+          break;
+
+        // 🎯 FIX: Canteen POS အော့ဖ်လိုင်း ဆွဲချချိန်တွင် 403 မတက်စေရန် pos_read နှင့် student_read ခွင့်ပြုပေးခြင်း
+        case 'getStudentMoneySummary':
+          if (!can(userSession, 'ledger_read') && !can(userSession, 'cashier_read') && !can(userSession, 'student_read') && !can(userSession, 'pos_read')) {
+            return forbidden(corsHeaders);
+          }
+          result = await StudentMoneyHandlers.getStudentMoneySummary(db, body);
           break;
 
         case 'saveStudentMoneyEntry':
@@ -685,7 +690,7 @@ export default {
           if (!can(userSession, 'ledger_write') && !can(userSession, 'cashier_write')) return forbidden(corsHeaders);
           result = await StudentMoneyHandlers.savePmCashierBookEntry(db, userSession, body); break;
         case 'deletePmCashierBookEntry':
-          if (!can(userSession, 'ledger_write') && !can(userSession, 'cashier_write')) return forbidden(corsHeaders);
+          if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders, "Pm Cashier စာရင်းဖျက်သိမ်းခွင့် မရှိပါ။");
           result = await StudentMoneyHandlers.deletePmCashierBookEntry(db, userSession, body); break;
 
         case 'getSpmmsReconciliation':
@@ -693,7 +698,7 @@ export default {
           result = await StudentMoneyHandlers.getSpmmsReconciliation(db, body); break;
 
         // ==========================================================
-        // 💡 CANTEEN POS & MANAGEMENT EXTENSIONS (ISOLATED SYSTEM)
+        // 💡 CANTEEN POS & MANAGEMENT EXTENSIONS
         // ==========================================================
         case 'getPosItems':
           if (!can(userSession, 'pos_read') && !can(userSession, 'ledger_read')) return forbidden(corsHeaders);
@@ -796,7 +801,7 @@ export default {
           result = await CanteenPosHandlers.updatePosSettings(db, userSession, body); break;
 
         // ==========================================================
-        // 🔒 NEW: CANTEEN STORE CLOSURE (ဆိုင်ပိတ်သိမ်းခြင်း)
+        // 🔒 CANTEEN STORE CLOSURE (ဆိုင်ပိတ်သိမ်းခြင်း)
         // ==========================================================
         case 'closeCanteenDay':
           if (!can(userSession, 'pos_close') && !can(userSession, 'pos_admin')) {
@@ -809,7 +814,7 @@ export default {
           result = await CanteenPosHandlers.getCanteenClosureStatus(db, body); break;
 
         // ==========================================================
-        // 🌐 NEW: OFFLINE BATCH IDEMPOTENT SYNC
+        // 🌐 OFFLINE BATCH IDEMPOTENT SYNC
         // ==========================================================
         case 'syncOfflinePosOrders':
           if (!can(userSession, 'pos_sell') && !can(userSession, 'pos_write') && !can(userSession, 'cashier_write')) {
@@ -918,8 +923,8 @@ export default {
           return new Response(JSON.stringify({ success: false, message: `Action '${action}' မဟုတ်ပါ သို့မဟုတ် မပံ့ပိုးသေးပါ။` }), { headers: corsHeaders });
       }
 
-      // 🛡️ D1 AUDIT LOGGING (NON-BLOCKING)
-      const isMutatingAction = /^(save|update|delete|export|send|recalculate|close|sync)/i.test(action);
+      // 🛡️ D1 AUDIT LOGGING (NON-BLOCKING WITH CHECKOUT INCLUDED)
+      const isMutatingAction = /^(save|update|delete|export|send|recalculate|close|sync|checkout)/i.test(action);
       if (isMutatingAction && result && result.success !== false && userSession) {
         if (ctx && typeof ctx.waitUntil === 'function') {
           ctx.waitUntil(writeAuditLog(db, userSession, action, body, body.uniqueId || body.uniqueid || body.id || null));
