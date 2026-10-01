@@ -22,9 +22,9 @@
     :root {
       --bg-base: #f8fafc;
       --bg-sidebar: #ffffff;
-      --bg-card: rgba(255, 255, 255, 0.95);
+      --bg-card: #ffffff;
       --bg-card-inner: #f1f5f9;
-      --border-color: rgba(226, 232, 240, 0.9);
+      --border-color: #e2e8f0;
       --text-main: #0f172a;
       --text-muted: #64748b;
       --table-header: #f1f5f9;
@@ -32,7 +32,7 @@
     html.dark {
       --bg-base: #050b14;
       --bg-sidebar: #080f1e;
-      --bg-card: rgba(15, 23, 42, 0.75);
+      --bg-card: rgba(15, 23, 42, 0.85);
       --bg-card-inner: #070e1c;
       --border-color: rgba(51, 65, 85, 0.4);
       --text-main: #f8fafc;
@@ -44,7 +44,7 @@
       color: var(--text-main);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
       -webkit-tap-highlight-color: transparent; 
-      transition: background-color 0.2s ease, color 0.2s ease;
+      transition: background-color 0.15s ease, color 0.15s ease;
     }
     .glass-card { 
       background: var(--bg-card); 
@@ -128,13 +128,11 @@
           <span>Purchases (အဝယ်စာရင်း)</span>
         </button>
 
-        <!-- Waste & Loss Tab -->
         <button id="nav-btn-waste" onclick="switchCanteenView('waste')" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
           <i class="fa-solid fa-dumpster-fire w-4 text-center text-rose-400"></i>
           <span>Waste & Loss (အပျက်/အပျောက်)</span>
         </button>
 
-        <!-- 📦 NEW: Surplus & Overage Tab -->
         <button id="nav-btn-surplus" onclick="switchCanteenView('surplus')" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
           <i class="fa-solid fa-layer-group w-4 text-center text-emerald-400"></i>
           <span>Stock Surplus (အပိုစာရင်း)</span>
@@ -173,12 +171,12 @@
   </aside>
 
   <!-- ============================================================================== -->
-  <!-- 💡 2. MAIN APPLICATION WORKSPACE (INDEPENDENT INTERNAL SCROLLBOX)              -->
+  <!-- 💡 2. MAIN APPLICATION WORKSPACE (FLEX-1 FIT - COMPACT EXECUTIVE VIEWPORT)     -->
   <!-- ============================================================================== -->
   <div class="flex-1 flex flex-col h-screen min-w-0 overflow-hidden bg-[var(--bg-base)]">
     
-    <!-- Top Action Bar (Pinned Fixed Header) -->
-    <header class="bg-[var(--bg-sidebar)]/90 backdrop-blur-md border-b border-[var(--border-color)] px-4 py-2.5 flex items-center justify-between shrink-0 z-40">
+    <!-- Top Action Bar -->
+    <header class="bg-[var(--bg-sidebar)]/95 backdrop-blur-md border-b border-[var(--border-color)] px-4 py-2 flex items-center justify-between shrink-0 z-40">
       <div class="flex items-center gap-3">
         <button id="btn-toggle-sidebar" onclick="toggleCanteenSidebar()" class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center text-xs lg:hidden">
           <i class="fa-solid fa-bars"></i>
@@ -189,40 +187,32 @@
         </div>
       </div>
 
-      <!-- Header Tools & Modals Controllers -->
       <div class="flex items-center gap-2">
-        
-        <!-- ⏳ PENDING OFFLINE ORDERS BUTTON -->
         <button id="btn-pending-sync" onclick="openPendingSyncModal()" class="px-3 py-1.5 rounded-lg bg-slate-200/80 dark:bg-slate-800 border border-[var(--border-color)] text-xs font-bold flex items-center gap-1.5 transition active:scale-95 shadow-sm">
           <i class="fa-solid fa-clock-rotate-left text-amber-500 text-xs"></i>
           <span>Pending (<span id="pending-count" class="font-mono text-amber-500 font-black">0</span>)</span>
         </button>
 
-        <!-- 📦 ပစ္စည်း / အဝယ်သွင်း -->
         <button id="btn-admin-stock" onclick="openItemModal()" class="px-3 py-1.5 rounded-lg bg-slate-200/80 dark:bg-slate-800 border border-[var(--border-color)] text-xs font-bold flex items-center gap-1.5 transition active:scale-95 shadow-sm">
           <i class="fa-solid fa-box text-emerald-500 text-xs"></i>
           <span>ပစ္စည်း / အဝယ်သွင်း</span>
         </button>
 
-        <!-- အပျက်စာရင်းသွင်း -->
         <button id="btn-header-waste" onclick="openWasteModal()" class="px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-500 text-xs font-bold flex items-center gap-1.5 transition active:scale-95">
           <i class="fa-solid fa-dumpster-fire text-rose-500 text-xs"></i>
           <span>အပျက်စာရင်း</span>
         </button>
 
-        <!-- 📦 NEW: အပိုစာရင်းသွင်း -->
         <button id="btn-header-surplus" onclick="openSurplusModal()" class="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-500 text-xs font-bold flex items-center gap-1.5 transition active:scale-95">
           <i class="fa-solid fa-plus-circle text-emerald-500 text-xs"></i>
           <span>အပိုစာရင်း</span>
         </button>
 
-        <!-- ဆိုင်ပိတ်ခလုတ် -->
         <button id="btn-header-close-day" onclick="openDayCloseModal()" class="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-500 text-xs font-bold flex items-center gap-1.5 transition active:scale-95">
           <i class="fa-solid fa-store-slash text-amber-500 text-xs"></i>
           <span id="header-close-status-text">ဆိုင်ပိတ်မည်</span>
         </button>
 
-        <!-- ☀️ / 🌙 THEME TOGGLE SWITCHER -->
         <button id="btn-theme-toggle" onclick="toggleCanteenTheme()" class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-800 border border-[var(--border-color)] text-amber-500 dark:text-sky-300 flex items-center justify-center text-xs transition active:scale-95 shadow-sm" title="Toggle Theme">
           <i id="theme-toggle-icon" class="fa-solid fa-sun dark:fa-moon"></i>
         </button>
@@ -237,72 +227,68 @@
       </div>
     </header>
 
-    <!-- Content Workspace Container -->
-    <div class="flex-1 p-3 md:p-4 space-y-4 overflow-y-auto custom-scroll">
+    <!-- Content Workspace Container (Compact padding: p-2.5 md:p-3 for zero-gap feel) -->
+    <div class="flex-1 p-2.5 md:p-3 space-y-3 overflow-y-auto custom-scroll min-h-0 flex flex-col">
       
-      <!-- ────────────────────────────────────────────────────────────────────────── -->
-      <!-- 📊 VIEW 1: DASHBOARD (WITH NET LOSS FORMULA BREAKDOWN)                     -->
-      <!-- ────────────────────────────────────────────────────────────────────────── -->
-      <section id="view-dashboard" class="space-y-4 hidden">
-        <div class="flex justify-between items-center bg-indigo-50 dark:bg-[#0c1830] border border-indigo-200 dark:border-indigo-500/30 p-4 rounded-2xl shadow-sm">
+      <!-- VIEW 1: DASHBOARD -->
+      <section id="view-dashboard" class="space-y-3.5 hidden">
+        <div class="flex justify-between items-center bg-indigo-50 dark:bg-[#0c1830] border border-indigo-200 dark:border-indigo-500/30 p-3.5 rounded-2xl shadow-sm">
           <div class="flex items-center gap-3">
-            <div class="p-3 rounded-xl bg-indigo-500/20 text-indigo-500 text-xl"><i class="fa-solid fa-calendar-check"></i></div>
+            <div class="p-2.5 rounded-xl bg-indigo-500/20 text-indigo-500 text-lg"><i class="fa-solid fa-calendar-check"></i></div>
             <div>
               <span class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest block font-sans">TODAY'S OPERATIONS OVERVIEW</span>
-              <h3 id="dash-date-label" class="text-sm font-black font-mono mt-0.5">2026-10-01</h3>
+              <h3 id="dash-date-label" class="text-xs font-black font-mono mt-0.5">2026-10-01</h3>
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <span id="dash-closure-badge" class="px-3 py-1 rounded-xl text-xs font-black bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 font-mono">
+            <span id="dash-closure-badge" class="px-2.5 py-1 rounded-xl text-[11px] font-black bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 font-mono">
               REGISTER OPEN
             </span>
-            <span id="dash-settle-badge" class="px-3 py-1 rounded-xl text-xs font-black bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30 font-mono">
+            <span id="dash-settle-badge" class="px-2.5 py-1 rounded-xl text-[11px] font-black bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30 font-mono">
               PENDING CLEARING
             </span>
           </div>
         </div>
 
-        <!-- Today Metrics 5-Cards Grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          <div class="glass-card p-4 rounded-xl">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+          <div class="glass-card p-3.5 rounded-xl">
             <span class="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold block">ယနေ့ စုစုပေါင်း အရောင်းရငွေ</span>
-            <h3 id="dash-today-sales" class="text-xl font-black font-mono mt-1">0 MMK</h3>
+            <h3 id="dash-today-sales" class="text-lg font-black font-mono mt-1">0 MMK</h3>
             <span id="dash-today-orders" class="text-[10px] font-mono text-slate-400 mt-0.5 block">0 Orders</span>
           </div>
 
-          <div class="glass-card p-4 rounded-xl border-indigo-300 dark:border-indigo-500/30 bg-indigo-50/50 dark:bg-indigo-950/10">
+          <div class="glass-card p-3.5 rounded-xl border-indigo-300 dark:border-indigo-500/30 bg-indigo-50/50 dark:bg-indigo-950/10">
             <span class="text-[10px] text-indigo-500 dark:text-indigo-400 uppercase font-bold block">မုန့်ဖိုးကတ် ရောင်းရငွေ (WALLET)</span>
-            <h3 id="dash-today-wallet" class="text-xl font-black text-indigo-600 dark:text-indigo-300 font-mono mt-1">0 MMK</h3>
+            <h3 id="dash-today-wallet" class="text-lg font-black text-indigo-600 dark:text-indigo-300 font-mono mt-1">0 MMK</h3>
             <span class="text-[10px] text-slate-400 font-sans mt-0.5 block">Finance မှ ရှင်းပေးမည့်ငွေ</span>
           </div>
 
-          <div class="glass-card p-4 rounded-xl border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/10">
+          <div class="glass-card p-3.5 rounded-xl border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/10">
             <span class="text-[10px] text-emerald-600 dark:text-emerald-400 uppercase font-bold block">ငွေသား ရောင်းရငွေ (CASH)</span>
-            <h3 id="dash-today-cash" class="text-xl font-black text-emerald-600 dark:text-emerald-400 font-mono mt-1">0 MMK</h3>
+            <h3 id="dash-today-cash" class="text-lg font-black text-emerald-600 dark:text-emerald-400 font-mono mt-1">0 MMK</h3>
             <span class="text-[10px] text-slate-400 font-sans mt-0.5 block">ကန်တင်းတွင် လက်ငင်းရငွေသား</span>
           </div>
 
-          <div class="glass-card p-4 rounded-xl border-teal-300 dark:border-teal-500/30 bg-teal-50/50 dark:bg-teal-950/10">
+          <div class="glass-card p-3.5 rounded-xl border-teal-300 dark:border-teal-500/30 bg-teal-50/50 dark:bg-teal-950/10">
             <span class="text-[10px] text-teal-600 dark:text-teal-400 uppercase font-bold block">ယနေ့ အသားတင်အမြတ် (MARGIN)</span>
-            <h3 id="dash-today-profit" class="text-xl font-black text-teal-600 dark:text-teal-300 font-mono mt-1">+0 MMK</h3>
+            <h3 id="dash-today-profit" class="text-lg font-black text-teal-600 dark:text-teal-300 font-mono mt-1">+0 MMK</h3>
             <span class="text-[10px] text-slate-400 font-sans mt-0.5 block">Gross Sales - Cost Price</span>
           </div>
 
-          <!-- ⚠️ NET LOSS (အသားတင် ဆုံးရှုံးငွေ = အပျက် - အပို) -->
-          <div class="glass-card p-4 rounded-xl border-rose-300 dark:border-rose-500/30 bg-rose-50/50 dark:bg-rose-950/15">
+          <div class="glass-card p-3.5 rounded-xl border-rose-300 dark:border-rose-500/30 bg-rose-50/50 dark:bg-rose-950/15">
             <div class="flex justify-between items-start">
               <span class="text-[10px] text-rose-500 dark:text-rose-400 uppercase font-bold block">အသားတင် ဆုံးရှုံးငွေ (NET LOSS)</span>
-              <span class="text-[9px] px-1 rounded bg-rose-500/10 text-rose-500 font-bold font-mono">Waste - Surplus</span>
+              <span class="text-[8px] px-1 rounded bg-rose-500/10 text-rose-500 font-bold font-mono">Loss - Gain</span>
             </div>
-            <h3 id="dash-today-loss" class="text-xl font-black text-rose-500 dark:text-rose-400 font-mono mt-1">0 MMK</h3>
-            <div class="flex justify-between text-[10px] font-mono text-slate-400 mt-0.5">
+            <h3 id="dash-today-loss" class="text-lg font-black text-rose-500 dark:text-rose-400 font-mono mt-1">0 MMK</h3>
+            <div class="flex justify-between text-[9px] font-mono text-slate-400 mt-0.5">
               <span>အပျက်: <strong id="dash-today-waste-sub">0</strong></span>
               <span>အပို: <strong id="dash-today-surplus-sub" class="text-emerald-500">0</strong></span>
             </div>
           </div>
         </div>
 
-        <div class="glass-card p-4 rounded-2xl space-y-3">
+        <div class="glass-card p-3.5 rounded-2xl space-y-2.5">
           <div class="flex justify-between items-center border-b border-[var(--border-color)] pb-2">
             <h4 class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
               <i class="fa-solid fa-chart-line text-emerald-500"></i> သမိုင်းဝင် စာရင်းချုပ်နှင့် ရင်းနှီးငွေ (ALL-TIME & CAPITAL)
@@ -312,62 +298,62 @@
             </span>
           </div>
 
-          <div class="grid grid-cols-2 md:grid-cols-6 gap-3 text-xs font-mono">
+          <div class="grid grid-cols-2 md:grid-cols-6 gap-2.5 text-xs font-mono">
             <div>
               <span class="text-[10px] text-slate-400 block font-sans">စုစုပေါင်း အရောင်းရငွေ:</span>
-              <strong id="dash-all-sales" class="text-sm font-black">0 MMK</strong>
+              <strong id="dash-all-sales" class="text-xs font-black">0 MMK</strong>
             </div>
             <div>
               <span class="text-[10px] text-slate-400 block font-sans">စုစုပေါင်း Wallet:</span>
-              <strong id="dash-all-wallet" class="text-sm font-black text-indigo-500">0 MMK</strong>
+              <strong id="dash-all-wallet" class="text-xs font-black text-indigo-500">0 MMK</strong>
             </div>
             <div>
               <span class="text-[10px] text-slate-400 block font-sans">စုစုပေါင်း Cash:</span>
-              <strong id="dash-all-cash" class="text-sm font-black text-emerald-500">0 MMK</strong>
+              <strong id="dash-all-cash" class="text-xs font-black text-emerald-500">0 MMK</strong>
             </div>
             <div>
               <span class="text-[10px] text-slate-400 block font-sans">စုစုပေါင်း ပြေစာစောင်ရေ:</span>
-              <strong id="dash-all-orders" class="text-sm font-black">0 Invoices</strong>
+              <strong id="dash-all-orders" class="text-xs font-black">0 Invoices</strong>
             </div>
             <div class="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
               <span class="text-[10px] text-amber-500 font-bold block font-sans uppercase">ပစ္စည်းရင်းနှီးငွေ:</span>
-              <strong id="dash-stock-capital" class="text-sm font-black text-amber-500">0 MMK</strong>
+              <strong id="dash-stock-capital" class="text-xs font-black text-amber-500">0 MMK</strong>
             </div>
             <div class="p-2 rounded-xl bg-rose-500/10 border border-rose-500/20">
               <span class="text-[10px] text-rose-500 font-bold block font-sans uppercase">အသားတင် ဆုံးရှုံးငွေချုပ်:</span>
-              <strong id="dash-all-loss" class="text-sm font-black text-rose-500">0 MMK</strong>
+              <strong id="dash-all-loss" class="text-xs font-black text-rose-500">0 MMK</strong>
             </div>
           </div>
         </div>
       </section>
 
       <!-- ────────────────────────────────────────────────────────────────────────── -->
-      <!-- ⚡ VIEW 2: POS REGISTER (PERFECT SYMMETRICAL BOTTOM ALIGNMENT)              -->
+      <!-- ⚡ VIEW 2: POS REGISTER (PERFECT 100% BOTTOM SYMMETRICAL ALIGNMENT)         -->
       <!-- ────────────────────────────────────────────────────────────────────────── -->
-      <section id="view-pos" class="grid grid-cols-1 lg:grid-cols-12 gap-3.5 h-[calc(100vh-4.5rem)] items-stretch">
+      <section id="view-pos" class="h-full flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch min-h-0">
         
-        <!-- Left Panel: Scanner & Cart (Fixed Height Flex Container) -->
-        <div class="lg:col-span-7 flex flex-col space-y-3 h-full min-h-0">
-          <div class="glass-card p-3 rounded-2xl flex items-center gap-2.5 shadow-sm relative z-30 shrink-0">
-            <div class="w-9 h-9 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center shrink-0 border border-sky-500/20">
-              <i class="fa-solid fa-barcode text-base"></i>
+        <!-- Left Panel: Scanner & Cart (h-full flex column) -->
+        <div class="lg:col-span-7 flex flex-col space-y-2.5 h-full min-h-0">
+          <div class="glass-card p-2.5 rounded-2xl flex items-center gap-2.5 shadow-sm relative z-30 shrink-0">
+            <div class="w-8 h-8 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center shrink-0 border border-sky-500/20">
+              <i class="fa-solid fa-barcode text-sm"></i>
             </div>
             <div class="relative flex-1">
               <input type="text" id="pos-barcode-input" placeholder="Barcode Scan ဖတ်ပါ သို့မဟုတ် ပစ္စည်းအမည် ရိုက်ရှာပါ (Enter)..." 
                      autocomplete="off" autofocus
                      onkeydown="handleBarcodeInput(event)"
-                     class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3.5 py-2 text-xs placeholder-slate-400 focus:outline-none focus:border-sky-500 transition font-mono font-bold">
+                     class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-1.5 text-xs placeholder-slate-400 focus:outline-none focus:border-sky-500 transition font-mono font-bold">
               
-              <div id="pos-search-dropdown" class="absolute left-0 right-0 top-full mt-1.5 bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-xl shadow-2xl max-h-60 overflow-y-auto hidden z-50 custom-scroll"></div>
+              <div id="pos-search-dropdown" class="absolute left-0 right-0 top-full mt-1 bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-xl shadow-2xl max-h-56 overflow-y-auto hidden z-50 custom-scroll"></div>
             </div>
-            <button onclick="searchAndAddItem()" class="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-black shrink-0 transition active:scale-95 shadow-md flex items-center gap-1.5">
+            <button onclick="searchAndAddItem()" class="px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-black shrink-0 transition active:scale-95 shadow flex items-center gap-1">
               <i class="fa-solid fa-plus text-[10px]"></i> ထည့်မည်
             </button>
           </div>
 
-          <!-- Cart Container (flex-1 fill & aligned with right panel) -->
+          <!-- Cart Container (flex-1 fill, exactly matches right panel bottom) -->
           <div class="glass-card rounded-2xl flex-1 flex flex-col justify-between overflow-hidden shadow-sm relative z-10 min-h-0">
-            <div class="px-3.5 py-2.5 border-b border-[var(--border-color)] bg-[var(--table-header)] flex justify-between items-center shrink-0">
+            <div class="px-3.5 py-2 border-b border-[var(--border-color)] bg-[var(--table-header)] flex justify-between items-center shrink-0 h-[38px]">
               <div class="flex items-center gap-2">
                 <i class="fa-solid fa-cart-shopping text-emerald-500 text-xs"></i>
                 <h3 class="text-xs font-black uppercase tracking-wider">CART ITEMS</h3>
@@ -379,36 +365,36 @@
             </div>
 
             <div class="flex-1 overflow-y-auto custom-scroll p-2 space-y-1.5 min-h-0" id="pos-cart-list">
-              <div id="pos-cart-empty" class="h-full flex flex-col items-center justify-center p-8 text-slate-400 text-center space-y-2">
-                <i class="fa-solid fa-basket-shopping text-4xl text-slate-300 dark:text-slate-700"></i>
+              <div id="pos-cart-empty" class="h-full flex flex-col items-center justify-center p-6 text-slate-400 text-center space-y-1.5">
+                <i class="fa-solid fa-basket-shopping text-3xl text-slate-300 dark:text-slate-700"></i>
                 <p class="text-xs font-bold">Cart ထဲတွင် ပစ္စည်း မရှိသေးပါ။</p>
                 <p class="text-[10px] text-slate-400">Barcode Scan ဖတ်၍ ပစ္စည်းများ ထည့်သွင်းပါ။</p>
               </div>
             </div>
 
-            <!-- Cart Bottom Pinned Bar -->
-            <div class="p-3 bg-[var(--table-header)] border-t border-[var(--border-color)] flex items-center justify-between text-xs font-mono shrink-0 h-[46px]">
-              <span class="text-slate-400 font-sans">အရေအတွက်ပေါင်း: <strong id="pos-cart-total-qty" class="text-[var(--text-main)]">0</strong> ခု</span>
-              <span class="text-slate-400 font-sans">ကျသင့်ငွေပေါင်း: <strong id="pos-cart-subtotal" class="text-emerald-500 text-sm font-black">0 MMK</strong></span>
+            <!-- Cart Bottom Pinned Bar (Height: 52px exactly, matches Right panel) -->
+            <div class="px-4 bg-[var(--table-header)] border-t border-[var(--border-color)] flex items-center justify-between text-xs font-mono shrink-0 h-[52px]">
+              <span class="text-slate-500 dark:text-slate-400 font-sans">အရေအတွက်ပေါင်း: <strong id="pos-cart-total-qty" class="text-slate-900 dark:text-white font-mono font-bold text-sm">0</strong> ခု</span>
+              <span class="text-slate-500 dark:text-slate-400 font-sans">ကျသင့်ငွေပေါင်း: <strong id="pos-cart-subtotal" class="text-emerald-600 dark:text-emerald-400 text-base font-black font-mono">0 MMK</strong></span>
             </div>
           </div>
         </div>
 
-        <!-- Right Panel: Student Radar & Bill Summary (Symmetrical Height) -->
-        <div class="lg:col-span-5 flex flex-col space-y-3 h-full min-h-0">
-          <div class="grid grid-cols-2 gap-2 bg-[var(--bg-card-inner)] p-1.5 rounded-2xl border border-[var(--border-color)] shrink-0">
-            <button id="btn-mode-wallet" onclick="setPaymentMode('Student Pocket Money')" class="py-2 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
-              <i class="fa-solid fa-wallet text-sm"></i>
+        <!-- Right Panel: Student Radar & Bill Summary (h-full flex column) -->
+        <div class="lg:col-span-5 flex flex-col space-y-2.5 h-full min-h-0">
+          <div class="grid grid-cols-2 gap-2 bg-[var(--bg-card-inner)] p-1 rounded-2xl border border-[var(--border-color)] shrink-0">
+            <button id="btn-mode-wallet" onclick="setPaymentMode('Student Pocket Money')" class="py-1.5 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
+              <i class="fa-solid fa-wallet text-xs"></i>
               <span>မုန့်ဖိုးကတ် (F2)</span>
             </button>
-            <button id="btn-mode-cash" onclick="setPaymentMode('Cash')" class="py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 text-slate-400 hover:text-[var(--text-main)]">
-              <i class="fa-solid fa-money-bill-wave text-sm"></i>
+            <button id="btn-mode-cash" onclick="setPaymentMode('Cash')" class="py-1.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-[var(--text-main)]">
+              <i class="fa-solid fa-money-bill-wave text-xs"></i>
               <span>ငွေသား (F4)</span>
             </button>
           </div>
 
-          <!-- Student Radar -->
-          <div id="pos-student-radar" class="glass-card p-3 rounded-2xl border-indigo-500/30 shadow-sm space-y-2.5 shrink-0">
+          <!-- Student Radar Card -->
+          <div id="pos-student-radar" class="glass-card p-2.5 rounded-2xl border-indigo-500/30 shadow-sm space-y-2 shrink-0">
             <div class="flex items-center gap-2">
               <div class="relative flex-1">
                 <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400"><i class="fa-solid fa-id-card text-xs"></i></span>
@@ -421,22 +407,22 @@
               </button>
             </div>
 
-            <div id="pos-student-card" class="p-2.5 bg-slate-200/50 dark:bg-black/40 rounded-xl border border-[var(--border-color)] space-y-2">
+            <div id="pos-student-card" class="p-2 bg-slate-100 dark:bg-black/40 rounded-xl border border-[var(--border-color)] space-y-1.5">
               <div class="flex justify-between items-start">
                 <div>
                   <h4 id="radar-student-name" class="text-xs font-black">ကျောင်းသား ရွေးချယ်ပါ</h4>
                   <p id="radar-student-info" class="text-[10px] font-mono text-slate-400">Class: - | ID: -</p>
                 </div>
-                <span id="radar-badge-status" class="px-2 py-0.5 rounded text-[9px] font-black bg-slate-300 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-400 dark:border-slate-700 font-mono">STANDBY</span>
+                <span id="radar-badge-status" class="px-2 py-0.5 rounded text-[9px] font-black bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700 font-mono">STANDBY</span>
               </div>
 
-              <div class="grid grid-cols-2 gap-2 pt-1.5 border-t border-[var(--border-color)] text-xs font-mono">
+              <div class="grid grid-cols-2 gap-2 pt-1 border-t border-[var(--border-color)] text-xs font-mono">
                 <div>
-                  <span class="text-[10px] text-slate-400 block font-sans">မုန့်ဖိုးလက်ကျန်</span>
-                  <strong id="radar-wallet-bal" class="text-sm font-black text-amber-500">0 MMK</strong>
+                  <span class="text-[9px] text-slate-400 block font-sans">မုန့်ဖိုးလက်ကျန်</span>
+                  <strong id="radar-wallet-bal" class="text-xs font-black text-amber-500">0 MMK</strong>
                 </div>
                 <div class="text-right">
-                  <span class="text-[10px] text-slate-400 block font-sans">ယနေ့ သုံးပြီးငွေ</span>
+                  <span class="text-[9px] text-slate-400 block font-sans">ယနေ့ သုံးပြီးငွေ</span>
                   <strong id="radar-today-spent" class="text-xs font-bold">0 / 10,000</strong>
                 </div>
               </div>
@@ -446,56 +432,56 @@
                   <span id="radar-cap-header">DAILY ALLOWANCE CAP:</span>
                   <span id="radar-cap-text">ကျန်ခွဲတမ်း: 10,000 MMK</span>
                 </div>
-                <div class="w-full h-1.5 rounded-full bg-slate-300 dark:bg-slate-800 overflow-hidden">
+                <div class="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
                   <div id="radar-progress-bar" class="h-full bg-emerald-500 transition-all duration-300" style="width: 0%;"></div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Bill Summary Card & Checkout (Aligned with Cart Bottom) -->
-          <div class="glass-card p-3.5 rounded-2xl flex-1 flex flex-col justify-between shadow-sm min-h-0">
-            <div class="space-y-2">
+          <!-- Bill Summary Card (flex-1 fill with pinned matching 52px checkout container) -->
+          <div class="glass-card rounded-2xl flex-1 flex flex-col justify-between overflow-hidden shadow-sm min-h-0">
+            <div class="p-3.5 space-y-2 flex-1 overflow-y-auto custom-scroll">
               <h3 class="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center justify-between">
                 <span>BILL SUMMARY</span>
-                <span id="pos-items-count-label" class="font-mono text-[11px] text-slate-400">0 items</span>
+                <span id="pos-items-count-label" class="font-mono text-[10px] text-slate-400">0 items</span>
               </h3>
 
-              <div class="space-y-1 pt-1 text-xs font-mono">
-                <div class="flex justify-between text-slate-400">
+              <div class="space-y-1 pt-0.5 text-xs font-mono">
+                <div class="flex justify-between text-slate-500 dark:text-slate-400">
                   <span>Total Items Qty:</span>
-                  <span id="sum-qty" class="font-bold text-[var(--text-main)]">0</span>
+                  <span id="sum-qty" class="font-bold text-slate-900 dark:text-white">0</span>
                 </div>
-                <div class="flex justify-between text-slate-400">
+                <div class="flex justify-between text-slate-500 dark:text-slate-400">
                   <span>Estimated Cost:</span>
-                  <span id="sum-cost" class="font-bold">0 MMK</span>
+                  <span id="sum-cost" class="font-bold text-slate-900 dark:text-white">0 MMK</span>
                 </div>
-                <div class="flex justify-between text-slate-400">
+                <div class="flex justify-between text-slate-500 dark:text-slate-400">
                   <span>Est. Net Profit:</span>
-                  <span id="sum-profit" class="text-emerald-500 font-bold">0 MMK</span>
+                  <span id="sum-profit" class="text-emerald-600 dark:text-emerald-400 font-bold">0 MMK</span>
                 </div>
               </div>
 
-              <div class="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-center">
+              <div class="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-center">
                 <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block font-sans">TOTAL AMOUNT TO PAY</span>
-                <h2 id="pos-grand-total" class="text-2xl md:text-3xl font-black text-emerald-500 font-mono tracking-tight mt-0.5">0 <span class="text-xs font-bold">MMK</span></h2>
+                <h2 id="pos-grand-total" class="text-xl md:text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono tracking-tight mt-0.5">0 <span class="text-xs font-bold">MMK</span></h2>
               </div>
             </div>
 
-            <!-- Pinned Checkout Button (Matches Cart Bottom Summary height exactly) -->
-            <button id="btn-checkout" onclick="executeCheckout()" class="w-full h-[46px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-black text-xs md:text-sm shadow-xl shadow-emerald-950/20 flex items-center justify-center gap-2 active:scale-98 transition disabled:opacity-40 disabled:pointer-events-none shrink-0">
-              <i class="fa-solid fa-circle-check text-base"></i>
-              <span id="btn-checkout-label">အတည်ပြု ငွေရှင်းမည် (CHECKOUT - F8)</span>
-            </button>
+            <!-- Pinned Checkout Button Bar (Height: 52px exactly, 100% aligned with Cart footer) -->
+            <div class="p-1.5 bg-[var(--table-header)] border-t border-[var(--border-color)] flex items-center shrink-0 h-[52px]">
+              <button id="btn-checkout" onclick="executeCheckout()" class="w-full h-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-black text-xs md:text-sm shadow-md flex items-center justify-center gap-2 active:scale-98 transition disabled:opacity-40 disabled:pointer-events-none">
+                <i class="fa-solid fa-circle-check text-base"></i>
+                <span id="btn-checkout-label">အတည်ပြု ငွေရှင်းမည် (CHECKOUT - F8)</span>
+              </button>
+            </div>
           </div>
         </div>
 
       </section>
 
-      <!-- ────────────────────────────────────────────────────────────────────────── -->
-      <!-- 🧾 VIEW 3: SALES ORDERS                                                    -->
-      <!-- ────────────────────────────────────────────────────────────────────────── -->
-      <section id="view-sales" class="space-y-3.5 hidden">
+      <!-- VIEW 3: SALES ORDERS -->
+      <section id="view-sales" class="space-y-3 hidden">
         <div class="flex flex-col lg:flex-row justify-between items-center glass-card p-3 rounded-xl gap-3">
           <div class="flex flex-col sm:flex-row items-center gap-2 w-full lg:w-auto">
             <div class="relative w-full sm:w-56">
@@ -527,15 +513,15 @@
           <table class="w-full text-left text-xs border-collapse min-w-[950px]">
             <thead class="bg-[var(--table-header)] text-slate-500 text-[11px]">
               <tr>
-                <th class="py-2.5 px-3 w-12 text-center">စဉ်</th>
-                <th class="py-2.5 px-3 w-28">ရက်စွဲ</th>
-                <th class="py-2.5 px-3 w-32">INVOICE NO</th>
-                <th class="py-2.5 px-3 w-24">METHOD</th>
-                <th class="py-2.5 px-3 w-24">STUDENT ID</th>
-                <th class="py-2.5 px-3">ဝယ်ယူစာရင်း (ITEMS SUMMARY)</th>
-                <th class="py-2.5 px-3 text-right w-28">AMOUNT</th>
-                <th class="py-2.5 px-3 text-right w-24 text-teal-500 font-bold">PROFIT</th>
-                <th class="py-2.5 px-3 text-center w-20">SLIP</th>
+                <th class="py-2 px-3 w-12 text-center">စဉ်</th>
+                <th class="py-2 px-3 w-28">ရက်စွဲ</th>
+                <th class="py-2 px-3 w-32">INVOICE NO</th>
+                <th class="py-2 px-3 w-24">METHOD</th>
+                <th class="py-2 px-3 w-24">STUDENT ID</th>
+                <th class="py-2 px-3">ဝယ်ယူစာရင်း (ITEMS SUMMARY)</th>
+                <th class="py-2 px-3 text-right w-28">AMOUNT</th>
+                <th class="py-2 px-3 text-right w-24 text-teal-500 font-bold">PROFIT</th>
+                <th class="py-2 px-3 text-center w-20">SLIP</th>
               </tr>
             </thead>
             <tbody id="sales-table-body" class="divide-y divide-[var(--border-color)]"></tbody>
@@ -545,21 +531,19 @@
         <div class="flex justify-between items-center glass-card px-4 py-2 rounded-xl text-xs">
           <div id="sales-pagination-info" class="text-slate-400 font-mono text-[11px]">Showing 0 entries</div>
           <div class="flex items-center gap-2">
-            <button onclick="changeSalesPage(-1)" id="sales-btn-prev" class="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
+            <button onclick="changeSalesPage(-1)" id="sales-btn-prev" class="px-3 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
               <i class="fa-solid fa-chevron-left text-[9px]"></i> Previous
             </button>
-            <button onclick="changeSalesPage(1)" id="sales-btn-next" class="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
+            <button onclick="changeSalesPage(1)" id="sales-btn-next" class="px-3 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
               Next <i class="fa-solid fa-chevron-right text-[9px]"></i>
             </button>
           </div>
         </div>
       </section>
 
-      <!-- ────────────────────────────────────────────────────────────────────────── -->
-      <!-- 📦 VIEW 4: STOCK INVENTORY                                                 -->
-      <!-- ────────────────────────────────────────────────────────────────────────── -->
-      <section id="view-stock" class="space-y-3.5 hidden">
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <!-- VIEW 4: STOCK INVENTORY -->
+      <section id="view-stock" class="space-y-3 hidden">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5">
           <div class="glass-card p-3 rounded-xl">
             <span class="text-[10px] text-slate-400 font-bold uppercase block">ပစ္စည်းအမျိုးအစားပေါင်း</span>
             <strong id="stock-total-items" class="text-base font-black font-mono mt-0.5 block">0 မျိုး</strong>
@@ -614,15 +598,15 @@
           <table class="w-full text-left text-xs border-collapse min-w-[850px]">
             <thead class="bg-[var(--table-header)] text-slate-500 text-[11px]">
               <tr>
-                <th class="py-2.5 px-3 w-12 text-center">စဉ်</th>
-                <th class="py-2.5 px-3 w-36 font-mono">BARCODE</th>
-                <th class="py-2.5 px-3">ပစ္စည်းအမည်</th>
-                <th class="py-2.5 px-3 w-24">အမျိုးအစား</th>
-                <th class="py-2.5 px-3 text-right w-24">ဝယ်ဈေး</th>
-                <th class="py-2.5 px-3 text-right w-24 text-emerald-500 font-bold">ရောင်းဈေး</th>
-                <th class="py-2.5 px-3 text-center w-28">လက်ကျန် (STOCK)</th>
-                <th class="py-2.5 px-3 text-center w-24">အခြေအနေ</th>
-                <th class="py-2.5 px-3 text-center w-20">ပြင်ဆင်</th>
+                <th class="py-2 px-3 w-12 text-center">စဉ်</th>
+                <th class="py-2 px-3 w-36 font-mono">BARCODE</th>
+                <th class="py-2 px-3">ပစ္စည်းအမည်</th>
+                <th class="py-2 px-3 w-24">အမျိုးအစား</th>
+                <th class="py-2 px-3 text-right w-24">ဝယ်ဈေး</th>
+                <th class="py-2 px-3 text-right w-24 text-emerald-500 font-bold">ရောင်းဈေး</th>
+                <th class="py-2 px-3 text-center w-28">လက်ကျန် (STOCK)</th>
+                <th class="py-2 px-3 text-center w-24">အခြေအနေ</th>
+                <th class="py-2 px-3 text-center w-20">ပြင်ဆင်</th>
               </tr>
             </thead>
             <tbody id="stock-table-body" class="divide-y divide-[var(--border-color)]"></tbody>
@@ -632,20 +616,18 @@
         <div class="flex justify-between items-center glass-card px-4 py-2 rounded-xl text-xs">
           <div id="stock-pagination-info" class="text-slate-400 font-mono text-[11px]">Showing 0 entries</div>
           <div class="flex items-center gap-2">
-            <button onclick="changeStockPage(-1)" id="stock-btn-prev" class="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
+            <button onclick="changeStockPage(-1)" id="stock-btn-prev" class="px-3 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
               <i class="fa-solid fa-chevron-left text-[9px]"></i> Previous
             </button>
-            <button onclick="changeStockPage(1)" id="stock-btn-next" class="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
+            <button onclick="changeStockPage(1)" id="stock-btn-next" class="px-3 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
               Next <i class="fa-solid fa-chevron-right text-[9px]"></i>
             </button>
           </div>
         </div>
       </section>
 
-      <!-- ────────────────────────────────────────────────────────────────────────── -->
-      <!-- 🛒 VIEW 5: PURCHASES (WITH SUPPLIER DAILY TOTAL CALCULATOR)                 -->
-      <!-- ────────────────────────────────────────────────────────────────────────── -->
-      <section id="view-purchases" class="space-y-3.5 hidden">
+      <!-- VIEW 5: PURCHASES -->
+      <section id="view-purchases" class="space-y-3 hidden">
         <div class="flex flex-col lg:flex-row justify-between items-center glass-card p-3 rounded-xl gap-3">
           <div class="flex flex-col sm:flex-row items-center gap-2 w-full lg:w-auto">
             <div class="relative w-full sm:w-56">
@@ -653,7 +635,6 @@
               <input type="text" id="pur-search" oninput="onSearchPurchasesDebounced()" placeholder="ပစ္စည်း၊ Barcode၊ PO No..." class="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg bg-[var(--bg-card-inner)] border border-[var(--border-color)] outline-none focus:border-amber-500">
             </div>
 
-            <!-- Supplier Filter -->
             <select id="pur-supplier-filter" onchange="loadPurchasesHistory(1)" class="bg-[var(--bg-card-inner)] border border-[var(--border-color)] text-xs rounded-lg px-2.5 py-1.5 outline-none font-bold">
               <option value="">All Suppliers (ကုန်သည်အားလုံး)</option>
             </select>
@@ -669,7 +650,6 @@
           </div>
 
           <div class="flex items-center gap-2">
-            <!-- 🎯 LIVE SUPPLIER TOTAL CALCULATION BADGE -->
             <div class="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-500 text-xs font-mono font-bold flex items-center gap-1.5 shadow-sm">
               <i class="fa-solid fa-calculator text-[11px]"></i>
               <span>အဝယ်စုစုပေါင်း: <strong id="pur-supplier-total-badge" class="text-sm font-black">0 MMK</strong></span>
@@ -685,16 +665,16 @@
           <table class="w-full text-left text-xs border-collapse min-w-[1000px]">
             <thead class="bg-[var(--table-header)] text-slate-500 text-[11px]">
               <tr>
-                <th class="py-2.5 px-3 w-12 text-center">စဉ်</th>
-                <th class="py-2.5 px-3 w-24">ရက်စွဲ</th>
-                <th class="py-2.5 px-3 w-32">PO NUMBER</th>
-                <th class="py-2.5 px-3 w-36">ကုန်သည်အမည်</th>
-                <th class="py-2.5 px-3">ပစ္စည်းအမည် / BARCODE</th>
-                <th class="py-2.5 px-3 text-center w-16">QTY</th>
-                <th class="py-2.5 px-3 text-right w-24">ဝယ်ဈေး</th>
-                <th class="py-2.5 px-3 text-right w-24 text-emerald-500 font-bold">ရောင်းဈေး</th>
-                <th class="py-2.5 px-3 text-right w-28 font-mono text-amber-500">ကျသင့်ငွေ</th>
-                <th class="py-2.5 px-3 text-center w-20 right-0 sticky bg-[var(--table-header)] border-l border-[var(--border-color)]">ACTION</th>
+                <th class="py-2 px-3 w-12 text-center">စဉ်</th>
+                <th class="py-2 px-3 w-24">ရက်စွဲ</th>
+                <th class="py-2 px-3 w-32">PO NUMBER</th>
+                <th class="py-2 px-3 w-36">ကုန်သည်အမည်</th>
+                <th class="py-2 px-3">ပစ္စည်းအမည် / BARCODE</th>
+                <th class="py-2 px-3 text-center w-16">QTY</th>
+                <th class="py-2 px-3 text-right w-24">ဝယ်ဈေး</th>
+                <th class="py-2 px-3 text-right w-24 text-emerald-500 font-bold">ရောင်းဈေး</th>
+                <th class="py-2 px-3 text-right w-28 font-mono text-amber-500">ကျသင့်ငွေ</th>
+                <th class="py-2 px-3 text-center w-20 right-0 sticky bg-[var(--table-header)] border-l border-[var(--border-color)]">ACTION</th>
               </tr>
             </thead>
             <tbody id="pur-table-body" class="divide-y divide-[var(--border-color)]"></tbody>
@@ -704,20 +684,18 @@
         <div class="flex justify-between items-center glass-card px-4 py-2 rounded-xl text-xs">
           <div id="pur-pagination-info" class="text-slate-400 font-mono text-[11px]">Showing 0 entries</div>
           <div class="flex items-center gap-2">
-            <button onclick="changePurchasesPage(-1)" id="pur-btn-prev" class="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
+            <button onclick="changePurchasesPage(-1)" id="pur-btn-prev" class="px-3 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
               <i class="fa-solid fa-chevron-left text-[9px]"></i> Previous
             </button>
-            <button onclick="changePurchasesPage(1)" id="pur-btn-next" class="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
+            <button onclick="changePurchasesPage(1)" id="pur-btn-next" class="px-3 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
               Next <i class="fa-solid fa-chevron-right text-[9px]"></i>
             </button>
           </div>
         </div>
       </section>
 
-      <!-- ────────────────────────────────────────────────────────────────────────── -->
-      <!-- ⚠️ VIEW 6: WASTE & DAMAGE (အပျက်/အပျောက်စာရင်း)                             -->
-      <!-- ────────────────────────────────────────────────────────────────────────── -->
-      <section id="view-waste" class="space-y-3.5 hidden">
+      <!-- VIEW 6: WASTE & DAMAGE -->
+      <section id="view-waste" class="space-y-3 hidden">
         <div class="flex flex-col lg:flex-row justify-between items-center glass-card p-3 rounded-xl gap-3">
           <div class="flex flex-col sm:flex-row items-center gap-2 w-full lg:w-auto">
             <div class="relative w-full sm:w-56">
@@ -756,16 +734,16 @@
           <table class="w-full text-left text-xs border-collapse min-w-[950px]">
             <thead class="bg-[var(--table-header)] text-slate-500 text-[11px]">
               <tr>
-                <th class="py-2.5 px-3 w-12 text-center">စဉ်</th>
-                <th class="py-2.5 px-3 w-28">ရက်စွဲ</th>
-                <th class="py-2.5 px-3 w-36">WASTE NO</th>
-                <th class="py-2.5 px-3 w-28 text-center">အကြောင်းပြချက်</th>
-                <th class="py-2.5 px-3">ပျက်စီး/ပျောက်ဆုံးစာရင်း (ITEMS SUMMARY)</th>
-                <th class="py-2.5 px-3 text-center w-20">QTY</th>
-                <th class="py-2.5 px-3 text-right w-28 text-rose-500 font-bold">ဆုံးရှုံးငွေ (COST)</th>
-                <th class="py-2.5 px-3 w-28">စာရင်းသွင်းသူ</th>
-                <th class="py-2.5 px-3">မှတ်ချက်</th>
-                <th class="py-2.5 px-3 text-center w-16 right-0 sticky bg-[var(--table-header)] border-l border-[var(--border-color)]">ACTION</th>
+                <th class="py-2 px-3 w-12 text-center">စဉ်</th>
+                <th class="py-2 px-3 w-28">ရက်စွဲ</th>
+                <th class="py-2 px-3 w-36">WASTE NO</th>
+                <th class="py-2 px-3 w-28 text-center">အကြောင်းပြချက်</th>
+                <th class="py-2 px-3">ပျက်စီး/ပျောက်ဆုံးစာရင်း (ITEMS SUMMARY)</th>
+                <th class="py-2 px-3 text-center w-20">QTY</th>
+                <th class="py-2 px-3 text-right w-28 text-rose-500 font-bold">ဆုံးရှုံးငွေ (COST)</th>
+                <th class="py-2 px-3 w-28">စာရင်းသွင်းသူ</th>
+                <th class="py-2 px-3">မှတ်ချက်</th>
+                <th class="py-2 px-3 text-center w-16 right-0 sticky bg-[var(--table-header)] border-l border-[var(--border-color)]">ACTION</th>
               </tr>
             </thead>
             <tbody id="waste-table-body" class="divide-y divide-[var(--border-color)]"></tbody>
@@ -775,20 +753,18 @@
         <div class="flex justify-between items-center glass-card px-4 py-2 rounded-xl text-xs">
           <div id="waste-pagination-info" class="text-slate-400 font-mono text-[11px]">Showing 0 entries</div>
           <div class="flex items-center gap-2">
-            <button onclick="changeWastePage(-1)" id="waste-btn-prev" class="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
+            <button onclick="changeWastePage(-1)" id="waste-btn-prev" class="px-3 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
               <i class="fa-solid fa-chevron-left text-[9px]"></i> Previous
             </button>
-            <button onclick="changeWastePage(1)" id="waste-btn-next" class="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
+            <button onclick="changeWastePage(1)" id="waste-btn-next" class="px-3 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
               Next <i class="fa-solid fa-chevron-right text-[9px]"></i>
             </button>
           </div>
         </div>
       </section>
 
-      <!-- ────────────────────────────────────────────────────────────────────────── -->
-      <!-- 📦 VIEW 7: STOCK SURPLUS (အပိုစာရင်း - NEW)                                 -->
-      <!-- ────────────────────────────────────────────────────────────────────────── -->
-      <section id="view-surplus" class="space-y-3.5 hidden">
+      <!-- VIEW 7: STOCK SURPLUS -->
+      <section id="view-surplus" class="space-y-3 hidden">
         <div class="flex flex-col lg:flex-row justify-between items-center glass-card p-3 rounded-xl gap-3">
           <div class="flex flex-col sm:flex-row items-center gap-2 w-full lg:w-auto">
             <div class="relative w-full sm:w-56">
@@ -826,16 +802,16 @@
           <table class="w-full text-left text-xs border-collapse min-w-[950px]">
             <thead class="bg-[var(--table-header)] text-slate-500 text-[11px]">
               <tr>
-                <th class="py-2.5 px-3 w-12 text-center">စဉ်</th>
-                <th class="py-2.5 px-3 w-28">ရက်စွဲ</th>
-                <th class="py-2.5 px-3 w-36">SURPLUS NO</th>
-                <th class="py-2.5 px-3 w-28 text-center">အကြောင်းပြချက်</th>
-                <th class="py-2.5 px-3">အပိုပစ္စည်းစာရင်း (ITEMS SUMMARY)</th>
-                <th class="py-2.5 px-3 text-center w-20">QTY</th>
-                <th class="py-2.5 px-3 text-right w-28 text-emerald-500 font-bold">တန်ဖိုး (COST)</th>
-                <th class="py-2.5 px-3 w-28">စာရင်းသွင်းသူ</th>
-                <th class="py-2.5 px-3">မှတ်ချက်</th>
-                <th class="py-2.5 px-3 text-center w-16 right-0 sticky bg-[var(--table-header)] border-l border-[var(--border-color)]">ACTION</th>
+                <th class="py-2 px-3 w-12 text-center">စဉ်</th>
+                <th class="py-2 px-3 w-28">ရက်စွဲ</th>
+                <th class="py-2 px-3 w-36">SURPLUS NO</th>
+                <th class="py-2 px-3 w-28 text-center">အကြောင်းပြချက်</th>
+                <th class="py-2 px-3">အပိုပစ္စည်းစာရင်း (ITEMS SUMMARY)</th>
+                <th class="py-2 px-3 text-center w-20">QTY</th>
+                <th class="py-2 px-3 text-right w-28 text-emerald-500 font-bold">တန်ဖိုး (COST)</th>
+                <th class="py-2 px-3 w-28">စာရင်းသွင်းသူ</th>
+                <th class="py-2 px-3">မှတ်ချက်</th>
+                <th class="py-2 px-3 text-center w-16 right-0 sticky bg-[var(--table-header)] border-l border-[var(--border-color)]">ACTION</th>
               </tr>
             </thead>
             <tbody id="surplus-table-body" class="divide-y divide-[var(--border-color)]"></tbody>
@@ -845,10 +821,10 @@
         <div class="flex justify-between items-center glass-card px-4 py-2 rounded-xl text-xs">
           <div id="surplus-pagination-info" class="text-slate-400 font-mono text-[11px]">Showing 0 entries</div>
           <div class="flex items-center gap-2">
-            <button onclick="changeSurplusPage(-1)" id="surplus-btn-prev" class="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
+            <button onclick="changeSurplusPage(-1)" id="surplus-btn-prev" class="px-3 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
               <i class="fa-solid fa-chevron-left text-[9px]"></i> Previous
             </button>
-            <button onclick="changeSurplusPage(1)" id="surplus-btn-next" class="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
+            <button onclick="changeSurplusPage(1)" id="surplus-btn-next" class="px-3 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
               Next <i class="fa-solid fa-chevron-right text-[9px]"></i>
             </button>
           </div>
@@ -917,7 +893,6 @@
           </div>
         </div>
 
-        <!-- Smart Pricing Engine Widget -->
         <div class="p-3 bg-sky-500/10 border border-sky-500/20 rounded-2xl space-y-2">
           <div class="flex justify-between items-center">
             <span class="text-[10px] font-black text-sky-500 uppercase tracking-wider">SMART PRICING ENGINE</span>
@@ -1152,7 +1127,7 @@
     </div>
   </div>
 
-  <!-- 📦 MODAL 6: RECORD STOCK SURPLUS (အပိုစာရင်း သွင်းယူခြင်း - NEW) -->
+  <!-- 📦 MODAL 6: RECORD STOCK SURPLUS (အပိုစာရင်း သွင်းယူခြင်း) -->
   <div id="pos-surplus-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
     <div class="bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-150">
       <div class="px-5 py-4 border-b border-[var(--border-color)] flex justify-between items-center bg-emerald-500/10">
@@ -1351,12 +1326,12 @@
           <table class="w-full text-left text-xs border-collapse min-w-[550px]">
             <thead class="bg-[var(--table-header)] text-slate-500 text-[11px] sticky top-0">
               <tr>
-                <th class="py-2.5 px-3 w-10 text-center">စဉ်</th>
-                <th class="py-2.5 px-3 w-28">INVOICE NO</th>
-                <th class="py-2.5 px-3 w-24">METHOD</th>
-                <th class="py-2.5 px-3">ITEMS SUMMARY</th>
-                <th class="py-2.5 px-3 text-right w-24">AMOUNT</th>
-                <th class="py-2.5 px-3 text-center w-20">STATUS</th>
+                <th class="py-2 px-3 w-10 text-center">စဉ်</th>
+                <th class="py-2 px-3 w-28">INVOICE NO</th>
+                <th class="py-2 px-3 w-24">METHOD</th>
+                <th class="py-2 px-3">ITEMS SUMMARY</th>
+                <th class="py-2 px-3 text-right w-24">AMOUNT</th>
+                <th class="py-2 px-3 text-center w-20">STATUS</th>
               </tr>
             </thead>
             <tbody id="pending-orders-table-body" class="divide-y divide-[var(--border-color)]"></tbody>

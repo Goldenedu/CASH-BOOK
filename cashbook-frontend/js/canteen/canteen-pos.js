@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * GOLDEN ERP - CANTEEN POS TERMINAL & CHECKOUT ENGINE
+ * GOLDEN ERP - CANTEEN POS TERMINAL & CHECKOUT ENGINE (THEME-ADAPTIVE)
  * File: js/canteen/canteen-pos.js
  * ==============================================================================
  */
@@ -13,13 +13,13 @@ function setPaymentMode(mode) {
   const radar = document.getElementById('pos-student-radar');
 
   if (mode === 'Student Pocket Money') {
-    btnWallet.className = "py-2 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 bg-indigo-600 text-white shadow-lg shadow-indigo-600/30";
-    btnCash.className = "py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 text-slate-400 hover:text-white";
+    btnWallet.className = "py-1.5 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 bg-indigo-600 text-white shadow-lg shadow-indigo-600/30";
+    btnCash.className = "py-1.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-[var(--text-main)]";
     radar.classList.remove('opacity-40', 'pointer-events-none');
     document.getElementById('btn-checkout-label').textContent = "မုန့်ဖိုးဖြင့် ရှင်းမည် (CHECKOUT - F8)";
   } else {
-    btnCash.className = "py-2 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-2 bg-emerald-600 text-white shadow-lg shadow-emerald-600/30";
-    btnWallet.className = "py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 text-slate-400 hover:text-white";
+    btnCash.className = "py-1.5 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 bg-emerald-600 text-white shadow-lg shadow-emerald-600/30";
+    btnWallet.className = "py-1.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-[var(--text-main)]";
     radar.classList.add('opacity-40', 'pointer-events-none');
     document.getElementById('btn-checkout-label').textContent = "ငွေသားဖြင့် ရှင်းမည် (CHECKOUT - F8)";
   }
@@ -82,7 +82,7 @@ function renderStudentCard() {
   document.getElementById('radar-wallet-bal').textContent = `${Number(gCurrentStudent.currentBalance).toLocaleString()} MMK`;
   document.getElementById('radar-today-spent').textContent = `${Number(gCurrentStudent.todaySpent).toLocaleString()} / ${Number(cap).toLocaleString()}`;
   document.getElementById('radar-badge-status').textContent = "ACTIVE WALLET";
-  document.getElementById('radar-badge-status').className = "px-2 py-0.5 rounded text-[9px] font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-mono";
+  document.getElementById('radar-badge-status').className = "px-2 py-0.5 rounded text-[9px] font-black bg-indigo-500/20 text-indigo-500 dark:text-indigo-300 border border-indigo-500/30 font-mono";
 
   const capHeader = document.getElementById('radar-cap-header');
   if (capHeader) capHeader.textContent = `DAILY ${Number(cap).toLocaleString()} MMK CAP:`;
@@ -100,7 +100,7 @@ function resetStudentCard() {
   document.getElementById('radar-progress-bar').style.width = "0%";
   document.getElementById('radar-progress-bar').className = "h-full bg-emerald-500";
   document.getElementById('radar-badge-status').textContent = "STANDBY";
-  document.getElementById('radar-badge-status').className = "px-2 py-0.5 rounded text-[9px] font-black bg-slate-800 text-slate-400 border border-slate-700 font-mono";
+  document.getElementById('radar-badge-status').className = "px-2 py-0.5 rounded text-[9px] font-black bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700 font-mono";
 }
 
 function evaluateStudentCapWarning(currentBillAmount) {
@@ -118,9 +118,9 @@ function evaluateStudentCapWarning(currentBillAmount) {
 
   if (combined > cap) {
     pBar.className = "h-full bg-rose-500 animate-pulse";
-    capText.innerHTML = `<span class="text-rose-400 font-black">ကန့်သတ်ချက် ကျော်လွန်နေပါသည်! (ကျန်: ${remainingQuota.toLocaleString()} MMK)</span>`;
+    capText.innerHTML = `<span class="text-rose-500 font-black">ကန့်သတ်ချက် ကျော်လွန်နေပါသည်! (ကျန်: ${remainingQuota.toLocaleString()} MMK)</span>`;
   } else if (percentage >= 80) {
-    pBar.className = "h-full bg-amber-400";
+    pBar.className = "h-full bg-amber-500";
     capText.textContent = `ကျန်ခွဲတမ်း: ${(cap - combined).toLocaleString()} MMK`;
   } else {
     pBar.className = "h-full bg-emerald-500";
@@ -128,7 +128,7 @@ function evaluateStudentCapWarning(currentBillAmount) {
   }
 }
 
-// 🎯 Cart Functions
+// 🎯 Barcode Scanner & Search Matching
 function handleBarcodeInput(e) {
   const val = e.target.value.trim();
   const dropdown = document.getElementById('pos-search-dropdown');
@@ -147,12 +147,12 @@ function handleBarcodeInput(e) {
 
     if (matches.length > 0) {
       dropdown.innerHTML = matches.map(m => `
-        <div onclick="selectDropdownItem('${escAttr(m.barcode)}')" class="p-2.5 hover:bg-slate-800 cursor-pointer border-b border-slate-700/60 flex items-center justify-between text-xs bg-[#0c1527] transition">
+        <div onclick="selectDropdownItem('${escAttr(m.barcode)}')" class="p-2.5 hover:bg-slate-500/10 cursor-pointer border-b border-[var(--border-color)] flex items-center justify-between text-xs transition">
           <div>
-            <span class="font-bold text-white">${esc(m.itemName)}</span>
+            <span class="font-bold">${esc(m.itemName)}</span>
             <span class="text-[10px] font-mono text-slate-400 block">${esc(m.barcode)}</span>
           </div>
-          <span class="font-mono font-bold text-emerald-400">${Number(m.sellingPrice).toLocaleString()} MMK</span>
+          <span class="font-mono font-bold text-emerald-500">${Number(m.sellingPrice).toLocaleString()} MMK</span>
         </div>
       `).join('');
       dropdown.classList.remove('hidden');
@@ -208,6 +208,7 @@ function searchAndAddItem(targetCode) {
   focusScanner();
 }
 
+// 🎯 FIX: Light Mode & Dark Mode အပြည့်အစုံ ကိုက်ညီသော Cart Items Renderer (အမဲရောင်ဖြစ်နေမှု ဖြေရှင်းချက်)
 function renderCart() {
   const list = document.getElementById('pos-cart-list');
   const emptyBox = document.getElementById('pos-cart-empty');
@@ -225,21 +226,21 @@ function renderCart() {
   gCart.forEach((item, idx) => {
     const subtotal = item.qty * item.price;
     list.innerHTML += `
-      <div class="p-2.5 bg-[#080f1e]/80 border border-slate-800 rounded-xl flex items-center justify-between gap-3 text-xs">
+      <div class="p-2.5 bg-white dark:bg-[#080f1e]/90 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between gap-3 text-xs transition shadow-sm">
         <div class="min-w-0 flex-1">
-          <h4 class="font-bold text-white truncate">${esc(item.name)}</h4>
-          <span class="text-[10px] font-mono text-slate-400">${Number(item.price).toLocaleString()} MMK</span>
+          <h4 class="font-bold text-slate-800 dark:text-white truncate">${esc(item.name)}</h4>
+          <span class="text-[10px] font-mono text-slate-500 dark:text-slate-400">${Number(item.price).toLocaleString()} MMK</span>
         </div>
 
-        <div class="flex items-center gap-1 shrink-0 bg-[#060c18] border border-slate-800 rounded-lg p-0.5">
-          <button onclick="changeCartQty(${idx}, -1)" class="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold text-xs">-</button>
-          <input type="number" value="${item.qty}" min="1" max="${item.maxStock}" onchange="setCartQty(${idx}, this.value)" class="w-8 bg-transparent text-center font-mono font-bold text-white text-xs outline-none">
-          <button onclick="changeCartQty(${idx}, 1)" class="w-5 h-5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold text-xs">+</button>
+        <div class="flex items-center gap-1 shrink-0 bg-slate-100 dark:bg-[#060c18] border border-slate-200 dark:border-slate-800 rounded-lg p-0.5">
+          <button onclick="changeCartQty(${idx}, -1)" class="w-6 h-6 rounded bg-white dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center font-bold text-xs shadow-sm transition active:scale-95">-</button>
+          <input type="number" value="${item.qty}" min="1" max="${item.maxStock}" onchange="setCartQty(${idx}, this.value)" class="w-8 bg-transparent text-center font-mono font-bold text-slate-800 dark:text-white text-xs outline-none">
+          <button onclick="changeCartQty(${idx}, 1)" class="w-6 h-6 rounded bg-white dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center font-bold text-xs shadow-sm transition active:scale-95">+</button>
         </div>
 
-        <div class="text-right shrink-0 min-w-[70px]">
-          <strong class="font-mono text-emerald-400 font-bold block">${Number(subtotal).toLocaleString()}</strong>
-          <button onclick="removeCartItem(${idx})" class="text-[10px] text-slate-500 hover:text-rose-400 p-0.5 transition"><i class="fa-solid fa-trash"></i></button>
+        <div class="text-right shrink-0 min-w-[75px]">
+          <strong class="font-mono text-emerald-600 dark:text-emerald-400 font-bold text-xs block">${Number(subtotal).toLocaleString()}</strong>
+          <button onclick="removeCartItem(${idx})" class="text-[10px] text-slate-400 hover:text-rose-500 p-0.5 transition" title="ဖယ်ရှားမည်"><i class="fa-solid fa-trash-can"></i></button>
         </div>
       </div>
     `;
@@ -307,9 +308,7 @@ function getCartTotalAmount() {
   return tot;
 }
 
-// ==============================================================================
-// ⚡ CHECKOUT EXECUTION (OFFLINE-AWARE WITH PENDING QUEUE COMMIT)
-// ==============================================================================
+// 🎯 Checkout Engine
 async function executeCheckout() {
   if (isSubmitting) return;
   if (gCart.length === 0) return showToast("ERROR", "Cart ထဲတွင် ပစ္စည်းများ မရှိသေးပါ!");
@@ -370,7 +369,6 @@ async function executeCheckout() {
   try {
     let orderSuccess = false;
 
-    // 1. Attempt Online Submission if online
     if (navigator.onLine) {
       try {
         const res = await callApi('checkoutPosSale', payload);
@@ -386,7 +384,6 @@ async function executeCheckout() {
       }
     }
 
-    // 2. Offline Mode Commit (or network fallback)
     if (!orderSuccess) {
       payload.uniqueId = `OFF_${rawUniqueId}`;
       payload.isOffline = true;
@@ -402,14 +399,12 @@ async function executeCheckout() {
       await updatePendingBadgeCount();
     }
 
-    // Deduct stock from Local In-Memory Cache & IndexedDB
     for (const sd of stockDeductions) {
       const item = gItemsCache.find(it => it.barcode === sd.barcode);
       if (item) item.currentStock = Math.max(0, Number(item.currentStock || 0) - sd.qty);
       await dbUpdateItemStock(sd.barcode, sd.qty);
     }
 
-    // Reset Cart & Student Card
     gCart = [];
     gCurrentStudent = null;
     const stuInp = document.getElementById('pos-student-input');
@@ -426,7 +421,6 @@ async function executeCheckout() {
   }
 }
 
-// 🖨️ POS Thermal Receipt Printer
 function printPosReceipt(invoiceNo, totalAmt, itemsSummary, method, student) {
   const today = new Date().toISOString().slice(0, 10);
   const cashierName = gSession?.name || 'Cashier';
