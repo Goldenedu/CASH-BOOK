@@ -1,13 +1,13 @@
 /**
  * ==============================================================================
- * GOLDEN ERP SYSTEM - CLOUDFLARE WORKER MAIN ROUTER (D1 MODULAR EDITION)
+ * GOLDEN ERP SYSTEM - CLOUDFLARE WORKER MAIN ROUTER (D1 MODULAR ENTERPRISE EDITION)
  * File: worker.js (Location: cashbook-api/worker.js)
- * 💡 Features: 🛡️ Strict Domain-Specific RBAC Matrix (Zero Privilege Escalation),
+ * 💡 Features: 🛡️ Strict Domain-Specific RBAC Matrix (Case-Insensitive Safe),
  *              ⚡ QUOTA-SHIELD: O(1) Differential Global Recalculator Engine,
  *              🎯 Floating Point Safe Comparison (ROUND to 2 Decimals),
  *              Fail-Closed WebCrypto JWT & PBKDF2 Password Security (100k Iterations),
  *              Server-Side Brute-Force Lockout Defense,
- *              🛡️ Standalone Zero-Dependency D1 Audit Logger,
+ *              🛡️ Standalone Zero-Dependency D1 Audit Logger (Non-Blocking),
  *              ⚡ SPMMS 3-LEDGERS & CANTEEN POS ISOLATED DOMAIN SECURITY
  * ==============================================================================
  */
@@ -60,9 +60,11 @@ const ROLE_PERMS = {
     uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, 
     report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false,
     pos_read: true, pos_write: true, pos_admin: false, pos_purchase: true, 
-    pos_waste_read: true, pos_waste_write: true, pos_waste_admin: false, // 🎯 Admin သာ ပြင်/ဖျက်ခွင့်ရှိသည်
-    pos_surplus_read: true, pos_surplus_write: true, pos_surplus_admin: false, // 🎯 Admin သာ ပြင်/ဖျက်ခွင့်ရှိသည်
-    pos_settings_write: false, pos_close: true, canteen_settle: false 
+    pos_waste_read: true, pos_waste_write: true, pos_waste_admin: false,
+    pos_surplus_read: true, pos_surplus_write: true, pos_surplus_admin: false,
+    pos_settings_write: false, 
+    pos_close: true,       // 🎯 Cashier ဆိုင်ပိတ်ခွင့် ခွင့်ပြုသည်
+    canteen_settle: true   // 🎯 Cashier ညနေစာရင်းရှင်းခွင့် ခွင့်ပြုသည်
   },
   counter1: { 
     ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false, 
@@ -101,9 +103,16 @@ const ROLE_PERMS = {
   Viewer: { ledger_read: true, ledger_write: false, cashier_read: true, cashier_write: false, student_read: true, student_write: false, staff_read: true, staff_write: false, uniform_read: true, uniform_write: false, promo_read: true, promo_write: false, report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: false }
 };
 
+// 🎯 Safe Case-Insensitive Role Normalizer & Permission Evaluator
 function can(session, perm) {
-  const role = session?.role || "Viewer";
-  const perms = ROLE_PERMS[role] || ROLE_PERMS.Viewer;
+  const rawRole = String(session?.role || "Viewer").trim();
+  const normalized = rawRole.toLowerCase().replace(/[\s_-]/g, '');
+
+  const matchingKey = Object.keys(ROLE_PERMS).find(k => {
+    return k.toLowerCase().replace(/[\s_-]/g, '') === normalized;
+  });
+
+  const perms = matchingKey ? ROLE_PERMS[matchingKey] : (ROLE_PERMS[rawRole] || ROLE_PERMS.Viewer);
   return Boolean(perms[perm]);
 }
 

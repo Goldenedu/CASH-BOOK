@@ -1,15 +1,23 @@
 /**
  * ==============================================================================
- * GOLDEN ERP - CANTEEN INDEXED-DB OFFLINE ENGINE (V2 PRODUCTION)
- * File: js/canteen/canteen-db.js
+ * GOLDEN ERP - CANTEEN INDEXED-DB OFFLINE ENGINE (V3 PRODUCTION)
+ * File: js/canteen/canteen-db.js (Enterprise V9 Full Production Edition)
+ * 💡 Features:
+ *   1. ⚡ Zero D1 Read Caching: Full offline catalog & student wallet directory
+ *   2. 💰 Capital Invariance: Tracks currentStock & surplusStock in local memory
+ *   3. 🎓 Type-Safe Student Radar: Dual-Layer Primary Key & Cursor Search
+ *   4. ⏳ Resilient Pending Queue: Guarantees zero data loss during disconnection
+ *   5. 🛡️ Transaction-Safe: Fully wrapped in asynchronous Promises
  * ==============================================================================
  */
 
 const DB_NAME = 'GoldenCanteenOfflineDB';
-const DB_VERSION = 2; // 🎯 Version 2 သို့ တိုးမြှင့်၍ Database Schema အသစ်အား Force Update လုပ်သည်
+const DB_VERSION = 3; // 🎯 Version 3 သို့ တိုးမြှင့်၍ Schema အသစ်များ အလိုအလျောက် Migration ဝင်စေသည်
 let gIndexedDB = null;
 
-// 🎯 Initialize IndexedDB
+// ------------------------------------------------------------------------------
+// 🎯 1. INITIALIZE INDEXED-DB & SCHEMA SETUP
+// ------------------------------------------------------------------------------
 function initCanteenDB() {
   return new Promise((resolve, reject) => {
     if (!window.indexedDB) {
@@ -22,24 +30,32 @@ function initCanteenDB() {
     request.onupgradeneeded = (e) => {
       const db = e.target.result;
 
-      // 1. Products Store
+      // ၁။ Products Store (KeyPath: barcode)
       if (!db.objectStoreNames.contains('items_store')) {
         db.createObjectStore('items_store', { keyPath: 'barcode' });
       }
 
-      // 2. Student Pocket Money Store (KeyPath: studentId)
+      // ၂။ Student Pocket Money Store (KeyPath: studentId)
       if (!db.objectStoreNames.contains('students_store')) {
         const stuStore = db.createObjectStore('students_store', { keyPath: 'studentId' });
         stuStore.createIndex('fyid', 'fyid', { unique: false });
         stuStore.createIndex('nfcTagId', 'nfcTagId', { unique: false });
+      } else {
+        const stuStore = e.target.transaction.objectStore('students_store');
+        if (!stuStore.indexNames.contains('fyid')) {
+          stuStore.createIndex('fyid', 'fyid', { unique: false });
+        }
+        if (!stuStore.indexNames.contains('nfcTagId')) {
+          stuStore.createIndex('nfcTagId', 'nfcTagId', { unique: false });
+        }
       }
 
-      // 3. Pending Orders Queue (Sync Queue)
+      // ၃။ Pending Orders Queue (KeyPath: uniqueId)
       if (!db.objectStoreNames.contains('pending_orders_store')) {
         db.createObjectStore('pending_orders_store', { keyPath: 'uniqueId' });
       }
 
-      // 4. POS Settings Store
+      // ၄။ POS Settings Store (KeyPath: settingKey)
       if (!db.objectStoreNames.contains('settings_store')) {
         db.createObjectStore('settings_store', { keyPath: 'settingKey' });
       }
@@ -58,20 +74,35 @@ function initCanteenDB() {
 }
 
 // ------------------------------------------------------------------------------
-// 📦 Items Store Helpers
+// 📦 2. ITEMS STORE HELPERS (CAPITAL INVARIANCE HARMONY)
 // ------------------------------------------------------------------------------
 async function dbSaveItems(items = []) {
-  if (!gIndexedDB || !items.length) return;
+  if (!gIndexedDB || !Array.isArray(items) || !items.length) return false;
   return new Promise((resolve) => {
     try {
       const tx = gIndexedDB.transaction('items_store', 'readwrite');
       const store = tx.objectStore('items_store');
       items.forEach(it => {
-        if (it.barcode) store.put(it);
+        if (it && it.barcode) {
+          store.put({
+            barcode: String(it.barcode).trim(),
+            itemName: String(it.itemName || it.item_name || '').trim(),
+            category: String(it.category || 'Snack').trim(),
+            costPrice: parseFloat(it.costPrice || it.cost_price || 0),
+            markupPercent: parseFloat(it.markupPercent || it.markup_percent || 8), // 🎯 Default 8%
+            sellingPrice: parseFloat(it.sellingPrice || it.selling_price || 0),
+            currentStock: parseFloat(it.currentStock || it.current_stock || 0),
+            surplusStock: parseFloat(it.surplusStock || it.surplus_stock || 0), // 🎯 Surplus stock tracking
+            isActive: it.isActive !== undefined ? it.isActive : 1,
+            updatedAt: it.updatedAt || new Date().toISOString()
+          });
+        }
       });
       tx.oncomplete = () => resolve(true);
       tx.onerror = () => resolve(false);
-    } catch (e) { resolve(false); }
+    } catch (e) {
+      resolve(false);
+    }
   });
 }
 
@@ -80,10 +111,12 @@ async function dbGetItem(barcode) {
   return new Promise((resolve) => {
     try {
       const tx = gIndexedDB.transaction('items_store', 'readonly');
-      const req = tx.objectStore('items_store').get(barcode);
+      const req = tx.objectStore('items_store').get(String(barcode).trim());
       req.onsuccess = () => resolve(req.result || null);
       req.onerror = () => resolve(null);
-    } catch (e) { resolve(null); }
+    } catch (e) {
+      resolve(null);
+    }
   });
 }
 
@@ -95,32 +128,41 @@ async function dbGetAllItems() {
       const req = tx.objectStore('items_store').getAll();
       req.onsuccess = () => resolve(req.result || []);
       req.onerror = () => resolve([]);
-    } catch (e) { resolve([]); }
+    } catch (e) {
+      resolve([]);
+    }
   });
 }
 
 async function dbUpdateItemStock(barcode, deltaQty) {
-  if (!gIndexedDB || !barcode) return;
+  if (!gIndexedDB || !barcode) return false;
   return new Promise((resolve) => {
     try {
       const tx = gIndexedDB.transaction('items_store', 'readwrite');
       const store = tx.objectStore('items_store');
-      const req = store.get(barcode);
+      const req = store.get(String(barcode).trim());
       req.onsuccess = () => {
         const item = req.result;
         if (item) {
-          item.currentStock = Math.max(0, Number(item.currentStock || 0) - deltaQty);
+          const deduct = parseFloat(deltaQty || 0);
+          item.currentStock = Math.max(0, Number(item.currentStock || 0) - deduct);
+          // 🎯 Capital Invariance Guard: လက်ကျန် အပိုစတော့ ရှိပါကပါ နုတ်ပေးသည်
+          if (item.surplusStock) {
+            item.surplusStock = Math.max(0, Number(item.surplusStock || 0) - deduct);
+          }
           store.put(item);
         }
         resolve(true);
       };
       req.onerror = () => resolve(false);
-    } catch (e) { resolve(false); }
+    } catch (e) {
+      resolve(false);
+    }
   });
 }
 
 // ------------------------------------------------------------------------------
-// 🎓 Students Store Helpers (Type-Safe & Multiple Index Lookup)
+// 🎓 3. STUDENTS STORE HELPERS (TYPE-SAFE CURSOR & PRIMARY KEY LOOKUP)
 // ------------------------------------------------------------------------------
 async function dbSaveStudents(students = []) {
   if (!gIndexedDB || !Array.isArray(students) || !students.length) return false;
@@ -145,7 +187,9 @@ async function dbSaveStudents(students = []) {
       });
       tx.oncomplete = () => resolve(true);
       tx.onerror = () => resolve(false);
-    } catch (e) { resolve(false); }
+    } catch (e) {
+      resolve(false);
+    }
   });
 }
 
@@ -202,7 +246,7 @@ async function dbGetStudent(query) {
 }
 
 async function dbDeductStudentWallet(studentId, amount) {
-  if (!gIndexedDB || !studentId) return;
+  if (!gIndexedDB || !studentId) return false;
   return new Promise((resolve) => {
     try {
       const tx = gIndexedDB.transaction('students_store', 'readwrite');
@@ -211,19 +255,22 @@ async function dbDeductStudentWallet(studentId, amount) {
       req.onsuccess = () => {
         const s = req.result;
         if (s) {
-          s.currentBalance = Math.max(0, s.currentBalance - amount);
-          s.todaySpent = (s.todaySpent || 0) + amount;
+          const amt = parseFloat(amount || 0);
+          s.currentBalance = Math.max(0, Number(s.currentBalance || 0) - amt);
+          s.todaySpent = Number(s.todaySpent || 0) + amt;
           store.put(s);
         }
         resolve(true);
       };
       req.onerror = () => resolve(false);
-    } catch (e) { resolve(false); }
+    } catch (e) {
+      resolve(false);
+    }
   });
 }
 
 // ------------------------------------------------------------------------------
-// ⏳ Pending Orders Queue Helpers
+// ⏳ 4. PENDING ORDERS QUEUE HELPERS (OFFLINE COMMIT GUARDIAN)
 // ------------------------------------------------------------------------------
 async function dbSavePendingOrder(order) {
   if (!gIndexedDB || !order || !order.uniqueId) return false;
@@ -234,7 +281,9 @@ async function dbSavePendingOrder(order) {
       store.put(order);
       tx.oncomplete = () => resolve(true);
       tx.onerror = () => resolve(false);
-    } catch (e) { resolve(false); }
+    } catch (e) {
+      resolve(false);
+    }
   });
 }
 
@@ -246,34 +295,40 @@ async function dbGetPendingOrders() {
       const req = tx.objectStore('pending_orders_store').getAll();
       req.onsuccess = () => resolve(req.result || []);
       req.onerror = () => resolve([]);
-    } catch (e) { resolve([]); }
+    } catch (e) {
+      resolve([]);
+    }
   });
 }
 
 async function dbClearPendingOrders() {
-  if (!gIndexedDB) return;
+  if (!gIndexedDB) return false;
   return new Promise((resolve) => {
     try {
       const tx = gIndexedDB.transaction('pending_orders_store', 'readwrite');
       tx.objectStore('pending_orders_store').clear();
       tx.oncomplete = () => resolve(true);
       tx.onerror = () => resolve(false);
-    } catch (e) { resolve(false); }
+    } catch (e) {
+      resolve(false);
+    }
   });
 }
 
 // ------------------------------------------------------------------------------
-// ⚙️ Settings Store Helpers
+// ⚙️ 5. SETTINGS STORE HELPERS
 // ------------------------------------------------------------------------------
 async function dbSaveSetting(key, val) {
-  if (!gIndexedDB || !key) return;
+  if (!gIndexedDB || !key) return false;
   return new Promise((resolve) => {
     try {
       const tx = gIndexedDB.transaction('settings_store', 'readwrite');
-      tx.objectStore('settings_store').put({ settingKey: key, settingValue: String(val) });
+      tx.objectStore('settings_store').put({ settingKey: String(key).trim(), settingValue: String(val) });
       tx.oncomplete = () => resolve(true);
       tx.onerror = () => resolve(false);
-    } catch (e) { resolve(false); }
+    } catch (e) {
+      resolve(false);
+    }
   });
 }
 
@@ -282,14 +337,18 @@ async function dbGetSetting(key) {
   return new Promise((resolve) => {
     try {
       const tx = gIndexedDB.transaction('settings_store', 'readonly');
-      const req = tx.objectStore('settings_store').get(key);
+      const req = tx.objectStore('settings_store').get(String(key).trim());
       req.onsuccess = () => resolve(req.result ? req.result.settingValue : null);
       req.onerror = () => resolve(null);
-    } catch (e) { resolve(null); }
+    } catch (e) {
+      resolve(null);
+    }
   });
 }
 
-// Global Exports
+// ------------------------------------------------------------------------------
+// 🌐 6. WINDOW GLOBAL EXPORTS
+// ------------------------------------------------------------------------------
 window.initCanteenDB = initCanteenDB;
 window.dbSaveItems = dbSaveItems;
 window.dbGetItem = dbGetItem;

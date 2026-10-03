@@ -1,88 +1,143 @@
 /**
  * ==============================================================================
- * GOLDEN ERP - CANTEEN POS TERMINAL & CHECKOUT ENGINE (THEME-ADAPTIVE)
- * File: js/canteen/canteen-pos.js
+ * GOLDEN ERP - CANTEEN POS TERMINAL & CHECKOUT ENGINE
+ * File: js/canteen/canteen-pos.js (Enterprise V9 Full Production Edition)
+ * 💡 Features:
+ *   1. 🕒 Strict MMT (UTC+06:30) Timezone Enforcement for Invoices & Slips
+ *   2. 🌐 Dual-Layer Resilient Scanner (RAM Cache + IndexedDB Fallback)
+ *   3. 🎓 Offline-Aware Student Wallet Radar with Dynamic Daily Cap Protection
+ *   4. ⚡ Offline Queue Commit (Zero Data Loss on Network Drop)
+ *   5. 🎨 100% Theme-Adaptive Cart Renderer (Light & Dark Mode)
+ *   6. 🖨️ 80mm Thermal Receipt Printer with MMT Timestamp
  * ==============================================================================
  */
 
-// 🎯 Payment Mode Switcher
+// 🕒 Pure Non-Recursive MMT Date Helper (UTC+06:30)
+function getMMTDateString(dInput) {
+  if (typeof window.getMMTDateString === 'function') {
+    return window.getMMTDateString(dInput);
+  }
+  const d = dInput ? new Date(dInput) : new Date();
+  const targetMs = isNaN(d.getTime()) ? Date.now() : d.getTime();
+  const mmt = new Date(targetMs + (6.5 * 60 * 60 * 1000));
+  return mmt.toISOString().slice(0, 10);
+}
+
+// ------------------------------------------------------------------------------
+// 🎯 1. PAYMENT MODE CONTROLLER
+// ------------------------------------------------------------------------------
 function setPaymentMode(mode) {
   gPaymentMode = mode;
   const btnWallet = document.getElementById('btn-mode-wallet');
   const btnCash = document.getElementById('btn-mode-cash');
   const radar = document.getElementById('pos-student-radar');
+  const checkoutLabel = document.getElementById('btn-checkout-label');
 
   if (mode === 'Student Pocket Money') {
-    btnWallet.className = "py-1.5 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 bg-indigo-600 text-white shadow-lg shadow-indigo-600/30";
-    btnCash.className = "py-1.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-[var(--text-main)]";
-    radar.classList.remove('opacity-40', 'pointer-events-none');
-    document.getElementById('btn-checkout-label').textContent = "မုန့်ဖိုးဖြင့် ရှင်းမည် (CHECKOUT - F8)";
+    if (btnWallet) {
+      btnWallet.className = "py-1.5 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 bg-indigo-600 text-white shadow-lg shadow-indigo-600/30";
+    }
+    if (btnCash) {
+      btnCash.className = "py-1.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-[var(--text-main)]";
+    }
+    if (radar) {
+      radar.classList.remove('opacity-40', 'pointer-events-none');
+    }
+    if (checkoutLabel) {
+      checkoutLabel.textContent = "မုန့်ဖိုးဖြင့် ရှင်းမည် (CHECKOUT - F8)";
+    }
   } else {
-    btnCash.className = "py-1.5 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 bg-emerald-600 text-white shadow-lg shadow-emerald-600/30";
-    btnWallet.className = "py-1.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-[var(--text-main)]";
-    radar.classList.add('opacity-40', 'pointer-events-none');
-    document.getElementById('btn-checkout-label').textContent = "ငွေသားဖြင့် ရှင်းမည် (CHECKOUT - F8)";
+    if (btnCash) {
+      btnCash.className = "py-1.5 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 bg-emerald-600 text-white shadow-lg shadow-emerald-600/30";
+    }
+    if (btnWallet) {
+      btnWallet.className = "py-1.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-[var(--text-main)]";
+    }
+    if (radar) {
+      radar.classList.add('opacity-40', 'pointer-events-none');
+    }
+    if (checkoutLabel) {
+      checkoutLabel.textContent = "ငွေသားဖြင့် ရှင်းမည် (CHECKOUT - F8)";
+    }
   }
 }
 
-// 🎯 Student Radar Lookup (Online with Offline IndexedDB Fallback)
+// ------------------------------------------------------------------------------
+// 🎓 2. STUDENT POCKET MONEY RADAR (ONLINE WITH OFFLINE DB FALLBACK)
+// ------------------------------------------------------------------------------
 async function lookupStudentRadar() {
   const input = document.getElementById('pos-student-input');
   const val = (input?.value || '').trim();
   if (!val) return;
 
-  // 1. Online Lookup
+  // ၁။ Online Lookup (အင်တာနက် ရှိပါက D1 မှ စစ်ဆေးပြီး IndexedDB သို့ အသစ်ပြန်သိမ်းသည်)
   if (navigator.onLine) {
     try {
       const res = await callApi('lookupStudentForPos', { studentId: val, _t: Date.now() }, 'POST');
       if (res && res.success && res.data) {
         gCurrentStudent = res.data;
-        if (res.data.dailyCap) gDailySpendingCap = Number(res.data.dailyCap);
-        
-        await dbSaveStudents([res.data]);
-        
+        if (res.data.dailyCap) {
+          gDailySpendingCap = Number(res.data.dailyCap);
+        }
+        if (typeof dbSaveStudents === 'function') {
+          await dbSaveStudents([res.data]);
+        }
         renderStudentCard();
         showToast("SUCCESS", `ကျောင်းသား: ${gCurrentStudent.name}`);
         focusScanner();
         return;
       }
     } catch (err) {
-      console.warn("[StudentRadar] Online lookup failed, trying offline fallback...", err.message);
+      console.warn("[StudentRadar] Online lookup failed, trying offline DB fallback...", err.message);
     }
   }
 
-  // 2. Offline Fallback from IndexedDB
-  const offlineStu = await dbGetStudent(val);
-  if (offlineStu) {
-    gCurrentStudent = {
-      studentId: offlineStu.studentId,
-      name: offlineStu.name,
-      studentClass: offlineStu.studentClass,
-      fyid: offlineStu.fyid,
-      currentBalance: offlineStu.currentBalance,
-      todaySpent: offlineStu.todaySpent || 0,
-      dailyCap: gDailySpendingCap || 10000
-    };
-    renderStudentCard();
-    showToast("SUCCESS", `ကျောင်းသား (Offline): ${gCurrentStudent.name}`);
-    focusScanner();
-  } else {
-    gCurrentStudent = null;
-    resetStudentCard();
-    showToast("ERROR", "ကျောင်းသား ရှာမတွေ့ပါ။ (Offline Database တွင်လည်း မရှိပါ)");
+  // ၂။ Offline Fallback (အင်တာနက် မရှိပါက သို့မဟုတ် Network Error တက်ပါက IndexedDB မှ ချက်ချင်းဆွဲထုတ်သည်)
+  if (typeof dbGetStudent === 'function') {
+    const offlineStu = await dbGetStudent(val);
+    if (offlineStu) {
+      gCurrentStudent = {
+        studentId: offlineStu.studentId,
+        name: offlineStu.name,
+        studentClass: offlineStu.studentClass,
+        fyid: offlineStu.fyid,
+        currentBalance: Number(offlineStu.currentBalance || 0),
+        todaySpent: Number(offlineStu.todaySpent || 0),
+        dailyCap: gDailySpendingCap || 10000
+      };
+      renderStudentCard();
+      showToast("SUCCESS", `ကျောင်းသား (Offline): ${gCurrentStudent.name}`);
+      focusScanner();
+      return;
+    }
   }
+
+  gCurrentStudent = null;
+  resetStudentCard();
+  showToast("ERROR", "ကျောင်းသား ရှာမတွေ့ပါ။ (Offline စက်တွင်းစာရင်းတွင်လည်း မရှိပါ)");
 }
 
 function renderStudentCard() {
   if (!gCurrentStudent) return resetStudentCard();
   const cap = gDailySpendingCap || gCurrentStudent.dailyCap || 10000;
 
-  document.getElementById('radar-student-name').textContent = gCurrentStudent.name;
-  document.getElementById('radar-student-info').textContent = `Class: ${gCurrentStudent.studentClass || '-'} | FYID: ${gCurrentStudent.fyid || '-'}`;
-  document.getElementById('radar-wallet-bal').textContent = `${Number(gCurrentStudent.currentBalance).toLocaleString()} MMK`;
-  document.getElementById('radar-today-spent').textContent = `${Number(gCurrentStudent.todaySpent).toLocaleString()} / ${Number(cap).toLocaleString()}`;
-  document.getElementById('radar-badge-status').textContent = "ACTIVE WALLET";
-  document.getElementById('radar-badge-status').className = "px-2 py-0.5 rounded text-[9px] font-black bg-indigo-500/20 text-indigo-500 dark:text-indigo-300 border border-indigo-500/30 font-mono";
+  const elName = document.getElementById('radar-student-name');
+  if (elName) elName.textContent = gCurrentStudent.name || '-';
+
+  const elInfo = document.getElementById('radar-student-info');
+  if (elInfo) elInfo.textContent = `Class: ${gCurrentStudent.studentClass || '-'} | FYID: ${gCurrentStudent.fyid || '-'}`;
+
+  const elBal = document.getElementById('radar-wallet-bal');
+  if (elBal) elBal.textContent = `${Number(gCurrentStudent.currentBalance || 0).toLocaleString()} MMK`;
+
+  const elSpent = document.getElementById('radar-today-spent');
+  if (elSpent) elSpent.textContent = `${Number(gCurrentStudent.todaySpent || 0).toLocaleString()} / ${Number(cap).toLocaleString()}`;
+
+  const elBadge = document.getElementById('radar-badge-status');
+  if (elBadge) {
+    elBadge.textContent = "ACTIVE WALLET";
+    elBadge.className = "px-2 py-0.5 rounded text-[9px] font-black bg-indigo-500/20 text-indigo-500 dark:text-indigo-300 border border-indigo-500/30 font-mono";
+  }
 
   const capHeader = document.getElementById('radar-cap-header');
   if (capHeader) capHeader.textContent = `DAILY ${Number(cap).toLocaleString()} MMK CAP:`;
@@ -92,43 +147,66 @@ function renderStudentCard() {
 
 function resetStudentCard() {
   const cap = gDailySpendingCap || 10000;
-  document.getElementById('radar-student-name').textContent = "ကျောင်းသား ရွေးချယ်ပါ";
-  document.getElementById('radar-student-info').textContent = "Class: - | ID: -";
-  document.getElementById('radar-wallet-bal').textContent = "0 MMK";
-  document.getElementById('radar-today-spent').textContent = `0 / ${Number(cap).toLocaleString()}`;
-  document.getElementById('radar-cap-text').textContent = `ကျန်ခွဲတမ်း: ${Number(cap).toLocaleString()} MMK`;
-  document.getElementById('radar-progress-bar').style.width = "0%";
-  document.getElementById('radar-progress-bar').className = "h-full bg-emerald-500";
-  document.getElementById('radar-badge-status').textContent = "STANDBY";
-  document.getElementById('radar-badge-status').className = "px-2 py-0.5 rounded text-[9px] font-black bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700 font-mono";
+
+  const elName = document.getElementById('radar-student-name');
+  if (elName) elName.textContent = "ကျောင်းသား ရွေးချယ်ပါ";
+
+  const elInfo = document.getElementById('radar-student-info');
+  if (elInfo) elInfo.textContent = "Class: - | ID: -";
+
+  const elBal = document.getElementById('radar-wallet-bal');
+  if (elBal) elBal.textContent = "0 MMK";
+
+  const elSpent = document.getElementById('radar-today-spent');
+  if (elSpent) elSpent.textContent = `0 / ${Number(cap).toLocaleString()}`;
+
+  const elCapText = document.getElementById('radar-cap-text');
+  if (elCapText) elCapText.textContent = `ကျန်ခွဲတမ်း: ${Number(cap).toLocaleString()} MMK`;
+
+  const pBar = document.getElementById('radar-progress-bar');
+  if (pBar) {
+    pBar.style.width = "0%";
+    pBar.className = "h-full bg-emerald-500";
+  }
+
+  const elBadge = document.getElementById('radar-badge-status');
+  if (elBadge) {
+    elBadge.textContent = "STANDBY";
+    elBadge.className = "px-2 py-0.5 rounded text-[9px] font-black bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700 font-mono";
+  }
 }
 
 function evaluateStudentCapWarning(currentBillAmount) {
   if (!gCurrentStudent || gPaymentMode !== 'Student Pocket Money') return;
 
-  const spent = gCurrentStudent.todaySpent || 0;
-  const cap = gDailySpendingCap || gCurrentStudent.dailyCap || 10000;
+  const spent = Number(gCurrentStudent.todaySpent || 0);
+  const cap = Number(gDailySpendingCap || gCurrentStudent.dailyCap || 10000);
   const combined = spent + currentBillAmount;
   const percentage = Math.min(100, (combined / cap) * 100);
   const remainingQuota = Math.max(0, cap - spent);
 
   const pBar = document.getElementById('radar-progress-bar');
   const capText = document.getElementById('radar-cap-text');
-  pBar.style.width = `${percentage}%`;
+
+  if (pBar) {
+    pBar.style.width = `${percentage}%`;
+  }
 
   if (combined > cap) {
-    pBar.className = "h-full bg-rose-500 animate-pulse";
-    capText.innerHTML = `<span class="text-rose-500 font-black">ကန့်သတ်ချက် ကျော်လွန်နေပါသည်! (ကျန်: ${remainingQuota.toLocaleString()} MMK)</span>`;
+    if (pBar) pBar.className = "h-full bg-rose-500 animate-pulse";
+    if (capText) capText.innerHTML = `<span class="text-rose-500 font-black">ကန့်သတ်ချက် ကျော်လွန်နေပါသည်! (ကျန်: ${remainingQuota.toLocaleString()} MMK)</span>`;
   } else if (percentage >= 80) {
-    pBar.className = "h-full bg-amber-500";
-    capText.textContent = `ကျန်ခွဲတမ်း: ${(cap - combined).toLocaleString()} MMK`;
+    if (pBar) pBar.className = "h-full bg-amber-500";
+    if (capText) capText.textContent = `ကျန်ခွဲတမ်း: ${(cap - combined).toLocaleString()} MMK`;
   } else {
-    pBar.className = "h-full bg-emerald-500";
-    capText.textContent = `ကျန်ခွဲတမ်း: ${(cap - combined).toLocaleString()} MMK`;
+    if (pBar) pBar.className = "h-full bg-emerald-500";
+    if (capText) capText.textContent = `ကျန်ခွဲတမ်း: ${(cap - combined).toLocaleString()} MMK`;
   }
 }
 
-// 🎯 Barcode Scanner & Search Matching
+// ------------------------------------------------------------------------------
+// 📦 3. RESILIENT BARCODE SCANNER (RAM + INDEXED-DB DUAL-LAYER LOOKUP)
+// ------------------------------------------------------------------------------
 function handleBarcodeInput(e) {
   const val = e.target.value.trim();
   const dropdown = document.getElementById('pos-search-dropdown');
@@ -141,54 +219,93 @@ function handleBarcodeInput(e) {
 
   if (val.length >= 2) {
     const matches = gItemsCache.filter(it => 
-      it.itemName.toLowerCase().includes(val.toLowerCase()) || 
-      it.barcode.toLowerCase().includes(val.toLowerCase())
+      String(it.itemName || '').toLowerCase().includes(val.toLowerCase()) || 
+      String(it.barcode || '').toLowerCase().includes(val.toLowerCase())
     );
 
-    if (matches.length > 0) {
+    if (matches.length > 0 && dropdown) {
       dropdown.innerHTML = matches.map(m => `
         <div onclick="selectDropdownItem('${escAttr(m.barcode)}')" class="p-2.5 hover:bg-slate-500/10 cursor-pointer border-b border-[var(--border-color)] flex items-center justify-between text-xs transition">
           <div>
             <span class="font-bold">${esc(m.itemName)}</span>
             <span class="text-[10px] font-mono text-slate-400 block">${esc(m.barcode)}</span>
           </div>
-          <span class="font-mono font-bold text-emerald-500">${Number(m.sellingPrice).toLocaleString()} MMK</span>
+          <span class="font-mono font-bold text-emerald-500">${Number(m.sellingPrice || 0).toLocaleString()} MMK</span>
         </div>
       `).join('');
       dropdown.classList.remove('hidden');
-    } else {
+    } else if (dropdown) {
       dropdown.classList.add('hidden');
     }
-  } else {
+  } else if (dropdown) {
     dropdown.classList.add('hidden');
   }
 }
 
 function selectDropdownItem(barcode) {
-  document.getElementById('pos-search-dropdown')?.classList.add('hidden');
+  const dropdown = document.getElementById('pos-search-dropdown');
+  if (dropdown) dropdown.classList.add('hidden');
   searchAndAddItem(barcode);
 }
 
-function searchAndAddItem(targetCode) {
+async function searchAndAddItem(targetCode) {
   const input = document.getElementById('pos-barcode-input');
-  const code = (targetCode || input.value || '').trim();
+  const code = (targetCode || input?.value || '').trim();
   if (!code) return;
 
-  const item = gItemsCache.find(it => it.barcode === code || it.itemName.toLowerCase() === code.toLowerCase());
+  // အဆင့် ၁။ RAM Cache အလွတ်ဖြစ်နေပါက စက်တွင်း IndexedDB မှ ချက်ချင်းဆွဲတင်သည်
+  if (!gItemsCache || gItemsCache.length === 0) {
+    if (typeof dbGetAllItems === 'function') {
+      gItemsCache = await dbGetAllItems();
+    }
+    if ((!gItemsCache || gItemsCache.length === 0) && typeof loadItemsCatalog === 'function') {
+      await loadItemsCatalog(false);
+    }
+  }
+
+  const codeLower = code.toLowerCase();
+
+  // အဆင့် ၂။ Barcode တိုက်ရိုက်တိုက်စစ်ခြင်း
+  let item = gItemsCache.find(it => 
+    String(it.barcode || '').trim().toLowerCase() === codeLower
+  );
+
+  // အဆင့် ၃။ Barcode ဖြင့် မတွေ့ပါက ပစ္စည်းအမည်ဖြင့် တိုက်စစ်ခြင်း
+  if (!item) {
+    item = gItemsCache.find(it => 
+      String(it.itemName || '').trim().toLowerCase() === codeLower
+    ) || gItemsCache.find(it => 
+      String(it.itemName || '').trim().toLowerCase().includes(codeLower)
+    );
+  }
+
+  // အဆင့် ၄။ Memory တွင် မတွေ့ပါက စက်တွင်း IndexedDB သို့ တိုက်ရိုက်ဆင်းရှာခြင်း (Offline Resilience)
+  if (!item && typeof dbGetItem === 'function') {
+    const dbItem = await dbGetItem(code);
+    if (dbItem) {
+      item = dbItem;
+      if (!gItemsCache.some(ci => ci.barcode === item.barcode)) {
+        gItemsCache.push(item);
+      }
+    }
+  }
+
   if (!item) {
     showToast("ERROR", `ပစ္စည်း ရှာမတွေ့ပါ: ${code}`);
     return;
   }
 
   const existing = gCart.find(ci => ci.barcode === item.barcode);
+  const currentStock = Number(item.currentStock || 0);
+
   if (existing) {
-    if (item.currentStock > 0 && existing.qty + 1 > item.currentStock) {
-      showToast("ERROR", `လက်ကျန် Stock (${item.currentStock}) သာ ရှိသဖြင့် ထပ်တိုး၍ မရပါ!`);
+    if (currentStock > 0 && (existing.qty + 1) > currentStock) {
+      showToast("ERROR", `လက်ကျန် Stock (${currentStock}) သာ ရှိသဖြင့် ထပ်တိုး၍ မရပါ!`);
       return;
     }
     existing.qty += 1;
   } else {
-    if (item.currentStock <= 0) {
+    if (currentStock <= 0) {
       showToast("ERROR", `ဤပစ္စည်းတွင် လက်ကျန် Stock (0) ဖြစ်နေပါသည်။`);
       return;
     }
@@ -197,27 +314,33 @@ function searchAndAddItem(targetCode) {
       name: item.itemName,
       price: Number(item.sellingPrice || 0),
       cost: Number(item.costPrice || 0),
-      maxStock: Number(item.currentStock || 9999),
+      maxStock: currentStock || 9999,
       qty: 1
     });
   }
 
-  input.value = '';
-  document.getElementById('pos-search-dropdown')?.classList.add('hidden');
+  if (input) input.value = '';
+  const dropdown = document.getElementById('pos-search-dropdown');
+  if (dropdown) dropdown.classList.add('hidden');
+
   renderCart();
   focusScanner();
 }
 
-// 🎯 FIX: Light Mode & Dark Mode အပြည့်အစုံ ကိုက်ညီသော Cart Items Renderer (အမဲရောင်ဖြစ်နေမှု ဖြေရှင်းချက်)
+// ------------------------------------------------------------------------------
+// 🛒 4. THEME-ADAPTIVE CART RENDERER & BILL CALCULATIONS
+// ------------------------------------------------------------------------------
 function renderCart() {
   const list = document.getElementById('pos-cart-list');
   const emptyBox = document.getElementById('pos-cart-empty');
   const badge = document.getElementById('pos-cart-badge');
 
+  if (!list) return;
+
   if (gCart.length === 0) {
     list.innerHTML = '';
     if (emptyBox) list.appendChild(emptyBox);
-    badge.textContent = "0 Items";
+    if (badge) badge.textContent = "0 Items";
     updateBillTotals();
     return;
   }
@@ -246,7 +369,7 @@ function renderCart() {
     `;
   });
 
-  badge.textContent = `${gCart.length} Items`;
+  if (badge) badge.textContent = `${gCart.length} Items`;
   updateBillTotals();
 }
 
@@ -291,13 +414,26 @@ function updateBillTotals() {
 
   const netProfit = Math.max(0, totAmt - totCost);
 
-  document.getElementById('pos-cart-total-qty').textContent = totQty;
-  document.getElementById('pos-cart-subtotal').textContent = `${totAmt.toLocaleString()} MMK`;
-  document.getElementById('sum-qty').textContent = totQty;
-  document.getElementById('sum-cost').textContent = `${totCost.toLocaleString()} MMK`;
-  document.getElementById('sum-profit').textContent = `+${netProfit.toLocaleString()} MMK`;
-  document.getElementById('pos-grand-total').innerHTML = `${totAmt.toLocaleString()} <span class="text-sm font-bold">MMK</span>`;
-  document.getElementById('pos-items-count-label').textContent = `${totQty} items in cart`;
+  const elCartQty = document.getElementById('pos-cart-total-qty');
+  if (elCartQty) elCartQty.textContent = totQty;
+
+  const elCartSub = document.getElementById('pos-cart-subtotal');
+  if (elCartSub) elCartSub.textContent = `${totAmt.toLocaleString()} MMK`;
+
+  const elSumQty = document.getElementById('sum-qty');
+  if (elSumQty) elSumQty.textContent = totQty;
+
+  const elSumCost = document.getElementById('sum-cost');
+  if (elSumCost) elSumCost.textContent = `${totCost.toLocaleString()} MMK`;
+
+  const elSumProfit = document.getElementById('sum-profit');
+  if (elSumProfit) elSumProfit.textContent = `+${netProfit.toLocaleString()} MMK`;
+
+  const elGrandTotal = document.getElementById('pos-grand-total');
+  if (elGrandTotal) elGrandTotal.innerHTML = `${totAmt.toLocaleString()} <span class="text-sm font-bold">MMK</span>`;
+
+  const elCountLabel = document.getElementById('pos-items-count-label');
+  if (elCountLabel) elCountLabel.textContent = `${totQty} items in cart`;
 
   evaluateStudentCapWarning(totAmt);
 }
@@ -308,7 +444,9 @@ function getCartTotalAmount() {
   return tot;
 }
 
-// 🎯 Checkout Engine
+// ------------------------------------------------------------------------------
+// ⚡ 5. CHECKOUT EXECUTION (ONLINE WITH OFFLINE PENDING QUEUE COMMIT)
+// ------------------------------------------------------------------------------
 async function executeCheckout() {
   if (isSubmitting) return;
   if (gCart.length === 0) return showToast("ERROR", "Cart ထဲတွင် ပစ္စည်းများ မရှိသေးပါ!");
@@ -326,7 +464,7 @@ async function executeCheckout() {
 
   const itemsSummary = itemsListText.join(', ');
 
-  // Wallet Validation
+  // Wallet Validation & Daily Allowance Cap Protection
   if (gPaymentMode === 'Student Pocket Money') {
     if (!gCurrentStudent) return showToast("ERROR", "မုန့်ဖိုးဖြတ်တောက်ရန် ကျောင်းသား ID Scan အရင်ဖတ်ပေးပါ!");
 
@@ -334,15 +472,16 @@ async function executeCheckout() {
       return showToast("ERROR", `ကျောင်းသားတွင် မုန့်ဖိုး (${gCurrentStudent.currentBalance.toLocaleString()} MMK) သာ ကျန်သဖြင့် မလုံလောက်ပါ!`);
     }
 
-    const spent = gCurrentStudent.todaySpent || 0;
-    const cap = gDailySpendingCap || gCurrentStudent.dailyCap || 10000;
+    const spent = Number(gCurrentStudent.todaySpent || 0);
+    const cap = Number(gDailySpendingCap || gCurrentStudent.dailyCap || 10000);
     if ((spent + totalAmount) > cap) {
       const remaining = Math.max(0, cap - spent);
       return showToast("ERROR", `တစ်ရက် ${Number(cap).toLocaleString()} ကျပ် ကန့်သတ်ချက် ကျော်လွန်နေပါသည်! (ကျန်ခွဲတမ်း: ${remaining.toLocaleString()} MMK)`);
     }
   }
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // 🕒 Strict MMT Date Formatting
+  const todayStr = getMMTDateString();
   const rawUniqueId = 'CAN_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
   const invoiceNo = `INV-${todayStr.replace(/-/g, '')}-${rawUniqueId.slice(-4).toUpperCase()}`;
 
@@ -369,6 +508,7 @@ async function executeCheckout() {
   try {
     let orderSuccess = false;
 
+    // အဆင့် ၁။ Online တင်ပို့နိုင်ပါက D1 သို့ တိုက်ရိုက်ပို့သည်
     if (navigator.onLine) {
       try {
         const res = await callApi('checkoutPosSale', payload);
@@ -384,31 +524,42 @@ async function executeCheckout() {
       }
     }
 
+    // အဆင့် ၂။ Offline ဖြစ်နေပါက စက်တွင်း IndexedDB Pending Queue သို့ လုံခြုံစွာ သိမ်းဆည်းသည်
     if (!orderSuccess) {
       payload.uniqueId = `OFF_${rawUniqueId}`;
       payload.isOffline = true;
       payload.created_at = new Date().toISOString();
 
-      await dbSavePendingOrder(payload);
+      if (typeof dbSavePendingOrder === 'function') {
+        await dbSavePendingOrder(payload);
+      }
 
-      if (gPaymentMode === 'Student Pocket Money' && gCurrentStudent) {
+      if (gPaymentMode === 'Student Pocket Money' && gCurrentStudent && typeof dbDeductStudentWallet === 'function') {
         await dbDeductStudentWallet(gCurrentStudent.studentId, totalAmount);
       }
 
       showToast("SUCCESS", `အရောင်း မှတ်တမ်းတင်ပြီးပါပြီ (Offline Pending: ${invoiceNo})`);
-      await updatePendingBadgeCount();
+      if (typeof updatePendingBadgeCount === 'function') {
+        await updatePendingBadgeCount();
+      }
     }
 
+    // အဆင့် ၃။ စတော့များကို RAM Cache နှင့် IndexedDB နှစ်ခုစလုံးမှ အလိုအလျောက် နုတ်ယူညှိနှိုင်းသည်
     for (const sd of stockDeductions) {
       const item = gItemsCache.find(it => it.barcode === sd.barcode);
-      if (item) item.currentStock = Math.max(0, Number(item.currentStock || 0) - sd.qty);
-      await dbUpdateItemStock(sd.barcode, sd.qty);
+      if (item) {
+        item.currentStock = Math.max(0, Number(item.currentStock || 0) - sd.qty);
+      }
+      if (typeof dbUpdateItemStock === 'function') {
+        await dbUpdateItemStock(sd.barcode, sd.qty);
+      }
     }
 
     gCart = [];
     gCurrentStudent = null;
     const stuInp = document.getElementById('pos-student-input');
     if (stuInp) stuInp.value = '';
+
     resetStudentCard();
     renderCart();
 
@@ -421,8 +572,11 @@ async function executeCheckout() {
   }
 }
 
+// ------------------------------------------------------------------------------
+// 🖨️ 6. POS THERMAL RECEIPT PRINTER (STRICT MMT DATE)
+// ------------------------------------------------------------------------------
 function printPosReceipt(invoiceNo, totalAmt, itemsSummary, method, student) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getMMTDateString();
   const cashierName = gSession?.name || 'Cashier';
 
   const studentInfoRow = student 
@@ -472,7 +626,9 @@ function printPosReceipt(invoiceNo, totalAmt, itemsSummary, method, student) {
   setTimeout(() => { w.focus(); w.print(); w.close(); }, 350);
 }
 
-// Global Exports
+// ------------------------------------------------------------------------------
+// 🌐 7. WINDOW GLOBAL EXPORTS
+// ------------------------------------------------------------------------------
 window.setPaymentMode = setPaymentMode;
 window.lookupStudentRadar = lookupStudentRadar;
 window.handleBarcodeInput = handleBarcodeInput;

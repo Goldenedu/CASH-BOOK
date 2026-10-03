@@ -1,11 +1,44 @@
 /**
  * ==============================================================================
  * GOLDEN ERP - CANTEEN GLOBAL STATE & NETWORK CONTROLLER
- * File: js/canteen/canteen-state.js
+ * File: js/canteen/canteen-state.js (Enterprise V9 Full Production Edition)
+ * 💡 Features:
+ *   1. 🕒 Strict MMT (UTC+06:30) Timezone Global Helper
+ *   2. 🛡️ Robust Role Normalizer (Case-Insensitive & Whitespace Safe)
+ *   3. ⚡ Quota-Shield: IndexedDB Pre-caching on App Startup (Zero D1 Waste)
+ *   4. 🔄 Universal Robust Async Refresh Engine for All Tab Views
+ *   5. ⌨️ Global POS Hardware Hotkeys (F2, F4, F8, Esc)
+ *   6. 🌐 Real-time Network Monitoring & Background Auto-Sync Trigger
  * ==============================================================================
  */
 
-// 🎯 Global Application Variables
+// ------------------------------------------------------------------------------
+// 🕒 1. STRICT MYANMAR STANDARD TIME ENGINE (MMT UTC+06:30)
+// ------------------------------------------------------------------------------
+function getMMTDateString(dInput) {
+  if (dInput && typeof dInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dInput.trim())) {
+    return dInput.trim();
+  }
+  const d = dInput ? new Date(dInput) : new Date();
+  const targetMs = isNaN(d.getTime()) ? Date.now() : d.getTime();
+  // Myanmar is strictly UTC + 6 hours 30 minutes (23,400,000 ms)
+  const mmt = new Date(targetMs + (6.5 * 60 * 60 * 1000));
+  return mmt.toISOString().slice(0, 10);
+}
+window.getMMTDateString = getMMTDateString;
+
+// ------------------------------------------------------------------------------
+// 🛡️ 2. SAFE ROLE NORMALIZATION HELPER
+// ------------------------------------------------------------------------------
+function getNormalizedRole() {
+  const rawRole = String(gSession?.role || localStorage.getItem('golden_user_role') || 'Cashier').trim();
+  return rawRole.toLowerCase().replace(/[\s_-]/g, '');
+}
+window.getNormalizedRole = getNormalizedRole;
+
+// ------------------------------------------------------------------------------
+// 🎯 3. GLOBAL APPLICATION STATE & MEMORY CACHES
+// ------------------------------------------------------------------------------
 var gSession = null;
 var gActiveView = 'pos';
 var gItemsCache = [];
@@ -14,16 +47,16 @@ var gStockInventoryData = [];
 var gPurchasesData = [];
 var gSalesOrdersData = [];
 var gWasteData = [];
-var gSurplusData = [];      // 🎯 Cached Surplus Records
+var gSurplusData = [];
 var gCart = [];
 var gWasteCart = [];
-var gSurplusCart = [];    // 🎯 In-Memory Surplus Cart
+var gSurplusCart = [];
 var gCurrentStudent = null;
 var gPaymentMode = 'Student Pocket Money';
 var gDailySpendingCap = 10000;
 var isSubmitting = false;
 
-// Pagination Variables (20 Rows Per Page)
+// 📄 Pagination Variables (20 Rows Per Page)
 var gStockPage = 1, gStockLimit = 20, gStockTotalRows = 0, gStockSearchTimeout = null;
 var gPurchasesPage = 1, gPurchasesLimit = 20, gPurchasesTotalRows = 0, gPurSearchTimeout = null;
 var gSalesPage = 1, gSalesLimit = 20, gSalesTotalRows = 0, gSalesSearchTimeout = null;
@@ -33,6 +66,9 @@ var gSurplusPage = 1, gSurplusLimit = 20, gSurplusTotalRows = 0, gSurplusSearchT
 const esc = window.escapeHtml || (s => s ? String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : '');
 const escAttr = window.escapeJsAttr || (s => s ? String(s).replace(/'/g, "\\'") : '');
 
+// ------------------------------------------------------------------------------
+// 🚀 4. DOM READY & APPLICATION BOOTSTRAP
+// ------------------------------------------------------------------------------
 window.addEventListener('DOMContentLoaded', async () => {
   const userStr = localStorage.getItem('golden_user') || localStorage.getItem('user');
   const token = localStorage.getItem('golden_auth_token') || localStorage.getItem('token');
@@ -43,41 +79,65 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   gSession = JSON.parse(userStr);
-  const role = (gSession.role || 'Cashier').trim();
+  const rawRole = String(gSession.role || 'Cashier').trim();
+  const role = getNormalizedRole();
 
   const roleBadge = document.getElementById('pos-role-badge');
-  if (roleBadge) roleBadge.textContent = role.toUpperCase();
+  if (roleBadge) roleBadge.textContent = rawRole.toUpperCase();
   const sideRole = document.getElementById('side-user-role');
-  if (sideRole) sideRole.textContent = role.toUpperCase();
+  if (sideRole) sideRole.textContent = rawRole.toUpperCase();
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // 🕒 Strict MMT Today String Injection
+  const todayStr = getMMTDateString();
   const dateEl = document.getElementById('pos-today-date');
-  if (dateEl) dateEl.textContent = todayStr;
+  if (dateEl) dateEl.textContent = `MMT ${todayStr}`;
   const sideDateEl = document.getElementById('side-today-date');
-  if (sideDateEl) sideDateEl.textContent = todayStr;
+  if (sideDateEl) sideDateEl.textContent = `MMT ${todayStr}`;
 
+  // စက်တွင်း IndexedDB နှင့် Network Monitor စတင်ခြင်း
   await initCanteenDB();
   initNetworkMonitor();
 
-  // Counter Role Isolation
-  if (role.startsWith('counter')) {
-    document.getElementById('canteen-sidebar')?.classList.add('hidden');
-    document.getElementById('btn-toggle-sidebar')?.classList.add('hidden');
-    document.getElementById('btn-admin-stock')?.classList.add('hidden');
-    document.getElementById('btn-header-waste')?.classList.add('hidden');
-    document.getElementById('btn-header-surplus')?.classList.add('hidden');
-    document.getElementById('btn-header-close-day')?.classList.add('hidden');
+  // 🛡️ ROLE-BASED WORKSPACE ROUTING
+  const html = document.documentElement;
+  const isCounter = role.includes('counter');
+  const isCashier = role === 'canteencashier' || role === 'cashier';
+  const isAdmin = role === 'canteenadmin' || role === 'admin' || role === 'owner';
+
+  if (isCounter) {
+    html.classList.add('role-counter');
+    html.classList.remove('role-cashier', 'role-admin');
+    
+    // Counter Isolation: Terminal သီးသန့် အသုံးပြုစေရန် Sidebar နှင့် Buttons များ ပိတ်ခြင်း
+    const sidebar = document.getElementById('canteen-sidebar');
+    if (sidebar) sidebar.style.display = 'none';
+    const toggleBtn = document.getElementById('btn-toggle-sidebar');
+    if (toggleBtn) toggleBtn.style.display = 'none';
+    ['btn-admin-stock', 'btn-header-waste', 'btn-header-surplus', 'btn-header-close-day'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
     switchCanteenView('pos');
-  } else if (role === 'canteen_cashier') {
-    document.getElementById('btn-side-settings')?.classList.add('hidden');
+
+  } else if (isCashier) {
+    html.classList.add('role-cashier');
+    html.classList.remove('role-counter', 'role-admin');
+    
+    // Cashier: မုန့်ဖိုးကန့်သတ်ငွေ ဆက်တင်ခလုတ်တစ်ခုတည်းကိုသာ ဖျောက်ထားသည်
+    const btnSettings = document.getElementById('btn-side-settings');
+    if (btnSettings) btnSettings.style.display = 'none';
+    
     switchCanteenView('pos');
+
   } else {
+    html.classList.add('role-admin');
+    html.classList.remove('role-counter', 'role-cashier');
     switchCanteenView('dashboard');
   }
 
   window.addEventListener('keydown', handleGlobalHotkeys);
 
-  // Close Dropdowns on outside click
+  // Dropdown များ အပြင်ဘက် နှိပ်ပါက ပိတ်သိမ်းခြင်း
   document.addEventListener('click', (e) => {
     const barcodeInput = document.getElementById('pos-barcode-input');
     const dropdown = document.getElementById('pos-search-dropdown');
@@ -98,6 +158,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  // ⚡ D1 QUOTA-SHIELD: အကောင့်စတင်ဝင်ရောက်ချိန်တွင် စက်တွင်း IndexedDB သို့ ကြိုတင် Preload ပြုလုပ်ခြင်း
   await Promise.all([
     loadItemsCatalog(false),
     loadSuppliersList(),
@@ -109,7 +170,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   focusScanner();
 });
 
-// ☀️ / 🌙 Dual-Theme Switcher Engine
+// ------------------------------------------------------------------------------
+// 🎨 5. THEME CONTROLLER (LIGHT / DARK DUAL-ENGINE)
+// ------------------------------------------------------------------------------
 function toggleCanteenTheme() {
   const html = document.documentElement;
   const isDark = html.classList.contains('dark');
@@ -126,6 +189,9 @@ function toggleCanteenTheme() {
   }
 }
 
+// ------------------------------------------------------------------------------
+// 🌐 6. REAL-TIME NETWORK MONITOR & AUTO-SYNC
+// ------------------------------------------------------------------------------
 function initNetworkMonitor() {
   const updateStatus = () => {
     const el = document.getElementById('pos-network-status');
@@ -144,7 +210,9 @@ function initNetworkMonitor() {
   window.addEventListener('online', async () => {
     updateStatus();
     showToast("SUCCESS", "အင်တာနက်လိုင်း ပြန်လည်ရရှိပါပြီ။ အော့ဖ်လိုင်းအရောင်းများ Sync လုပ်ပါမည်။");
-    if (typeof autoSyncPendingOrders === 'function') await autoSyncPendingOrders();
+    if (typeof autoSyncPendingOrders === 'function') {
+      await autoSyncPendingOrders();
+    }
   });
 
   window.addEventListener('offline', () => {
@@ -159,7 +227,7 @@ async function cacheStudentDirectoryForOffline() {
   if (!navigator.onLine) return;
   try {
     const res = await callApi('getPosStudentsSnapshot', { _t: Date.now() }, 'POST');
-    if (res && res.success && Array.isArray(res.data)) {
+    if (res && res.success && Array.isArray(res.data) && typeof dbSaveStudents === 'function') {
       await dbSaveStudents(res.data);
     }
   } catch (e) {
@@ -169,7 +237,7 @@ async function cacheStudentDirectoryForOffline() {
 
 async function updatePendingBadgeCount() {
   const badge = document.getElementById('pending-count');
-  if (!badge) return;
+  if (!badge || typeof dbGetPendingOrders !== 'function') return;
   const pendingOrders = await dbGetPendingOrders();
   badge.textContent = pendingOrders.length;
 
@@ -183,6 +251,9 @@ async function updatePendingBadgeCount() {
   }
 }
 
+// ------------------------------------------------------------------------------
+// 🧭 7. WORKSPACE VIEW SWITCHER
+// ------------------------------------------------------------------------------
 function switchCanteenView(viewName) {
   gActiveView = viewName;
   const views = ['dashboard', 'pos', 'sales', 'stock', 'purchases', 'waste', 'surplus'];
@@ -224,26 +295,41 @@ function switchCanteenView(viewName) {
   else if (viewName === 'pos') focusScanner();
 }
 
-function refreshActiveCanteenView() {
+// ------------------------------------------------------------------------------
+// 🔄 8. UNIVERSAL ROBUST ASYNC REFRESH ENGINE
+// ------------------------------------------------------------------------------
+async function refreshActiveCanteenView() {
   const refreshBtn = document.getElementById('btn-global-refresh');
   if (refreshBtn) refreshBtn.classList.add('animate-spin');
 
   try {
-    if (gActiveView === 'dashboard') loadCanteenDashboard();
-    else if (gActiveView === 'sales') loadSalesOrdersHistory(gSalesPage);
-    else if (gActiveView === 'stock') loadStockInventory(gStockPage);
-    else if (gActiveView === 'purchases') loadPurchasesHistory(gPurchasesPage);
-    else if (gActiveView === 'waste') loadWasteHistory(gWastePage);
-    else if (gActiveView === 'surplus') loadSurplusHistory(gSurplusPage);
-    else if (gActiveView === 'pos') {
-      loadItemsCatalog(true);
-      cacheStudentDirectoryForOffline();
+    if (gActiveView === 'dashboard' && typeof loadCanteenDashboard === 'function') {
+      await loadCanteenDashboard();
+    } else if (gActiveView === 'sales' && typeof loadSalesOrdersHistory === 'function') {
+      await loadSalesOrdersHistory(gSalesPage);
+    } else if (gActiveView === 'stock' && typeof loadStockInventory === 'function') {
+      await loadStockInventory(gStockPage);
+    } else if (gActiveView === 'purchases' && typeof loadPurchasesHistory === 'function') {
+      await loadPurchasesHistory(gPurchasesPage);
+    } else if (gActiveView === 'waste' && typeof loadWasteHistory === 'function') {
+      await loadWasteHistory(gWastePage);
+    } else if (gActiveView === 'surplus' && typeof loadSurplusHistory === 'function') {
+      await loadSurplusHistory(gSurplusPage);
+    } else if (gActiveView === 'pos') {
+      if (typeof loadItemsCatalog === 'function') await loadItemsCatalog(true);
+      await cacheStudentDirectoryForOffline();
     }
+    showToast("SUCCESS", "အချက်အလက်များ အသစ်ရယူပြီးပါပြီ။");
+  } catch (err) {
+    showToast("ERROR", "Refresh အမှား: " + err.message);
   } finally {
     if (refreshBtn) refreshBtn.classList.remove('animate-spin');
   }
 }
 
+// ------------------------------------------------------------------------------
+// 🛠️ 9. UI HELPERS & GLOBAL KEYBOARD HOTKEYS
+// ------------------------------------------------------------------------------
 function toggleCanteenSidebar() {
   document.getElementById('canteen-sidebar')?.classList.toggle('hidden');
 }
@@ -272,11 +358,11 @@ function handleGlobalHotkeys(e) {
   if (gActiveView !== 'pos') return;
   if (e.key === 'F2') {
     e.preventDefault();
-    setPaymentMode('Student Pocket Money');
+    if (typeof setPaymentMode === 'function') setPaymentMode('Student Pocket Money');
     document.getElementById('pos-student-input')?.focus();
   } else if (e.key === 'F4') {
     e.preventDefault();
-    setPaymentMode('Cash');
+    if (typeof setPaymentMode === 'function') setPaymentMode('Cash');
     focusScanner();
   } else if (e.key === 'F8') {
     e.preventDefault();
@@ -296,7 +382,9 @@ function logoutPos() {
   window.location.href = '/';
 }
 
-// Window Exports
+// ------------------------------------------------------------------------------
+// 🌐 10. WINDOW GLOBAL EXPORTS
+// ------------------------------------------------------------------------------
 window.switchCanteenView = switchCanteenView;
 window.refreshActiveCanteenView = refreshActiveCanteenView;
 window.toggleCanteenSidebar = toggleCanteenSidebar;

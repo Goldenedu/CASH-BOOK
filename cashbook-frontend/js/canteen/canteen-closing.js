@@ -1,9 +1,37 @@
 /**
  * ==============================================================================
  * GOLDEN ERP - CANTEEN STORE CLOSING, SETTLEMENT & OFFLINE PENDING SYNC
- * File: js/canteen/canteen-closing.js
+ * File: js/canteen/canteen-closing.js (Enterprise V9 Full Production Edition)
+ * 💡 Features:
+ *   1. 🕒 Strict MMT (UTC+06:30) Timezone Universal Engine
+ *   2. 📊 Live Dashboard: Real-time Sales, Margin, Capital & Net Loss Aggregator
+ *   3. 🔒 Canteen Store Day Closure (Cashier & Admin Allowed, Pending Guarded)
+ *   4. 💵 Evening Finance Settlement (Closure Interlocked)
+ *   5. ⏳ Resilient Offline Pending Queue Management & Auto-Sync
+ *   6. 🧾 20-Row Paginated Sales History with Slip Thermal Printer
+ *   7. 🛡️ Defensive Null-Safe DOM Renderers (Zero Crash Guarantee)
  * ==============================================================================
  */
+
+// 🕒 Pure Non-Recursive MMT Date Engine (UTC+06:30)
+function getMMTDateString(dInput) {
+  if (typeof window.getMMTDateString === 'function') {
+    return window.getMMTDateString(dInput);
+  }
+  const d = dInput ? new Date(dInput) : new Date();
+  const targetMs = isNaN(d.getTime()) ? Date.now() : d.getTime();
+  const mmt = new Date(targetMs + (6.5 * 60 * 60 * 1000));
+  return mmt.toISOString().slice(0, 10);
+}
+
+// 🛡️️ Safe Role Normalizer
+function getNormalizedRole() {
+  if (typeof window.getNormalizedRole === 'function') {
+    return window.getNormalizedRole();
+  }
+  const raw = String(gSession?.role || localStorage.getItem('golden_user_role') || 'Cashier').trim();
+  return raw.toLowerCase().replace(/[\s_-]/g, '');
+}
 
 // ------------------------------------------------------------------------------
 // 📊 0. LIVE CANTEEN DASHBOARD CONTROLLER (NET LOSS FORMULA ENABLED)
@@ -11,140 +39,184 @@
 async function loadCanteenDashboard() {
   try {
     const res = await callApi('getCanteenDashboardMetrics', { _t: Date.now() }, 'POST');
-    if (res && res.success && res.data) {
-      const { today, allTime, totalStockCapital, lowStockCount, todayLossCost, todaySurplusValue, todayNetLoss, allTimeLossCost, allTimeSurplusValue, allTimeNetLoss, date } = res.data;
+    if (!res || !res.success || !res.data) return;
 
-      const dateLabel = document.getElementById('dash-date-label');
-      if (dateLabel) dateLabel.textContent = date || new Date().toISOString().slice(0, 10);
-      
-      const settleBadge = document.getElementById('dash-settle-badge');
-      if (settleBadge) {
-        if (today.isSettled) {
-          settleBadge.className = "px-3 py-1 rounded-xl text-xs font-black bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-mono";
-          settleBadge.textContent = `SETTLED (${today.settlement?.settlementNo || 'DONE'})`;
-        } else {
-          settleBadge.className = "px-3 py-1 rounded-xl text-xs font-black bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30 font-mono animate-pulse";
-          settleBadge.textContent = "PENDING CLEARING";
-        }
+    const { 
+      today, allTime, totalStockCapital, lowStockCount, 
+      todayLossCost, todaySurplusValue, todayNetLoss, 
+      allTimeLossCost, allTimeSurplusValue, allTimeNetLoss, date 
+    } = res.data;
+
+    // ရက်စွဲ Label
+    const dateLabel = document.getElementById('dash-date-label');
+    if (dateLabel) dateLabel.textContent = date || getMMTDateString();
+
+    // ၁။ Settlement Status Badge
+    const settleBadge = document.getElementById('dash-settle-badge');
+    if (settleBadge) {
+      if (today?.isSettled) {
+        settleBadge.className = "px-2.5 py-1 rounded-xl text-[11px] font-black bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-mono";
+        settleBadge.textContent = `SETTLED (${today.settlement?.settlementNo || 'DONE'})`;
+      } else {
+        settleBadge.className = "px-2.5 py-1 rounded-xl text-[11px] font-black bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30 font-mono animate-pulse";
+        settleBadge.textContent = "PENDING CLEARING";
       }
+    }
 
-      const closureBadge = document.getElementById('dash-closure-badge');
-      if (closureBadge) {
-        if (today.isClosed) {
-          closureBadge.className = "px-3 py-1 rounded-xl text-xs font-black bg-rose-500/20 text-rose-500 border border-rose-500/30 font-mono";
-          closureBadge.textContent = `CLOSED (${today.closure?.closedBy || 'DONE'})`;
-        } else {
-          closureBadge.className = "px-3 py-1 rounded-xl text-xs font-black bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 font-mono";
-          closureBadge.textContent = "REGISTER OPEN";
-        }
+    // ၂။ Closure Status Badge
+    const closureBadge = document.getElementById('dash-closure-badge');
+    if (closureBadge) {
+      if (today?.isClosed) {
+        closureBadge.className = "px-2.5 py-1 rounded-xl text-[11px] font-black bg-rose-500/20 text-rose-500 border border-rose-500/30 font-mono";
+        closureBadge.textContent = `CLOSED (${today.closure?.closedBy || 'DONE'})`;
+      } else {
+        closureBadge.className = "px-2.5 py-1 rounded-xl text-[11px] font-black bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 font-mono";
+        closureBadge.textContent = "REGISTER OPEN";
       }
+    }
 
-      const headerCloseBtnText = document.getElementById('header-close-status-text');
-      if (headerCloseBtnText) {
-        headerCloseBtnText.textContent = today.isClosed ? "ဆိုင်ပိတ်ပြီး" : "ဆိုင်ပိတ်မည်";
+    // Header Close Button Status Text
+    const headerCloseBtnText = document.getElementById('header-close-status-text');
+    if (headerCloseBtnText) {
+      headerCloseBtnText.textContent = today?.isClosed ? "ဆိုင်ပိတ်ပြီး" : "ဆိုင်ပိတ်မည်";
+    }
+
+    // ၃။ Today's Operations KPI Render (Null-Safe)
+    const elTodaySales = document.getElementById('dash-today-sales');
+    if (elTodaySales) elTodaySales.textContent = `${Number(today?.totalSales || 0).toLocaleString()} MMK`;
+
+    const elTodayOrders = document.getElementById('dash-today-orders');
+    if (elTodayOrders) elTodayOrders.textContent = `${today?.totalOrders || 0} Orders`;
+
+    const elTodayWallet = document.getElementById('dash-today-wallet');
+    if (elTodayWallet) elTodayWallet.textContent = `${Number(today?.pocketMoneyShare || 0).toLocaleString()} MMK`;
+
+    const elTodayCash = document.getElementById('dash-today-cash');
+    if (elTodayCash) elTodayCash.textContent = `${Number(today?.cashSalesShare || 0).toLocaleString()} MMK`;
+
+    const elTodayProfit = document.getElementById('dash-today-profit');
+    if (elTodayProfit) elTodayProfit.textContent = `+${Number(today?.totalProfit || 0).toLocaleString()} MMK`;
+
+    // 🎯 NET LOSS DASHBOARD RENDER (Waste - Surplus)
+    const wasteSubEl = document.getElementById('dash-today-waste-sub');
+    if (wasteSubEl) wasteSubEl.textContent = Number(todayLossCost || 0).toLocaleString();
+
+    const surplusSubEl = document.getElementById('dash-today-surplus-sub');
+    if (surplusSubEl) surplusSubEl.textContent = Number(todaySurplusValue || 0).toLocaleString();
+
+    const todayLossEl = document.getElementById('dash-today-loss');
+    if (todayLossEl) {
+      const netVal = Number(todayNetLoss || 0);
+      if (netVal > 0) {
+        todayLossEl.className = "text-lg font-black text-rose-500 font-mono mt-1";
+        todayLossEl.textContent = `-${netVal.toLocaleString()} MMK`;
+      } else if (netVal < 0) {
+        todayLossEl.className = "text-lg font-black text-emerald-500 font-mono mt-1";
+        todayLossEl.textContent = `+${Math.abs(netVal).toLocaleString()} MMK`;
+      } else {
+        todayLossEl.className = "text-lg font-black text-slate-400 font-mono mt-1";
+        todayLossEl.textContent = `0 MMK`;
       }
+    }
 
-      document.getElementById('dash-today-sales').textContent = `${Number(today.totalSales || 0).toLocaleString()} MMK`;
-      document.getElementById('dash-today-orders').textContent = `${today.totalOrders || 0} Orders`;
-      document.getElementById('dash-today-wallet').textContent = `${Number(today.pocketMoneyShare || 0).toLocaleString()} MMK`;
-      document.getElementById('dash-today-cash').textContent = `${Number(today.cashSalesShare || 0).toLocaleString()} MMK`;
-      document.getElementById('dash-today-profit').textContent = `+${Number(today.totalProfit || 0).toLocaleString()} MMK`;
-      
-      // 🎯 NET LOSS DASHBOARD RENDER (Waste - Surplus)
-      const wasteSubEl = document.getElementById('dash-today-waste-sub');
-      const surplusSubEl = document.getElementById('dash-today-surplus-sub');
-      if (wasteSubEl) wasteSubEl.textContent = Number(todayLossCost || 0).toLocaleString();
-      if (surplusSubEl) surplusSubEl.textContent = Number(todaySurplusValue || 0).toLocaleString();
+    // ၄။ All-Time & Capital Investment Render (Null-Safe)
+    const elAllSales = document.getElementById('dash-all-sales');
+    if (elAllSales) elAllSales.textContent = `${Number(allTime?.totalSales || 0).toLocaleString()} MMK`;
 
-      const todayLossEl = document.getElementById('dash-today-loss');
-      if (todayLossEl) {
-        const netVal = Number(todayNetLoss || 0);
-        if (netVal > 0) {
-          todayLossEl.className = "text-xl font-black text-rose-500 font-mono mt-1";
-          todayLossEl.textContent = `-${netVal.toLocaleString()} MMK`;
-        } else if (netVal < 0) {
-          todayLossEl.className = "text-xl font-black text-emerald-500 font-mono mt-1";
-          todayLossEl.textContent = `+${Math.abs(netVal).toLocaleString()} MMK`;
-        } else {
-          todayLossEl.className = "text-xl font-black text-slate-400 font-mono mt-1";
-          todayLossEl.textContent = `0 MMK`;
-        }
+    const elAllWallet = document.getElementById('dash-all-wallet');
+    if (elAllWallet) elAllWallet.textContent = `${Number(allTime?.pocketMoneyShare || 0).toLocaleString()} MMK`;
+
+    const elAllCash = document.getElementById('dash-all-cash');
+    if (elAllCash) elAllCash.textContent = `${Number(allTime?.cashSalesShare || 0).toLocaleString()} MMK`;
+
+    const elAllOrders = document.getElementById('dash-all-orders');
+    if (elAllOrders) elAllOrders.textContent = `${Number(allTime?.totalOrders || 0)} Invoices`;
+
+    // 💰 Surplus ကြောင့် Capital မတက်စေသော တိကျသည့် စတော့ရင်းနှီးငွေ
+    const capitalEl = document.getElementById('dash-stock-capital');
+    if (capitalEl) {
+      const capitalVal = totalStockCapital !== undefined ? totalStockCapital : (allTime?.totalStockCapital || 0);
+      capitalEl.textContent = `${Number(capitalVal).toLocaleString()} MMK`;
+    }
+
+    const allLossEl = document.getElementById('dash-all-loss');
+    if (allLossEl) {
+      const allNetVal = Number(allTimeNetLoss || 0);
+      if (allNetVal > 0) {
+        allLossEl.className = "text-xs font-black text-rose-500 font-mono";
+        allLossEl.textContent = `-${allNetVal.toLocaleString()} MMK`;
+      } else if (allNetVal < 0) {
+        allLossEl.className = "text-xs font-black text-emerald-500 font-mono";
+        allLossEl.textContent = `+${Math.abs(allNetVal).toLocaleString()} MMK`;
+      } else {
+        allLossEl.className = "text-xs font-black text-slate-400 font-mono";
+        allLossEl.textContent = `0 MMK`;
       }
+    }
 
-      document.getElementById('dash-all-sales').textContent = `${Number(allTime.totalSales || 0).toLocaleString()} MMK`;
-      document.getElementById('dash-all-wallet').textContent = `${Number(allTime.pocketMoneyShare || 0).toLocaleString()} MMK`;
-      document.getElementById('dash-all-cash').textContent = `${Number(allTime.cashSalesShare || 0).toLocaleString()} MMK`;
-      document.getElementById('dash-all-orders').textContent = `${Number(allTime.totalOrders || 0)} Invoices`;
-
-      const capitalEl = document.getElementById('dash-stock-capital');
-      if (capitalEl) {
-        const capitalVal = totalStockCapital !== undefined ? totalStockCapital : (allTime.totalStockCapital || 0);
-        capitalEl.textContent = `${Number(capitalVal).toLocaleString()} MMK`;
-      }
-
-      const allLossEl = document.getElementById('dash-all-loss');
-      if (allLossEl) {
-        const allNetVal = Number(allTimeNetLoss || 0);
-        if (allNetVal > 0) {
-          allLossEl.className = "text-sm font-black text-rose-500 font-mono";
-          allLossEl.textContent = `-${allNetVal.toLocaleString()} MMK`;
-        } else if (allNetVal < 0) {
-          allLossEl.className = "text-sm font-black text-emerald-500 font-mono";
-          allLossEl.textContent = `+${Math.abs(allNetVal).toLocaleString()} MMK`;
-        } else {
-          allLossEl.className = "text-sm font-black text-slate-400 font-mono";
-          allLossEl.textContent = `0 MMK`;
-        }
-      }
-
-      const lowStockAlert = document.getElementById('dash-low-stock-alert');
-      if (lowStockAlert) {
-        if (lowStockCount > 0) {
-          lowStockAlert.textContent = `⚠️ Low Stock: ${lowStockCount} မျိုး`;
-          lowStockAlert.classList.remove('hidden');
-        } else {
-          lowStockAlert.classList.add('hidden');
-        }
+    const lowStockAlert = document.getElementById('dash-low-stock-alert');
+    if (lowStockAlert) {
+      if (lowStockCount > 0) {
+        lowStockAlert.textContent = `⚠️ Low Stock: ${lowStockCount} မျိုး`;
+        lowStockAlert.classList.remove('hidden');
+      } else {
+        lowStockAlert.classList.add('hidden');
       }
     }
   } catch (err) {
-    console.error("Dashboard Load Error:", err);
+    console.error("[CanteenClosing] Dashboard Load Error:", err);
   }
 }
 
 // ------------------------------------------------------------------------------
-// 🔒 1. CANTEEN STORE DAY CLOSURE
+// 🔒 1. CANTEEN STORE DAY CLOSURE (CASHIER & ADMIN BOTH ALLOWED)
 // ------------------------------------------------------------------------------
 async function openDayCloseModal() {
-  const role = (gSession?.role || '').trim();
-  if (role !== 'canteen_admin' && role !== 'canteen_cashier' && role !== 'Owner' && role !== 'Admin') {
+  const role = getNormalizedRole();
+  // 🎯 Cashier နှင့် Admin နှစ်ဦးစလုံး ဆိုင်ပိတ်ခွင့်ရှိသည်
+  const canClose = role.includes('admin') || role.includes('cashier') || role.includes('owner');
+  
+  if (!canClose) {
     return showToast("ERROR", "ဆိုင်ပိတ်သိမ်းခွင့် မရှိပါ။");
   }
 
-  const todayStr = new Date().toISOString().slice(0, 10);
-  document.getElementById('close-modal-date').textContent = todayStr;
+  const todayStr = getMMTDateString(); // 🕒 Strict MMT Today
+  const dateEl = document.getElementById('close-modal-date');
+  if (dateEl) dateEl.textContent = todayStr;
 
   try {
     const res = await callApi('getCanteenDailySummary', { date: todayStr, _t: Date.now() }, 'POST');
     if (res && res.success && res.data) {
       const dt = res.data;
-      document.getElementById('close-modal-orders').textContent = `${dt.totalOrders} စောင်`;
-      document.getElementById('close-modal-total').textContent = `${Number(dt.totalSales).toLocaleString()} MMK`;
-      document.getElementById('close-modal-cash').textContent = `${Number(dt.cashSalesShare).toLocaleString()} MMK`;
-      document.getElementById('close-modal-wallet').textContent = `${Number(dt.pocketMoneyShare).toLocaleString()} MMK`;
+      
+      const elOrders = document.getElementById('close-modal-orders');
+      if (elOrders) elOrders.textContent = `${dt.totalOrders || 0} စောင်`;
+
+      const elTotal = document.getElementById('close-modal-total');
+      if (elTotal) elTotal.textContent = `${Number(dt.totalSales || 0).toLocaleString()} MMK`;
+
+      const elCash = document.getElementById('close-modal-cash');
+      if (elCash) elCash.textContent = `${Number(dt.cashSalesShare || 0).toLocaleString()} MMK`;
+
+      const elWallet = document.getElementById('close-modal-wallet');
+      if (elWallet) elWallet.textContent = `${Number(dt.pocketMoneyShare || 0).toLocaleString()} MMK`;
 
       const btnClose = document.getElementById('btn-confirm-day-close');
-      if (dt.isClosed) {
-        btnClose.disabled = true;
-        btnClose.textContent = "ယနေ့အတွက် ဆိုင်ပိတ်သိမ်းပြီးဖြစ်ပါသည်";
-        btnClose.className = "w-full py-3.5 bg-slate-200 dark:bg-slate-800 text-slate-400 rounded-xl font-black text-xs cursor-not-allowed";
-      } else {
-        btnClose.disabled = false;
-        btnClose.textContent = "အတည်ပြု ဆိုင်ပိတ်သိမ်းမည် (CLOSE REGISTER)";
-        btnClose.className = "w-full py-3.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl font-black text-xs shadow-lg shadow-amber-950/20 active:scale-95 transition font-sans";
+      if (btnClose) {
+        if (dt.isClosed) {
+          btnClose.disabled = true;
+          btnClose.textContent = "ယနေ့အတွက် ဆိုင်ပိတ်သိမ်းပြီးဖြစ်ပါသည်";
+          btnClose.className = "w-full py-3.5 bg-slate-200 dark:bg-slate-800 text-slate-400 rounded-xl font-black text-xs cursor-not-allowed";
+        } else {
+          btnClose.disabled = false;
+          btnClose.textContent = "အတည်ပြု ဆိုင်ပိတ်သိမ်းမည် (CLOSE REGISTER)";
+          btnClose.className = "w-full py-3.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl font-black text-xs shadow-lg shadow-amber-950/20 active:scale-95 transition font-sans";
+        }
       }
 
       document.getElementById('pos-closure-modal')?.classList.remove('hidden');
+    } else {
+      showToast("ERROR", res?.message || "ဆိုင်ပိတ်စာရင်း ဆွဲယူ၍ မရပါ");
     }
   } catch (err) {
     showToast("ERROR", "ဆိုင်ပိတ်စာရင်း အချက်အလက် ဆွဲမရပါ: " + err.message);
@@ -152,12 +224,15 @@ async function openDayCloseModal() {
 }
 
 async function executeCanteenDayClose() {
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getMMTDateString(); // 🕒 Strict MMT Today
   const remark = document.getElementById('close-modal-remark')?.value.trim();
 
-  const pendingOrders = await dbGetPendingOrders();
-  if (pendingOrders.length > 0) {
-    return showToast("ERROR", `ဆိုင်မပိတ်မီ D1 ပေါ်သို့ မရောက်သေးသော Pending အော့ဖ်လိုင်းအရောင်း (${pendingOrders.length}) စောင်အား ဦးစွာ Sync လုပ်ပေးပါ!`);
+  // 🛡️ Pending Guard: မရောက်သေးသော အော့ဖ်လိုင်းအရောင်းများ ရှိနေပါက ဆိုင်ပိတ်ခွင့် မပြုပါ
+  if (typeof dbGetPendingOrders === 'function') {
+    const pendingOrders = await dbGetPendingOrders();
+    if (pendingOrders.length > 0) {
+      return showToast("ERROR", `ဆိုင်မပိတ်မီ D1 ပေါ်သို့ မရောက်သေးသော Pending အော့ဖ်လိုင်းအရောင်း (${pendingOrders.length}) စောင်အား ဦးစွာ Sync လုပ်ပေးပါ!`);
+    }
   }
 
   if (!confirm(`ယနေ့ရက်စွဲ (${todayStr}) အတွက် အရောင်းစာရင်းအားလုံး ပိတ်သိမ်းမည်မှာ သေချာပါသလား?\n\nသတိပြုရန်: ဆိုင်ပိတ်ပြီးပါက ယနေ့အတွက် အရောင်းဖွင့်၍ ရတော့မည်မဟုတ်ပါ။`)) {
@@ -187,6 +262,7 @@ async function openPendingSyncModal() {
 }
 
 async function renderPendingOrdersTable() {
+  if (typeof dbGetPendingOrders !== 'function') return;
   const pendingOrders = await dbGetPendingOrders();
   const tbody = document.getElementById('pending-orders-table-body');
   if (!tbody) return;
@@ -195,8 +271,11 @@ async function renderPendingOrdersTable() {
   let totalAmt = 0;
   pendingOrders.forEach(o => { totalAmt += Number(o.totalAmount || 0); });
 
-  document.getElementById('pending-modal-orders').textContent = `${pendingOrders.length} စောင်`;
-  document.getElementById('pending-modal-amount').textContent = `${totalAmt.toLocaleString()} MMK`;
+  const elOrders = document.getElementById('pending-modal-orders');
+  if (elOrders) elOrders.textContent = `${pendingOrders.length} စောင်`;
+
+  const elAmount = document.getElementById('pending-modal-amount');
+  if (elAmount) elAmount.textContent = `${totalAmt.toLocaleString()} MMK`;
 
   if (pendingOrders.length === 0) {
     tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-slate-400 font-bold">D1 သို့ ပေးပို့ရန် ကျန်ရှိသော အော့ဖ်လိုင်းအရောင်း မရှိပါ။</td></tr>`;
@@ -215,7 +294,7 @@ async function renderPendingOrdersTable() {
           </span>
         </td>
         <td class="py-2.5 px-3 truncate max-w-xs">${esc(o.itemsSummary)}</td>
-        <td class="text-right font-mono font-bold py-2.5 px-3">${Number(o.totalAmount).toLocaleString()} MMK</td>
+        <td class="text-right font-mono font-bold py-2.5 px-3">${Number(o.totalAmount || 0).toLocaleString()} MMK</td>
         <td class="text-center py-2.5 px-3">
           <span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-500/20 text-amber-500 border border-amber-500/30">PENDING</span>
         </td>
@@ -229,6 +308,7 @@ async function triggerManualOfflineSync() {
     return showToast("ERROR", "အင်တာနက်လိုင်း မရှိသေးပါ! လိုင်းပြန်ရမှသာ Sync လုပ်နိုင်ပါမည်။");
   }
 
+  if (typeof dbGetPendingOrders !== 'function') return;
   const pendingOrders = await dbGetPendingOrders();
   if (pendingOrders.length === 0) {
     return showToast("SUCCESS", "Sync လုပ်ရန် အော့ဖ်လိုင်းအရောင်း မရှိပါ။");
@@ -243,8 +323,8 @@ async function triggerManualOfflineSync() {
   try {
     const res = await callApi('syncOfflinePosOrders', { orders: pendingOrders });
     if (res && res.success) {
-      await dbClearPendingOrders();
-      await updatePendingBadgeCount();
+      if (typeof dbClearPendingOrders === 'function') await dbClearPendingOrders();
+      if (typeof updatePendingBadgeCount === 'function') await updatePendingBadgeCount();
       await renderPendingOrdersTable();
       showToast("SUCCESS", res.message || "အော့ဖ်လိုင်းအရောင်းများ အားလုံး D1 သို့ Sync ပြီးပါပြီ။");
       closeModal('pos-pending-modal');
@@ -263,34 +343,52 @@ async function triggerManualOfflineSync() {
 }
 
 async function autoSyncPendingOrders() {
-  if (!navigator.onLine) return;
+  if (!navigator.onLine || typeof dbGetPendingOrders !== 'function') return;
   const pending = await dbGetPendingOrders();
-  if (pending.length === 0) return;
+  if (!pending || pending.length === 0) return;
 
   try {
     const res = await callApi('syncOfflinePosOrders', { orders: pending });
     if (res && res.success) {
-      await dbClearPendingOrders();
-      await updatePendingBadgeCount();
+      if (typeof dbClearPendingOrders === 'function') await dbClearPendingOrders();
+      if (typeof updatePendingBadgeCount === 'function') await updatePendingBadgeCount();
       showToast("SUCCESS", `[Auto-Sync] အော့ဖ်လိုင်းအရောင်း (${res.syncedCount}) စောင် D1 သို့ အောင်မြင်စွာ တင်ပို့ပြီးပါပြီ။`);
     }
   } catch (e) {}
 }
 
 // ------------------------------------------------------------------------------
-// 💵 3. EVENING SETTLEMENT MODAL (CLOSURE INTERLOCKED)
+// 💵 3. EVENING SETTLEMENT MODAL (CASHIER & ADMIN BOTH ALLOWED)
 // ------------------------------------------------------------------------------
 async function openSettlementModal() {
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const role = getNormalizedRole();
+  // 🎯 Cashier နှင့် Admin နှစ်ဦးစလုံး ညနေစာရင်းရှင်းခွင့်ရှိသည်
+  const canSettle = role.includes('admin') || role.includes('cashier') || role.includes('owner');
+
+  if (!canSettle) {
+    return showToast("ERROR", "ငွေရှင်းလင်းခွင့် မရှိပါ။");
+  }
+
+  const todayStr = getMMTDateString(); // 🕒 Strict MMT Today
   try {
     const res = await callApi('getCanteenDailySummary', { date: todayStr, _t: Date.now() }, 'POST');
     if (res && res.success && res.data) {
       const dt = res.data;
-      document.getElementById('set-orders').textContent = `${dt.totalOrders} Orders`;
-      document.getElementById('set-total').textContent = `${Number(dt.totalSales).toLocaleString()} MMK`;
-      document.getElementById('set-cash').textContent = `${Number(dt.cashSalesShare).toLocaleString()} MMK`;
-      document.getElementById('set-pocket').textContent = `${Number(dt.pocketMoneyShare).toLocaleString()} MMK`;
-      document.getElementById('set-payout-text').textContent = `${Number(dt.pocketMoneyShare).toLocaleString()} MMK`;
+
+      const elOrders = document.getElementById('set-orders');
+      if (elOrders) elOrders.textContent = `${dt.totalOrders || 0} Orders`;
+
+      const elTotal = document.getElementById('set-total');
+      if (elTotal) elTotal.textContent = `${Number(dt.totalSales || 0).toLocaleString()} MMK`;
+
+      const elCash = document.getElementById('set-cash');
+      if (elCash) elCash.textContent = `${Number(dt.cashSalesShare || 0).toLocaleString()} MMK`;
+
+      const elPocket = document.getElementById('set-pocket');
+      if (elPocket) elPocket.textContent = `${Number(dt.pocketMoneyShare || 0).toLocaleString()} MMK`;
+
+      const elPayout = document.getElementById('set-payout-text');
+      if (elPayout) elPayout.textContent = `${Number(dt.pocketMoneyShare || 0).toLocaleString()} MMK`;
 
       const box = document.getElementById('set-closure-status-box');
       const icon = document.getElementById('set-closure-icon');
@@ -298,23 +396,25 @@ async function openSettlementModal() {
       const btnConfirm = document.getElementById('btn-confirm-settlement');
 
       if (dt.isSettled) {
-        box.className = "p-2.5 rounded-xl border text-[11px] font-sans flex items-center gap-2 bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400";
-        icon.className = "fa-solid fa-circle-check text-emerald-500";
-        text.textContent = `ဤရက်စွဲအတွက် Finance နှင့် ငွေရှင်းပြီးဖြစ်ပါသည် (${dt.settlement?.settlement_no || dt.settlement?.settlementNo})`;
-        btnConfirm.disabled = true;
+        if (box) box.className = "p-2.5 rounded-xl border text-[11px] font-sans flex items-center gap-2 bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400";
+        if (icon) icon.className = "fa-solid fa-circle-check text-emerald-500";
+        if (text) text.textContent = `ဤရက်စွဲအတွက် Finance နှင့် ငွေရှင်းပြီးဖြစ်ပါသည် (${dt.settlement?.settlement_no || dt.settlement?.settlementNo})`;
+        if (btnConfirm) btnConfirm.disabled = true;
       } else if (!dt.isClosed) {
-        box.className = "p-2.5 rounded-xl border text-[11px] font-sans flex items-center gap-2 bg-rose-500/10 border-rose-500/30 text-rose-500";
-        icon.className = "fa-solid fa-triangle-exclamation text-rose-500";
-        text.textContent = "သတိပြုရန်: ကန်တင်းဘက်မှ ဆိုင်မပိတ်ရသေးပါ! ဆိုင်ပိတ်ပြီးမှသာ ငွေရှင်းပေးနိုင်ပါမည်။";
-        btnConfirm.disabled = true;
+        if (box) box.className = "p-2.5 rounded-xl border text-[11px] font-sans flex items-center gap-2 bg-rose-500/10 border-rose-500/30 text-rose-500";
+        if (icon) icon.className = "fa-solid fa-triangle-exclamation text-rose-500";
+        if (text) text.textContent = "သတိပြုရန်: ကန်တင်းဘက်မှ ဆိုင်မပိတ်ရသေးပါ! ဆိုင်ပိတ်ပြီးမှသာ ငွေရှင်းပေးနိုင်ပါမည်။";
+        if (btnConfirm) btnConfirm.disabled = true;
       } else {
-        box.className = "p-2.5 rounded-xl border text-[11px] font-sans flex items-center gap-2 bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400";
-        icon.className = "fa-solid fa-circle-check text-emerald-500";
-        text.textContent = `ကန်တင်းဆိုင်ပိတ်သိမ်းပြီးဖြစ်ပါသည် (${dt.closure?.closedBy || 'Done'})။ ငွေရှင်းလင်းနိုင်ပါပြီ။`;
-        btnConfirm.disabled = false;
+        if (box) box.className = "p-2.5 rounded-xl border text-[11px] font-sans flex items-center gap-2 bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400";
+        if (icon) icon.className = "fa-solid fa-circle-check text-emerald-500";
+        if (text) text.textContent = `ကန်တင်းဆိုင်ပိတ်သိမ်းပြီးဖြစ်ပါသည် (${dt.closure?.closedBy || 'Done'})။ ငွေရှင်းလင်းနိုင်ပါပြီ။`;
+        if (btnConfirm) btnConfirm.disabled = false;
       }
 
       document.getElementById('pos-settlement-modal')?.classList.remove('hidden');
+    } else {
+      showToast("ERROR", res?.message || "Summary ခေါ်ယူ၍ မရပါ");
     }
   } catch (e) {
     showToast("ERROR", "Summary ခေါ်ယူ၍ မရပါ: " + e.message);
@@ -324,7 +424,7 @@ async function openSettlementModal() {
 async function confirmCanteenSettlement(pocketShare, cashShare) {
   if (!confirm("Finance မှ Pocket Money ရောင်းရငွေ အပြင်တွင် အမှန်တကယ် လက်ရောက်ရှင်းပြီးပြီလား?")) return;
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getMMTDateString(); // 🕒 Strict MMT Today
   const pShare = pocketShare !== undefined ? pocketShare : parseFloat(document.getElementById('set-pocket')?.textContent.replace(/[^0-9.-]+/g, '') || 0);
   const cShare = cashShare !== undefined ? cashShare : parseFloat(document.getElementById('set-cash')?.textContent.replace(/[^0-9.-]+/g, '') || 0);
 
@@ -351,7 +451,7 @@ async function confirmCanteenSettlement(pocketShare, cashShare) {
 }
 
 // ------------------------------------------------------------------------------
-// ⚙️ 4. SYSTEM SETTINGS (DAILY ALLOWANCE CAP CONTROLLER)
+// ⚙️ 4. SYSTEM SETTINGS (DAILY ALLOWANCE CAP CONTROLLER - ADMIN ONLY)
 // ------------------------------------------------------------------------------
 async function loadPosSettings() {
   try {
@@ -359,22 +459,28 @@ async function loadPosSettings() {
     if (res && res.success && res.data) {
       if (res.data.daily_spending_cap) {
         gDailySpendingCap = Number(res.data.daily_spending_cap);
-        await dbSaveSetting('daily_spending_cap', gDailySpendingCap);
+        if (typeof dbSaveSetting === 'function') {
+          await dbSaveSetting('daily_spending_cap', gDailySpendingCap);
+        }
       }
     }
   } catch (e) {
-    const cachedCap = await dbGetSetting('daily_spending_cap');
-    if (cachedCap) gDailySpendingCap = Number(cachedCap);
+    if (typeof dbGetSetting === 'function') {
+      const cachedCap = await dbGetSetting('daily_spending_cap');
+      if (cachedCap) gDailySpendingCap = Number(cachedCap);
+    }
   }
 }
 
 function openSettingsModal() {
-  const role = (gSession?.role || '').trim();
-  if (role !== 'canteen_admin' && role !== 'Owner' && role !== 'Admin') {
+  const role = getNormalizedRole();
+  // 🎯 Settings သည် Admin/Owner သီးသန့်ဖြစ်သည်
+  if (!role.includes('admin') && !role.includes('owner')) {
     return showToast("ERROR", "ဆက်တင် ပြင်ဆင်ခွင့် မရှိပါ။ (Admin Only)");
   }
 
-  document.getElementById('m-set-daily-cap').value = gDailySpendingCap;
+  const inputCap = document.getElementById('m-set-daily-cap');
+  if (inputCap) inputCap.value = gDailySpendingCap;
   document.getElementById('pos-settings-modal')?.classList.remove('hidden');
 }
 
@@ -391,7 +497,9 @@ async function submitPosSettings(e) {
 
     if (res && res.success) {
       gDailySpendingCap = Number(capVal);
-      await dbSaveSetting('daily_spending_cap', gDailySpendingCap);
+      if (typeof dbSaveSetting === 'function') {
+        await dbSaveSetting('daily_spending_cap', gDailySpendingCap);
+      }
       showToast("SUCCESS", `Daily Cap ကို ${Number(capVal).toLocaleString()} MMK သို့ ပြင်ဆင်ပြီးပါပြီ။`);
       closeModal('pos-settings-modal');
       
@@ -413,10 +521,18 @@ function onSearchSalesDebounced() {
 }
 
 function clearSalesFilter() {
-  document.getElementById('sales-search').value = '';
-  document.getElementById('sales-method-filter').value = '';
-  document.getElementById('sales-date-from').value = '';
-  document.getElementById('sales-date-to').value = '';
+  const sInput = document.getElementById('sales-search');
+  if (sInput) sInput.value = '';
+
+  const mFilter = document.getElementById('sales-method-filter');
+  if (mFilter) mFilter.value = '';
+
+  const dFrom = document.getElementById('sales-date-from');
+  if (dFrom) dFrom.value = '';
+
+  const dTo = document.getElementById('sales-date-to');
+  if (dTo) dTo.value = '';
+
   loadSalesOrdersHistory(1);
 }
 
@@ -468,8 +584,8 @@ async function loadSalesOrdersHistory(page = 1) {
               </td>
               <td class="font-mono py-2.5 px-3 text-slate-400">${r.studentId ? `ID ${r.studentId}` : '-'}</td>
               <td class="py-2.5 px-3 text-slate-300 font-bold">${esc(r.itemsSummary)}</td>
-              <td class="text-right font-mono font-bold py-2.5 px-3">${Number(r.totalAmount).toLocaleString()} MMK</td>
-              <td class="text-right font-mono font-bold text-teal-500 py-2.5 px-3">+${Number(r.netProfit).toLocaleString()}</td>
+              <td class="text-right font-mono font-bold py-2.5 px-3">${Number(r.totalAmount || 0).toLocaleString()} MMK</td>
+              <td class="text-right font-mono font-bold text-teal-500 py-2.5 px-3">+${Number(r.netProfit || 0).toLocaleString()}</td>
               <td class="text-center py-2.5 px-3">
                 <button onclick="reprintSalesSlip('${escAttr(r.invoiceNo)}')" class="p-1.5 text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-lg transition" title="Print Receipt">
                   <i class="fa-solid fa-print"></i>
@@ -491,7 +607,7 @@ async function loadSalesOrdersHistory(page = 1) {
       if (nextBtn) nextBtn.disabled = (end >= gSalesTotalRows);
     }
   } catch (err) {
-    console.error("Sales History Load Error:", err);
+    console.error("[CanteenClosing] Sales History Load Error:", err);
   }
 }
 
@@ -504,11 +620,14 @@ function reprintSalesSlip(invoiceNo) {
   }
 }
 
-// Global Exports
+// ------------------------------------------------------------------------------
+// 🌐 6. WINDOW GLOBAL EXPORTS
+// ------------------------------------------------------------------------------
 window.loadCanteenDashboard = loadCanteenDashboard;
 window.openDayCloseModal = openDayCloseModal;
 window.executeCanteenDayClose = executeCanteenDayClose;
 window.openPendingSyncModal = openPendingSyncModal;
+window.renderPendingOrdersTable = renderPendingOrdersTable;
 window.triggerManualOfflineSync = triggerManualOfflineSync;
 window.autoSyncPendingOrders = autoSyncPendingOrders;
 window.openSettlementModal = openSettlementModal;

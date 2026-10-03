@@ -1,27 +1,70 @@
 /**
  * ==============================================================================
  * GOLDEN ERP - CANTEEN INVENTORY & PURCHASES CONTROLLER
- * File: js/canteen/canteen-inventory.js
+ * File: js/canteen/canteen-inventory.js (Enterprise V9 Full Production Edition)
+ * 💡 Features:
+ *   1. 🕒 Strict MMT (UTC+06:30) Timezone Enforcement
+ *   2. 📈 Default 8% Markup on Purchases & Catalog Smart Pricing
+ *   3. 📦 Stock Inventory Auditor with Capital Invariance Harmony
+ *   4. 🛒 Purchases History with Live Supplier Total Calculator
+ *   5. 🛡️ Robust Role Security & Defensive Input Validation
+ *   6. ⚡ D1 Quota Shield with IndexedDB Offline Persistence
  * ==============================================================================
  */
 
+// 🕒 Pure Non-Recursive MMT Date Helper (UTC+06:30)
+function getMMTDateString(dInput) {
+  if (typeof window.getMMTDateString === 'function') {
+    return window.getMMTDateString(dInput);
+  }
+  const d = dInput ? new Date(dInput) : new Date();
+  const targetMs = isNaN(d.getTime()) ? Date.now() : d.getTime();
+  const mmt = new Date(targetMs + (6.5 * 60 * 60 * 1000));
+  return mmt.toISOString().slice(0, 10);
+}
+
+// 🛡️ Safe Role Normalizer
+function getNormalizedRole() {
+  if (typeof window.getNormalizedRole === 'function') {
+    return window.getNormalizedRole();
+  }
+  const raw = String(gSession?.role || localStorage.getItem('golden_user_role') || 'Cashier').trim();
+  return raw.toLowerCase().replace(/[\s_-]/g, '');
+}
+
+const esc = window.escapeHtml || (s => s ? String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : '');
+const escAttr = window.escapeJsAttr || (s => s ? String(s).replace(/'/g, "\\'") : '');
+
+// ------------------------------------------------------------------------------
+// 📦 1. CATALOG PRELOAD & CACHE CONTROLLER
+// ------------------------------------------------------------------------------
 async function loadItemsCatalog(isManualRefresh) {
   if (navigator.onLine) {
     try {
       const res = await callApi('getPosItems', { onlyActive: true, _t: Date.now() }, 'POST');
       if (res && res.success) {
         gItemsCache = res.data || [];
-        await dbSaveItems(gItemsCache);
-        if (isManualRefresh) showToast("SUCCESS", `ပစ္စည်း (${gItemsCache.length}) မျိုး အသစ်ရယူပြီးပါပြီ။`);
+        if (typeof dbSaveItems === 'function') {
+          await dbSaveItems(gItemsCache);
+        }
+        if (isManualRefresh) {
+          showToast("SUCCESS", `ပစ္စည်း (${gItemsCache.length}) မျိုး အသစ်ရယူပြီးပါပြီ။`);
+        }
         return;
       }
     } catch (e) {
       console.warn("[Catalog] Online load failed, falling back to IndexedDB...");
     }
   }
-  gItemsCache = await dbGetAllItems();
+
+  if (typeof dbGetAllItems === 'function') {
+    gItemsCache = await dbGetAllItems();
+  }
 }
 
+// ------------------------------------------------------------------------------
+// 📊 2. REAL-TIME STOCK INVENTORY AUDITOR (PAGINATED 20 ROWS)
+// ------------------------------------------------------------------------------
 function onSearchStockDebounced() {
   clearTimeout(gStockSearchTimeout);
   gStockSearchTimeout = setTimeout(() => { loadStockInventory(1); }, 250);
@@ -49,10 +92,17 @@ async function loadStockInventory(page = 1) {
       gStockInventoryData = items;
       gStockTotalRows = res.totalRows || 0;
 
-      document.getElementById('stock-total-items').textContent = `${summary.totalItems || 0} မျိုး`;
-      document.getElementById('stock-total-qty').textContent = `${Number(summary.totalStockQty || 0).toLocaleString()} ခု`;
-      document.getElementById('stock-total-val').textContent = `${Number(summary.totalStockValue || 0).toLocaleString()} MMK`;
-      document.getElementById('stock-alert-count').textContent = `${(summary.outOfStockCount || 0) + (summary.lowStockCount || 0)} မျိုး`;
+      const elTotalItems = document.getElementById('stock-total-items');
+      if (elTotalItems) elTotalItems.textContent = `${summary.totalItems || 0} မျိုး`;
+
+      const elTotalQty = document.getElementById('stock-total-qty');
+      if (elTotalQty) elTotalQty.textContent = `${Number(summary.totalStockQty || 0).toLocaleString()} ခု`;
+
+      const elTotalVal = document.getElementById('stock-total-val');
+      if (elTotalVal) elTotalVal.textContent = `${Number(summary.totalStockValue || 0).toLocaleString()} MMK`;
+
+      const elAlertCount = document.getElementById('stock-alert-count');
+      if (elAlertCount) elAlertCount.textContent = `${(summary.outOfStockCount || 0) + (summary.lowStockCount || 0)} မျိုး`;
 
       const tbody = document.getElementById('stock-table-body');
       if (!tbody) return;
@@ -61,7 +111,8 @@ async function loadStockInventory(page = 1) {
       if (items.length === 0) {
         tbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-slate-400 font-bold">ရှာဖွေမှုနှင့် ကိုက်ညီသော ပစ္စည်း မရှိပါ။</td></tr>`;
       } else {
-        const canManageStock = (gSession?.role === 'canteen_admin' || gSession?.role === 'Owner' || gSession?.role === 'Admin');
+        const role = getNormalizedRole();
+        const canManageStock = role.includes('admin') || role.includes('owner');
 
         items.forEach((item, idx) => {
           const displayNo = gStockTotalRows - ((gStockPage - 1) * gStockLimit + idx);
@@ -87,8 +138,8 @@ async function loadStockInventory(page = 1) {
               <td class="font-mono text-slate-400 py-2.5 px-3 font-bold">${esc(item.barcode)}</td>
               <td class="font-bold py-2.5 px-3">${esc(item.itemName)}</td>
               <td class="text-slate-400 py-2.5 px-3">${esc(item.category)}</td>
-              <td class="text-right font-mono text-slate-400 py-2.5 px-3">${Number(item.costPrice).toLocaleString()}</td>
-              <td class="text-right font-mono font-bold text-emerald-500 py-2.5 px-3">${Number(item.sellingPrice).toLocaleString()} MMK</td>
+              <td class="text-right font-mono text-slate-400 py-2.5 px-3">${Number(item.costPrice || 0).toLocaleString()}</td>
+              <td class="text-right font-mono font-bold text-emerald-500 py-2.5 px-3">${Number(item.sellingPrice || 0).toLocaleString()} MMK</td>
               <td class="text-center font-mono font-black py-2.5 px-3 text-sm ${item.currentStock <= 0 ? 'text-rose-500' : (item.currentStock <= 10 ? 'text-amber-500' : '')}">
                 ${item.currentStock}
               </td>
@@ -110,10 +161,13 @@ async function loadStockInventory(page = 1) {
       if (nextBtn) nextBtn.disabled = (end >= gStockTotalRows);
     }
   } catch (err) {
-    console.error("Stock Inventory Load Error:", err);
+    console.error("[CanteenInventory] Stock Inventory Load Error:", err);
   }
 }
 
+// ------------------------------------------------------------------------------
+// 📄 3. STOCK INVENTORY CSV EXPORT (STRICT MMT TIMESTAMP)
+// ------------------------------------------------------------------------------
 async function exportStockInventoryCSV() {
   try {
     const res = await callApi('getPosStockInventory', { page: 1, limit: 1000, _t: Date.now() }, 'POST');
@@ -128,14 +182,17 @@ async function exportStockInventoryCSV() {
       if (item.currentStock <= 0) statusText = 'OUT OF STOCK';
       else if (item.currentStock <= 10) statusText = 'LOW STOCK';
 
-      const sValue = Number(item.costPrice || 0) * Number(item.currentStock || 0);
+      const sValue = item.stockValue !== undefined 
+        ? item.stockValue 
+        : (Number(item.costPrice || 0) * Math.max(0, Number(item.currentStock || 0) - Number(item.surplusStock || 0)));
+
       csv += `${idx + 1},${safeCell(item.barcode)},${safeCell(item.itemName)},${safeCell(item.category)},${item.costPrice || 0},${item.sellingPrice || 0},${item.currentStock || 0},${sValue},${safeCell(statusText)}\n`;
     });
 
     const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `Canteen_Stock_Inventory_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `Canteen_Stock_Inventory_${getMMTDateString()}.csv`;
     a.click();
     showToast("SUCCESS", "Stock စာရင်း CSV ထုတ်ယူမှု အောင်မြင်ပါသည်။");
   } catch (err) {
@@ -143,16 +200,33 @@ async function exportStockInventoryCSV() {
   }
 }
 
+// ------------------------------------------------------------------------------
+// ✏️ 4. QUICK STOCK & PRICE EDIT (ADMIN ONLY)
+// ------------------------------------------------------------------------------
 function openQuickEditModal(barcode) {
-  if (gSession?.role === 'canteen_cashier') return showToast("ERROR", "ငွေကိုင် (Cashier) အနေဖြင့် လက်ကျန်စာရင်းအား ပြင်ဆင်ခွင့် မရှိပါ။ Admin ထံ တင်ပြပါ။");
+  const role = getNormalizedRole();
+  if (role === 'canteencashier' || role === 'cashier') {
+    return showToast("ERROR", "ငွေကိုင် (Cashier) အနေဖြင့် လက်ကျန်စာရင်းအား တိုက်ရိုက်ပြင်ဆင်ခွင့် မရှိပါ။ Admin ထံ တင်ပြပါ။");
+  }
+
   const item = gItemsCache.find(it => it.barcode === barcode) || gStockInventoryData.find(it => it.barcode === barcode);
   if (!item) return;
 
-  document.getElementById('qe-item-name').textContent = item.itemName;
-  document.getElementById('qe-barcode').textContent = item.barcode;
-  document.getElementById('qe-stock').value = item.currentStock || 0;
-  document.getElementById('qe-cost').value = item.costPrice || 0;
-  document.getElementById('qe-price').value = item.sellingPrice || 0;
+  const elName = document.getElementById('qe-item-name');
+  if (elName) elName.textContent = item.itemName;
+
+  const elBarcode = document.getElementById('qe-barcode');
+  if (elBarcode) elBarcode.textContent = item.barcode;
+
+  const elStock = document.getElementById('qe-stock');
+  if (elStock) elStock.value = item.currentStock || 0;
+
+  const elCost = document.getElementById('qe-cost');
+  if (elCost) elCost.value = item.costPrice || 0;
+
+  const elPrice = document.getElementById('qe-price');
+  if (elPrice) elPrice.value = item.sellingPrice || 0;
+
   document.getElementById('pos-quick-edit-modal')?.classList.remove('hidden');
 }
 
@@ -177,11 +251,15 @@ async function submitQuickEdit() {
   }
 }
 
-// 🎯 Purchases: Today Filter Shortcut
+// ------------------------------------------------------------------------------
+// 🛒 5. PURCHASES AUDITOR WITH SUPPLIER TOTAL CALCULATOR
+// ------------------------------------------------------------------------------
 function setFilterPurchasesToday() {
-  const today = new Date().toISOString().slice(0, 10);
-  document.getElementById('pur-date-from').value = today;
-  document.getElementById('pur-date-to').value = today;
+  const today = getMMTDateString();
+  const dFrom = document.getElementById('pur-date-from');
+  const dTo = document.getElementById('pur-date-to');
+  if (dFrom) dFrom.value = today;
+  if (dTo) dTo.value = today;
   loadPurchasesHistory(1);
 }
 
@@ -191,10 +269,18 @@ function onSearchPurchasesDebounced() {
 }
 
 function clearPurchasesFilter() {
-  document.getElementById('pur-search').value = '';
-  document.getElementById('pur-supplier-filter').value = '';
-  document.getElementById('pur-date-from').value = '';
-  document.getElementById('pur-date-to').value = '';
+  const sInput = document.getElementById('pur-search');
+  if (sInput) sInput.value = '';
+
+  const sFilter = document.getElementById('pur-supplier-filter');
+  if (sFilter) sFilter.value = '';
+
+  const dFrom = document.getElementById('pur-date-from');
+  if (dFrom) dFrom.value = '';
+
+  const dTo = document.getElementById('pur-date-to');
+  if (dTo) dTo.value = '';
+
   loadPurchasesHistory(1);
 }
 
@@ -202,7 +288,6 @@ function changePurchasesPage(delta) {
   loadPurchasesHistory(gPurchasesPage + delta);
 }
 
-// 🎯 Purchases History with Live Supplier Total Calculator
 async function loadPurchasesHistory(page = 1) {
   gPurchasesPage = Math.max(1, page);
   const searchVal = document.getElementById('pur-search')?.value.trim() || '';
@@ -221,7 +306,6 @@ async function loadPurchasesHistory(page = 1) {
       gPurchasesData = records;
       gPurchasesTotalRows = res.totalRows || 0;
 
-      // 🎯 Update Supplier-specific Total Purchase Badge
       const totalPurchasesAmount = res.totalPurchasesAmount || 0;
       const badgeEl = document.getElementById('pur-supplier-total-badge');
       if (badgeEl) badgeEl.textContent = `${Number(totalPurchasesAmount).toLocaleString()} MMK`;
@@ -233,7 +317,8 @@ async function loadPurchasesHistory(page = 1) {
       if (records.length === 0) {
         tbody.innerHTML = `<tr><td colspan="10" class="text-center py-8 text-slate-400 font-bold">အဝယ်စာရင်း မရှိပါ။</td></tr>`;
       } else {
-        const canManagePurchases = (gSession?.role === 'canteen_admin' || gSession?.role === 'Owner' || gSession?.role === 'Admin');
+        const role = getNormalizedRole();
+        const canManagePurchases = role.includes('admin') || role.includes('owner');
 
         records.forEach((r, idx) => {
           const displayNo = gPurchasesTotalRows - ((gPurchasesPage - 1) * gPurchasesLimit + idx);
@@ -263,9 +348,9 @@ async function loadPurchasesHistory(page = 1) {
                 <span class="text-[10px] font-mono text-slate-400 block font-bold">${esc(r.barcode)}</span>
               </td>
               <td class="text-center font-mono font-black py-2.5 px-3">${r.qty}</td>
-              <td class="text-right font-mono text-slate-400 py-2.5 px-3">${Number(r.costPrice).toLocaleString()}</td>
-              <td class="text-right font-mono font-bold text-emerald-500 py-2.5 px-3">${Number(r.sellingPrice).toLocaleString()}</td>
-              <td class="text-right font-mono font-black text-amber-500 py-2.5 px-3">${Number(r.totalCost).toLocaleString()} MMK</td>
+              <td class="text-right font-mono text-slate-400 py-2.5 px-3">${Number(r.costPrice || 0).toLocaleString()}</td>
+              <td class="text-right font-mono font-bold text-emerald-500 py-2.5 px-3">${Number(r.sellingPrice || 0).toLocaleString()}</td>
+              <td class="text-right font-mono font-black text-amber-500 py-2.5 px-3">${Number(r.totalCost || 0).toLocaleString()} MMK</td>
               <td class="text-center py-2.5 px-3 right-0 sticky bg-[var(--table-header)] border-l border-[var(--border-color)]">${actionHtml}</td>
             </tr>
           `;
@@ -283,61 +368,99 @@ async function loadPurchasesHistory(page = 1) {
       if (nextBtn) nextBtn.disabled = (end >= gPurchasesTotalRows);
     }
   } catch (err) {
-    console.error("Purchases History Load Error:", err);
+    console.error("[CanteenInventory] Purchases History Load Error:", err);
   }
 }
 
+// ------------------------------------------------------------------------------
+// 🎯 6. SMART PRICING CALCULATOR (DEFAULT 8% MARKUP)
+// ------------------------------------------------------------------------------
 function triggerSmartPriceCalc() {
   const cost = parseFloat(document.getElementById('m-cost-price')?.value || 0);
-  const markup = parseFloat(document.getElementById('m-markup-percent')?.value || 20);
+  const markupInput = document.getElementById('m-markup-percent');
+  const markup = parseFloat(markupInput?.value !== undefined && markupInput.value !== '' ? markupInput.value : 8);
+
   if (cost <= 0) {
-    document.getElementById('m-suggested-price').textContent = '0 MMK';
+    const elSug = document.getElementById('m-suggested-price');
+    if (elSug) elSug.textContent = '0 MMK';
     return;
   }
+
   const rawPrice = cost * (1 + markup / 100);
   const rounded = Math.ceil(rawPrice / 50) * 50;
 
-  document.getElementById('m-suggested-price').textContent = `${rounded.toLocaleString()} MMK`;
+  const elSug = document.getElementById('m-suggested-price');
+  if (elSug) elSug.textContent = `${rounded.toLocaleString()} MMK`;
+
   const sellingInput = document.getElementById('m-selling-price');
   if (sellingInput) sellingInput.value = rounded;
 }
 
 function openItemModal() {
-  document.getElementById('m-barcode').value = '';
-  document.getElementById('m-item-name').value = '';
-  document.getElementById('m-qty').value = '1';
-  document.getElementById('m-cost-price').value = '';
-  document.getElementById('m-markup-percent').value = '20';
-  document.getElementById('m-suggested-price').textContent = '0 MMK';
-  document.getElementById('m-selling-price').value = '';
+  const elBar = document.getElementById('m-barcode');
+  if (elBar) elBar.value = '';
+
+  const elName = document.getElementById('m-item-name');
+  if (elName) elName.value = '';
+
+  const elQty = document.getElementById('m-qty');
+  if (elQty) elQty.value = '1';
+
+  const elCost = document.getElementById('m-cost-price');
+  if (elCost) elCost.value = '';
+
+  // 🎯 Default 8% Markup
+  const elMarkup = document.getElementById('m-markup-percent');
+  if (elMarkup) elMarkup.value = '8';
+
+  const elSug = document.getElementById('m-suggested-price');
+  if (elSug) elSug.textContent = '0 MMK';
+
+  const elSell = document.getElementById('m-selling-price');
+  if (elSell) elSell.value = '';
+
   loadSuppliersList();
   document.getElementById('pos-item-modal')?.classList.remove('hidden');
 }
 
 function lookupExistingBarcode() {
-  const bCode = document.getElementById('m-barcode').value.trim();
+  const bCode = document.getElementById('m-barcode')?.value.trim();
+  if (!bCode) return;
+
   const existing = gItemsCache.find(it => it.barcode === bCode);
   if (existing) {
-    document.getElementById('m-item-name').value = existing.itemName;
-    document.getElementById('m-category').value = existing.category || 'Snack';
-    document.getElementById('m-cost-price').value = existing.costPrice;
-    document.getElementById('m-markup-percent').value = existing.markupPercent || 20;
+    const elName = document.getElementById('m-item-name');
+    if (elName) elName.value = existing.itemName;
+
+    const elCat = document.getElementById('m-category');
+    if (elCat) elCat.value = existing.category || 'Snack';
+
+    const elCost = document.getElementById('m-cost-price');
+    if (elCost) elCost.value = existing.costPrice;
+
+    const elMarkup = document.getElementById('m-markup-percent');
+    if (elMarkup) elMarkup.value = existing.markupPercent !== undefined ? existing.markupPercent : 8;
+
     triggerSmartPriceCalc();
   }
 }
 
 async function submitPosPurchase(e) {
-  e.preventDefault();
+  if (e && e.preventDefault) e.preventDefault();
+
+  const markupInput = document.getElementById('m-markup-percent');
+  const markupVal = parseFloat(markupInput?.value !== undefined && markupInput.value !== '' ? markupInput.value : 8);
+
   const payload = {
-    date: new Date().toISOString().slice(0, 10),
-    barcode: document.getElementById('m-barcode').value.trim(),
-    itemName: document.getElementById('m-item-name').value.trim(),
-    category: document.getElementById('m-category').value,
+    date: getMMTDateString(), // 🕒 Strict MMT Today
+    barcode: document.getElementById('m-barcode')?.value.trim(),
+    itemName: document.getElementById('m-item-name')?.value.trim(),
+    category: document.getElementById('m-category')?.value || 'Snack',
     supplierId: parseInt(document.getElementById('m-supplier-id')?.value, 10) || null,
-    qty: parseFloat(document.getElementById('m-qty').value || 1),
-    costPrice: parseFloat(document.getElementById('m-cost-price').value || 0),
-    markupPercent: parseFloat(document.getElementById('m-markup-percent').value || 20),
-    sellingPrice: parseFloat(document.getElementById('m-selling-price').value || 0)
+    qty: parseFloat(document.getElementById('m-qty')?.value || 1),
+    costPrice: parseFloat(document.getElementById('m-cost-price')?.value || 0),
+    markupPercent: markupVal, // 🎯 Default 8%
+    sellingPrice: parseFloat(document.getElementById('m-selling-price')?.value || 0)
   };
 
   try {
@@ -359,46 +482,77 @@ async function submitPosPurchase(e) {
   }
 }
 
+// ------------------------------------------------------------------------------
+// ✏️ 7. EDIT PURCHASE ENTRY (DEFAULT 8% MARKUP & ADMIN CONTROLLED)
+// ------------------------------------------------------------------------------
 function openEditPurchaseModal(id) {
-  if (gSession?.role === 'canteen_cashier') return showToast("ERROR", "ငွေကိုင် (Cashier) အနေဖြင့် အဝယ်စာရင်းဟောင်းများအား ပြင်ဆင်ခွင့် မရှိပါ။");
+  const role = getNormalizedRole();
+  if (role === 'canteencashier' || role === 'cashier') {
+    return showToast("ERROR", "ငွေကိုင် (Cashier) အနေဖြင့် အဝယ်စာရင်းဟောင်းများအား ပြင်ဆင်ခွင့် မရှိပါ။ Admin ထံ တင်ပြပါ။");
+  }
+
   const item = gPurchasesData.find(p => String(p.id) === String(id));
   if (!item) return showToast("ERROR", "အဝယ်စာရင်း အချက်အလက် မတွေ့ပါ။");
 
-  document.getElementById('edit-pur-id').value = item.id;
-  document.getElementById('edit-pur-no').textContent = item.purchaseNo;
-  document.getElementById('edit-pur-item-name').textContent = `${item.itemName} (${item.barcode})`;
-  document.getElementById('edit-pur-date').value = item.date;
+  const elId = document.getElementById('edit-pur-id');
+  if (elId) elId.value = item.id;
+
+  const elNo = document.getElementById('edit-pur-no');
+  if (elNo) elNo.textContent = item.purchaseNo;
+
+  const elName = document.getElementById('edit-pur-item-name');
+  if (elName) elName.textContent = `${item.itemName} (${item.barcode})`;
+
+  const elDate = document.getElementById('edit-pur-date');
+  if (elDate) elDate.value = item.date;
 
   const supSelect = document.getElementById('edit-pur-supplier');
   if (supSelect) supSelect.value = item.supplierId || '';
 
-  document.getElementById('edit-pur-qty').value = item.qty;
-  document.getElementById('edit-pur-cost').value = item.costPrice;
-  document.getElementById('edit-pur-markup').value = item.markupPercent || 20;
-  document.getElementById('edit-pur-selling').value = item.sellingPrice;
-  document.getElementById('edit-pur-remark').value = item.remark || '';
+  const elQty = document.getElementById('edit-pur-qty');
+  if (elQty) elQty.value = item.qty;
+
+  const elCost = document.getElementById('edit-pur-cost');
+  if (elCost) elCost.value = item.costPrice;
+
+  // 🎯 Default 8% Markup
+  const elMarkup = document.getElementById('edit-pur-markup');
+  if (elMarkup) elMarkup.value = item.markupPercent !== undefined ? item.markupPercent : 8;
+
+  const elSelling = document.getElementById('edit-pur-selling');
+  if (elSelling) elSelling.value = item.sellingPrice;
+
+  const elRemark = document.getElementById('edit-pur-remark');
+  if (elRemark) elRemark.value = item.remark || '';
+
   document.getElementById('pos-edit-purchase-modal')?.classList.remove('hidden');
 }
 
 function triggerEditPurSmartPriceCalc() {
   const cost = parseFloat(document.getElementById('edit-pur-cost')?.value || 0);
-  const markup = parseFloat(document.getElementById('edit-pur-markup')?.value || 20);
+  const markupInput = document.getElementById('edit-pur-markup');
+  const markup = parseFloat(markupInput?.value !== undefined && markupInput.value !== '' ? markupInput.value : 8);
+
   if (cost <= 0) return;
   const rawPrice = cost * (1 + markup / 100);
   const rounded = Math.ceil(rawPrice / 50) * 50;
+
   const sellingInput = document.getElementById('edit-pur-selling');
   if (sellingInput) sellingInput.value = rounded;
 }
 
 async function submitEditPurchase(e) {
   if (e && e.preventDefault) e.preventDefault();
+
   const id = parseInt(document.getElementById('edit-pur-id')?.value, 10);
   const purchaseNo = document.getElementById('edit-pur-no')?.textContent.trim();
   const date = document.getElementById('edit-pur-date')?.value;
   const supplierId = parseInt(document.getElementById('edit-pur-supplier')?.value, 10) || null;
   const qty = parseFloat(document.getElementById('edit-pur-qty')?.value || 1);
   const costPrice = parseFloat(document.getElementById('edit-pur-cost')?.value || 0);
-  const markupPercent = parseFloat(document.getElementById('edit-pur-markup')?.value || 20);
+
+  const markupInput = document.getElementById('edit-pur-markup');
+  const markupPercent = parseFloat(markupInput?.value !== undefined && markupInput.value !== '' ? markupInput.value : 8);
   const sellingPrice = parseFloat(document.getElementById('edit-pur-selling')?.value || 0);
   const remark = document.getElementById('edit-pur-remark')?.value.trim();
 
@@ -417,8 +571,14 @@ async function submitEditPurchase(e) {
 }
 
 async function deletePurchaseEntry(id, purchaseNo) {
-  if (gSession?.role === 'canteen_cashier') return showToast("ERROR", "ငွေကိုင် (Cashier) အနေဖြင့် အဝယ်စာရင်းဟောင်းများအား ဖျက်သိမ်းခွင့် မရှိပါ။");
-  if (!confirm(`အဝယ်ဘောက်ချာ (${purchaseNo}) အား ဖျက်သိမ်းမည်မှာ သေချာပါသလား?`)) return;
+  const role = getNormalizedRole();
+  if (role === 'canteencashier' || role === 'cashier') {
+    return showToast("ERROR", "ငွေကိုင် (Cashier) အနေဖြင့် အဝယ်စာရင်းဟောင်းများအား ဖျက်သိမ်းခွင့် မရှိပါ။ Admin ထံ တင်ပြပါ။");
+  }
+
+  if (!confirm(`အဝယ်ဘောက်ချာ (${purchaseNo}) အား ဖျက်သိမ်းမည်မှာ သေချာပါသလား?\n\nသတိပြုရန်: စတော့လက်ကျန်ထဲမှ ဝယ်ယူထားသော အရေအတွက်ကို အလိုအလျောက် ပြန်လည်နုတ်ယူပါမည်။`)) {
+    return;
+  }
 
   try {
     const res = await callApi('deletePosPurchase', { id: parseInt(id, 10), purchaseNo });
@@ -433,6 +593,9 @@ async function deletePurchaseEntry(id, purchaseNo) {
   }
 }
 
+// ------------------------------------------------------------------------------
+// 🏢 8. SUPPLIERS MASTER CONTROLLER
+// ------------------------------------------------------------------------------
 async function loadSuppliersList() {
   try {
     const res = await callApi('getPosSuppliers', { _t: Date.now() }, 'POST');
@@ -443,18 +606,29 @@ async function loadSuppliersList() {
       const editPurSupplier = document.getElementById('edit-pur-supplier');
 
       const options = gSuppliersCache.map(s => `<option value="${s.id}">${esc(s.supplierName)}${s.phoneNo ? ' (' + esc(s.phoneNo) + ')' : ''}</option>`).join('');
+
       if (filterSelect) filterSelect.innerHTML = `<option value="">All Suppliers (ကုန်သည်အားလုံး)</option>` + options;
       if (modalSelect) modalSelect.innerHTML = `<option value="">-- ရွေးချယ်ပါ (အထွေထွေ) --</option>` + options;
       if (editPurSupplier) editPurSupplier.innerHTML = `<option value="">-- ရွေးချယ်ပါ (အထွေထွေ) --</option>` + options;
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn("[Suppliers] Failed to load suppliers list:", e.message);
+  }
 }
 
 function openSupplierModal() {
-  document.getElementById('sup-name').value = '';
-  document.getElementById('sup-contact').value = '';
-  document.getElementById('sup-phone').value = '';
-  document.getElementById('sup-address').value = '';
+  const elName = document.getElementById('sup-name');
+  if (elName) elName.value = '';
+
+  const elContact = document.getElementById('sup-contact');
+  if (elContact) elContact.value = '';
+
+  const elPhone = document.getElementById('sup-phone');
+  if (elPhone) elPhone.value = '';
+
+  const elAddress = document.getElementById('sup-address');
+  if (elAddress) elAddress.value = '';
+
   document.getElementById('pos-supplier-modal')?.classList.remove('hidden');
 }
 
@@ -465,6 +639,7 @@ async function submitNewSupplier() {
   const address = document.getElementById('sup-address')?.value.trim();
 
   if (!name) return showToast("ERROR", "ကုန်သည်အမည် ထည့်သွင်းပါ။");
+
   try {
     const res = await callApi('savePosSupplier', { supplierName: name, contactPerson, phoneNo, address });
     if (res && res.success) {
@@ -479,7 +654,9 @@ async function submitNewSupplier() {
   }
 }
 
-// Global Exports
+// ------------------------------------------------------------------------------
+// 🌐 9. WINDOW GLOBAL EXPORTS
+// ------------------------------------------------------------------------------
 window.loadItemsCatalog = loadItemsCatalog;
 window.loadStockInventory = loadStockInventory;
 window.onSearchStockDebounced = onSearchStockDebounced;
@@ -500,5 +677,6 @@ window.openEditPurchaseModal = openEditPurchaseModal;
 window.triggerEditPurSmartPriceCalc = triggerEditPurSmartPriceCalc;
 window.submitEditPurchase = submitEditPurchase;
 window.deletePurchaseEntry = deletePurchaseEntry;
+window.loadSuppliersList = loadSuppliersList;
 window.openSupplierModal = openSupplierModal;
 window.submitNewSupplier = submitNewSupplier;

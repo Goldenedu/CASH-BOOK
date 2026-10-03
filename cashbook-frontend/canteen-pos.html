@@ -59,11 +59,26 @@
     .custom-scroll::-webkit-scrollbar { width: 5px; height: 5px; }
     .custom-scroll::-webkit-scrollbar-track { background: transparent; }
     .custom-scroll::-webkit-scrollbar-thumb { background: #64748b40; border-radius: 4px; }
+
+    /* 🛡️ Strict Role-Based Instant Lockdown CSS */
+    html.role-counter #canteen-sidebar,
+    html.role-counter #btn-toggle-sidebar,
+    html.role-counter #btn-admin-stock,
+    html.role-counter #btn-header-waste,
+    html.role-counter #btn-header-surplus,
+    html.role-counter #btn-header-close-day {
+      display: none !important;
+    }
+
+    html.role-cashier #btn-side-settings {
+      display: none !important;
+    }
   </style>
 
-  <!-- Theme Pre-Initialization to prevent UI flicker -->
+  <!-- 🕒 MMT UTC+06:30, Theme & Early Role Initialization -->
   <script>
     (function() {
+      // 1. Theme Initialization
       const savedTheme = localStorage.getItem('canteen_pos_theme') || 'dark';
       if (savedTheme === 'light') {
         document.documentElement.classList.remove('dark');
@@ -72,6 +87,28 @@
         document.documentElement.classList.remove('light');
         document.documentElement.classList.add('dark');
       }
+
+      // 2. Early Role Detection (Zero Flash of Restricted Controls)
+      try {
+        const userStr = localStorage.getItem('golden_user') || localStorage.getItem('user');
+        const role = userStr ? JSON.parse(userStr).role : (localStorage.getItem('golden_user_role') || '');
+        const normRole = String(role || '').toLowerCase().replace(/[\s_-]/g, '');
+        if (normRole.includes('counter')) {
+          document.documentElement.classList.add('role-counter');
+        } else if (normRole === 'canteencashier' || normRole === 'cashier') {
+          document.documentElement.classList.add('role-cashier');
+        } else if (normRole === 'canteenadmin' || normRole === 'admin' || normRole === 'owner') {
+          document.documentElement.classList.add('role-admin');
+        }
+      } catch(e) {}
+
+      // 3. Myanmar Standard Time (UTC+06:30) Global Helper
+      window.getMMTDateString = function(dInput) {
+        const d = dInput ? new Date(dInput) : new Date();
+        const targetMs = isNaN(d.getTime()) ? Date.now() : d.getTime();
+        const mmt = new Date(targetMs + (6.5 * 60 * 60 * 1000));
+        return mmt.toISOString().slice(0, 10);
+      };
     })();
   </script>
 
@@ -82,7 +119,7 @@
 <body class="h-screen flex overflow-hidden select-none">
 
   <!-- ============================================================================== -->
-  <!-- 💡 1. CANTEEN HUB NAVIGATION SIDEBAR (FIXED PINNED SIDEBAR - NEVER SCROLLS)   -->
+  <!-- 💡 1. CANTEEN HUB NAVIGATION SIDEBAR (2-LINE TYPOGRAPHY HIERARCHY)             -->
   <!-- ============================================================================== -->
   <aside id="canteen-sidebar" class="w-64 bg-[var(--bg-sidebar)] border-r border-[var(--border-color)] flex flex-col justify-between shrink-0 h-screen z-50 overflow-y-auto custom-scroll shadow-lg">
     <div>
@@ -97,71 +134,101 @@
         </div>
       </div>
 
-      <!-- Navigation Links -->
-      <nav class="p-3 space-y-1 text-xs font-bold">
-        <div class="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 px-3 py-1">OPERATIONS</div>
+      <!-- Navigation Links (English on Top, Burmese Subtitle Below) -->
+      <nav class="p-3 space-y-1.5 text-xs font-bold">
+        <div class="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 px-3 py-0.5">OPERATIONS</div>
         
         <button id="nav-btn-dashboard" onclick="switchCanteenView('dashboard')" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
-          <i class="fa-solid fa-chart-pie w-4 text-center text-indigo-400"></i>
-          <span>Dashboard (အရောင်းချုပ်)</span>
+          <i class="fa-solid fa-chart-pie w-4 text-center text-indigo-400 shrink-0"></i>
+          <div class="flex flex-col text-left leading-tight">
+            <span class="text-xs font-black">Dashboard</span>
+            <span class="text-[10px] opacity-80 font-normal">(အရောင်းချုပ်)</span>
+          </div>
         </button>
 
         <button id="nav-btn-pos" onclick="switchCanteenView('pos')" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 bg-emerald-600 text-white shadow-lg shadow-emerald-900/30">
-          <i class="fa-solid fa-cash-register w-4 text-center"></i>
-          <span>POS Register (အရောင်းကောင်တာ)</span>
+          <i class="fa-solid fa-cash-register w-4 text-center shrink-0"></i>
+          <div class="flex flex-col text-left leading-tight">
+            <span class="text-xs font-black">POS Register</span>
+            <span class="text-[10px] opacity-90 font-normal">(အရောင်းကောင်တာ)</span>
+          </div>
         </button>
 
         <button id="nav-btn-sales" onclick="switchCanteenView('sales')" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
-          <i class="fa-solid fa-receipt w-4 text-center text-sky-400"></i>
-          <span>Sales Orders (အရောင်းစာရင်း)</span>
+          <i class="fa-solid fa-receipt w-4 text-center text-sky-400 shrink-0"></i>
+          <div class="flex flex-col text-left leading-tight">
+            <span class="text-xs font-black">Sales Orders</span>
+            <span class="text-[10px] opacity-80 font-normal">(အရောင်းစာရင်း)</span>
+          </div>
         </button>
 
-        <div class="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 px-3 py-1 pt-2.5">INVENTORY & AUDIT</div>
+        <div class="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 px-3 py-1 pt-2">INVENTORY & AUDIT</div>
 
         <button id="nav-btn-stock" onclick="switchCanteenView('stock')" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
-          <i class="fa-solid fa-boxes-stacked w-4 text-center text-teal-400"></i>
-          <span>Stock Inventory (လက်ကျန်စစ်)</span>
+          <i class="fa-solid fa-boxes-stacked w-4 text-center text-teal-400 shrink-0"></i>
+          <div class="flex flex-col text-left leading-tight">
+            <span class="text-xs font-black">Stock Inventory</span>
+            <span class="text-[10px] opacity-80 font-normal">(လက်ကျန်စစ်)</span>
+          </div>
         </button>
 
         <button id="nav-btn-purchases" onclick="switchCanteenView('purchases')" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
-          <i class="fa-solid fa-truck-ramp-box w-4 text-center text-amber-400"></i>
-          <span>Purchases (အဝယ်စာရင်း)</span>
+          <i class="fa-solid fa-truck-ramp-box w-4 text-center text-amber-400 shrink-0"></i>
+          <div class="flex flex-col text-left leading-tight">
+            <span class="text-xs font-black">Purchases</span>
+            <span class="text-[10px] opacity-80 font-normal">(အဝယ်စာရင်း)</span>
+          </div>
         </button>
 
         <button id="nav-btn-waste" onclick="switchCanteenView('waste')" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
-          <i class="fa-solid fa-dumpster-fire w-4 text-center text-rose-400"></i>
-          <span>Waste & Loss (အပျက်/အပျောက်)</span>
+          <i class="fa-solid fa-dumpster-fire w-4 text-center text-rose-400 shrink-0"></i>
+          <div class="flex flex-col text-left leading-tight">
+            <span class="text-xs font-black">Waste & Loss</span>
+            <span class="text-[10px] opacity-80 font-normal">(အပျက်/အပျောက်)</span>
+          </div>
         </button>
 
         <button id="nav-btn-surplus" onclick="switchCanteenView('surplus')" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
-          <i class="fa-solid fa-layer-group w-4 text-center text-emerald-400"></i>
-          <span>Stock Surplus (အပိုစာရင်း)</span>
+          <i class="fa-solid fa-layer-group w-4 text-center text-emerald-400 shrink-0"></i>
+          <div class="flex flex-col text-left leading-tight">
+            <span class="text-xs font-black">Stock Surplus</span>
+            <span class="text-[10px] opacity-80 font-normal">(အပိုစာရင်း)</span>
+          </div>
         </button>
 
-        <div class="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 px-3 py-1 pt-2.5">CLEARING & CONTROLS</div>
+        <div class="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 px-3 py-1 pt-2">CLEARING & CONTROLS</div>
 
         <button id="nav-btn-close-day" onclick="openDayCloseModal()" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-amber-500 dark:text-slate-400 dark:hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20">
-          <i class="fa-solid fa-lock w-4 text-center text-amber-400"></i>
-          <span>Close Register (ဆိုင်ပိတ်မည်)</span>
+          <i class="fa-solid fa-lock w-4 text-center text-amber-400 shrink-0"></i>
+          <div class="flex flex-col text-left leading-tight">
+            <span class="text-xs font-black">Close Register</span>
+            <span class="text-[10px] opacity-80 font-normal">(ဆိုင်ပိတ်မည်)</span>
+          </div>
         </button>
 
-        <button onclick="openSettlementModal()" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-amber-500 dark:text-slate-400 dark:hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20">
-          <i class="fa-solid fa-coins w-4 text-center text-amber-400"></i>
-          <span>Evening Clearing (ညနေစာရင်းရှင်း)</span>
+        <button id="nav-btn-settle" onclick="openSettlementModal()" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-amber-500 dark:text-slate-400 dark:hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20">
+          <i class="fa-solid fa-coins w-4 text-center text-amber-400 shrink-0"></i>
+          <div class="flex flex-col text-left leading-tight">
+            <span class="text-xs font-black">Evening Clearing</span>
+            <span class="text-[10px] opacity-80 font-normal">(ညနေစာရင်းရှင်း)</span>
+          </div>
         </button>
 
         <button id="btn-side-settings" onclick="openSettingsModal()" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-sky-500 dark:text-slate-400 dark:hover:text-sky-300 hover:bg-sky-500/10 border border-transparent hover:border-sky-500/20">
-          <i class="fa-solid fa-sliders w-4 text-center text-sky-400"></i>
-          <span>Settings (မုန့်ဖိုးကန့်သတ်ငွေ)</span>
+          <i class="fa-solid fa-sliders w-4 text-center text-sky-400 shrink-0"></i>
+          <div class="flex flex-col text-left leading-tight">
+            <span class="text-xs font-black">POS Settings</span>
+            <span class="text-[10px] opacity-80 font-normal">(မုန့်ဖိုးကန့်သတ်ငွေ)</span>
+          </div>
         </button>
       </nav>
     </div>
 
-    <!-- Sidebar Bottom -->
+    <!-- Sidebar Bottom (MMT UTC+06:30 Indicated) -->
     <div class="p-3 border-t border-[var(--border-color)] bg-[var(--bg-sidebar)] space-y-2">
       <div class="px-2 py-1 flex items-center justify-between text-[10px] font-mono text-slate-500">
         <span id="pos-network-status" class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> ONLINE</span>
-        <span id="side-today-date">2026-10-01</span>
+        <span id="side-today-date" title="Myanmar Standard Time (UTC+06:30)">MMT 2026-10-01</span>
       </div>
       <button onclick="logoutPos()" class="w-full py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2">
         <i class="fa-solid fa-power-off text-xs"></i>
@@ -171,7 +238,7 @@
   </aside>
 
   <!-- ============================================================================== -->
-  <!-- 💡 2. MAIN APPLICATION WORKSPACE (FLEX-1 FIT - COMPACT EXECUTIVE VIEWPORT)     -->
+  <!-- 💡 2. MAIN APPLICATION WORKSPACE                                              -->
   <!-- ============================================================================== -->
   <div class="flex-1 flex flex-col h-screen min-w-0 overflow-hidden bg-[var(--bg-base)]">
     
@@ -183,7 +250,7 @@
         </button>
         <div>
           <h1 id="canteen-view-title" class="text-xs font-black tracking-wider uppercase">CANTEEN POS TERMINAL</h1>
-          <p id="pos-today-date" class="text-[10px] font-mono text-slate-400">Loading...</p>
+          <p id="pos-today-date" class="text-[10px] font-mono text-slate-400">Loading MMT...</p>
         </div>
       </div>
 
@@ -213,11 +280,13 @@
           <span id="header-close-status-text">ဆိုင်ပိတ်မည်</span>
         </button>
 
+        <!-- Theme Switcher -->
         <button id="btn-theme-toggle" onclick="toggleCanteenTheme()" class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-800 border border-[var(--border-color)] text-amber-500 dark:text-sky-300 flex items-center justify-center text-xs transition active:scale-95 shadow-sm" title="Toggle Theme">
           <i id="theme-toggle-icon" class="fa-solid fa-sun dark:fa-moon"></i>
         </button>
         
-        <button id="btn-global-refresh" onclick="refreshActiveCanteenView()" class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-800 border border-[var(--border-color)] text-slate-600 dark:text-slate-300 flex items-center justify-center text-xs transition active:scale-95" title="Refresh">
+        <!-- Universal Robust Refresh -->
+        <button id="btn-global-refresh" onclick="refreshActiveCanteenView()" class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-800 border border-[var(--border-color)] text-slate-600 dark:text-slate-300 flex items-center justify-center text-xs transition active:scale-95" title="Refresh Current View">
           <i class="fa-solid fa-arrows-rotate"></i>
         </button>
 
@@ -227,10 +296,12 @@
       </div>
     </header>
 
-    <!-- Content Workspace Container (Compact padding: p-2.5 md:p-3 for zero-gap feel) -->
+    <!-- Content Workspace Container -->
     <div class="flex-1 p-2.5 md:p-3 space-y-3 overflow-y-auto custom-scroll min-h-0 flex flex-col">
       
-      <!-- VIEW 1: DASHBOARD -->
+      <!-- ============================================================================== -->
+      <!-- 📊 VIEW 1: DASHBOARD (TODAY + ALL-TIME)                                        -->
+      <!-- ============================================================================== -->
       <section id="view-dashboard" class="space-y-3.5 hidden">
         <div class="flex justify-between items-center bg-indigo-50 dark:bg-[#0c1830] border border-indigo-200 dark:border-indigo-500/30 p-3.5 rounded-2xl shadow-sm">
           <div class="flex items-center gap-3">
@@ -327,12 +398,12 @@
         </div>
       </section>
 
-      <!-- ────────────────────────────────────────────────────────────────────────── -->
-      <!-- ⚡ VIEW 2: POS REGISTER (PERFECT 100% BOTTOM SYMMETRICAL ALIGNMENT)         -->
-      <!-- ────────────────────────────────────────────────────────────────────────── -->
+      <!-- ============================================================================== -->
+      <!-- ⚡ VIEW 2: POS REGISTER (PERFECT SYMMETRICAL BOTTOM ALIGNMENT)                  -->
+      <!-- ============================================================================== -->
       <section id="view-pos" class="h-full flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch min-h-0">
         
-        <!-- Left Panel: Scanner & Cart (h-full flex column) -->
+        <!-- Left Panel: Scanner & Cart -->
         <div class="lg:col-span-7 flex flex-col space-y-2.5 h-full min-h-0">
           <div class="glass-card p-2.5 rounded-2xl flex items-center gap-2.5 shadow-sm relative z-30 shrink-0">
             <div class="w-8 h-8 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center shrink-0 border border-sky-500/20">
@@ -351,7 +422,7 @@
             </button>
           </div>
 
-          <!-- Cart Container (flex-1 fill, exactly matches right panel bottom) -->
+          <!-- Cart Container (flex-1 fill) -->
           <div class="glass-card rounded-2xl flex-1 flex flex-col justify-between overflow-hidden shadow-sm relative z-10 min-h-0">
             <div class="px-3.5 py-2 border-b border-[var(--border-color)] bg-[var(--table-header)] flex justify-between items-center shrink-0 h-[38px]">
               <div class="flex items-center gap-2">
@@ -372,7 +443,7 @@
               </div>
             </div>
 
-            <!-- Cart Bottom Pinned Bar (Height: 52px exactly, matches Right panel) -->
+            <!-- Cart Bottom Pinned Bar (Height: 52px exactly) -->
             <div class="px-4 bg-[var(--table-header)] border-t border-[var(--border-color)] flex items-center justify-between text-xs font-mono shrink-0 h-[52px]">
               <span class="text-slate-500 dark:text-slate-400 font-sans">အရေအတွက်ပေါင်း: <strong id="pos-cart-total-qty" class="text-slate-900 dark:text-white font-mono font-bold text-sm">0</strong> ခု</span>
               <span class="text-slate-500 dark:text-slate-400 font-sans">ကျသင့်ငွေပေါင်း: <strong id="pos-cart-subtotal" class="text-emerald-600 dark:text-emerald-400 text-base font-black font-mono">0 MMK</strong></span>
@@ -380,7 +451,7 @@
           </div>
         </div>
 
-        <!-- Right Panel: Student Radar & Bill Summary (h-full flex column) -->
+        <!-- Right Panel: Student Radar & Bill Summary -->
         <div class="lg:col-span-5 flex flex-col space-y-2.5 h-full min-h-0">
           <div class="grid grid-cols-2 gap-2 bg-[var(--bg-card-inner)] p-1 rounded-2xl border border-[var(--border-color)] shrink-0">
             <button id="btn-mode-wallet" onclick="setPaymentMode('Student Pocket Money')" class="py-1.5 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
@@ -439,7 +510,7 @@
             </div>
           </div>
 
-          <!-- Bill Summary Card (flex-1 fill with pinned matching 52px checkout container) -->
+          <!-- Bill Summary Card & Checkout (Height: 52px exactly, matches Left Cart Footer) -->
           <div class="glass-card rounded-2xl flex-1 flex flex-col justify-between overflow-hidden shadow-sm min-h-0">
             <div class="p-3.5 space-y-2 flex-1 overflow-y-auto custom-scroll">
               <h3 class="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center justify-between">
@@ -468,7 +539,7 @@
               </div>
             </div>
 
-            <!-- Pinned Checkout Button Bar (Height: 52px exactly, 100% aligned with Cart footer) -->
+            <!-- Pinned Checkout Button Bar (Height: 52px exactly) -->
             <div class="p-1.5 bg-[var(--table-header)] border-t border-[var(--border-color)] flex items-center shrink-0 h-[52px]">
               <button id="btn-checkout" onclick="executeCheckout()" class="w-full h-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-black text-xs md:text-sm shadow-md flex items-center justify-center gap-2 active:scale-98 transition disabled:opacity-40 disabled:pointer-events-none">
                 <i class="fa-solid fa-circle-check text-base"></i>
@@ -838,7 +909,7 @@
   <!-- 💡 3. MODALS SECTION                                                           -->
   <!-- ============================================================================== -->
 
-  <!-- MODAL 1: ITEM & STOCK PURCHASE -->
+  <!-- MODAL 1: ITEM & STOCK PURCHASE (DEFAULT 8% MARKUP) -->
   <div id="pos-item-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
     <div class="bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
       <div class="px-5 py-4 border-b border-[var(--border-color)] flex justify-between items-center bg-[var(--table-header)]">
@@ -893,12 +964,13 @@
           </div>
         </div>
 
+        <!-- 🎯 SMART PRICING ENGINE (DEFAULT 8% MARKUP) -->
         <div class="p-3 bg-sky-500/10 border border-sky-500/20 rounded-2xl space-y-2">
           <div class="flex justify-between items-center">
             <span class="text-[10px] font-black text-sky-500 uppercase tracking-wider">SMART PRICING ENGINE</span>
             <div class="flex items-center gap-1.5">
               <label class="text-[10px] text-slate-400 font-bold">Markup:</label>
-              <input type="number" id="m-markup-percent" value="20" oninput="triggerSmartPriceCalc()" class="w-14 bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-lg px-1.5 py-0.5 text-center font-mono font-bold text-sky-500 text-xs">
+              <input type="number" id="m-markup-percent" value="8" oninput="triggerSmartPriceCalc()" class="w-14 bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-lg px-1.5 py-0.5 text-center font-mono font-bold text-sky-500 text-xs">
               <span class="text-[10px] text-slate-400">%</span>
             </div>
           </div>
@@ -988,7 +1060,7 @@
     </div>
   </div>
 
-  <!-- MODAL 4: EDIT PURCHASE MODAL (Admin Only) -->
+  <!-- MODAL 4: EDIT PURCHASE MODAL (DEFAULT 8% MARKUP) -->
   <div id="pos-edit-purchase-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
     <div class="bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-3xl w-full max-w-md shadow-2xl p-5 space-y-4">
       <div class="flex justify-between items-center border-b border-[var(--border-color)] pb-2">
@@ -1030,7 +1102,7 @@
         <div class="grid grid-cols-2 gap-3">
           <div class="space-y-1">
             <label class="font-bold text-slate-400">Markup %</label>
-            <input type="number" id="edit-pur-markup" value="20" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-sky-500 font-mono font-bold text-right outline-none">
+            <input type="number" id="edit-pur-markup" value="8" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-sky-500 font-mono font-bold text-right outline-none">
           </div>
           <div class="space-y-1">
             <label class="font-bold text-emerald-500">ရောင်းဈေး</label>
@@ -1099,7 +1171,7 @@
             </select>
           </div>
           <div class="space-y-1">
-            <label class="font-bold text-slate-400 uppercase">ရက်စွဲ</label>
+            <label class="font-bold text-slate-400 uppercase">ရက်စွဲ (MMT)</label>
             <input type="date" id="m-waste-date" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 outline-none">
           </div>
         </div>
@@ -1175,7 +1247,7 @@
             </select>
           </div>
           <div class="space-y-1">
-            <label class="font-bold text-slate-400 uppercase">ရက်စွဲ</label>
+            <label class="font-bold text-slate-400 uppercase">ရက်စွဲ (MMT)</label>
             <input type="date" id="m-surplus-date" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 outline-none">
           </div>
         </div>
@@ -1253,7 +1325,7 @@
       <div class="p-5 space-y-4 text-xs font-mono">
         <div id="closure-stats-card" class="p-3.5 bg-slate-200/50 dark:bg-black/40 border border-[var(--border-color)] rounded-2xl space-y-2">
           <div class="flex justify-between text-slate-400 font-sans">
-            <span>ပိတ်သိမ်းမည့်ရက်စွဲ:</span>
+            <span>ပိတ်သိမ်းမည့်ရက်စွဲ (MMT):</span>
             <strong id="close-modal-date" class="font-mono">-</strong>
           </div>
           <div class="flex justify-between text-slate-400 font-sans">
