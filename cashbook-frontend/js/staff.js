@@ -4,7 +4,7 @@
  * File: js/staff.js (Location: cashbook-frontend/js/staff.js)
  * 💡 Features: Safe Standalone Pure Escapers, 1-Row 4-KPI Grid Enforcer,
  *              Precision Gender Counting (Daw/ဒေါ် -> Female),
- *              Compact 1-Row Toolbar & True Client-Side Pagination Slicing
+ *              Full Time Staff & Part Time Staff Spaced Buttons, Student-width Search
  * ==============================================================================
  */
 
@@ -133,7 +133,7 @@ function filterStaffData(list = [], searchVal = '') {
 }
 
 /**
- * 💡 Switch Staff Category (Full Time vs Part Time)
+ * 💡 Switch Staff Category (Full Time Staff vs Part Time Staff)
  */
 async function switchStaffCategory(category) {
   gStaffCategory = category;
@@ -143,8 +143,8 @@ async function switchStaffCategory(category) {
   const btnPT = document.getElementById('staff-tab-pt');
   const btnEditGrade = document.getElementById('btn-edit-grade');
 
-  const activeTabClass = "px-2.5 py-1 rounded text-xs font-bold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-600/20 flex items-center gap-1 whitespace-nowrap";
-  const inactiveTabClass = "px-2.5 py-1 rounded text-xs font-bold transition-all text-slate-400 hover:text-white flex items-center gap-1 whitespace-nowrap";
+  const activeTabClass = "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-600/20 flex items-center gap-1.5 whitespace-nowrap";
+  const inactiveTabClass = "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white flex items-center gap-1.5 whitespace-nowrap";
 
   if (category === 'Full Time') {
     if (btnFT) btnFT.className = activeTabClass;
@@ -232,7 +232,7 @@ async function loadStaffData(useCache = false) {
       let femaleCount = 0;
       let netPayroll = 0;
 
-      // 💡 Gender Precision Fix: Daw/ဒေါ် ပါဝင်သော အမည်များကို Female အဖြစ် တိကျစွာ ရေတွက်ခြင်း
+      // 💡 Gender Precision: Daw/ဒေါ် ပါဝင်သော အမည်များကို Female အဖြစ် တိကျစွာ ရေတွက်ခြင်း
       gStaffData.forEach(item => {
         const isResigned = Boolean(item.resigned_date || item.resignedDate);
         const isInactive = String(item.status || '').toLowerCase() === 'inactive' || isResigned;
@@ -244,7 +244,6 @@ async function loadStaffData(useCache = false) {
           const detectedG = autoDetectGender(rawName);
           let g = String(item.gender || '').toLowerCase().trim();
 
-          // အကယ်၍ DB ထဲတွင် Male ဟု အလွဲမှတ်ထားသော်လည်း နာမည်က Daw/ဒေါ် ဖြစ်နေပါက Female အဖြစ် ချက်ချင်း ပြောင်းလဲရေတွက်သည်
           if (!g || g === 'non' || g === 'undefined' || (g === 'male' && detectedG === 'Female')) {
             g = detectedG.toLowerCase();
           }
@@ -319,7 +318,7 @@ function renderStaffKpis(stats) {
 }
 
 /**
- * 💡 Render Table Grid Rows
+ * 💡 Render Table Grid Rows (Crash-Proof Data Mapping)
  */
 function renderStaffTable(rawData) {
   const tbody = document.getElementById('staff-table-body');
