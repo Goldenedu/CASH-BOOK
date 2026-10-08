@@ -1,32 +1,59 @@
 <!-- views/income.html --> 
 <div class="space-y-5">
 
-  <!-- ၁။ Top KPI Cards Grid -->
+  <!-- 💡 ၁။ Top KPI Stats Cards Grid (Main Bank Book နှင့် Pixel-Perfect တူညီအောင် ညှိထားသည်) -->
   <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <!-- 1. Total Income -->
     <div class="stats-card p-5 rounded-xl flex items-start gap-4">
       <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400"><i class="fa-solid fa-arrow-trend-up text-xl"></i></div>
-      <div><p class="text-[10px] uppercase font-bold text-slate-500">Total Income</p><h3 id="inc-total-income" class="text-base font-extrabold text-white mt-1">0 MMK</h3></div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Total Income</p>
+        <h3 id="inc-total-income" class="text-base font-extrabold text-white mt-1">0 MMK</h3>
+      </div>
     </div>
+
+    <!-- 2. Total Expense -->
     <div class="stats-card p-5 rounded-xl flex items-start gap-4">
       <div class="p-3.5 rounded-lg bg-rose-500/10 text-rose-400"><i class="fa-solid fa-arrow-trend-down text-xl"></i></div>
-      <div><p class="text-[10px] uppercase font-bold text-slate-500">Total Expense</p><h3 id="inc-total-expense" class="text-base font-extrabold text-white mt-1">0 MMK</h3></div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Total Expense</p>
+        <h3 id="inc-total-expense" class="text-base font-extrabold text-white mt-1">0 MMK</h3>
+      </div>
     </div>
+
+    <!-- 3. Balances -->
     <div class="stats-card p-5 rounded-xl flex items-start gap-4">
       <div class="p-3.5 rounded-lg bg-indigo-500/10 text-indigo-400"><i class="fa-solid fa-scale-balanced text-xl"></i></div>
-      <div><p class="text-[10px] uppercase font-bold text-slate-500">Balances</p><h3 id="inc-balance" class="text-base font-extrabold text-white mt-1">0 MMK</h3></div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Balances</p>
+        <h3 id="inc-balance" class="text-base font-extrabold text-white mt-1">0 MMK</h3>
+      </div>
     </div>
+
+    <!-- 4. Total Entries -->
     <div class="stats-card p-5 rounded-xl flex items-start gap-4">
       <div class="p-3.5 rounded-lg bg-sky-500/10 text-sky-400"><i class="fa-solid fa-list-check text-xl"></i></div>
-      <div><p class="text-[10px] uppercase font-bold text-slate-500">Total Entries</p><h3 id="inc-entries-count" class="text-base font-extrabold text-white mt-1">0</h3></div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Total Entries</p>
+        <h3 id="inc-entries-count" class="text-base font-extrabold text-white mt-1">0</h3>
+      </div>
     </div>
   </div>
 
-  <!-- ၂။ Search & Action Controls Bar -->
+  <!-- 💡 ၂။ Search & Action Controls Bar (Main Bank Book စတိုင်နှင့် ခလုတ်များ ၁၀၀% ထပ်တူညီသည်) -->
   <div class="flex flex-col lg:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
     <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
-      <div class="relative w-full sm:w-64">
-        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
-        <input type="text" id="income-search" oninput="onSearchInputIncome()" placeholder="Search student name, FYID, student ID..." class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white focus:outline-none focus:border-indigo-500 transition-all">
+      
+      <!-- 🎯 Search Input (Bank Book အတိုင်း အကျယ် sm:w-64, min-w-[250px]) -->
+      <div class="relative w-full sm:w-64 shrink-0" style="min-width: 250px;">
+        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500 pointer-events-none">
+          <i class="fa-solid fa-magnifying-glass text-xs"></i>
+        </span>
+        <input type="text" 
+               id="income-search" 
+               oninput="onSearchInputIncome()" 
+               placeholder="Search student name, FYID, ID..." 
+               class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all">
       </div>
 
       <!-- 💡 DATE RANGE FILTER CONTROLS -->
@@ -39,14 +66,24 @@
       </div>
     </div>
 
+    <!-- ညာဘက်ခြမ်း Action Buttons (Bank Book အတိုင်း + Add New Entry ဟု ပြောင်းထားသည်) -->
     <div class="flex items-center gap-2.5 w-full lg:w-auto justify-end">
-      <button onclick="loadIncomeData(false)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all" title="Refresh Data"><i class="fa-solid fa-rotate text-xs"></i> Refresh</button>
-      <button onclick="exportToCSVIncome()" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all"><i class="fa-solid fa-file-export text-xs"></i> Export CSV</button>
-      <button onclick="openAddModalIncome()" class="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/10 transition-all"><i class="fa-solid fa-plus text-xs"></i> Add Income Entry</button>
+      <button onclick="loadIncomeData(false)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap" title="Refresh Data">
+        <i class="fa-solid fa-rotate text-xs"></i> Refresh
+      </button>
+
+      <button onclick="exportToCSVIncome()" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap">
+        <i class="fa-solid fa-file-export text-xs"></i> Export CSV
+      </button>
+
+      <!-- 🎯 Bank Book အတိုင်း + Add New Entry ဟု ပြောင်းထားသည် -->
+      <button onclick="openAddModalIncome()" class="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/10 transition-all whitespace-nowrap">
+        <i class="fa-solid fa-plus text-xs"></i> Add New Entry
+      </button>
     </div>
   </div>
 
-  <!-- ၃။ 19-Column Table Grid -->
+  <!-- 💡 ၃။ 19-Column Table Grid (Header များ စံသတ်မှတ်ချက်အတိုင်း သပ်ရပ်စွာ ညှိထားသည်) -->
   <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
     <table class="w-full text-left border-collapse min-w-[1900px]">
       <thead>
@@ -55,10 +92,10 @@
           <th scope="col" class="w-28 text-slate-400 text-xs py-3">EFFECT DATE</th>
           <th scope="col" class="w-28 text-slate-400 text-xs py-3">DATE</th>
           <th scope="col" class="w-24 text-slate-400 text-xs py-3">FY</th>
-          <th scope="col" class="w-24 text-slate-400 text-xs py-3">ID</th>
+          <th scope="col" class="w-20 text-slate-400 text-xs py-3">ID</th>
           <th scope="col" class="w-32 text-slate-400 text-xs py-3">FYID</th>
           <th scope="col" class="min-w-[200px] text-slate-400 text-xs py-3">FYID NAME</th>
-          <th scope="col" class="w-32 text-slate-400 text-xs py-3">CLASS</th>
+          <th scope="col" class="w-28 text-slate-400 text-xs py-3">CLASS</th>
           <th scope="col" class="w-32 text-slate-400 text-xs py-3">CATEGORY</th>
           <th scope="col" class="w-36 text-slate-400 text-xs py-3">ACCOUNT NAME</th>
           <th scope="col" class="w-24 text-slate-400 text-xs py-3">METHOD</th>
@@ -69,7 +106,7 @@
           <th scope="col" class="w-24 text-slate-400 text-xs py-3">MY</th>
           <th scope="col" class="w-36 text-slate-400 text-xs py-3">VR NO</th>
           <th scope="col" class="min-w-[150px] text-slate-400 text-xs py-3">REMARK</th>
-          <th scope="col" class="w-32 text-center text-slate-400 text-xs py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">ACTION</th>
+          <th scope="col" class="w-28 text-center text-slate-400 text-xs py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">ACTION</th>
         </tr>
       </thead>
       <tbody id="income-table-body" class="divide-y divide-slate-800/40 text-slate-300">
@@ -78,7 +115,7 @@
     </table>
   </div>
 
-  <!-- ၄။ Pagination Tray -->
+  <!-- 💡 ၄။ Pagination Tray -->
   <div class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
     <div id="inc-pagination-info" class="text-xs font-semibold text-slate-400 tracking-wide">Showing entries...</div>
     <div class="flex items-center gap-2">
@@ -89,7 +126,7 @@
 
 </div>
 
-<!-- ၅။ ADD / EDIT INCOME ENTRY MODAL -->
+<!-- 💡 ၅။ ADD / EDIT INCOME ENTRY MODAL -->
 <div id="income-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
   <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
     <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
