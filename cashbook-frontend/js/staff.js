@@ -2,14 +2,14 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - STAFF DIRECTORY & MATRIX MODULE (D1 DATABASE COMPATIBLE)
  * File: js/staff.js (Location: cashbook-frontend/js/staff.js)
- * 💡 Features: Self-Contained Escapers (Infinite Loop Crash Eliminated),
- *              Guaranteed 1-Row 4-KPI Grid, Precision Gender Counter,
- *              Ultra-Compact 1-Row Toolbar & True Client-Side Pagination Slicing
+ * 💡 Features: Safe Standalone Pure Escapers, 1-Row 4-KPI Grid Enforcer,
+ *              Precision Gender Counting (Daw/ဒေါ် -> Female),
+ *              Compact 1-Row Toolbar & True Client-Side Pagination Slicing
  * ==============================================================================
  */
 
 // ==============================================================================
-// 💡 SAFE PURE HELPERS (Recursion Loop လုံးဝ မဖြစ်စေဘဲ တိုက်ရိုက်အလုပ်လုပ်သော Function များ)
+// 💡 SAFE PURE HELPERS
 // ==============================================================================
 
 function escapeHtml(str) {
@@ -49,17 +49,23 @@ function autoDetectGender(nameStr) {
   if (!nameStr) return 'Male';
   const clean = String(nameStr).trim();
 
+  // ၁။ မိန်းကလေး ရှေ့စာလုံးများနှင့် တိုင်းရင်းသူအမည်များ (Daw, မေ, ဒေါ်, နန်း, နော်)
+  if (clean.startsWith('မေ') || clean.startsWith('ဒေါ်') || clean.startsWith('နန်း') || clean.startsWith('နော်') ||
+      /^(May|Daw|Nang|Naw)\b/i.test(clean) || clean.includes('Daw ') || clean.includes('ဒေါ်')) {
+    return 'Female';
+  }
+
+  // ၂။ ယောကျ်ားလေး ရှေ့စာလုံးများ
   if (clean.startsWith('မောင်') || clean.startsWith('ကို') || clean.startsWith('ဦး') ||
       clean.startsWith('မင်း') || /^(Mg|Ko|U|Min)\b/i.test(clean) || /^(မောင်|ကို|ဦး|မင်း)/.test(clean)) {
     return 'Male';
   }
-  if (clean.startsWith('မေ') || clean.startsWith('ဒေါ်') || clean.startsWith('နန်း') || clean.startsWith('နော်') ||
-      /^(May|Daw|Nang|Naw)\b/i.test(clean)) {
-    return 'Female';
-  }
+
+  // ၃။ 'မ' ဖြင့် စပြီး 'မောင်' သို့မဟုတ် 'မင်း' မဟုတ်ပါက Female
   if ((clean.startsWith('မ') && !clean.startsWith('မောင်') && !clean.startsWith('မင်း')) || /^(Ma)\b/i.test(clean)) {
     return 'Female';
   }
+
   return 'Male';
 }
 
@@ -137,8 +143,8 @@ async function switchStaffCategory(category) {
   const btnPT = document.getElementById('staff-tab-pt');
   const btnEditGrade = document.getElementById('btn-edit-grade');
 
-  const activeTabClass = "px-2.5 py-1.5 rounded-md text-xs font-bold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-600/20 flex items-center gap-1 whitespace-nowrap";
-  const inactiveTabClass = "px-2.5 py-1.5 rounded-md text-xs font-bold transition-all text-slate-400 hover:text-white flex items-center gap-1 whitespace-nowrap";
+  const activeTabClass = "px-2.5 py-1 rounded text-xs font-bold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-600/20 flex items-center gap-1 whitespace-nowrap";
+  const inactiveTabClass = "px-2.5 py-1 rounded text-xs font-bold transition-all text-slate-400 hover:text-white flex items-center gap-1 whitespace-nowrap";
 
   if (category === 'Full Time') {
     if (btnFT) btnFT.className = activeTabClass;
@@ -226,7 +232,7 @@ async function loadStaffData(useCache = false) {
       let femaleCount = 0;
       let netPayroll = 0;
 
-      // 💡 Gender Precision Fix: Female 53 ဦးကို မှန်ကန်စွာ ရေတွက်ခြင်း
+      // 💡 Gender Precision Fix: Daw/ဒေါ် ပါဝင်သော အမည်များကို Female အဖြစ် တိကျစွာ ရေတွက်ခြင်း
       gStaffData.forEach(item => {
         const isResigned = Boolean(item.resigned_date || item.resignedDate);
         const isInactive = String(item.status || '').toLowerCase() === 'inactive' || isResigned;
@@ -238,6 +244,7 @@ async function loadStaffData(useCache = false) {
           const detectedG = autoDetectGender(rawName);
           let g = String(item.gender || '').toLowerCase().trim();
 
+          // အကယ်၍ DB ထဲတွင် Male ဟု အလွဲမှတ်ထားသော်လည်း နာမည်က Daw/ဒေါ် ဖြစ်နေပါက Female အဖြစ် ချက်ချင်း ပြောင်းလဲရေတွက်သည်
           if (!g || g === 'non' || g === 'undefined' || (g === 'male' && detectedG === 'Female')) {
             g = detectedG.toLowerCase();
           }
@@ -312,7 +319,7 @@ function renderStaffKpis(stats) {
 }
 
 /**
- * 💡 Render Table Grid Rows (Crash-Proof: အမည်စာရင်းများ ၁၀၀% ချက်ချင်း ပြန်ပေါ်လာမည်)
+ * 💡 Render Table Grid Rows
  */
 function renderStaffTable(rawData) {
   const tbody = document.getElementById('staff-table-body');
