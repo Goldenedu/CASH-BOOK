@@ -1,57 +1,57 @@
 <!-- views/staff.html (Staff Directory - Full Time / Part Time) --> 
-<div class="space-y-5">
+<div class="space-y-4 max-w-[1920px] mx-auto">
 
-  <!-- 💡 ၁။ Top KPI Stats Cards Grid (Row 1 အပေါ်ဆုံးသို့ ရွှေ့ထားသည်) -->
-  <div id="staff-kpi-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"></div>
+  <!-- 💡 ၁။ Top KPI Stats Cards Grid (၁ တန်းတည်း ၄ ကွက် အတိအကျ ဖြစ်စေရန် md:grid-cols-4 ထားရှိသည်) -->
+  <div id="staff-kpi-grid" class="grid grid-cols-2 md:grid-cols-4 gap-3.5"></div>
 
-  <!-- 💡 ၂။ Search, Category Tabs & Actions Bar -->
-  <div class="flex flex-col lg:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
+  <!-- 💡 ၂။ Search, Category Tabs & Actions Bar (၁ တန်းတည်း သပ်ရပ်စွာ ပေါ်စေမည့် Layout) -->
+  <div class="flex flex-col xl:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-3 sm:p-3.5 rounded-xl gap-3">
     
-    <!-- ဘယ်ဘက်ခြမ်း: Search Box + Category Switcher Tabs (ဘေးချင်းယှဉ် တန်းစီထားသည်) -->
-    <div class="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+    <!-- ဘယ်ဘက်ခြမ်း: Search Box + Category Switcher Tabs (FID / PID ဖြုတ်ထားပြီး ကျစ်လျစ်စွာ ၁ တန်းတည်း စီထားသည်) -->
+    <div class="flex items-center gap-2.5 w-full xl:w-auto flex-wrap sm:flex-nowrap">
       
-      <!-- 🎯 Search Box (Student List & Bank Book အတိုင်း sm:w-64 min-w-[250px]) -->
-      <div class="relative w-full sm:w-64" style="min-width: 250px;">
+      <!-- 🎯 Search Box (Student List & Bank Book အတိုင်း အနေတော် အကျယ်) -->
+      <div class="relative w-full sm:w-60 shrink-0" style="min-width: 210px;">
         <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500 pointer-events-none">
           <i class="fa-solid fa-magnifying-glass text-xs"></i>
         </span>
         <input type="text" 
                id="staff-search-input" 
                oninput="onSearchInputStaff()" 
-               placeholder="Search staff name, staff ID, position..." 
-               class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all">
+               placeholder="Search staff name, ID, position..." 
+               class="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all">
       </div>
 
-      <!-- 🎯 Category Switcher Tabs: Full Time vs Part Time (Search Box ဘေးကပ်လျက် ဘောင်ကွက်စနစ်) -->
-      <div class="flex items-center gap-1.5 p-1 bg-[#0f172a] border border-slate-800 rounded-lg w-full sm:w-auto">
+      <!-- 🎯 Category Switcher Tabs (FID / PID ဖြုတ်ထားပြီး Search Box ဘေးကပ်လျက် ဘောင်ကွက်စနစ်) -->
+      <div class="flex items-center gap-1 p-1 bg-[#0f172a] border border-slate-800 rounded-lg shrink-0">
         <button onclick="switchStaffCategory('Full Time')" id="staff-tab-ft" 
                 class="px-3 py-1.5 rounded-md text-xs font-bold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-600/20 flex items-center gap-1.5 whitespace-nowrap">
-          <i class="fa-solid fa-user-check text-[11px]"></i> Full Time Staff (FID)
+          <i class="fa-solid fa-user-check text-[11px]"></i> Full Time Staff
         </button>
         <button onclick="switchStaffCategory('Part Time')" id="staff-tab-pt" 
                 class="px-3 py-1.5 rounded-md text-xs font-bold transition-all text-slate-400 hover:text-white flex items-center gap-1.5 whitespace-nowrap">
-          <i class="fa-solid fa-user-clock text-[11px]"></i> Part Time Staff (PID)
+          <i class="fa-solid fa-user-clock text-[11px]"></i> Part Time Staff
         </button>
       </div>
 
     </div>
 
-    <!-- ညာဘက်ခြမ်း: Action Buttons -->
-    <div class="flex items-center gap-2.5 w-full lg:w-auto justify-end flex-wrap">
-      <button onclick="loadStaffData(false)" class="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap" title="Refresh Data">
+    <!-- ညာဘက်ခြမ်း: Action Buttons (၁ တန်းတည်း ဆန့်စေရန် ကျစ်လျစ်သော Padding ထားရှိသည်) -->
+    <div class="flex items-center gap-2 w-full xl:w-auto justify-end flex-wrap sm:flex-nowrap">
+      <button onclick="loadStaffData(false)" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap" title="Refresh Data">
         <i class="fa-solid fa-rotate text-xs"></i> Refresh
       </button>
 
       <!-- 🎯 Edit Salary Grade (Refresh လိုမျိုး အနားသတ် Border ခတ်ပြီး Amber Accent ထည့်ထားသည်) -->
-      <button onclick="openGradeModal()" id="btn-edit-grade" class="p-2 bg-slate-800 hover:bg-slate-700 border border-amber-500/40 text-amber-300 hover:text-amber-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap shadow-sm">
+      <button onclick="openGradeModal()" id="btn-edit-grade" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-amber-500/40 text-amber-300 hover:text-amber-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap shadow-sm">
         <i class="fa-solid fa-sliders text-xs text-amber-400"></i> Edit Salary Grade
       </button>
 
-      <button onclick="exportToCSVStaff()" class="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap">
+      <button onclick="exportToCSVStaff()" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap">
         <i class="fa-solid fa-file-export text-xs"></i> Export CSV
       </button>
 
-      <button onclick="openAddModalStaff()" class="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/10 transition-all whitespace-nowrap">
+      <button onclick="openAddModalStaff()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/10 transition-all whitespace-nowrap">
         <i class="fa-solid fa-plus text-xs"></i> Add Staff Record
       </button>
     </div>
