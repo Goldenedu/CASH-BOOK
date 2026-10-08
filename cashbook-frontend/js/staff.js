@@ -3,9 +3,74 @@
  * GOLDEN ERP SYSTEM - STAFF DIRECTORY & MATRIX MODULE (D1 DATABASE COMPATIBLE)
  * File: js/staff.js (Location: cashbook-frontend/js/staff.js)
  * 💡 Features: Refactored with Global api.js for DRY Principle,
- *              🎯 Phase 4: Added Date Range Filter support for API requests
+ *              Live D1 Salary Grade Matrix Sync, Auto Basic Amt Fill,
+ *              Resigned Date Auto-Inactive Engine (Status & Active Force KPIs),
+ *              Compact Segmented Category Tabs Sync, Safe Grade Modal Handler,
+ *              🛡️ Bug #2 Fixed: Resilient escapeHtml, escapeJsAttr & safeCsvCell Fallbacks
  * ==============================================================================
  */
+
+// ==============================================================================
+// 💡 SAFE UTILITY FALLBACKS (Prevents load order / undefined errors)
+// ==============================================================================
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  if (typeof window.escapeHtml === 'function') return window.escapeHtml(str);
+  const div = document.createElement('div');
+  div.textContent = String(str);
+  return div.innerHTML;
+}
+
+function escapeJsAttr(str) {
+  if (str === null || str === undefined) return '';
+  if (typeof window.escapeJsAttr === 'function') return window.escapeJsAttr(str);
+  const jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return escapeHtml(jsEscaped);
+}
+
+function safeCsvCell(val) {
+  if (typeof window.safeCsvCell === 'function') return window.safeCsvCell(val);
+  if (val === null || val === undefined) return '""';
+  if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
+
+  let str = String(val).trim();
+  if (str === '') return '""';
+
+  const cleanNumStr = str.replace(/,/g, '');
+  if (!isNaN(Number(cleanNumStr)) && cleanNumStr !== '') {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
+function autoDetectGender(nameStr) {
+  if (typeof window.autoDetectGender === 'function') {
+    return window.autoDetectGender(nameStr);
+  }
+  if (!nameStr) return 'Male';
+  const clean = String(nameStr).trim();
+
+  if (clean.startsWith('မောင်') || clean.startsWith('ကို') || clean.startsWith('ဦး') ||
+      clean.startsWith('မင်း') || /^(Mg|Ko|U|Min)\b/i.test(clean) || /^(မောင်|ကို|ဦး|မင်း)/.test(clean)) {
+    return 'Male';
+  }
+  if (clean.startsWith('မေ') || clean.startsWith('ဒေါ်') || clean.startsWith('နန်း') || clean.startsWith('နော်') ||
+      /^(May|Daw|Nang|Naw)\b/i.test(clean)) {
+    return 'Female';
+  }
+  if ((clean.startsWith('မ') && !clean.startsWith('မောင်') && !clean.startsWith('မင်း')) || /^(Ma)\b/i.test(clean)) {
+    return 'Female';
+  }
+  return 'Male';
+}
+
+// ==============================================================================
+// 💡 GLOBAL VARIABLES & STATE
+// ==============================================================================
 
 var gStaffCategory = 'Full Time'; // 'Full Time' or 'Part Time'
 var gStaffPage = 1;
@@ -66,6 +131,10 @@ function filterStaffData(list = [], searchVal = '') {
   });
 }
 
+/**
+ * 💡 Switch Staff Category (Full Time vs Part Time)
+ * 🎯 Updated: Uses sleek compact classes matching views/staff.html segmented tabs
+ */
 async function switchStaffCategory(category) {
   gStaffCategory = category;
   gStaffPage = 1;
@@ -74,13 +143,16 @@ async function switchStaffCategory(category) {
   const btnPT = document.getElementById('staff-tab-pt');
   const btnEditGrade = document.getElementById('btn-edit-grade');
 
+  const activeTabClass = "px-3 py-1.5 rounded-md text-xs font-bold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-600/20 flex items-center gap-1.5 whitespace-nowrap";
+  const inactiveTabClass = "px-3 py-1.5 rounded-md text-xs font-bold transition-all text-slate-400 hover:text-white flex items-center gap-1.5 whitespace-nowrap";
+
   if (category === 'Full Time') {
-    if (btnFT) btnFT.className = "px-4 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-lg shadow-indigo-600/10 flex items-center gap-2";
-    if (btnPT) btnPT.className = "px-4 py-2 rounded-lg text-xs font-bold transition-all bg-slate-800 text-slate-400 hover:text-white flex items-center gap-2";
+    if (btnFT) btnFT.className = activeTabClass;
+    if (btnPT) btnPT.className = inactiveTabClass;
     if (btnEditGrade) btnEditGrade.classList.remove('hidden');
   } else {
-    if (btnFT) btnFT.className = "px-4 py-2 rounded-lg text-xs font-bold transition-all bg-slate-800 text-slate-400 hover:text-white flex items-center gap-2";
-    if (btnPT) btnPT.className = "px-4 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-lg shadow-indigo-600/10 flex items-center gap-2";
+    if (btnFT) btnFT.className = inactiveTabClass;
+    if (btnPT) btnPT.className = activeTabClass;
     if (btnEditGrade) btnEditGrade.classList.add('hidden');
   }
 
@@ -145,7 +217,6 @@ async function loadStaffData(useCache = false) {
     if (typeof toggleLoading === 'function') toggleLoading(true);
     renderStaffTableHead();
 
-    // 💡 Phase 4: Retrieve Data with API
     const res = await callApi('getStaffData', {
       category: gStaffCategory,
       page: 1,
@@ -171,7 +242,7 @@ async function loadStaffData(useCache = false) {
           
           let g = String(item.gender || '').toLowerCase().trim();
           if (!g || g === 'non' || g === 'undefined') {
-            g = window.autoDetectGender(item.name || item.staffIdName || item.staff_idname).toLowerCase();
+            g = autoDetectGender(item.name || item.staffIdName || item.staff_idname).toLowerCase();
           }
 
           if (g === 'male' || g === 'm' || g === 'ကျား' || g.startsWith('mal')) {
@@ -258,7 +329,6 @@ function renderStaffTable(rawData) {
     return;
   }
 
-  // ⚡ FIX: True Client-Side Pagination Slicing (20 per page)
   const totalPages = Math.ceil(totalEntries / gStaffLimit) || 1;
   if (gStaffPage > totalPages) gStaffPage = totalPages;
   const startIndex = (gStaffPage - 1) * gStaffLimit;
@@ -300,16 +370,16 @@ function renderStaffTable(rawData) {
         ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Inactive</span>'
         : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Active</span>';
 
-      const detectedGender = item.gender || window.autoDetectGender(item.name || staffIdName);
+      const detectedGender = item.gender || autoDetectGender(item.name || staffIdName);
 
       return `
       <tr class="hover:bg-slate-800/40 transition">
         <td class="text-center text-slate-400 py-3">${displayNo}</td>
-        <td class="font-mono text-slate-300 py-3">${window.escapeHtml(joinDate)}</td>
-        <td class="font-bold text-white py-3">${window.escapeHtml(staffIdName)}</td>
-        <td class="text-slate-300 py-3">${window.escapeHtml(item.education || '')}</td>
-        <td class="text-indigo-300 font-semibold py-3">${window.escapeHtml(item.position || '')}</td>
-        <td class="font-bold text-amber-400 py-3">${window.escapeHtml(salaryGrade)}</td>
+        <td class="font-mono text-slate-300 py-3">${escapeHtml(joinDate)}</td>
+        <td class="font-bold text-white py-3">${escapeHtml(staffIdName)}</td>
+        <td class="text-slate-300 py-3">${escapeHtml(item.education || '')}</td>
+        <td class="text-indigo-300 font-semibold py-3">${escapeHtml(item.position || '')}</td>
+        <td class="font-bold text-amber-400 py-3">${escapeHtml(salaryGrade)}</td>
         <td class="text-right font-bold text-slate-200 py-3">${workingDays}</td>
         <td class="text-right font-bold text-emerald-400 py-3">${basicAmt.toLocaleString('en-US')}</td>
         <td class="text-right font-bold text-rose-400 py-3">${extraAmt.toLocaleString('en-US')}</td>
@@ -318,18 +388,18 @@ function renderStaffTable(rawData) {
         <td class="text-right font-bold text-teal-400 py-3">${fund.toLocaleString('en-US')}</td>
         <td class="text-right font-extrabold text-indigo-400 py-3">${totalNetAmt.toLocaleString('en-US')}</td>
         <td class="text-center py-3">${statusBadge}</td>
-        <td class="text-slate-300 py-3">${window.escapeHtml(detectedGender)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(nrcNo)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(bankAccount)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(phoneNo)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(item.email || '')}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(fundDate)}</td>
+        <td class="text-slate-300 py-3">${escapeHtml(detectedGender)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(nrcNo)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(bankAccount)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(phoneNo)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(item.email || '')}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(fundDate)}</td>
         <td class="text-right font-bold text-emerald-400 py-3">${unpaidBonus.toLocaleString('en-US')}</td>
         <td class="text-right font-bold text-teal-400 py-3">${unpaidFund.toLocaleString('en-US')}</td>
         <td class="text-center py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">
           <div class="flex items-center justify-center gap-2">
-            <button onclick="editStaffEntry('${window.escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded transition" title="Edit Profile"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
-            <button onclick="deleteStaffEntry('${window.escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded transition btn-delete" title="Delete Profile"><i class="fa-solid fa-trash-can text-xs"></i></button>
+            <button onclick="editStaffEntry('${escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded transition" title="Edit Profile"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
+            <button onclick="deleteStaffEntry('${escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded transition btn-delete" title="Delete Profile"><i class="fa-solid fa-trash-can text-xs"></i></button>
           </div>
         </td>
       </tr>`;
@@ -359,27 +429,27 @@ function renderStaffTable(rawData) {
         ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Inactive</span>'
         : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Active</span>';
 
-      const detectedGender = item.gender || window.autoDetectGender(item.name || staffIdName);
+      const detectedGender = item.gender || autoDetectGender(item.name || staffIdName);
 
       return `
       <tr class="hover:bg-slate-800/40 transition">
         <td class="text-center text-slate-400 py-3">${displayNo}</td>
-        <td class="font-mono text-slate-300 py-3">${window.escapeHtml(joinDate)}</td>
-        <td class="font-bold text-white py-3">${window.escapeHtml(staffIdName)}</td>
-        <td class="text-slate-300 py-3">${window.escapeHtml(item.education || '')}</td>
-        <td class="text-indigo-300 font-semibold py-3">${window.escapeHtml(item.position || '')}</td>
+        <td class="font-mono text-slate-300 py-3">${escapeHtml(joinDate)}</td>
+        <td class="font-bold text-white py-3">${escapeHtml(staffIdName)}</td>
+        <td class="text-slate-300 py-3">${escapeHtml(item.education || '')}</td>
+        <td class="text-indigo-300 font-semibold py-3">${escapeHtml(item.position || '')}</td>
         <td class="text-right font-bold text-indigo-400 py-3">${totalSalary.toLocaleString('en-US')}</td>
         <td class="text-right font-extrabold text-indigo-400 py-3">${totalNetAmt.toLocaleString('en-US')}</td>
         <td class="text-center py-3">${statusBadge}</td>
-        <td class="text-slate-300 py-3">${window.escapeHtml(detectedGender)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(nrcNo)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(bankAccount)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(phoneNo)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(item.email || '')}</td>
+        <td class="text-slate-300 py-3">${escapeHtml(detectedGender)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(nrcNo)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(bankAccount)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(phoneNo)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(item.email || '')}</td>
         <td class="text-center py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">
           <div class="flex items-center justify-center gap-2">
-            <button onclick="editStaffEntry('${window.escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded transition" title="Edit Profile"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
-            <button onclick="deleteStaffEntry('${window.escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded transition btn-delete" title="Delete Profile"><i class="fa-solid fa-trash-can text-xs"></i></button>
+            <button onclick="editStaffEntry('${escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded transition" title="Edit Profile"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
+            <button onclick="deleteStaffEntry('${escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded transition btn-delete" title="Delete Profile"><i class="fa-solid fa-trash-can text-xs"></i></button>
           </div>
         </td>
       </tr>`;
@@ -551,6 +621,26 @@ function closeStaffModal() {
   if (modal) modal.classList.add('hidden');
 }
 
+/**
+ * 💡 Salary Grade Matrix Modal Handlers (Fail-Safe)
+ */
+async function openGradeModal() {
+  const modal = document.getElementById('grade-modal') || document.getElementById('salary-grade-modal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    await fetchPayrollSettings();
+    return;
+  }
+  if (typeof showToast === 'function') {
+    showToast("INFO", "Salary Grade Matrix နှုန်းထားများကို 'System Settings & Controls' တွင် ပြင်ဆင်နိုင်ပါသည်။");
+  }
+}
+
+function closeGradeModal() {
+  const modal = document.getElementById('grade-modal') || document.getElementById('salary-grade-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
 async function editStaffEntry(uniqueId) {
   const item = gStaffData.find(s => (s.uniqueid === uniqueId || s.uniqueId === uniqueId));
   if (!item) return;
@@ -587,7 +677,7 @@ async function editStaffEntry(uniqueId) {
 }
 
 /**
- * 💡 SAVE STAFF FORM (With Auto Status: Inactive on Resigned Date & Double-Submit Protection)
+ * 💡 SAVE STAFF FORM (With Auto Status: Inactive on Resigned Date & Cache Clearing)
  */
 async function saveStaffForm(event) {
   if (event && event.preventDefault) event.preventDefault();
@@ -661,6 +751,7 @@ async function saveStaffForm(event) {
     if (res && res.success) {
       if (typeof showToast === 'function') showToast("SUCCESS", "ဝန်ထမ်း အချက်အလက်များ အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။");
       closeStaffModal();
+      if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
       loadStaffData(false);
     } else {
       if (typeof showToast === 'function') showToast("ERROR", res?.message || "သိမ်းဆည်းမှု မအောင်မြင်ပါ။");
@@ -685,6 +776,7 @@ async function deleteStaffEntry(uniqueId) {
 
     if (res && res.success) {
       if (typeof showToast === 'function') showToast("SUCCESS", "ဝန်ထမ်း မှတ်တမ်းအား အောင်မြင်စွာ ဖျက်သိမ်းပြီးပါပြီ။");
+      if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
       loadStaffData(false);
     } else {
       if (typeof showToast === 'function') showToast("ERROR", res?.message || "ဖျက်သိမ်းမှု မအောင်မြင်ပါ။");
@@ -716,14 +808,14 @@ function exportToCSVStaff() {
       const cleanStaffIdName = rawStaffIdName.replace(/\.0/g, '');
 
       csv += `${displayNo},` +
-             `${window.safeCsvCell(r.join_date || r.joinDate || '')},` +
+             `${safeCsvCell(r.join_date || r.joinDate || '')},` +
              `"Full Time",` +
-             `${window.safeCsvCell(r.staff_id || r.staffId || '')},` +
-             `${window.safeCsvCell(r.name || '')},` +
-             `${window.safeCsvCell(cleanStaffIdName)},` +
-             `${window.safeCsvCell(r.education || '')},` +
-             `${window.safeCsvCell(r.position || '')},` +
-             `${window.safeCsvCell(r.salary_grade || r.salaryGrade || '')},` +
+             `${safeCsvCell(r.staff_id || r.staffId || '')},` +
+             `${safeCsvCell(r.name || '')},` +
+             `${safeCsvCell(cleanStaffIdName)},` +
+             `${safeCsvCell(r.education || '')},` +
+             `${safeCsvCell(r.position || '')},` +
+             `${safeCsvCell(r.salary_grade || r.salaryGrade || '')},` +
              `${r.working_days || r.workingDays || 26},` +
              `${r.basic_amt || r.basicAmt || 0},` +
              `${r.extra_amt || r.extraAmt || 0},` +
@@ -731,14 +823,14 @@ function exportToCSVStaff() {
              `${r.bonus || 0},` +
              `${r.fund || 0},` +
              `${r.total_net_amt || r.totalNetAmt || 0},` +
-             `${window.safeCsvCell(r.resigned_date || r.resignedDate || '')},` +
-             `${window.safeCsvCell(r.status || 'Active')},` +
-             `${window.safeCsvCell(r.gender || 'Male')},` +
-             `${window.safeCsvCell(r.nrc_no || r.nrcNo || '')},` +
-             `${window.safeCsvCell(r.bank_account || r.bankAccount || '')},` +
-             `${window.safeCsvCell(r.phone_no || r.phoneNo || '')},` +
-             `${window.safeCsvCell(r.email || '')},` +
-             `${window.safeCsvCell(r.fund_date || r.fundDate || '')},` +
+             `${safeCsvCell(r.resigned_date || r.resignedDate || '')},` +
+             `${safeCsvCell(r.status || 'Active')},` +
+             `${safeCsvCell(r.gender || 'Male')},` +
+             `${safeCsvCell(r.nrc_no || r.nrcNo || '')},` +
+             `${safeCsvCell(r.bank_account || r.bankAccount || '')},` +
+             `${safeCsvCell(r.phone_no || r.phoneNo || '')},` +
+             `${safeCsvCell(r.email || '')},` +
+             `${safeCsvCell(r.fund_date || r.fundDate || '')},` +
              `${r.unpaid_bonus || r.unpaidBonus || 0},` +
              `${r.unpaid_fund || r.unpaidFund || 0}\n`;
     });
@@ -750,22 +842,22 @@ function exportToCSVStaff() {
       const cleanStaffIdName = rawStaffIdName.replace(/\.0/g, '');
 
       csv += `${displayNo},` +
-             `${window.safeCsvCell(r.join_date || r.joinDate || '')},` +
+             `${safeCsvCell(r.join_date || r.joinDate || '')},` +
              `"Part Time",` +
-             `${window.safeCsvCell(r.staff_id || r.staffId || '')},` +
-             `${window.safeCsvCell(r.name || '')},` +
-             `${window.safeCsvCell(cleanStaffIdName)},` +
-             `${window.safeCsvCell(r.education || '')},` +
-             `${window.safeCsvCell(r.position || '')},` +
+             `${safeCsvCell(r.staff_id || r.staffId || '')},` +
+             `${safeCsvCell(r.name || '')},` +
+             `${safeCsvCell(cleanStaffIdName)},` +
+             `${safeCsvCell(r.education || '')},` +
+             `${safeCsvCell(r.position || '')},` +
              `${r.total_salary || r.totalSalary || 0},` +
              `${r.total_net_amt || r.totalNetAmt || 0},` +
-             `${window.safeCsvCell(r.resigned_date || r.resignedDate || '')},` +
-             `${window.safeCsvCell(r.status || 'Active')},` +
-             `${window.safeCsvCell(r.gender || 'Male')},` +
-             `${window.safeCsvCell(r.nrc_no || r.nrcNo || '')},` +
-             `${window.safeCsvCell(r.bank_account || r.bankAccount || '')},` +
-             `${window.safeCsvCell(r.phone_no || r.phoneNo || '')},` +
-             `${window.safeCsvCell(r.email || '')}\n`;
+             `${safeCsvCell(r.resigned_date || r.resignedDate || '')},` +
+             `${safeCsvCell(r.status || 'Active')},` +
+             `${safeCsvCell(r.gender || 'Male')},` +
+             `${safeCsvCell(r.nrc_no || r.nrcNo || '')},` +
+             `${safeCsvCell(r.bank_account || r.bankAccount || '')},` +
+             `${safeCsvCell(r.phone_no || r.phoneNo || '')},` +
+             `${safeCsvCell(r.email || '')}\n`;
     });
   }
 
@@ -786,6 +878,8 @@ window.onSearchInputStaff = onSearchInputStaff;
 window.changePageStaff = changePageStaff;
 window.openAddModalStaff = openAddModalStaff;
 window.closeStaffModal = closeStaffModal;
+window.openGradeModal = openGradeModal;
+window.closeGradeModal = closeGradeModal;
 window.editStaffEntry = editStaffEntry;
 window.saveStaffForm = saveStaffForm;
 window.deleteStaffEntry = deleteStaffEntry;
@@ -794,3 +888,4 @@ window.fetchPayrollSettings = fetchPayrollSettings;
 window.renderGradeDropdownOptions = renderGradeDropdownOptions;
 window.onSalaryGradeChangeStaff = onSalaryGradeChangeStaff;
 window.calculateLiveStaffSalary = calculateLiveStaffSalary;
+window.autoDetectGender = autoDetectGender;
