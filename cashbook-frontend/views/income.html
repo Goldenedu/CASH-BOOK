@@ -76,45 +76,47 @@
         <i class="fa-solid fa-file-export text-xs"></i> Export CSV
       </button>
 
+      <!-- 🎯 Bank Book အတိုင်း + Add New Entry ဟု သတ်မှတ်ထားသည် -->
       <button onclick="openAddModalIncome()" class="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/10 transition-all whitespace-nowrap">
         <i class="fa-solid fa-plus text-xs"></i> Add New Entry
       </button>
     </div>
   </div>
 
-  <!-- 💡 ၃။ 19-Column Table Grid (Main Bank Book အတိုင်း အတိအကျ ၂ ကြောင်းတည်း အမြင့်ညီအောင် ညှိထားသည်) -->
+  <!-- 💡 ၃။ 19-Column Table Grid (Main Bank Book နှင့် အမြင့် 52px အတိအကျ တူညီစေရန် height: 52px သတ်မှတ်ထားသည်) -->
   <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
-    <table class="w-full text-left border-collapse min-w-[1900px]">
+    <table class="w-full text-left border-collapse min-w-[1950px]">
       <thead>
-        <tr class="bg-[#0e172a]">
-          <th scope="col" class="w-12 text-center text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">NO</th>
-          <th scope="col" class="w-28 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">EFFECT DATE</th>
-          <th scope="col" class="w-28 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">DATE</th>
-          <th scope="col" class="w-24 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">FY</th>
-          <th scope="col" class="w-20 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">ID</th>
-          <th scope="col" class="w-32 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">FYID</th>
-          <th scope="col" class="min-w-[200px] text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">FYID NAME</th>
-          <th scope="col" class="w-28 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">CLASS</th>
-          <th scope="col" class="w-32 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">CATEGORY</th>
-          <th scope="col" class="w-36 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">ACCOUNT NAME</th>
-          <th scope="col" class="w-24 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">METHOD</th>
+        <!-- 🎯 Header Row အမြင့်ကို 52px အသေ သတ်မှတ်ထားသဖြင့် စာမျက်နှာ ကူးပြောင်းချိန်တွင် လုံးဝ မခါတော့ပါ -->
+        <tr class="bg-[#0e172a]" style="height: 52px;">
+          <th scope="col" class="w-12 text-center text-slate-400 text-xs px-2 align-middle whitespace-nowrap">NO</th>
+          <th scope="col" class="w-28 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">EFFECT DATE</th>
+          <th scope="col" class="w-28 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">DATE</th>
+          <th scope="col" class="w-24 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">FY</th>
+          <th scope="col" class="w-20 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">ID</th>
+          <th scope="col" class="w-32 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">FYID</th>
+          <th scope="col" class="min-w-[200px] text-slate-400 text-xs px-2 align-middle whitespace-nowrap">FYID NAME</th>
+          <th scope="col" class="w-28 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">CLASS</th>
+          <th scope="col" class="w-32 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">CATEGORY</th>
+          <th scope="col" class="w-36 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">ACCOUNT NAME</th>
+          <th scope="col" class="w-24 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">METHOD</th>
           
           <!-- 🎯 Main Bank Book အတိုင်း တိတိကျကျ ၂ ကြောင်းတည်း ဖြစ်စေရန် စီမံထားသည် -->
-          <th scope="col" class="w-32 text-right text-rose-400 text-xs py-2 px-2 leading-tight">
+          <th scope="col" class="w-32 text-right text-rose-400 text-xs px-2 align-middle leading-tight whitespace-nowrap">
             <div>DEBIT</div>
-            <div class="text-[10px] text-rose-400/90 whitespace-nowrap mt-0.5">(ပြန်အမ်း)</div>
+            <div class="text-[10px] text-rose-400/90 font-semibold mt-0.5">(ပြန်အမ်း)</div>
           </th>
-          <th scope="col" class="w-32 text-right text-emerald-400 text-xs py-2 px-2 leading-tight">
+          <th scope="col" class="w-32 text-right text-emerald-400 text-xs px-2 align-middle leading-tight whitespace-nowrap">
             <div>CREDIT</div>
-            <div class="text-[10px] text-emerald-400/90 whitespace-nowrap mt-0.5">(ဝင်ငွေ)</div>
+            <div class="text-[10px] text-emerald-400/90 font-semibold mt-0.5">(ဝင်ငွေ)</div>
           </th>
           
-          <th scope="col" class="w-32 text-right text-indigo-400 text-xs py-2.5 px-2 whitespace-nowrap">AUT AMOUNT</th>
-          <th scope="col" class="w-24 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">PROMO</th>
-          <th scope="col" class="w-24 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">MY</th>
-          <th scope="col" class="w-36 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">VR NO</th>
-          <th scope="col" class="min-w-[150px] text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">REMARK</th>
-          <th scope="col" class="w-28 text-center text-slate-400 text-xs py-2.5 px-2 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg whitespace-nowrap">ACTION</th>
+          <th scope="col" class="w-32 text-right text-indigo-400 text-xs px-2 align-middle whitespace-nowrap">AUT AMOUNT</th>
+          <th scope="col" class="w-24 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">PROMO</th>
+          <th scope="col" class="w-24 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">MY</th>
+          <th scope="col" class="w-36 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">VR NO</th>
+          <th scope="col" class="min-w-[150px] text-slate-400 text-xs px-2 align-middle whitespace-nowrap">REMARK</th>
+          <th scope="col" class="w-28 text-center text-slate-400 text-xs px-2 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg align-middle whitespace-nowrap">ACTION</th>
         </tr>
       </thead>
       <tbody id="income-table-body" class="divide-y divide-slate-800/40 text-slate-300">
