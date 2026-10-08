@@ -1,7 +1,7 @@
 <!-- views/cashier.html -->  
 <div class="space-y-4 max-w-[1920px] mx-auto">
 
-  <!-- 💡 ၁။ Top KPI Stats Cards Grid (Main Bank Book အတိုင်း ထိပ်ဆုံးတွင် ၁ တန်းတည်း ၄ ကွက် ပေါ်စေသည်) -->
+  <!-- 💡 ၁။ Top KPI Stats Cards Grid (ထိပ်ဆုံးတွင် ၁ တန်းတည်း ၄ ကွက် ပေါ်စေသည်) -->
   <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;">
     <!-- 1. Total Income -->
     <div class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
@@ -66,7 +66,7 @@
       </div>
     </div>
 
-    <!-- ညာဘက်ခြမ်း Actions (Main Bank Book အတိုင်း ခရမ်းရောင် Add Button ပြောင်းထားသည်) -->
+    <!-- ညာဘက်ခြမ်း Actions (Main Bank Book အတိုင်း ခရမ်းရောင် Add Button) -->
     <div class="flex items-center gap-2 shrink-0">
       <button onclick="loadCashierData(false)" class="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap" title="Refresh Data">
         <i class="fa-solid fa-rotate text-xs"></i> Refresh
@@ -83,58 +83,54 @@
     </div>
   </div>
 
-  <!-- 💡 ၃။ Cashier Sub-Tabs Bar (နေရာလွတ် မကျန်စေရန် မျက်နှာပြင်အပြည့် ၆ ကွက် ညီညာစွာ ဖြန့်ခင်းထားသည်) -->
-  <div class="bg-[#0c1322] border border-slate-800 p-2 rounded-xl shadow-lg">
-    <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2 w-full">
+  <!-- 💡 ၃။ Cashier Sub-Tabs Bar (အဖြူရောင်ဘောင် မပါဘဲ Search Box ကဲ့သို့ မသိသာသော Dark Border ဖြင့် ၁ တန်းတည်း ၆ ကွက် ပေါ်စေသည်) -->
+  <div class="bg-[#0c1322] border border-slate-800 p-2 rounded-xl shadow-lg overflow-x-auto">
+    <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px;" class="w-full min-w-[780px] xl:min-w-0">
 
-      <!-- 1. CABank (Amber Theme) -->
+      <!-- 1. CABank (Active: မသိသာသော Amber Dark Border) -->
       <button onclick="switchCashierSubTab('CABank')" id="ca-tab-CABank" 
-              class="ca-sub-tab-btn w-full px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 border bg-amber-950/30 border-amber-500/30 text-amber-300 hover:bg-amber-900/40 whitespace-nowrap">
+              class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-amber-500/50 bg-amber-500/15 text-amber-300 whitespace-nowrap">
         <i class="fa-solid fa-building-columns text-amber-400 text-xs"></i> Bank (CABank)
       </button>
       
-      <!-- 2. CACash (Emerald Theme) -->
+      <!-- 2. CACash (Inactive: Search Box အတိုင်း border-slate-800) -->
       <button onclick="switchCashierSubTab('CACash')" id="ca-tab-CACash" 
-              class="ca-sub-tab-btn w-full px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 border bg-emerald-950/30 border-emerald-500/30 text-emerald-300 hover:bg-emerald-900/40 whitespace-nowrap">
+              class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-800 bg-[#0f172a] text-slate-400 hover:text-white hover:border-slate-700 whitespace-nowrap">
         <i class="fa-solid fa-money-bill-wave text-emerald-400 text-xs"></i> Cash (CACash)
       </button>
 
-      <!-- 3. CAOffice (Cyan Theme) -->
+      <!-- 3. CAOffice (Inactive: border-slate-800) -->
       <button onclick="switchCashierSubTab('CAOffice')" id="ca-tab-CAOffice" 
-              class="ca-sub-tab-btn w-full px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 border bg-cyan-950/30 border-cyan-500/30 text-cyan-300 hover:bg-cyan-900/40 whitespace-nowrap">
+              class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-800 bg-[#0f172a] text-slate-400 hover:text-white hover:border-slate-700 whitespace-nowrap">
         <i class="fa-solid fa-briefcase text-cyan-400 text-xs"></i> Office (CAOffice)
       </button>
 
-      <!-- 4. CAKitchen (Rose Theme) -->
+      <!-- 4. CAKitchen (Inactive: border-slate-800) -->
       <button onclick="switchCashierSubTab('CAKitchen')" id="ca-tab-CAKitchen" 
-              class="ca-sub-tab-btn w-full px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 border bg-rose-950/30 border-rose-500/30 text-rose-300 hover:bg-rose-900/40 whitespace-nowrap">
+              class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-800 bg-[#0f172a] text-slate-400 hover:text-white hover:border-slate-700 whitespace-nowrap">
         <i class="fa-solid fa-utensils text-rose-400 text-xs"></i> Kitchen (CAKitchen)
       </button>
 
-      <!-- 5. CAPayroll (Teal Theme) -->
+      <!-- 5. CAPayroll (Inactive: border-slate-800) -->
       <button onclick="switchCashierSubTab('CAPayroll')" id="ca-tab-CAPayroll" 
-              class="ca-sub-tab-btn w-full px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 border bg-teal-950/30 border-teal-500/30 text-teal-300 hover:bg-teal-900/40 whitespace-nowrap">
+              class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-800 bg-[#0f172a] text-slate-400 hover:text-white hover:border-slate-700 whitespace-nowrap">
         <i class="fa-solid fa-hand-holding-dollar text-teal-400 text-xs"></i> Payroll (CAPayroll)
       </button>
 
-      <!-- 6. Today Income (Sky Theme) -->
+      <!-- 6. Today Income (Inactive: border-slate-800) -->
       <button onclick="switchCashierSubTab('todayIncome')" id="ca-tab-todayIncome" 
-              class="ca-sub-tab-btn w-full px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 border bg-sky-950/30 border-sky-500/30 text-sky-300 hover:bg-sky-900/40 whitespace-nowrap">
+              class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-800 bg-[#0f172a] text-slate-400 hover:text-white hover:border-slate-700 whitespace-nowrap">
         <i class="fa-solid fa-receipt text-sky-400 text-xs"></i> Today Income (Invoice)
       </button>
 
     </div>
   </div>
 
-  <!-- 💡 ၄။ Dynamic Table Grid (Swaps Headers for Income Tab vs CA* Sub-Ledgers) -->
+  <!-- 💡 ၄။ Dynamic Table Grid -->
   <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
     <table class="w-full text-left border-collapse min-w-[1700px]">
-      <thead id="cashier-table-head">
-        <!-- Dynamic Headers rendered by js/cashier.js -->
-      </thead>
-      <tbody id="cashier-table-body" class="divide-y divide-slate-800/40 text-slate-300">
-        <!-- Dynamic Rows generated by js/cashier.js -->
-      </tbody>
+      <thead id="cashier-table-head"></thead>
+      <tbody id="cashier-table-body" class="divide-y divide-slate-800/40 text-slate-300"></tbody>
     </table>
   </div>
 
@@ -186,24 +182,18 @@
       <div class="grid grid-cols-2 gap-4">
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Category</label>
-          <select id="ca-category" onchange="onCategoryChangeCashier()" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
-            <!-- Dynamically populated from config.js -->
-          </select>
+          <select id="ca-category" onchange="onCategoryChangeCashier()" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500"></select>
         </div>
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Method</label>
-          <select id="ca-method" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
-            <!-- Dynamically populated -->
-          </select>
+          <select id="ca-method" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500"></select>
         </div>
       </div>
 
       <!-- Row 3: TRANSFER TO & DEBIT/CREDIT -->
       <div class="flex flex-col gap-1">
         <label class="font-bold text-slate-400 uppercase tracking-wide">Transfer To (ငွေလွှဲပြောင်းမည့် စာအုပ်)</label>
-        <select id="ca-transfer" onchange="onTransferTargetChangeCashier()" class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
-          <!-- Dynamically populated -->
-        </select>
+        <select id="ca-transfer" onchange="onTransferTargetChangeCashier()" class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500"></select>
       </div>
 
       <div class="grid grid-cols-2 gap-4">
