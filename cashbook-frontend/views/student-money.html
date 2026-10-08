@@ -1,95 +1,104 @@
 <!-- views/student-money.html -->
-<div class="space-y-5">
+<div class="space-y-4 max-w-[1920px] mx-auto">
 
-  <!-- 💡 ၁။ Sub-Tab Navigation Bar (Dual Mode Toggle) -->
-  <div class="flex items-center justify-between bg-[#0c1322] border border-slate-800 p-2 rounded-xl">
-    <div class="flex items-center gap-2">
-      <button id="stm-tab-history" onclick="switchStudentMoneySubTab('history')" class="px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 bg-indigo-600 text-white shadow-lg shadow-indigo-600/20">
-        <i class="fa-solid fa-list-check"></i> 1. Transaction History (နေ့စဉ် အသွင်း/အထုတ်)
-      </button>
-      <button id="stm-tab-summary" onclick="switchStudentMoneySubTab('summary')" class="px-4 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 bg-slate-800 text-slate-400 hover:text-white border border-slate-700/50">
-        <i class="fa-solid fa-wallet text-amber-400"></i> 2. Student Wallet Balances (ကျောင်းသားတစ်ဦးချင်း လက်ကျန်ချုပ်)
-      </button>
-    </div>
-
-    <div class="hidden sm:flex items-center gap-2 px-3 text-[11px] font-mono font-bold text-slate-400">
-      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Trust Account Engine
-    </div>
-  </div>
-
-  <!-- 💡 ၂။ Top KPI Stats Cards Grid -->
-  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+  <!-- 💡 ၁။ Top KPI Stats Cards Grid (၁ တန်းတည်း ၄ ကွက် ပေါ်စေရန် အသေ သတ်မှတ်ထားသည်) -->
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;">
     <!-- Total Inflow / Deposited -->
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400"><i class="fa-solid fa-circle-arrow-down text-xl"></i></div>
-      <div>
-        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500" id="stm-kpi-1-label">TOTAL DEPOSITED (အပ်ငွေ)</p>
-        <h3 id="stm-total-income" class="text-base font-extrabold text-emerald-400 mt-1">0 MMK</h3>
+    <div class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+      <div class="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0"><i class="fa-solid fa-circle-arrow-down text-base"></i></div>
+      <div class="min-w-0">
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate" id="stm-kpi-1-label">TOTAL DEPOSITED (အပ်ငွေ)</p>
+        <h3 id="stm-total-income" class="text-sm sm:text-base font-extrabold text-emerald-400 mt-0.5">0 MMK</h3>
       </div>
     </div>
 
     <!-- Total Outflow / Withdrawn -->
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-rose-500/10 text-rose-400"><i class="fa-solid fa-circle-arrow-up text-xl"></i></div>
-      <div>
-        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500" id="stm-kpi-2-label">TOTAL WITHDRAWN (ထုတ်ငွေ)</p>
-        <h3 id="stm-total-expense" class="text-base font-extrabold text-rose-400 mt-1">0 MMK</h3>
+    <div class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+      <div class="p-2.5 rounded-lg bg-rose-500/10 text-rose-400 shrink-0"><i class="fa-solid fa-circle-arrow-up text-base"></i></div>
+      <div class="min-w-0">
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate" id="stm-kpi-2-label">TOTAL WITHDRAWN (ထုတ်ငွေ)</p>
+        <h3 id="stm-total-expense" class="text-sm sm:text-base font-extrabold text-rose-400 mt-0.5">0 MMK</h3>
       </div>
     </div>
 
     <!-- Net Fund in Trust / Balance -->
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-indigo-500/10 text-indigo-400"><i class="fa-solid fa-vault text-xl"></i></div>
-      <div>
-        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">CURRENT TRUST BALANCE</p>
-        <h3 id="stm-balance" class="text-base font-extrabold text-white mt-1">0 MMK</h3>
+    <div class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+      <div class="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-400 shrink-0"><i class="fa-solid fa-vault text-base"></i></div>
+      <div class="min-w-0">
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">CURRENT TRUST BALANCE</p>
+        <h3 id="stm-balance" class="text-sm sm:text-base font-extrabold text-white mt-0.5">0 MMK</h3>
       </div>
     </div>
 
     <!-- Total Count -->
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-amber-500/10 text-amber-400"><i class="fa-solid fa-users text-xl"></i></div>
-      <div>
-        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500" id="stm-kpi-4-label">TOTAL ENTRIES</p>
-        <h3 id="stm-entries-count" class="text-base font-extrabold text-amber-400 mt-1">0</h3>
+    <div class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+      <div class="p-2.5 rounded-lg bg-amber-500/10 text-amber-400 shrink-0"><i class="fa-solid fa-users text-base"></i></div>
+      <div class="min-w-0">
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate" id="stm-kpi-4-label">TOTAL ENTRIES</p>
+        <h3 id="stm-entries-count" class="text-sm sm:text-base font-extrabold text-amber-400 mt-0.5">0</h3>
       </div>
+    </div>
+  </div>
+
+  <!-- 💡 ၂။ Control Search & Action Bar (Search + From/To + Transaction/Wallet Tabs + Action Buttons ၁ တန်းတည်း) -->
+  <div class="flex items-center justify-between bg-[#0c1322] border border-slate-800 p-2.5 sm:p-3 rounded-xl gap-2.5 overflow-x-auto">
+    
+    <!-- ဘယ်ဘက်ခြမ်း: Search Box + From-To Date + Sub-Tabs -->
+    <div class="flex items-center gap-2.5 shrink-0">
+      
+      <!-- 🎯 Search Input (Student List & Bank Book အတိုင်း sm:w-64, min-w-[250px]) -->
+      <div class="relative w-full sm:w-64 shrink-0" style="min-width: 250px;">
+        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500 pointer-events-none">
+          <i class="fa-solid fa-magnifying-glass text-xs"></i>
+        </span>
+        <input type="text" 
+               id="stm-search" 
+               oninput="onSearchInputStudentMoneyUnified()" 
+               placeholder="Search student name, FYID, ID..." 
+               class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all">
+      </div>
+
+      <!-- 🎯 From / To Date Filter -->
+      <div id="stm-date-filter-group" class="flex items-center gap-1.5 bg-[#0f172a] border border-slate-800 px-2 py-1.5 rounded-lg text-xs shrink-0">
+        <span class="text-[10px] text-slate-400 font-bold px-1 uppercase">From:</span>
+        <input type="date" id="stm-date-from" onchange="onSearchInputStudentMoneyUnified()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
+        <span class="text-[10px] text-slate-400 font-bold px-1 uppercase">To:</span>
+        <input type="date" id="stm-date-to" onchange="onSearchInputStudentMoneyUnified()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
+        <button onclick="clearDateFilterStudentMoney()" class="p-1 text-slate-400 hover:text-rose-400 transition" title="Clear Date Filter"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
+      </div>
+
+      <!-- 🎯 Sub-Tabs: Transaction vs Wallet (ကပ်မနေစေရန် gap-1.5 ဖြင့် သပ်ရပ်စွာ ခွဲထုတ်ထားသည်) -->
+      <div class="flex items-center gap-1.5 p-1 bg-[#0f172a] border border-slate-800 rounded-xl shrink-0">
+        <button id="stm-tab-history" onclick="switchStudentMoneySubTab('history')" 
+                class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-600/20 flex items-center gap-1.5 whitespace-nowrap">
+          <i class="fa-solid fa-list-check text-[11px]"></i> Transaction
+        </button>
+        <button id="stm-tab-summary" onclick="switchStudentMoneySubTab('summary')" 
+                class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white flex items-center gap-1.5 whitespace-nowrap">
+          <i class="fa-solid fa-wallet text-[11px] text-amber-400"></i> Wallet
+        </button>
+      </div>
+
+    </div>
+
+    <!-- ညာဘက်ခြမ်း: Action Buttons -->
+    <div class="flex items-center gap-2 shrink-0">
+      <button onclick="handleStudentMoneyRefresh()" class="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap" title="Refresh Data">
+        <i class="fa-solid fa-rotate text-xs"></i> Refresh
+      </button>
+
+      <button id="stm-btn-export" onclick="handleStudentMoneyExport()" class="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap">
+        <i class="fa-solid fa-file-export text-xs"></i> Export CSV
+      </button>
+
+      <button id="stm-btn-add" onclick="openAddModalStudentMoney()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/10 transition-all whitespace-nowrap">
+        <i class="fa-solid fa-plus text-xs"></i> Add Entry
+      </button>
     </div>
   </div>
 
   <!-- ==================== TAB 1: TRANSACTION HISTORY VIEW ==================== -->
   <div id="stm-history-view" class="space-y-4">
-    <!-- Control Search & Action Bar -->
-    <div class="flex flex-col lg:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
-      <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
-        <div class="relative w-full sm:w-72">
-          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
-          <input type="text" id="stm-search" oninput="onSearchInputStudentMoney()" placeholder="Search student name, FYID, ID, remark..." class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white focus:outline-none focus:border-indigo-500 transition-all">
-        </div>
-
-        <div class="flex items-center gap-1.5 w-full sm:w-auto bg-[#0f172a] border border-slate-800 p-1 rounded-lg text-xs">
-          <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">From:</span>
-          <input type="date" id="stm-date-from" onchange="onSearchInputStudentMoney()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
-          <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">To:</span>
-          <input type="date" id="stm-date-to" onchange="onSearchInputStudentMoney()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
-          <button onclick="clearDateFilterStudentMoney()" class="p-1 text-slate-400 hover:text-rose-400 transition" title="Clear Date Filter"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
-        </div>
-      </div>
-
-      <div class="flex items-center gap-2.5 w-full lg:w-auto justify-end">
-        <button onclick="loadStudentMoneyData(false)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all" title="Refresh Data">
-          <i class="fa-solid fa-rotate text-xs"></i> Refresh
-        </button>
-
-        <button onclick="exportToCSVStudentMoney()" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
-          <i class="fa-solid fa-file-export text-xs"></i> Export CSV
-        </button>
-
-        <button onclick="openAddModalStudentMoney()" class="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/10 transition-all">
-          <i class="fa-solid fa-plus text-xs"></i> Add Entry
-        </button>
-      </div>
-    </div>
-
     <!-- 13-Column Visual Table Grid -->
     <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
       <table class="w-full text-left border-collapse min-w-[1400px]">
@@ -132,22 +141,6 @@
 
   <!-- ==================== TAB 2: STUDENT WALLET SUMMARY VIEW (1 Student = 1 Row) ==================== -->
   <div id="stm-summary-view" class="space-y-4 hidden">
-    <div class="flex flex-col sm:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
-      <div class="relative w-full sm:w-80">
-        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
-        <input type="text" id="stm-summary-search" oninput="onSearchInputStudentMoneySummary()" placeholder="Search student name, ID, class, FYID..." class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white focus:outline-none focus:border-amber-500 transition-all">
-      </div>
-
-      <div class="flex items-center gap-2.5 w-full sm:w-auto justify-end">
-        <button onclick="loadStudentMoneySummaryData(false)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
-          <i class="fa-solid fa-rotate text-xs"></i> Refresh
-        </button>
-        <button onclick="exportStudentMoneySummaryToCSV()" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
-          <i class="fa-solid fa-file-excel text-emerald-400 text-xs"></i> Export Wallet CSV
-        </button>
-      </div>
-    </div>
-
     <!-- Student Wallet Summary Table Grid -->
     <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
       <table class="w-full text-left border-collapse min-w-[1100px]">
@@ -223,7 +216,7 @@
         <span id="stm-wallet-live-amount" class="font-mono font-black text-amber-400 text-sm">0 MMK</span>
       </div>
 
-      <!-- 💡 PAYMENT METHOD, DEPOSIT & WITHDRAW (ညီညာသပ်ရပ်စွာ ချိန်ညှိထားသော ROW) -->
+      <!-- 💡 PAYMENT METHOD, DEPOSIT & WITHDRAW -->
       <div class="grid grid-cols-3 gap-3 items-start">
         <div class="flex flex-col gap-1.5">
           <label class="font-bold text-slate-400 uppercase tracking-wide text-[11px] h-5 flex items-center">
@@ -303,9 +296,7 @@
               <th class="py-2.5 px-3">REMARK / PURPOSE</th>
             </tr>
           </thead>
-          <tbody id="stm-stmt-table-body" class="divide-y divide-slate-800/40 text-slate-300">
-            <!-- Timeline rows -->
-          </tbody>
+          <tbody id="stm-stmt-table-body" class="divide-y divide-slate-800/40 text-slate-300"></tbody>
         </table>
       </div>
     </div>
