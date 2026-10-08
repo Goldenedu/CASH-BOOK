@@ -1,14 +1,14 @@
 /**
  * ==============================================================================
  * GOLDEN ERP - CANTEEN GLOBAL STATE & NETWORK CONTROLLER
- * File: js/canteen/canteen-state.js (Enterprise V9.3 Full Production Edition)
+ * File: js/canteen/canteen-state.js (Enterprise V9.4 Full Production Edition)
  * 💡 Features:
  *   1. 🕒 Live MMT (UTC+06:30) Ticking Clock (Date + Time AM/PM)
  *   2. 🛡️ Scope-Safe Singleton Helpers (Zero SyntaxError Guarantee)
  *   3. ⚡ Quota-Shield: IndexedDB Pre-caching on App Startup (0 D1 Read Waste)
  *   4. 👤 Dynamic Role Authenticator (Fixes Cashier Showing as Admin)
  *   5. 🌐 4.5s Network Settle & QUIC Socket Flush (Fixes QUIC_NETWORK_IDLE_TIMEOUT)
- *   6. 🧩 Partials Auto-Mount: Awaits component partials injection before DOM data rendering
+ *   6. 🧩 Direct Partials Auto-Mount: Zero Recursion Stack Overflow Guarantee
  *   7. 🔄 Universal Robust Async Refresh Engine for All Tab Views
  *   8. ⌨️ Global Hardware Hotkeys (F2, F4, F8, Esc)
  * ==============================================================================
@@ -112,32 +112,37 @@ var _onlineDebounceTimer = null;
 var _isAutoSyncRunning = false;
 
 // ------------------------------------------------------------------------------
-// 🧩 5. COMPONENT PARTIALS LOADER (OFFLINE CACHED TEMPLATE ENGINE)
+// 🧩 5. RECURSION-FREE COMPONENT PARTIALS LOADER (OFFLINE CACHED TEMPLATE ENGINE)
 // ------------------------------------------------------------------------------
 async function loadCanteenComponents() {
-  if (typeof window.loadCanteenComponents === 'function') {
-    return await window.loadCanteenComponents();
-  }
-
-  // Safe Fallback loader with local storage caching for offline resilience
   async function loadPartial(containerId, url, cacheKey) {
     const container = document.getElementById(containerId);
     if (!container) return;
-    if (container.children.length > 0) return; // Already rendered (monolithic mode safe)
+    if (container.children.length > 0) return; // Already rendered
 
-    try {
-      const res = await fetch(url);
-      if (res.ok) {
-        const html = await res.text();
-        container.innerHTML = html;
-        try { localStorage.setItem(cacheKey, html); } catch(e) {}
-        return;
-      }
-    } catch (e) {
-      console.warn(`[Partials] Network fetch failed for ${url}, fallback to cache:`, e.message);
+    const pathsToTry = [url, `/${url}`, `components/${url.split('/').pop()}`, `/components/${url.split('/').pop()}`];
+    const uniquePaths = [...new Set(pathsToTry)];
+
+    let html = null;
+    for (const p of uniquePaths) {
+      try {
+        const res = await fetch(p);
+        if (res.ok) {
+          html = await res.text();
+          if (html && html.trim().length > 0) {
+            try { localStorage.setItem(cacheKey, html); } catch(e) {}
+            break;
+          }
+        }
+      } catch(e) {}
     }
-    const cached = localStorage.getItem(cacheKey);
-    if (cached) container.innerHTML = cached;
+
+    if (html) {
+      container.innerHTML = html;
+    } else {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) container.innerHTML = cached;
+    }
   }
 
   await Promise.allSettled([
@@ -151,11 +156,11 @@ async function loadCanteenComponents() {
 // 🚀 6. APPLICATION BOOTSTRAP & LIFECYCLE
 // ------------------------------------------------------------------------------
 window.addEventListener('DOMContentLoaded', async () => {
-  // 🧩 1. Mount Component Partials First (Guarantees zero null reference crashes)
+  // 🧩 1. Mount Component Partials First (Zero Recursion Guaranteed)
   try {
     await loadCanteenComponents();
   } catch(compErr) {
-    console.warn("[CanteenState] Components pre-mount notice:", compErr);
+    console.warn("[CanteenState] Components mount notice:", compErr);
   }
 
   const userStr = localStorage.getItem('golden_user') || localStorage.getItem('user');
@@ -175,7 +180,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   const rawRole = String(gSession.role || 'Cashier').trim();
   const role = getNormalizedRole();
 
-  // 👤 DYNAMIC ROLE BADGE (FIXES CASHIER APPEARING AS ADMIN)
+  // 👤 DYNAMIC ROLE BADGE
   const roleDisplay = rawRole.toUpperCase().replace(/_/g, ' ');
   const roleBadge = document.getElementById('pos-role-badge');
   if (roleBadge) roleBadge.textContent = roleDisplay;
@@ -314,10 +319,6 @@ function initNetworkMonitor() {
     if (_onlineDebounceTimer) clearTimeout(_onlineDebounceTimer);
 
     // 🛡️ Enterprise Network Settle & Socket Flush Window (4500ms):
-    // Waits 4.5s for:
-    // 1. OS Wi-Fi / DHCP handshake to obtain valid IP & default gateway route
-    // 2. DNS resolver configuration to settle completely
-    // 3. Browser to purge stale/idle QUIC (HTTP/3) UDP sessions, avoiding QUIC_NETWORK_IDLE_TIMEOUT
     _onlineDebounceTimer = setTimeout(async () => {
       if (!navigator.onLine || _isAutoSyncRunning) return;
       _isAutoSyncRunning = true;
@@ -332,20 +333,18 @@ function initNetworkMonitor() {
           : [];
 
         if (pendingOrders && pendingOrders.length > 0) {
-          // 🛡️ Flush dead QUIC socket with a lightweight probe before firing large batch payload
+          // 🛡️ Flush dead QUIC socket with lightweight probe
           try {
             const probeBase = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
             await fetch(`${probeBase}/?_probe=${Date.now()}`, { method: 'HEAD', mode: 'no-cors', cache: 'no-store' });
-          } catch(probeErr) {
-            // Ignored - purpose is simply to trigger browser socket reset
-          }
+          } catch(probeErr) {}
 
           if (typeof autoSyncPendingOrders === 'function') {
             await autoSyncPendingOrders();
           }
         }
       } catch (syncErr) {
-        console.warn("[NetworkMonitor] Graceful auto-sync settle notice:", syncErr);
+        console.warn("[NetworkMonitor] Auto-sync settle notice:", syncErr);
       } finally {
         _isAutoSyncRunning = false;
       }

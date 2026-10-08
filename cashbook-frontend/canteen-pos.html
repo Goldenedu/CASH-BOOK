@@ -146,28 +146,44 @@
         setInterval(tick, 1000);
       };
 
-      // 5. Enterprise-Grade Offline-Cached Component Loader (Method B)
+      // 5. Enterprise-Grade Offline-Cached Component Loader (Method B - Recursion-Free)
       window.loadCanteenComponents = async function() {
         async function loadPartial(containerId, url, cacheKey) {
           const container = document.getElementById(containerId);
           if (!container) return;
-          try {
-            const res = await fetch(url);
-            if (res.ok) {
-              const html = await res.text();
-              container.innerHTML = html;
-              try { localStorage.setItem(cacheKey, html); } catch(e) {}
-              return;
-            }
-          } catch (e) {
-            console.warn(`[Partials] Network fetch failed for ${url}, fallback to cache:`, e.message);
+          if (container.children.length > 0) return; // Already rendered
+
+          const paths = [
+            url,
+            `/${url}`,
+            `components/${url.split('/').pop()}`,
+            `/components/${url.split('/').pop()}`
+          ];
+          const uniquePaths = [...new Set(paths)];
+
+          let html = null;
+          for (const p of uniquePaths) {
+            try {
+              const res = await fetch(p);
+              if (res.ok) {
+                html = await res.text();
+                if (html && html.trim().length > 0) {
+                  try { localStorage.setItem(cacheKey, html); } catch(e) {}
+                  break;
+                }
+              }
+            } catch (e) {}
           }
-          // Offline fallback from localStorage cache
-          const cached = localStorage.getItem(cacheKey);
-          if (cached) container.innerHTML = cached;
+
+          if (html) {
+            container.innerHTML = html;
+          } else {
+            const cached = localStorage.getItem(cacheKey);
+            if (cached) container.innerHTML = cached;
+          }
         }
 
-        await Promise.all([
+        await Promise.allSettled([
           loadPartial('view-dashboard', 'components/canteen-dashboard.html', 'canteen_tpl_dashboard'),
           loadPartial('view-purchases', 'components/canteen-purchases.html', 'canteen_tpl_purchases'),
           loadPartial('canteen-modals-container', 'components/canteen-modals.html', 'canteen_tpl_modals')

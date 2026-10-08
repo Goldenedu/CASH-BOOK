@@ -1,54 +1,62 @@
 <!-- ============================================================================== -->
 <!-- 🛒 VIEW: PURCHASES & SUPPLIERS AUDIT HUB (LIVE KPIS & MODERN TOOLBAR)          -->
-<!-- File: components/canteen-purchases.html                                         -->
+<!-- File: components/canteen-purchases.html (Enterprise V9.4 Full Production)      -->
 <!-- ============================================================================== -->
 <div class="space-y-3.5">
   
+  <!-- ────────────────────────────────────────────────────────────────────────── -->
   <!-- 🎯 1. PURCHASES TOP KPI METRICS (TODAY, THIS MONTH, ALL-TIME & ACTION HUB) -->
+  <!-- ────────────────────────────────────────────────────────────────────────── -->
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
     
     <!-- KPI 1: ယနေ့ အဝယ်စာရင်း -->
-    <div class="glass-card p-3.5 rounded-2xl border-amber-300 dark:border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/15 shadow-sm">
+    <div class="glass-card p-3.5 rounded-2xl border-amber-300 dark:border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/15 shadow-sm flex flex-col justify-between">
       <div class="flex justify-between items-start">
         <span class="text-[10px] text-amber-600 dark:text-amber-400 font-bold uppercase tracking-wider block font-sans">ယနေ့ အဝယ်စာရင်း (TODAY)</span>
-        <span class="p-1.5 rounded-lg bg-amber-500/10 text-amber-500 text-xs"><i class="fa-solid fa-calendar-day"></i></span>
+        <span class="p-1.5 rounded-xl bg-amber-500/10 text-amber-500 text-xs border border-amber-500/20"><i class="fa-solid fa-calendar-day"></i></span>
       </div>
-      <h3 id="pur-kpi-today" class="text-xl font-black font-mono text-amber-600 dark:text-amber-400 mt-1">0 MMK</h3>
-      <span id="pur-kpi-today-count" class="text-[10px] font-mono text-slate-400 mt-0.5 block">0 Invoices</span>
+      <div class="mt-2">
+        <h3 id="pur-kpi-today" class="text-xl font-black font-mono text-amber-600 dark:text-amber-400">0 MMK</h3>
+        <span id="pur-kpi-today-count" class="text-[10px] font-mono text-slate-400 mt-0.5 block">0 Invoices</span>
+      </div>
     </div>
 
     <!-- KPI 2: ယခုလ အဝယ်စာရင်း -->
-    <div class="glass-card p-3.5 rounded-2xl border-sky-300 dark:border-sky-500/30 bg-sky-50/50 dark:bg-sky-950/15 shadow-sm">
+    <div class="glass-card p-3.5 rounded-2xl border-sky-300 dark:border-sky-500/30 bg-sky-50/50 dark:bg-sky-950/15 shadow-sm flex flex-col justify-between">
       <div class="flex justify-between items-start">
         <span class="text-[10px] text-sky-600 dark:text-sky-400 font-bold uppercase tracking-wider block font-sans">ဒီလ အဝယ်စာရင်း (THIS MONTH)</span>
-        <span class="p-1.5 rounded-lg bg-sky-500/10 text-sky-500 text-xs"><i class="fa-solid fa-calendar-week"></i></span>
+        <span class="p-1.5 rounded-xl bg-sky-500/10 text-sky-500 text-xs border border-sky-500/20"><i class="fa-solid fa-calendar-week"></i></span>
       </div>
-      <h3 id="pur-kpi-month" class="text-xl font-black font-mono text-sky-600 dark:text-sky-400 mt-1">0 MMK</h3>
-      <span id="pur-kpi-month-count" class="text-[10px] font-mono text-slate-400 mt-0.5 block">0 Invoices</span>
+      <div class="mt-2">
+        <h3 id="pur-kpi-month" class="text-xl font-black font-mono text-sky-600 dark:text-sky-400">0 MMK</h3>
+        <span id="pur-kpi-month-count" class="text-[10px] font-mono text-slate-400 mt-0.5 block">0 Invoices</span>
+      </div>
     </div>
 
     <!-- KPI 3: သမိုင်းဝင် အဝယ်စုစုပေါင်း -->
-    <div class="glass-card p-3.5 rounded-2xl border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40 shadow-sm">
+    <div class="glass-card p-3.5 rounded-2xl border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40 shadow-sm flex flex-col justify-between">
       <div class="flex justify-between items-start">
         <span class="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider block font-sans">အဝယ် စုစုပေါင်း (ALL-TIME)</span>
-        <span class="p-1.5 rounded-lg bg-slate-500/10 text-slate-400 text-xs"><i class="fa-solid fa-boxes-packing"></i></span>
+        <span class="p-1.5 rounded-xl bg-slate-500/10 text-slate-400 text-xs border border-slate-500/20"><i class="fa-solid fa-boxes-packing"></i></span>
       </div>
-      <h3 id="pur-kpi-all" class="text-xl font-black font-mono text-slate-900 dark:text-white mt-1">0 MMK</h3>
-      <span id="pur-kpi-all-count" class="text-[10px] font-mono text-slate-400 mt-0.5 block">0 Invoices</span>
+      <div class="mt-2">
+        <h3 id="pur-kpi-all" class="text-xl font-black font-mono text-slate-900 dark:text-white">0 MMK</h3>
+        <span id="pur-kpi-all-count" class="text-[10px] font-mono text-slate-400 mt-0.5 block">0 Invoices</span>
+      </div>
     </div>
 
     <!-- KPI 4: QUICK ACTION HUB -->
-    <div class="glass-card p-3 rounded-2xl flex flex-col justify-between border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/15 shadow-sm">
+    <div class="glass-card p-3.5 rounded-2xl flex flex-col justify-between border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/15 shadow-sm">
       <div>
         <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider block font-sans">QUICK PURCHASES ACTION</span>
-        <p class="text-[10px] text-slate-400 mt-0.5">ပစ္စည်းအသစ်နှင့် အဝယ်ဘောက်ချာများ တင်သွင်းရန်</p>
+        <p class="text-[10px] text-slate-400 mt-0.5 font-sans leading-tight">ပစ္စည်းအသစ်နှင့် အဝယ်ဘောက်ချာများ တင်သွင်းရန်</p>
       </div>
       <div class="flex items-center gap-2 mt-2">
-        <button onclick="openItemModal()" class="flex-1 py-2 px-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl text-xs font-black transition active:scale-95 shadow flex items-center justify-center gap-1.5">
+        <button type="button" onclick="openItemModal()" class="flex-1 py-2 px-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl text-xs font-black transition active:scale-95 shadow flex items-center justify-center gap-1.5">
           <i class="fa-solid fa-plus text-[10px]"></i>
           <span>အဝယ်စာရင်းသစ်သွင်း</span>
         </button>
-        <button onclick="openSupplierModal()" class="p-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl text-amber-500 text-xs font-bold transition active:scale-95 shadow-sm" title="ကုန်သည်အသစ် ထည့်မည်">
+        <button type="button" onclick="openSupplierModal()" class="p-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl text-amber-500 text-xs font-bold transition active:scale-95 shadow-sm border border-[var(--border-color)]" title="ကုန်သည်အသစ် ထည့်မည်">
           <i class="fa-solid fa-truck-field"></i>
         </button>
       </div>
@@ -56,7 +64,9 @@
 
   </div>
 
-  <!-- 🎯 2. SLEEK PURCHASES SEARCH & FILTER TOOLBAR -->
+  <!-- ────────────────────────────────────────────────────────────────────────── -->
+  <!-- 🎯 2. SLEEK PURCHASES SEARCH & FILTER TOOLBAR                              -->
+  <!-- ────────────────────────────────────────────────────────────────────────── -->
   <div class="glass-card p-3 rounded-2xl flex flex-col lg:flex-row justify-between items-center gap-3 shadow-sm">
     <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto">
       
@@ -64,28 +74,28 @@
       <div class="relative w-full sm:w-64">
         <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
         <input type="text" id="pur-search" oninput="onSearchPurchasesDebounced()" placeholder="ပစ္စည်း၊ Barcode၊ PO No ရှာဖွေပါ..." 
-               class="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-[var(--bg-card-inner)] border border-[var(--border-color)] outline-none focus:border-amber-500 transition font-sans">
+               class="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-[var(--bg-card-inner)] border border-[var(--border-color)] text-slate-800 dark:text-slate-200 outline-none focus:border-amber-500 transition font-sans">
       </div>
 
       <!-- Supplier Dropdown -->
       <select id="pur-supplier-filter" onchange="loadPurchasesHistory(1)" 
-              class="bg-[var(--bg-card-inner)] border border-[var(--border-color)] text-xs rounded-xl px-3 py-2 outline-none font-bold transition">
+              class="bg-[var(--bg-card-inner)] border border-[var(--border-color)] text-xs rounded-xl px-3 py-2 outline-none font-bold text-slate-800 dark:text-slate-200 transition">
         <option value="">All Suppliers (ကုန်သည်အားလုံး)</option>
       </select>
 
       <!-- Quick Date Filter Shortcuts Pills -->
       <div class="flex items-center gap-1 bg-[var(--bg-card-inner)] p-1 rounded-xl border border-[var(--border-color)]">
-        <button onclick="setFilterPurchasesToday()" class="px-2.5 py-1 rounded-lg text-[10px] font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition active:scale-95">Today</button>
-        <button onclick="setFilterPurchasesThisMonth()" class="px-2.5 py-1 rounded-lg text-[10px] font-bold text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 transition active:scale-95">This Month</button>
+        <button type="button" onclick="setFilterPurchasesToday()" class="px-2.5 py-1 rounded-lg text-[10px] font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition active:scale-95">Today</button>
+        <button type="button" onclick="setFilterPurchasesThisMonth()" class="px-2.5 py-1 rounded-lg text-[10px] font-bold text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 transition active:scale-95">This Month</button>
       </div>
 
       <!-- Date Range Pickers -->
       <div class="flex items-center gap-1.5 bg-[var(--bg-card-inner)] border border-[var(--border-color)] px-2.5 py-1.5 rounded-xl text-xs">
         <span class="text-[9px] text-slate-400 font-bold uppercase">From:</span>
-        <input type="date" id="pur-date-from" onchange="loadPurchasesHistory(1)" class="bg-transparent text-xs outline-none font-mono">
+        <input type="date" id="pur-date-from" onchange="loadPurchasesHistory(1)" class="bg-transparent text-xs outline-none font-mono text-slate-800 dark:text-slate-200 dark:[color-scheme:dark]">
         <span class="text-[9px] text-slate-400 font-bold uppercase">To:</span>
-        <input type="date" id="pur-date-to" onchange="loadPurchasesHistory(1)" class="bg-transparent text-xs outline-none font-mono">
-        <button onclick="clearPurchasesFilter()" class="p-1 text-slate-400 hover:text-rose-500 transition" title="Reset Filters"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
+        <input type="date" id="pur-date-to" onchange="loadPurchasesHistory(1)" class="bg-transparent text-xs outline-none font-mono text-slate-800 dark:text-slate-200 dark:[color-scheme:dark]">
+        <button type="button" onclick="clearPurchasesFilter()" class="p-1 text-slate-400 hover:text-rose-500 transition" title="Reset Filters"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
       </div>
 
     </div>
@@ -97,7 +107,9 @@
     </div>
   </div>
 
-  <!-- 🎯 3. PAGINATED PURCHASES AUDIT TABLE -->
+  <!-- ────────────────────────────────────────────────────────────────────────── -->
+  <!-- 🎯 3. PAGINATED PURCHASES AUDIT TABLE                                      -->
+  <!-- ────────────────────────────────────────────────────────────────────────── -->
   <div class="table-container glass-card rounded-2xl overflow-x-auto shadow-sm">
     <table class="w-full text-left text-xs border-collapse min-w-[1000px]">
       <thead class="bg-[var(--table-header)] text-slate-500 text-[11px] font-bold">
@@ -118,14 +130,16 @@
     </table>
   </div>
 
-  <!-- 🎯 4. PAGINATION FOOTER -->
+  <!-- ────────────────────────────────────────────────────────────────────────── -->
+  <!-- 🎯 4. PAGINATION FOOTER                                                    -->
+  <!-- ────────────────────────────────────────────────────────────────────────── -->
   <div class="flex justify-between items-center glass-card px-4 py-2.5 rounded-2xl text-xs shadow-sm">
     <div id="pur-pagination-info" class="text-slate-400 font-mono text-[11px]">Showing 0 entries</div>
     <div class="flex items-center gap-2">
-      <button onclick="changePurchasesPage(-1)" id="pur-btn-prev" class="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1 active:scale-95 shadow-sm">
+      <button type="button" onclick="changePurchasesPage(-1)" id="pur-btn-prev" class="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1 active:scale-95 shadow-sm">
         <i class="fa-solid fa-chevron-left text-[9px]"></i> Previous
       </button>
-      <button onclick="changePurchasesPage(1)" id="pur-btn-next" class="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1 active:scale-95 shadow-sm">
+      <button type="button" onclick="changePurchasesPage(1)" id="pur-btn-next" class="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1 active:scale-95 shadow-sm">
         Next <i class="fa-solid fa-chevron-right text-[9px]"></i>
       </button>
     </div>

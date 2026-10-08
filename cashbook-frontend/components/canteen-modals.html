@@ -1,19 +1,19 @@
 <!-- ============================================================================== -->
 <!-- 💡 CANTEEN MODALS HUB (10 MODALS + TOAST CONTAINER)                            -->
-<!-- File: components/canteen-modals.html                                           -->
+<!-- File: components/canteen-modals.html (Enterprise V9.4 Full Production Edition) -->
 <!-- ============================================================================== -->
 
-<!-- MODAL 1: ITEM & STOCK PURCHASE (DEFAULT 8% MARKUP) -->
+<!-- 📦 MODAL 1: ITEM & STOCK PURCHASE (DEFAULT 8% MARKUP) -->
 <div id="pos-item-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
   <div class="bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
     <div class="px-5 py-4 border-b border-[var(--border-color)] flex justify-between items-center bg-[var(--table-header)]">
       <h3 class="text-xs font-black uppercase tracking-wider flex items-center gap-2">
         <i class="fa-solid fa-box text-emerald-500"></i> ပစ္စည်း / အဝယ်စာရင်း သွင်းယူခြင်း
       </h3>
-      <button onclick="closeModal('pos-item-modal')" class="text-slate-400 hover:text-[var(--text-main)] p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
+      <button type="button" onclick="closeModal('pos-item-modal')" class="text-slate-400 hover:text-[var(--text-main)] p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
     </div>
 
-    <form onsubmit="submitPosPurchase(event)" class="p-5 space-y-3 overflow-y-auto text-xs">
+    <form onsubmit="submitPosPurchase(event)" class="p-5 space-y-3 overflow-y-auto custom-scroll text-xs">
       <div class="grid grid-cols-2 gap-3">
         <div class="space-y-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Barcode / QR</label>
@@ -58,7 +58,7 @@
         </div>
       </div>
 
-      <!-- 🎯 SMART PRICING ENGINE (DEFAULT 8% MARKUP) -->
+      <!-- 🎯 SMART PRICING ENGINE (DEFAULT 8% MARKUP, 50-STEP ROUNDING) -->
       <div class="p-3 bg-sky-500/10 border border-sky-500/20 rounded-2xl space-y-2">
         <div class="flex justify-between items-center">
           <span class="text-[10px] font-black text-sky-500 uppercase tracking-wider">SMART PRICING ENGINE</span>
@@ -88,12 +88,12 @@
   </div>
 </div>
 
-<!-- MODAL 2: QUICK EDIT STOCK & PRICE (Admin Only) -->
+<!-- ✏️ MODAL 2: QUICK EDIT STOCK & PRICE (Admin Only) -->
 <div id="pos-quick-edit-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
   <div class="bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-3xl w-full max-w-sm shadow-2xl p-5 space-y-4">
     <div class="flex justify-between items-center border-b border-[var(--border-color)] pb-2">
       <h3 class="text-xs font-black uppercase">Quick Stock & Price Edit</h3>
-      <button onclick="closeModal('pos-quick-edit-modal')" class="text-slate-400 hover:text-[var(--text-main)]"><i class="fa-solid fa-xmark"></i></button>
+      <button type="button" onclick="closeModal('pos-quick-edit-modal')" class="text-slate-400 hover:text-[var(--text-main)]"><i class="fa-solid fa-xmark"></i></button>
     </div>
 
     <div class="space-y-3 text-xs">
@@ -113,21 +113,21 @@
         <label class="font-bold text-emerald-500">ရောင်းဈေး Selling Price (ကျပ်)</label>
         <input type="number" id="qe-price" class="w-full bg-[var(--bg-card-inner)] border border-emerald-500/50 rounded-xl px-3 py-2 text-emerald-500 font-mono font-black text-right outline-none">
       </div>
-      <button onclick="submitQuickEdit()" class="w-full py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl font-bold text-xs shadow-md transition active:scale-95">
+      <button type="button" onclick="submitQuickEdit()" class="w-full py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl font-bold text-xs shadow-md transition active:scale-95">
         ပြင်ဆင်ချက် အတည်ပြု သိမ်းဆည်းမည်
       </button>
     </div>
   </div>
 </div>
 
-<!-- MODAL 3: QUICK ADD SUPPLIER -->
+<!-- 🏢 MODAL 3: QUICK ADD SUPPLIER -->
 <div id="pos-supplier-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
   <div class="bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-3xl w-full max-w-sm shadow-2xl p-5 space-y-4">
     <div class="flex justify-between items-center border-b border-[var(--border-color)] pb-2">
       <h3 class="text-xs font-black uppercase flex items-center gap-1.5">
         <i class="fa-solid fa-truck-field text-amber-500"></i> Add Supplier (ကုန်သည်သစ်)
       </h3>
-      <button onclick="closeModal('pos-supplier-modal')" class="text-slate-400 hover:text-[var(--text-main)]"><i class="fa-solid fa-xmark"></i></button>
+      <button type="button" onclick="closeModal('pos-supplier-modal')" class="text-slate-400 hover:text-[var(--text-main)]"><i class="fa-solid fa-xmark"></i></button>
     </div>
 
     <div class="space-y-3 text-xs">
@@ -147,21 +147,21 @@
         <label class="font-bold text-slate-400">ဆိုင်လိပ်စာ / မှတ်ချက်</label>
         <textarea id="sup-address" rows="2" placeholder="ဆိုင်တည်နေရာ လိပ်စာ..." class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 outline-none focus:border-amber-500"></textarea>
       </div>
-      <button onclick="submitNewSupplier()" class="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold text-xs shadow-md transition active:scale-95">
+      <button type="button" onclick="submitNewSupplier()" class="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold text-xs shadow-md transition active:scale-95">
         ကုန်သည်အမည် သိမ်းဆည်းမည်
       </button>
     </div>
   </div>
 </div>
 
-<!-- MODAL 4: EDIT PURCHASE MODAL (DEFAULT 8% MARKUP) -->
+<!-- 🛒 MODAL 4: EDIT PURCHASE MODAL (LIVE SMART PRICE CALCULATOR) -->
 <div id="pos-edit-purchase-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
   <div class="bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-3xl w-full max-w-md shadow-2xl p-5 space-y-4">
     <div class="flex justify-between items-center border-b border-[var(--border-color)] pb-2">
       <h3 class="text-xs font-black uppercase flex items-center gap-1.5">
         <i class="fa-solid fa-pen-to-square text-amber-500"></i> Edit Purchase (အဝယ်စာရင်း ပြင်ဆင်ခြင်း)
       </h3>
-      <button onclick="closeModal('pos-edit-purchase-modal')" class="text-slate-400 hover:text-[var(--text-main)]"><i class="fa-solid fa-xmark"></i></button>
+      <button type="button" onclick="closeModal('pos-edit-purchase-modal')" class="text-slate-400 hover:text-[var(--text-main)]"><i class="fa-solid fa-xmark"></i></button>
     </div>
 
     <form onsubmit="submitEditPurchase(event)" class="space-y-3 text-xs">
@@ -189,14 +189,14 @@
         </div>
         <div class="space-y-1">
           <label class="font-bold text-amber-500">ဝယ်ဈေး Cost</label>
-          <input type="number" id="edit-pur-cost" step="any" min="0" required class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-amber-500 font-mono font-bold text-right outline-none">
+          <input type="number" id="edit-pur-cost" step="any" min="0" required oninput="triggerEditPurSmartPriceCalc()" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-amber-500 font-mono font-bold text-right outline-none">
         </div>
       </div>
 
       <div class="grid grid-cols-2 gap-3">
         <div class="space-y-1">
           <label class="font-bold text-slate-400">Markup %</label>
-          <input type="number" id="edit-pur-markup" value="8" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-sky-500 font-mono font-bold text-right outline-none">
+          <input type="number" id="edit-pur-markup" value="8" oninput="triggerEditPurSmartPriceCalc()" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-sky-500 font-mono font-bold text-right outline-none">
         </div>
         <div class="space-y-1">
           <label class="font-bold text-emerald-500">ရောင်းဈေး</label>
@@ -223,7 +223,7 @@
       <h3 class="text-xs font-black text-rose-500 uppercase tracking-wider flex items-center gap-2">
         <i class="fa-solid fa-dumpster-fire text-rose-500"></i> အပျက်/အပျောက်/သက်တမ်းလွန် စာရင်းသွင်းယူခြင်း
       </h3>
-      <button onclick="closeModal('pos-waste-modal')" class="text-slate-400 hover:text-[var(--text-main)] p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
+      <button type="button" onclick="closeModal('pos-waste-modal')" class="text-slate-400 hover:text-[var(--text-main)] p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
     </div>
 
     <div class="p-5 space-y-3.5 overflow-y-auto custom-scroll text-xs">
@@ -300,7 +300,7 @@
       <h3 class="text-xs font-black text-emerald-500 uppercase tracking-wider flex items-center gap-2">
         <i class="fa-solid fa-layer-group text-emerald-500"></i> အပိုပစ္စည်း စာရင်းသွင်းယူခြင်း (Stock Surplus)
       </h3>
-      <button onclick="closeModal('pos-surplus-modal')" class="text-slate-400 hover:text-[var(--text-main)] p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
+      <button type="button" onclick="closeModal('pos-surplus-modal')" class="text-slate-400 hover:text-[var(--text-main)] p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
     </div>
 
     <div class="p-5 space-y-3.5 overflow-y-auto custom-scroll text-xs">
@@ -382,7 +382,7 @@
       <h3 class="text-xs font-black uppercase flex items-center gap-1.5">
         <i class="fa-solid fa-sliders text-sky-400"></i> POS Settings & Allowance Cap
       </h3>
-      <button onclick="closeModal('pos-settings-modal')" class="text-slate-400 hover:text-[var(--text-main)]"><i class="fa-solid fa-xmark"></i></button>
+      <button type="button" onclick="closeModal('pos-settings-modal')" class="text-slate-400 hover:text-[var(--text-main)]"><i class="fa-solid fa-xmark"></i></button>
     </div>
 
     <form onsubmit="submitPosSettings(event)" class="space-y-3.5 text-xs">
@@ -413,7 +413,7 @@
       <h3 class="text-xs font-black text-amber-500 uppercase tracking-wider flex items-center gap-2">
         <i class="fa-solid fa-store-slash text-amber-500"></i> ကန်တင်း နေ့စဉ် ဆိုင်ပိတ်သိမ်းခြင်း (Day Close)
       </h3>
-      <button onclick="closeModal('pos-closure-modal')" class="text-slate-400 hover:text-[var(--text-main)] p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
+      <button type="button" onclick="closeModal('pos-closure-modal')" class="text-slate-400 hover:text-[var(--text-main)] p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
     </div>
 
     <div class="p-5 space-y-4 text-xs font-mono">
@@ -452,7 +452,7 @@
       </div>
 
       <div id="closure-action-box">
-        <button id="btn-confirm-day-close" onclick="executeCanteenDayClose()" class="w-full py-3.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl font-black text-xs shadow-lg shadow-amber-950/20 active:scale-95 transition font-sans">
+        <button type="button" id="btn-confirm-day-close" onclick="executeCanteenDayClose()" class="w-full py-3.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl font-black text-xs shadow-lg shadow-amber-950/20 active:scale-95 transition font-sans">
           အတည်ပြု ဆိုင်ပိတ်သိမ်းမည် (CLOSE REGISTER)
         </button>
       </div>
@@ -473,7 +473,7 @@
           <p class="text-[10px] font-mono text-slate-400">D1 Database သို့ Sync ပေးပို့ရန် ကျန်ရှိနေသော အော့ဖ်လိုင်းပြေစာများ</p>
         </div>
       </div>
-      <button onclick="closeModal('pos-pending-modal')" class="text-slate-400 hover:text-[var(--text-main)] p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
+      <button type="button" onclick="closeModal('pos-pending-modal')" class="text-slate-400 hover:text-[var(--text-main)] p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
     </div>
 
     <div class="p-4 flex-1 overflow-y-auto custom-scroll space-y-3 text-xs">
@@ -507,7 +507,7 @@
 
     <div class="p-4 border-t border-[var(--border-color)] bg-[var(--table-header)] flex items-center justify-between gap-3">
       <p class="text-[10px] text-slate-400 font-sans">💡 အင်တာနက်လိုင်း ပြန်ရသည်နှင့် စနစ်မှ အလိုအလျောက် Sync ပြုလုပ်ပေးပါမည်။</p>
-      <button id="btn-trigger-sync" onclick="triggerManualOfflineSync()" class="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-black text-xs shadow-lg shadow-emerald-950/20 flex items-center gap-2 active:scale-95 transition">
+      <button type="button" id="btn-trigger-sync" onclick="triggerManualOfflineSync()" class="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-black text-xs shadow-lg shadow-emerald-950/20 flex items-center gap-2 active:scale-95 transition">
         <i class="fa-solid fa-cloud-arrow-up"></i>
         <span>Sync Now (D1 သို့ ပေးပို့မည်)</span>
       </button>
@@ -515,14 +515,14 @@
   </div>
 </div>
 
-<!-- MODAL 10: EVENING CANTEEN SETTLEMENT (CLOSURE INTERLOCKED) -->
+<!-- 💵 MODAL 10: EVENING CANTEEN SETTLEMENT (CLOSURE INTERLOCKED) -->
 <div id="pos-settlement-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
   <div class="bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
     <div class="px-5 py-4 border-b border-[var(--border-color)] flex justify-between items-center bg-[var(--table-header)]">
       <h3 class="text-xs font-black uppercase tracking-wider flex items-center gap-2">
         <i class="fa-solid fa-vault text-amber-500"></i> ညနေပိုင်း Canteen ငွေရှင်းလင်းမှု (Evening Clearing)
       </h3>
-      <button onclick="closeModal('pos-settlement-modal')" class="text-slate-400 hover:text-[var(--text-main)] p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
+      <button type="button" onclick="closeModal('pos-settlement-modal')" class="text-slate-400 hover:text-[var(--text-main)] p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
     </div>
 
     <div class="p-5 space-y-4 text-xs font-mono">
@@ -558,7 +558,7 @@
       </div>
 
       <div id="set-action-box">
-        <button id="btn-confirm-settlement" onclick="confirmCanteenSettlement()" class="w-full py-3.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-black text-xs shadow-lg shadow-amber-950/20 active:scale-95 transition font-sans disabled:opacity-40 disabled:pointer-events-none">
+        <button type="button" id="btn-confirm-settlement" onclick="confirmCanteenSettlement()" class="w-full py-3.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-black text-xs shadow-lg shadow-amber-950/20 active:scale-95 transition font-sans disabled:opacity-40 disabled:pointer-events-none">
           Finance မှ ငွေထုတ်ပေးရှင်းလင်းပြီးကြောင်း အတည်ပြုမည်
         </button>
       </div>
@@ -566,5 +566,5 @@
   </div>
 </div>
 
-<!-- TOAST NOTIFICATION CONTAINER -->
+<!-- 🔔 TOAST NOTIFICATION CONTAINER -->
 <div id="pos-toast-box" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[999999] pointer-events-none w-11/12 max-w-sm"></div>

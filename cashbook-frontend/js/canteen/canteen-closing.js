@@ -1,7 +1,7 @@
 /**
  * ==============================================================================
  * GOLDEN ERP - CANTEEN STORE CLOSING, SETTLEMENT & OFFLINE PENDING SYNC
- * File: js/canteen/canteen-closing.js (Enterprise V9.3 Full Production Edition)
+ * File: js/canteen/canteen-closing.js (Enterprise V9.4 Full Production Edition)
  * 💡 Features:
  *   1. 🕒 Strict MMT (UTC+06:30) Timezone Universal Engine (Recursion-Free)
  *   2. 📊 Live Dashboard: Real-time Today, THIS MONTH, Capital & Net Loss Aggregator
@@ -9,7 +9,7 @@
  *   4. 💵 Evening Finance Settlement (Closure Interlocked)
  *   5. ⏳ Resilient Offline Pending Queue Management & QUIC Settle Auto-Sync
  *   6. 🧾 20-Row Paginated Sales History with Slip Thermal Printer
- *   7. 🛡️ Defensive Null-Safe DOM Renderers (Zero Crash Guarantee)
+ *   7. 🛡️ Self-Healing DOM Guards: Automatically ensures component partials are mounted
  * ==============================================================================
  */
 
@@ -41,6 +41,11 @@ var _isAutoSyncing = false;
 // 📊 0. LIVE CANTEEN DASHBOARD CONTROLLER (TODAY + THIS MONTH + ALL-TIME)
 // ------------------------------------------------------------------------------
 async function loadCanteenDashboard() {
+  // Self-Healing: Ensure dashboard partial is mounted
+  if (!document.getElementById('dash-today-sales') && typeof loadCanteenComponents === 'function') {
+    await loadCanteenComponents();
+  }
+
   try {
     const res = await callApi('getCanteenDashboardMetrics', { _t: Date.now() }, 'POST');
     if (!res || !res.success || !res.data) return;
@@ -223,11 +228,15 @@ async function loadCanteenDashboard() {
 // ------------------------------------------------------------------------------
 async function openDayCloseModal() {
   const role = getNormalizedRole();
-  // 🎯 Cashier နှင့် Admin နှစ်ဦးစလုံး ဆိုင်ပိတ်ခွင့်ရှိသည်
   const canClose = role.includes('admin') || role.includes('cashier') || role.includes('owner');
   
   if (!canClose) {
     return showToast("ERROR", "ဆိုင်ပိတ်သိမ်းခွင့် မရှိပါ။");
+  }
+
+  // Self-Healing Guard: Ensure modal is mounted
+  if (!document.getElementById('pos-closure-modal') && typeof loadCanteenComponents === 'function') {
+    await loadCanteenComponents();
   }
 
   const todayStr = getMMTDateString(); // 🕒 Strict MMT Today
@@ -307,6 +316,10 @@ async function executeCanteenDayClose() {
 // ⏳ 2. PENDING OFFLINE ORDERS SYNC MANAGER
 // ------------------------------------------------------------------------------
 async function openPendingSyncModal() {
+  // Self-Healing Guard: Ensure modal is mounted
+  if (!document.getElementById('pos-pending-modal') && typeof loadCanteenComponents === 'function') {
+    await loadCanteenComponents();
+  }
   await renderPendingOrdersTable();
   document.getElementById('pos-pending-modal')?.classList.remove('hidden');
 }
@@ -404,13 +417,10 @@ async function autoSyncPendingOrders(retryCount = 0) {
 
   _isAutoSyncing = true;
   try {
-    // 🛡️ Settle Guard: On initial attempt after network restoration, pause briefly
-    // to allow browser connection pool to purge stale/dead QUIC (HTTP/3) UDP sessions.
     if (retryCount === 0) {
       await new Promise(r => setTimeout(r, 1200));
     }
 
-    // Verify still online and pending items still exist
     if (!navigator.onLine) return;
     const currentPending = await dbGetPendingOrders();
     if (!currentPending || currentPending.length === 0) return;
@@ -434,7 +444,6 @@ async function autoSyncPendingOrders(retryCount = 0) {
       setTimeout(() => autoSyncPendingOrders(retryCount + 1), 3000);
     }
   } catch (err) {
-    // Graceful silent retry for background task - prevents showing red error toast during connection stabilization
     if (retryCount < 2 && navigator.onLine) {
       setTimeout(() => autoSyncPendingOrders(retryCount + 1), 3000);
     }
@@ -448,11 +457,15 @@ async function autoSyncPendingOrders(retryCount = 0) {
 // ------------------------------------------------------------------------------
 async function openSettlementModal() {
   const role = getNormalizedRole();
-  // 🎯 Cashier နှင့် Admin နှစ်ဦးစလုံး ညနေစာရင်းရှင်းခွင့်ရှိသည်
   const canSettle = role.includes('admin') || role.includes('cashier') || role.includes('owner');
 
   if (!canSettle) {
     return showToast("ERROR", "ငွေရှင်းလင်းခွင့် မရှိပါ။");
+  }
+
+  // Self-Healing Guard: Ensure modal is mounted
+  if (!document.getElementById('pos-settlement-modal') && typeof loadCanteenComponents === 'function') {
+    await loadCanteenComponents();
   }
 
   const todayStr = getMMTDateString(); // 🕒 Strict MMT Today
@@ -558,11 +571,15 @@ async function loadPosSettings() {
   }
 }
 
-function openSettingsModal() {
+async function openSettingsModal() {
   const role = getNormalizedRole();
-  // 🎯 Settings သည် Admin/Owner သီးသန့်ဖြစ်သည်
   if (!role.includes('admin') && !role.includes('owner')) {
     return showToast("ERROR", "ဆက်တင် ပြင်ဆင်ခွင့် မရှိပါ။ (Admin Only)");
+  }
+
+  // Self-Healing Guard: Ensure modal is mounted
+  if (!document.getElementById('pos-settings-modal') && typeof loadCanteenComponents === 'function') {
+    await loadCanteenComponents();
   }
 
   const inputCap = document.getElementById('m-set-daily-cap');
