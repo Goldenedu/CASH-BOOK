@@ -40,7 +40,7 @@
     </div>
   </div>
 
-  <!-- 💡 ၂။ Search & Action Controls Bar (Main Bank Book စတိုင်နှင့် ခလုတ်များ ၁၀၀% ထပ်တူညီသည်) -->
+  <!-- 💡 ၂။ Search & Action Controls Bar (Main Bank Book စတိုင်နှင့် ၁၀၀% ထပ်တူညီသည်) -->
   <div class="flex flex-col lg:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
     <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
       
@@ -66,7 +66,7 @@
       </div>
     </div>
 
-    <!-- ညာဘက်ခြမ်း Action Buttons (Bank Book အတိုင်း + Add New Entry ဟု ပြောင်းထားသည်) -->
+    <!-- ညာဘက်ခြမ်း Action Buttons (Bank Book အတိုင်း + Add New Entry) -->
     <div class="flex items-center gap-2.5 w-full lg:w-auto justify-end">
       <button onclick="loadIncomeData(false)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap" title="Refresh Data">
         <i class="fa-solid fa-rotate text-xs"></i> Refresh
@@ -76,40 +76,45 @@
         <i class="fa-solid fa-file-export text-xs"></i> Export CSV
       </button>
 
-      <!-- 🎯 Bank Book အတိုင်း + Add New Entry ဟု ပြောင်းထားသည် -->
       <button onclick="openAddModalIncome()" class="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/10 transition-all whitespace-nowrap">
         <i class="fa-solid fa-plus text-xs"></i> Add New Entry
       </button>
     </div>
   </div>
 
-  <!-- 💡 ၃။ 19-Column Table Grid (whitespace-nowrap ဖြင့် ၁ ကြောင်းတည်း အမြင့်ညီအောင် ညှိထားသည်) -->
+  <!-- 💡 ၃။ 19-Column Table Grid (Main Bank Book အတိုင်း အတိအကျ ၂ ကြောင်းတည်း အမြင့်ညီအောင် ညှိထားသည်) -->
   <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
-    <table class="w-full text-left border-collapse min-w-[1950px]">
+    <table class="w-full text-left border-collapse min-w-[1900px]">
       <thead>
-        <tr class="bg-[#0e172a] whitespace-nowrap">
-          <th scope="col" class="w-12 text-center text-slate-400 text-xs py-3 px-2">NO</th>
-          <th scope="col" class="w-28 text-slate-400 text-xs py-3 px-2">EFFECT DATE</th>
-          <th scope="col" class="w-28 text-slate-400 text-xs py-3 px-2">DATE</th>
-          <th scope="col" class="w-24 text-slate-400 text-xs py-3 px-2">FY</th>
-          <th scope="col" class="w-20 text-slate-400 text-xs py-3 px-2">ID</th>
-          <th scope="col" class="w-32 text-slate-400 text-xs py-3 px-2">FYID</th>
-          <th scope="col" class="min-w-[200px] text-slate-400 text-xs py-3 px-2">FYID NAME</th>
-          <th scope="col" class="w-28 text-slate-400 text-xs py-3 px-2">CLASS</th>
-          <th scope="col" class="w-32 text-slate-400 text-xs py-3 px-2">CATEGORY</th>
-          <th scope="col" class="w-36 text-slate-400 text-xs py-3 px-2">ACCOUNT NAME</th>
-          <th scope="col" class="w-24 text-slate-400 text-xs py-3 px-2">METHOD</th>
+        <tr class="bg-[#0e172a]">
+          <th scope="col" class="w-12 text-center text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">NO</th>
+          <th scope="col" class="w-28 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">EFFECT DATE</th>
+          <th scope="col" class="w-28 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">DATE</th>
+          <th scope="col" class="w-24 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">FY</th>
+          <th scope="col" class="w-20 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">ID</th>
+          <th scope="col" class="w-32 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">FYID</th>
+          <th scope="col" class="min-w-[200px] text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">FYID NAME</th>
+          <th scope="col" class="w-28 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">CLASS</th>
+          <th scope="col" class="w-32 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">CATEGORY</th>
+          <th scope="col" class="w-36 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">ACCOUNT NAME</th>
+          <th scope="col" class="w-24 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">METHOD</th>
           
-          <!-- 🎯 ၃ ကြောင်း မဆင်းတော့ဘဲ ၁ ကြောင်းတည်း ညီညာစေရန် w-36 နှင့် whitespace-nowrap သတ်မှတ်ထားသည် -->
-          <th scope="col" class="w-36 text-right text-rose-400 text-xs py-3 px-2 whitespace-nowrap">DEBIT (ပြန်အမ်း)</th>
-          <th scope="col" class="w-36 text-right text-emerald-400 text-xs py-3 px-2 whitespace-nowrap">CREDIT (ဝင်ငွေ)</th>
+          <!-- 🎯 Main Bank Book အတိုင်း တိတိကျကျ ၂ ကြောင်းတည်း ဖြစ်စေရန် စီမံထားသည် -->
+          <th scope="col" class="w-32 text-right text-rose-400 text-xs py-2 px-2 leading-tight">
+            <div>DEBIT</div>
+            <div class="text-[10px] text-rose-400/90 whitespace-nowrap mt-0.5">(ပြန်အမ်း)</div>
+          </th>
+          <th scope="col" class="w-32 text-right text-emerald-400 text-xs py-2 px-2 leading-tight">
+            <div>CREDIT</div>
+            <div class="text-[10px] text-emerald-400/90 whitespace-nowrap mt-0.5">(ဝင်ငွေ)</div>
+          </th>
           
-          <th scope="col" class="w-32 text-right text-indigo-400 text-xs py-3 px-2 whitespace-nowrap">AUT AMOUNT</th>
-          <th scope="col" class="w-24 text-slate-400 text-xs py-3 px-2">PROMO</th>
-          <th scope="col" class="w-24 text-slate-400 text-xs py-3 px-2">MY</th>
-          <th scope="col" class="w-36 text-slate-400 text-xs py-3 px-2">VR NO</th>
-          <th scope="col" class="min-w-[150px] text-slate-400 text-xs py-3 px-2">REMARK</th>
-          <th scope="col" class="w-28 text-center text-slate-400 text-xs py-3 px-2 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">ACTION</th>
+          <th scope="col" class="w-32 text-right text-indigo-400 text-xs py-2.5 px-2 whitespace-nowrap">AUT AMOUNT</th>
+          <th scope="col" class="w-24 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">PROMO</th>
+          <th scope="col" class="w-24 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">MY</th>
+          <th scope="col" class="w-36 text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">VR NO</th>
+          <th scope="col" class="min-w-[150px] text-slate-400 text-xs py-2.5 px-2 whitespace-nowrap">REMARK</th>
+          <th scope="col" class="w-28 text-center text-slate-400 text-xs py-2.5 px-2 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg whitespace-nowrap">ACTION</th>
         </tr>
       </thead>
       <tbody id="income-table-body" class="divide-y divide-slate-800/40 text-slate-300">
