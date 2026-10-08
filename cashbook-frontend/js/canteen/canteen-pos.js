@@ -1,14 +1,15 @@
 /**
  * ==============================================================================
  * GOLDEN ERP - CANTEEN POS TERMINAL & CHECKOUT ENGINE
- * File: js/canteen/canteen-pos.js (Enterprise V9 Full Production Edition)
+ * File: js/canteen/canteen-pos.js (Enterprise V9.1 Full Production Edition)
  * 💡 Features:
  *   1. 🕒 Strict MMT (UTC+06:30) Timezone Enforcement for Invoices & Slips
- *   2. 🌐 Dual-Layer Resilient Scanner (RAM Cache + IndexedDB Fallback)
+ *   2. 🌐 Dual-Layer Resilient Scanner (RAM Cache + IndexedDB Fallback - 0 D1 Read)
  *   3. 🎓 Offline-Aware Student Wallet Radar with Dynamic Daily Cap Protection
  *   4. ⚡ Offline Queue Commit (Zero Data Loss on Network Drop)
  *   5. 🎨 100% Theme-Adaptive Cart Renderer (Light & Dark Mode)
  *   6. 🖨️ 80mm Thermal Receipt Printer with MMT Timestamp
+ *   7. 🛡️ Defensive Null-Safe DOM Updaters (Zero-Crash Guarantee)
  * ==============================================================================
  */
 
@@ -22,6 +23,10 @@ function getMMTDateString(dInput) {
   const mmt = new Date(targetMs + (6.5 * 60 * 60 * 1000));
   return mmt.toISOString().slice(0, 10);
 }
+
+// 🛡️ Scope-Safe Variable Declarations (Prevents ReferenceError / SyntaxError)
+var esc = window.esc || (s => s ? String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : '');
+var escAttr = window.escAttr || (s => s ? String(s).replace(/'/g, "\\'") : '');
 
 // ------------------------------------------------------------------------------
 // 🎯 1. PAYMENT MODE CONTROLLER
@@ -448,7 +453,7 @@ function getCartTotalAmount() {
 // ⚡ 5. CHECKOUT EXECUTION (ONLINE WITH OFFLINE PENDING QUEUE COMMIT)
 // ------------------------------------------------------------------------------
 async function executeCheckout() {
-  if (isSubmitting) return;
+  if (window.isSubmitting) return;
   if (gCart.length === 0) return showToast("ERROR", "Cart ထဲတွင် ပစ္စည်းများ မရှိသေးပါ!");
 
   const totalAmount = getCartTotalAmount();
@@ -501,7 +506,7 @@ async function executeCheckout() {
     createdBy: gSession?.name || 'Cashier'
   };
 
-  isSubmitting = true;
+  window.isSubmitting = true;
   const btn = document.getElementById('btn-checkout');
   if (btn) btn.disabled = true;
 
@@ -566,17 +571,17 @@ async function executeCheckout() {
   } catch (err) {
     showToast("ERROR", "အရောင်း အမှားဖြစ်ပေါ်ခဲ့သည်: " + err.message);
   } finally {
-    isSubmitting = false;
+    window.isSubmitting = false;
     if (btn) btn.disabled = false;
     focusScanner();
   }
 }
 
 // ------------------------------------------------------------------------------
-// 🖨️ 6. POS THERMAL RECEIPT PRINTER (STRICT MMT DATE)
+// 🖨️ 6. POS THERMAL RECEIPT PRINTER (STRICT MMT DATE & TIME)
 // ------------------------------------------------------------------------------
 function printPosReceipt(invoiceNo, totalAmt, itemsSummary, method, student) {
-  const today = getMMTDateString();
+  const formattedDateTime = typeof window.getMMTFullDateTimeString === 'function' ? window.getMMTFullDateTimeString() : getMMTDateString();
   const cashierName = gSession?.name || 'Cashier';
 
   const studentInfoRow = student 
@@ -599,7 +604,7 @@ function printPosReceipt(invoiceNo, totalAmt, itemsSummary, method, student) {
       </div>
       <div class="line"></div>
       <table>
-        <tr><td>Inv: ${invoiceNo}</td><td style="text-align:right;">${today}</td></tr>
+        <tr><td>Inv: ${invoiceNo}</td><td style="text-align:right;">${formattedDateTime}</td></tr>
         <tr><td>Cashier: ${cashierName}</td><td style="text-align:right;">${method === 'Cash' ? 'Cash' : 'Wallet'}</td></tr>
         ${studentInfoRow}
       </table>

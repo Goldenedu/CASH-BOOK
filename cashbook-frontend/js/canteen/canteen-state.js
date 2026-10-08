@@ -1,14 +1,14 @@
 /**
  * ==============================================================================
  * GOLDEN ERP - CANTEEN GLOBAL STATE & NETWORK CONTROLLER
- * File: js/canteen/canteen-state.js (Enterprise V9 Full Production Edition)
+ * File: js/canteen/canteen-state.js (Enterprise V9.1 Full Production Edition)
  * 💡 Features:
- *   1. 🕒 Strict MMT (UTC+06:30) Timezone Global Helper
- *   2. 🛡️ Robust Role Normalizer (Case-Insensitive & Whitespace Safe)
- *   3. ⚡ Quota-Shield: IndexedDB Pre-caching on App Startup (Zero D1 Waste)
- *   4. 🔄 Universal Robust Async Refresh Engine for All Tab Views
- *   5. ⌨️ Global POS Hardware Hotkeys (F2, F4, F8, Esc)
- *   6. 🌐 Real-time Network Monitoring & Background Auto-Sync Trigger
+ *   1. 🕒 Live MMT (UTC+06:30) Ticking Clock (Date + Time AM/PM)
+ *   2. 🛡️ Scope-Safe Singleton Helpers (Zero SyntaxError Guarantee)
+ *   3. ⚡ Quota-Shield: IndexedDB Pre-caching on App Startup (0 D1 Read Waste)
+ *   4. 👤 Dynamic Role Authenticator (Fixes Cashier Showing as Admin)
+ *   5. 🔄 Universal Robust Async Refresh Engine for All Tab Views
+ *   6. ⌨️ Global Hardware Hotkeys (F2, F4, F8, Esc)
  * ==============================================================================
  */
 
@@ -27,6 +27,37 @@ function getMMTDateString(dInput) {
 }
 window.getMMTDateString = getMMTDateString;
 
+function getMMTFullDateTimeString(dInput) {
+  const d = dInput ? new Date(dInput) : new Date();
+  const targetMs = isNaN(d.getTime()) ? Date.now() : d.getTime();
+  const mmt = new Date(targetMs + (6.5 * 60 * 60 * 1000));
+  const y = mmt.getUTCFullYear();
+  const m = String(mmt.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(mmt.getUTCDate()).padStart(2, '0');
+  let hours = mmt.getUTCHours();
+  const minutes = String(mmt.getUTCMinutes()).padStart(2, '0');
+  const seconds = String(mmt.getUTCSeconds()).padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  const strHours = String(hours).padStart(2, '0');
+  return `${y}-${m}-${day} | ${strHours}:${minutes}:${seconds} ${ampm} (MMT)`;
+}
+window.getMMTFullDateTimeString = getMMTFullDateTimeString;
+
+function startLiveClock() {
+  function tick() {
+    const fullTimeStr = getMMTFullDateTimeString();
+    const dateOnlyStr = getMMTDateString();
+    const dateEl = document.getElementById('pos-today-date');
+    if (dateEl) dateEl.textContent = fullTimeStr;
+    const sideDateEl = document.getElementById('side-today-date');
+    if (sideDateEl) sideDateEl.textContent = `MMT ${dateOnlyStr}`;
+  }
+  tick();
+  setInterval(tick, 1000);
+}
+
 // ------------------------------------------------------------------------------
 // 🛡️ 2. SAFE ROLE NORMALIZATION HELPER
 // ------------------------------------------------------------------------------
@@ -37,7 +68,16 @@ function getNormalizedRole() {
 window.getNormalizedRole = getNormalizedRole;
 
 // ------------------------------------------------------------------------------
-// 🎯 3. GLOBAL APPLICATION STATE & MEMORY CACHES
+// 🛡️ 3. SCOPE-SAFE SINGLETON HELPERS (PREVENTS 'ESC ALREADY DECLARED' SYNTAX ERROR)
+// ------------------------------------------------------------------------------
+window.esc = window.esc || window.escapeHtml || (s => s ? String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : '');
+window.escAttr = window.escAttr || window.escapeJsAttr || (s => s ? String(s).replace(/'/g, "\\'") : '');
+
+var esc = window.esc;
+var escAttr = window.escAttr;
+
+// ------------------------------------------------------------------------------
+// 🎯 4. GLOBAL APPLICATION STATE & MEMORY CACHES
 // ------------------------------------------------------------------------------
 var gSession = null;
 var gActiveView = 'pos';
@@ -63,11 +103,8 @@ var gSalesPage = 1, gSalesLimit = 20, gSalesTotalRows = 0, gSalesSearchTimeout =
 var gWastePage = 1, gWasteLimit = 20, gWasteTotalRows = 0, gWasteSearchTimeout = null;
 var gSurplusPage = 1, gSurplusLimit = 20, gSurplusTotalRows = 0, gSurplusSearchTimeout = null;
 
-const esc = window.escapeHtml || (s => s ? String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : '');
-const escAttr = window.escapeJsAttr || (s => s ? String(s).replace(/'/g, "\\'") : '');
-
 // ------------------------------------------------------------------------------
-// 🚀 4. DOM READY & APPLICATION BOOTSTRAP
+// 🚀 5. APPLICATION BOOTSTRAP & LIFECYCLE
 // ------------------------------------------------------------------------------
 window.addEventListener('DOMContentLoaded', async () => {
   const userStr = localStorage.getItem('golden_user') || localStorage.getItem('user');
@@ -78,27 +115,30 @@ window.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  gSession = JSON.parse(userStr);
+  try {
+    gSession = JSON.parse(userStr);
+  } catch(e) {
+    gSession = { role: localStorage.getItem('golden_user_role') || 'Cashier' };
+  }
+
   const rawRole = String(gSession.role || 'Cashier').trim();
   const role = getNormalizedRole();
 
+  // 👤 DYNAMIC ROLE BADGE (FIXES CASHIER APPEARING AS ADMIN)
+  const roleDisplay = rawRole.toUpperCase().replace(/_/g, ' ');
   const roleBadge = document.getElementById('pos-role-badge');
-  if (roleBadge) roleBadge.textContent = rawRole.toUpperCase();
+  if (roleBadge) roleBadge.textContent = roleDisplay;
   const sideRole = document.getElementById('side-user-role');
-  if (sideRole) sideRole.textContent = rawRole.toUpperCase();
+  if (sideRole) sideRole.textContent = roleDisplay;
 
-  // 🕒 Strict MMT Today String Injection
-  const todayStr = getMMTDateString();
-  const dateEl = document.getElementById('pos-today-date');
-  if (dateEl) dateEl.textContent = `MMT ${todayStr}`;
-  const sideDateEl = document.getElementById('side-today-date');
-  if (sideDateEl) sideDateEl.textContent = `MMT ${todayStr}`;
+  // 🕒 START LIVE TICKING CLOCK
+  startLiveClock();
 
-  // စက်တွင်း IndexedDB နှင့် Network Monitor စတင်ခြင်း
-  await initCanteenDB();
+  // INITIALIZE OFFLINE DB & NETWORK MONITOR
+  if (typeof initCanteenDB === 'function') await initCanteenDB();
   initNetworkMonitor();
 
-  // 🛡️ ROLE-BASED WORKSPACE ROUTING
+  // 🛡️ ROLE WORKSPACE ISOLATION
   const html = document.documentElement;
   const isCounter = role.includes('counter');
   const isCashier = role === 'canteencashier' || role === 'cashier';
@@ -108,7 +148,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     html.classList.add('role-counter');
     html.classList.remove('role-cashier', 'role-admin');
     
-    // Counter Isolation: Terminal သီးသန့် အသုံးပြုစေရန် Sidebar နှင့် Buttons များ ပိတ်ခြင်း
     const sidebar = document.getElementById('canteen-sidebar');
     if (sidebar) sidebar.style.display = 'none';
     const toggleBtn = document.getElementById('btn-toggle-sidebar');
@@ -123,7 +162,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     html.classList.add('role-cashier');
     html.classList.remove('role-counter', 'role-admin');
     
-    // Cashier: မုန့်ဖိုးကန့်သတ်ငွေ ဆက်တင်ခလုတ်တစ်ခုတည်းကိုသာ ဖျောက်ထားသည်
+    // Cashier: Only POS Settings is restricted
     const btnSettings = document.getElementById('btn-side-settings');
     if (btnSettings) btnSettings.style.display = 'none';
     
@@ -137,7 +176,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   window.addEventListener('keydown', handleGlobalHotkeys);
 
-  // Dropdown များ အပြင်ဘက် နှိပ်ပါက ပိတ်သိမ်းခြင်း
+  // Close dropdowns on outside click
   document.addEventListener('click', (e) => {
     const barcodeInput = document.getElementById('pos-barcode-input');
     const dropdown = document.getElementById('pos-search-dropdown');
@@ -158,20 +197,24 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // ⚡ D1 QUOTA-SHIELD: အကောင့်စတင်ဝင်ရောက်ချိန်တွင် စက်တွင်း IndexedDB သို့ ကြိုတင် Preload ပြုလုပ်ခြင်း
-  await Promise.all([
-    loadItemsCatalog(false),
-    loadSuppliersList(),
-    loadPosSettings(),
-    updatePendingBadgeCount(),
-    cacheStudentDirectoryForOffline()
-  ]);
+  // ⚡ D1 QUOTA-SHIELD: NON-BLOCKING BACKGROUND PRE-CACHE
+  try {
+    const tasks = [];
+    if (typeof loadItemsCatalog === 'function') tasks.push(loadItemsCatalog(false));
+    if (typeof loadSuppliersList === 'function') tasks.push(loadSuppliersList());
+    if (typeof loadPosSettings === 'function') tasks.push(loadPosSettings());
+    if (typeof updatePendingBadgeCount === 'function') tasks.push(updatePendingBadgeCount());
+    if (typeof cacheStudentDirectoryForOffline === 'function') tasks.push(cacheStudentDirectoryForOffline());
+    await Promise.allSettled(tasks);
+  } catch (err) {
+    console.warn("[CanteenState] Background pre-cache notice:", err);
+  }
 
   focusScanner();
 });
 
 // ------------------------------------------------------------------------------
-// 🎨 5. THEME CONTROLLER (LIGHT / DARK DUAL-ENGINE)
+// 🎨 6. THEME CONTROLLER
 // ------------------------------------------------------------------------------
 function toggleCanteenTheme() {
   const html = document.documentElement;
@@ -190,7 +233,7 @@ function toggleCanteenTheme() {
 }
 
 // ------------------------------------------------------------------------------
-// 🌐 6. REAL-TIME NETWORK MONITOR & AUTO-SYNC
+// 🌐 7. REAL-TIME NETWORK MONITOR & AUTO-SYNC
 // ------------------------------------------------------------------------------
 function initNetworkMonitor() {
   const updateStatus = () => {
@@ -231,7 +274,7 @@ async function cacheStudentDirectoryForOffline() {
       await dbSaveStudents(res.data);
     }
   } catch (e) {
-    console.warn("[OfflineCache] Preload warning:", e.message);
+    console.warn("[OfflineCache] Preload notice:", e.message);
   }
 }
 
@@ -252,7 +295,7 @@ async function updatePendingBadgeCount() {
 }
 
 // ------------------------------------------------------------------------------
-// 🧭 7. WORKSPACE VIEW SWITCHER
+// 🧭 8. WORKSPACE VIEW SWITCHER
 // ------------------------------------------------------------------------------
 function switchCanteenView(viewName) {
   gActiveView = viewName;
@@ -296,7 +339,7 @@ function switchCanteenView(viewName) {
 }
 
 // ------------------------------------------------------------------------------
-// 🔄 8. UNIVERSAL ROBUST ASYNC REFRESH ENGINE
+// 🔄 9. UNIVERSAL ROBUST ASYNC REFRESH ENGINE
 // ------------------------------------------------------------------------------
 async function refreshActiveCanteenView() {
   const refreshBtn = document.getElementById('btn-global-refresh');
@@ -306,15 +349,15 @@ async function refreshActiveCanteenView() {
     if (gActiveView === 'dashboard' && typeof loadCanteenDashboard === 'function') {
       await loadCanteenDashboard();
     } else if (gActiveView === 'sales' && typeof loadSalesOrdersHistory === 'function') {
-      await loadSalesOrdersHistory(gSalesPage);
+      await loadSalesOrdersHistory(gSalesPage || 1);
     } else if (gActiveView === 'stock' && typeof loadStockInventory === 'function') {
-      await loadStockInventory(gStockPage);
+      await loadStockInventory(gStockPage || 1);
     } else if (gActiveView === 'purchases' && typeof loadPurchasesHistory === 'function') {
-      await loadPurchasesHistory(gPurchasesPage);
+      await loadPurchasesHistory(gPurchasesPage || 1);
     } else if (gActiveView === 'waste' && typeof loadWasteHistory === 'function') {
-      await loadWasteHistory(gWastePage);
+      await loadWasteHistory(gWastePage || 1);
     } else if (gActiveView === 'surplus' && typeof loadSurplusHistory === 'function') {
-      await loadSurplusHistory(gSurplusPage);
+      await loadSurplusHistory(gSurplusPage || 1);
     } else if (gActiveView === 'pos') {
       if (typeof loadItemsCatalog === 'function') await loadItemsCatalog(true);
       await cacheStudentDirectoryForOffline();
@@ -328,7 +371,7 @@ async function refreshActiveCanteenView() {
 }
 
 // ------------------------------------------------------------------------------
-// 🛠️ 9. UI HELPERS & GLOBAL KEYBOARD HOTKEYS
+// 🛠️ 10. UI HELPERS & KEYBOARD HOTKEYS
 // ------------------------------------------------------------------------------
 function toggleCanteenSidebar() {
   document.getElementById('canteen-sidebar')?.classList.toggle('hidden');
@@ -383,8 +426,11 @@ function logoutPos() {
 }
 
 // ------------------------------------------------------------------------------
-// 🌐 10. WINDOW GLOBAL EXPORTS
+// 🌐 11. WINDOW GLOBAL EXPORTS
 // ------------------------------------------------------------------------------
+window.getMMTDateString = getMMTDateString;
+window.getMMTFullDateTimeString = getMMTFullDateTimeString;
+window.getNormalizedRole = getNormalizedRole;
 window.switchCanteenView = switchCanteenView;
 window.refreshActiveCanteenView = refreshActiveCanteenView;
 window.toggleCanteenSidebar = toggleCanteenSidebar;

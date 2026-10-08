@@ -1,9 +1,9 @@
 /**
  * ==============================================================================
- * GOLDEN ERP SYSTEM - CANTEEN POS HANDLERS (CLOUDFLARE D1 ENTERPRISE V9 FULL)
+ * GOLDEN ERP SYSTEM - CANTEEN POS HANDLERS (CLOUDFLARE D1 ENTERPRISE V9.1 FULL)
  * File: handlers-canteen-pos.js (Location: cashbook-api/handlers-canteen-pos.js)
  * 
- * 💡 Features & Architectural Blueprint V9:
+ * 💡 Features & Architectural Blueprint V9.1:
  *   1. 🕒 STRICT MMT TIMEZONE: Universal UTC+06:30 Myanmar Standard Time calculation
  *   2. 📊 LIVE DASHBOARD: 1-Batch Atomic Metrics (Sales, Stock, Net Spoilage Loss & Closure)
  *   3. 💰 CAPITAL INVARIANCE: Surplus stock increases inventory count WITHOUT inflating capital
@@ -13,7 +13,8 @@
  *   7. 🧾 SALES ORDERS AUDITOR: Full 20-row paginated history with profit tracking
  *   8. 🔒 STORE CLOSURE INTERLOCK: Day Close enforcement before Finance Settlement
  *   9. 🌐 OFFLINE BATCH SYNC: Idempotent queue sync with Zero Double-Deduction guarantee
- *  10. 🛡️ SELF-HEALING SCHEMA: Auto-verifies and heals missing columns/tables on start
+ *  10. 🛡️ SELF-HEALING SCHEMA: Auto-verifies and heals missing columns/tables on cold start
+ *  11. ⚡ D1 QUOTA-SHIELD: Maximum query batching to minimize read/write charges
  * ==============================================================================
  */
 
@@ -64,9 +65,10 @@ async function ensureCanteenSchema(db) {
   if (_schemaInitialized || !db || typeof db.prepare !== 'function') return;
   try {
     await db.prepare("ALTER TABLE pos_items_master ADD COLUMN surplus_stock REAL NOT NULL DEFAULT 0").run();
-  } catch (e) {
-    // Column already exists or table locked
-  }
+  } catch (e) {}
+  try {
+    await db.prepare("ALTER TABLE pos_waste_records ADD COLUMN items_json TEXT").run();
+  } catch (e) {}
   try {
     await db.prepare(`
       CREATE TABLE IF NOT EXISTS pos_surplus_records (
@@ -102,11 +104,26 @@ async function ensureCanteenSchema(db) {
       )
     `).run();
   } catch (e) {}
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS pos_settings (
+        setting_key TEXT PRIMARY KEY,
+        setting_value TEXT NOT NULL,
+        description TEXT,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `).run();
+    await db.prepare(`
+      INSERT INTO pos_settings (setting_key, setting_value, description)
+      VALUES ('daily_spending_cap', '10000', 'ကျောင်းသားတစ်ဦး တစ်ရက် အများဆုံး မုန့်ဖိုးသုံးစွဲခွင့် ကန့်သတ်ငွေ (MMK)')
+      ON CONFLICT(setting_key) DO NOTHING
+    `).run();
+  } catch (e) {}
   _schemaInitialized = true;
 }
 
 // ==============================================================================
-// 💡 3. SMART PRICING ROUNDING ENGINE (DEFAULT 8% MARKUP)
+// 💡 3. SMART PRICING ROUNDING ENGINE (DEFAULT 8% MARKUP, 50-STEP ROUNDING)
 // ==============================================================================
 export function calculateSmartPrice(costPrice, markupPercent = 8, roundTo = 50) {
   const cost = safeAmount(costPrice);
@@ -1135,8 +1152,12 @@ export async function updatePosItemQuick(db, session, body) {
       params.push(safeAmount(body.costPrice));
     }
     if (body.currentStock !== undefined) {
+      const newStock = Math.max(0, Number(body.currentStock) || 0);
       updates.push(`current_stock = ?`);
-      params.push(Number(body.currentStock) || 0);
+      params.push(newStock);
+      // 💰 Guard against surplusStock becoming greater than currentStock
+      updates.push(`surplus_stock = MIN(COALESCE(surplus_stock, 0), ?)`);
+      params.push(newStock);
     }
     if (body.isActive !== undefined) {
       updates.push(`is_active = ?`);
@@ -1188,26 +1209,47 @@ export async function getPosItems(db, body) {
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
     
-    // 🎯 ပင်မ Core Columns များကိုသာ စိတ်ချစွာ ဆွဲယူသဖြင့် မည်သည့်အခါမျှ မပျက်ကျပါ
-    const query = `
-      SELECT 
-        id, 
-        barcode, 
-        item_name as itemName, 
-        category, 
-        cost_price as costPrice,
-        markup_percent as markupPercent, 
-        selling_price as sellingPrice,
-        current_stock as currentStock, 
-        is_active as isActive, 
-        updated_at as updatedAt
-      FROM pos_items_master 
-      ${whereSql}
-      ORDER BY item_name ASC 
-      LIMIT 500
-    `;
+    let res;
+    try {
+      res = await db.prepare(`
+        SELECT 
+          id, 
+          barcode, 
+          item_name as itemName, 
+          category, 
+          cost_price as costPrice,
+          markup_percent as markupPercent, 
+          selling_price as sellingPrice,
+          current_stock as currentStock, 
+          COALESCE(surplus_stock, 0) as surplusStock,
+          is_active as isActive, 
+          updated_at as updatedAt
+        FROM pos_items_master 
+        ${whereSql}
+        ORDER BY item_name ASC 
+        LIMIT 500
+      `).bind(...params).all();
+    } catch (colErr) {
+      res = await db.prepare(`
+        SELECT 
+          id, 
+          barcode, 
+          item_name as itemName, 
+          category, 
+          cost_price as costPrice,
+          markup_percent as markupPercent, 
+          selling_price as sellingPrice,
+          current_stock as currentStock, 
+          0 as surplusStock,
+          is_active as isActive, 
+          updated_at as updatedAt
+        FROM pos_items_master 
+        ${whereSql}
+        ORDER BY item_name ASC 
+        LIMIT 500
+      `).bind(...params).all();
+    }
 
-    const res = await db.prepare(query).bind(...params).all();
     return { success: true, data: res.results || [] };
   } catch (err) {
     return { success: false, message: "ပစ္စည်းစာရင်း ဆွဲယူ၍ မရပါ: " + err.message };

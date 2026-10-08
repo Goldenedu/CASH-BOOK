@@ -2,7 +2,7 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - CLOUDFLARE WORKER MAIN ROUTER (D1 MODULAR ENTERPRISE EDITION)
  * File: worker.js (Location: cashbook-api/worker.js)
- * 💡 Features: 🛡️ Strict Domain-Specific RBAC Matrix (Case-Insensitive Safe),
+ * 💡 Features: 🛡️ Strict Domain-Specific RBAC Matrix (Case-Insensitive & Resilient),
  *              ⚡ QUOTA-SHIELD: O(1) Differential Global Recalculator Engine,
  *              🎯 Floating Point Safe Comparison (ROUND to 2 Decimals),
  *              Fail-Closed WebCrypto JWT & PBKDF2 Password Security (100k Iterations),
@@ -32,10 +32,10 @@ import * as CanteenPosHandlers from './handlers-canteen-pos.js';
 // ==============================================================================
 const ROLE_PERMS = {
   // ပင်မ Finance & Executive Roles
-  Owner: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: true, grade_matrix: true, backup_dispatch: true, pos_read: true, pos_write: true, pos_admin: true, pos_purchase: true, pos_waste_read: true, pos_waste_write: true, pos_waste_admin: true, pos_surplus_read: true, pos_surplus_write: true, pos_surplus_admin: true, pos_settings_write: true, pos_close: true, canteen_settle: true },
-  Admin: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: true, grade_matrix: true, backup_dispatch: true, pos_read: true, pos_write: true, pos_admin: true, pos_purchase: true, pos_waste_read: true, pos_waste_write: true, pos_waste_admin: true, pos_surplus_read: true, pos_surplus_write: true, pos_surplus_admin: true, pos_settings_write: true, pos_close: true, canteen_settle: true },
-  Finance: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: true, pos_read: true, pos_write: true, pos_admin: true, pos_purchase: true, pos_waste_read: true, pos_waste_write: true, pos_waste_admin: true, pos_surplus_read: true, pos_surplus_write: true, pos_surplus_admin: true, pos_settings_write: true, pos_close: false, canteen_settle: true },
-  Accountant: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: true, pos_read: true, pos_write: true, pos_admin: true, pos_purchase: true, pos_waste_read: true, pos_waste_write: true, pos_waste_admin: true, pos_surplus_read: true, pos_surplus_write: true, pos_surplus_admin: true, pos_settings_write: true, pos_close: false, canteen_settle: true },
+  Owner: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: true, grade_matrix: true, backup_dispatch: true, pos_read: true, pos_write: true, pos_sell: true, pos_admin: true, pos_purchase: true, pos_waste_read: true, pos_waste_write: true, pos_waste_admin: true, pos_surplus_read: true, pos_surplus_write: true, pos_surplus_admin: true, pos_settings_write: true, pos_close: true, canteen_settle: true },
+  Admin: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: true, grade_matrix: true, backup_dispatch: true, pos_read: true, pos_write: true, pos_sell: true, pos_admin: true, pos_purchase: true, pos_waste_read: true, pos_waste_write: true, pos_waste_admin: true, pos_surplus_read: true, pos_surplus_write: true, pos_surplus_admin: true, pos_settings_write: true, pos_close: true, canteen_settle: true },
+  Finance: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: true, pos_read: true, pos_write: true, pos_sell: true, pos_admin: true, pos_purchase: true, pos_waste_read: true, pos_waste_write: true, pos_waste_admin: true, pos_surplus_read: true, pos_surplus_write: true, pos_surplus_admin: true, pos_settings_write: true, pos_close: false, canteen_settle: true },
+  Accountant: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: true, pos_read: true, pos_write: true, pos_sell: true, pos_admin: true, pos_purchase: true, pos_waste_read: true, pos_waste_write: true, pos_waste_admin: true, pos_surplus_read: true, pos_surplus_write: true, pos_surplus_admin: true, pos_settings_write: true, pos_close: false, canteen_settle: true },
   
   // HR & Cashier Sub-Ledgers
   HR: { ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false, student_read: false, student_write: false, staff_read: true, staff_write: true, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: true, settings_write: false, grade_matrix: true, backup_dispatch: false },
@@ -49,7 +49,7 @@ const ROLE_PERMS = {
     student_read: true, student_write: false, staff_read: false, staff_write: false, 
     uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, 
     report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false,
-    pos_read: true, pos_write: true, pos_admin: true, pos_purchase: true, 
+    pos_read: true, pos_write: true, pos_sell: true, pos_admin: true, pos_purchase: true, 
     pos_waste_read: true, pos_waste_write: true, pos_waste_admin: true,
     pos_surplus_read: true, pos_surplus_write: true, pos_surplus_admin: true,
     pos_settings_write: true, pos_close: true, canteen_settle: true 
@@ -59,7 +59,7 @@ const ROLE_PERMS = {
     student_read: true, student_write: false, staff_read: false, staff_write: false, 
     uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, 
     report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false,
-    pos_read: true, pos_write: true, pos_admin: false, pos_purchase: true, 
+    pos_read: true, pos_write: true, pos_sell: true, pos_admin: false, pos_purchase: true, 
     pos_waste_read: true, pos_waste_write: true, pos_waste_admin: false,
     pos_surplus_read: true, pos_surplus_write: true, pos_surplus_admin: false,
     pos_settings_write: false, 
@@ -71,7 +71,7 @@ const ROLE_PERMS = {
     student_read: true, student_write: false, staff_read: false, staff_write: false, 
     uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, 
     report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false,
-    pos_read: true, pos_write: true, pos_admin: false, pos_purchase: false, 
+    pos_read: true, pos_write: true, pos_sell: true, pos_admin: false, pos_purchase: false, 
     pos_waste_read: false, pos_waste_write: false, pos_waste_admin: false,
     pos_surplus_read: false, pos_surplus_write: false, pos_surplus_admin: false,
     pos_settings_write: false, pos_close: false, canteen_settle: false 
@@ -81,7 +81,7 @@ const ROLE_PERMS = {
     student_read: true, student_write: false, staff_read: false, staff_write: false, 
     uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, 
     report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false,
-    pos_read: true, pos_write: true, pos_admin: false, pos_purchase: false, 
+    pos_read: true, pos_write: true, pos_sell: true, pos_admin: false, pos_purchase: false, 
     pos_waste_read: false, pos_waste_write: false, pos_waste_admin: false,
     pos_surplus_read: false, pos_surplus_write: false, pos_surplus_admin: false,
     pos_settings_write: false, pos_close: false, canteen_settle: false 
@@ -91,7 +91,7 @@ const ROLE_PERMS = {
     student_read: true, student_write: false, staff_read: false, staff_write: false, 
     uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, 
     report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false,
-    pos_read: true, pos_write: true, pos_admin: false, pos_purchase: false, 
+    pos_read: true, pos_write: true, pos_sell: true, pos_admin: false, pos_purchase: false, 
     pos_waste_read: false, pos_waste_write: false, pos_waste_admin: false,
     pos_surplus_read: false, pos_surplus_write: false, pos_surplus_admin: false,
     pos_settings_write: false, pos_close: false, canteen_settle: false 
@@ -103,7 +103,7 @@ const ROLE_PERMS = {
   Viewer: { ledger_read: true, ledger_write: false, cashier_read: true, cashier_write: false, student_read: true, student_write: false, staff_read: true, staff_write: false, uniform_read: true, uniform_write: false, promo_read: true, promo_write: false, report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: false }
 };
 
-// 🎯 Safe Case-Insensitive Role Normalizer & Permission Evaluator
+// 🎯 Safe Case-Insensitive Role Normalizer & In-Memory RBAC Evaluator (0 D1 Reads)
 function can(session, perm) {
   const rawRole = String(session?.role || "Viewer").trim();
   const normalized = rawRole.toLowerCase().replace(/[\s_-]/g, '');
@@ -427,7 +427,7 @@ async function executeAutoRecalculateAll(db, body = {}) {
               FROM income
             )
             UPDATE income SET no = calculated.new_no FROM calculated 
-            WHERE income.id = calculated.id AND income.no IS NOT calculated.new_no;
+              WHERE income.id = calculated.id AND income.no IS NOT calculated.new_no;
           `).run();
         }
       } else {
@@ -547,6 +547,12 @@ export default {
         } catch (e) { body = {}; }
       }
 
+      // Fallback: URL Search Parameters မှ action အား စစ်ဆေးရယူခြင်း
+      if (!action) {
+        const url = new URL(request.url);
+        action = url.searchParams.get("action") || "";
+      }
+
       if (request.method !== "GET" && typeof validateLedgerInput === 'function') {
         const validation = validateLedgerInput(body);
         if (!validation.success) return new Response(JSON.stringify(validation), { status: 400, headers: corsHeaders });
@@ -558,7 +564,9 @@ export default {
       if (!PUBLIC_ACTIONS.includes(action)) {
         const authHeader = request.headers.get("Authorization") || "";
         const tokenFromHeader = authHeader.startsWith("Bearer ") ? authHeader.substring(7) : "";
-        const tokenToVerify = tokenFromHeader || body.token || body.authToken || "";
+        const urlToken = (request.method === "GET") ? new URL(request.url).searchParams.get("token") || new URL(request.url).searchParams.get("authToken") : "";
+        const tokenToVerify = tokenFromHeader || body.token || body.authToken || urlToken || "";
+        
         userSession = await verifyJwtToken(tokenToVerify, authSecret);
         if (!userSession) return new Response(JSON.stringify({ success: false, message: "Session သက်တမ်း ကုန်ဆုံးသွားပါပြီ။ ကျေးဇူးပြု၍ ပြန်လည် Login ဝင်ရောက်ပါ။" }), { status: 401, headers: corsHeaders });
       }
@@ -950,10 +958,11 @@ export default {
       // 🛡️ D1 AUDIT LOGGING (NON-BLOCKING WITH CHECKOUT INCLUDED)
       const isMutatingAction = /^(save|update|delete|export|send|recalculate|close|sync|checkout)/i.test(action);
       if (isMutatingAction && result && result.success !== false && userSession) {
+        const recordId = result?.invoiceNo || result?.purchaseNo || result?.wasteNo || result?.surplusNo || result?.settlementNo || body.uniqueId || body.uniqueid || body.id || null;
         if (ctx && typeof ctx.waitUntil === 'function') {
-          ctx.waitUntil(writeAuditLog(db, userSession, action, body, body.uniqueId || body.uniqueid || body.id || null));
+          ctx.waitUntil(writeAuditLog(db, userSession, action, body, recordId));
         } else {
-          await writeAuditLog(db, userSession, action, body, body.uniqueId || body.uniqueid || body.id || null);
+          await writeAuditLog(db, userSession, action, body, recordId);
         }
       }
 

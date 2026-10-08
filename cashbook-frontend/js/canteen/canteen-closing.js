@@ -1,9 +1,9 @@
 /**
  * ==============================================================================
  * GOLDEN ERP - CANTEEN STORE CLOSING, SETTLEMENT & OFFLINE PENDING SYNC
- * File: js/canteen/canteen-closing.js (Enterprise V9 Full Production Edition)
+ * File: js/canteen/canteen-closing.js (Enterprise V9.1 Full Production Edition)
  * 💡 Features:
- *   1. 🕒 Strict MMT (UTC+06:30) Timezone Universal Engine
+ *   1. 🕒 Strict MMT (UTC+06:30) Timezone Universal Engine (Recursion-Free)
  *   2. 📊 Live Dashboard: Real-time Sales, Margin, Capital & Net Loss Aggregator
  *   3. 🔒 Canteen Store Day Closure (Cashier & Admin Allowed, Pending Guarded)
  *   4. 💵 Evening Finance Settlement (Closure Interlocked)
@@ -13,10 +13,10 @@
  * ==============================================================================
  */
 
-// 🕒 Pure Non-Recursive MMT Date Engine (UTC+06:30)
+// 🕒 Pure Non-Recursive MMT Date Helper (UTC+06:30)
 function getMMTDateString(dInput) {
-  if (typeof window.getMMTDateString === 'function') {
-    return window.getMMTDateString(dInput);
+  if (dInput && typeof dInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dInput.trim())) {
+    return dInput.trim();
   }
   const d = dInput ? new Date(dInput) : new Date();
   const targetMs = isNaN(d.getTime()) ? Date.now() : d.getTime();
@@ -24,14 +24,15 @@ function getMMTDateString(dInput) {
   return mmt.toISOString().slice(0, 10);
 }
 
-// 🛡️️ Safe Role Normalizer
+// 🛡️ Standalone Role Normalizer (Loop-Free Guaranteed)
 function getNormalizedRole() {
-  if (typeof window.getNormalizedRole === 'function') {
-    return window.getNormalizedRole();
-  }
   const raw = String(gSession?.role || localStorage.getItem('golden_user_role') || 'Cashier').trim();
   return raw.toLowerCase().replace(/[\s_-]/g, '');
 }
+
+// 🛡️ Safe Fallback for HTML Escape
+var esc = window.esc || (s => s ? String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : '');
+var escAttr = window.escAttr || (s => s ? String(s).replace(/'/g, "\\'") : '');
 
 // ------------------------------------------------------------------------------
 // 📊 0. LIVE CANTEEN DASHBOARD CONTROLLER (NET LOSS FORMULA ENABLED)
@@ -81,7 +82,7 @@ async function loadCanteenDashboard() {
       headerCloseBtnText.textContent = today?.isClosed ? "ဆိုင်ပိတ်ပြီး" : "ဆိုင်ပိတ်မည်";
     }
 
-    // ၃။ Today's Operations KPI Render (Null-Safe)
+    // ၃။ Today's Operations KPI Render (Defensive Null-Safe)
     const elTodaySales = document.getElementById('dash-today-sales');
     if (elTodaySales) elTodaySales.textContent = `${Number(today?.totalSales || 0).toLocaleString()} MMK`;
 
@@ -119,7 +120,7 @@ async function loadCanteenDashboard() {
       }
     }
 
-    // ၄။ All-Time & Capital Investment Render (Null-Safe)
+    // ၄။ All-Time & Capital Investment Render (Defensive Null-Safe)
     const elAllSales = document.getElementById('dash-all-sales');
     if (elAllSales) elAllSales.textContent = `${Number(allTime?.totalSales || 0).toLocaleString()} MMK`;
 

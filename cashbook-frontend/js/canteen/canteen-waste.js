@@ -1,21 +1,22 @@
 /**
  * ==============================================================================
  * GOLDEN ERP - CANTEEN WASTAGE & SURPLUS AUDITOR
- * File: js/canteen/canteen-waste.js (Enterprise V9 Full Production Edition)
+ * File: js/canteen/canteen-waste.js (Enterprise V9.1 Full Production Edition)
  * 💡 Features:
- *   1. 🕒 Strict MMT (UTC+06:30) Timezone Enforcement
+ *   1. 🕒 Strict MMT (UTC+06:30) Timezone Universal Support
  *   2. ⚠️ Wastage & Loss Management with Cost-Basis Loss Tracking
  *   3. 📦 Stock Surplus Ledger (Capital Invariance Synchronization)
  *   4. 🔄 Atomic Admin-Only Rollback Engine for Waste & Surplus Deletion
  *   5. 🌐 Resilient Barcode Search with IndexedDB Offline Fallback
  *   6. 🛡️ Defensive Null-Safe DOM Updaters (Zero-Crash Execution)
+ *   7. 🛡️ Scope-Safe Helper (Zero 'esc' SyntaxError Guarantee)
  * ==============================================================================
  */
 
 // 🕒 Pure Non-Recursive MMT Date Helper (UTC+06:30)
 function getMMTDateString(dInput) {
-  if (typeof window.getMMTDateString === 'function') {
-    return window.getMMTDateString(dInput);
+  if (dInput && typeof dInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dInput.trim())) {
+    return dInput.trim();
   }
   const d = dInput ? new Date(dInput) : new Date();
   const targetMs = isNaN(d.getTime()) ? Date.now() : d.getTime();
@@ -23,17 +24,15 @@ function getMMTDateString(dInput) {
   return mmt.toISOString().slice(0, 10);
 }
 
-// 🛡️ Safe Role Normalizer
+// 🛡️ Standalone Role Normalizer (Loop-Free Guaranteed)
 function getNormalizedRole() {
-  if (typeof window.getNormalizedRole === 'function') {
-    return window.getNormalizedRole();
-  }
   const raw = String(gSession?.role || localStorage.getItem('golden_user_role') || 'Cashier').trim();
   return raw.toLowerCase().replace(/[\s_-]/g, '');
 }
 
-const esc = window.escapeHtml || (s => s ? String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : '');
-const escAttr = window.escapeJsAttr || (s => s ? String(s).replace(/'/g, "\\'") : '');
+// 🛡️ Scope-Safe Variable Declarations (Prevents Identifier SyntaxError)
+var esc = window.esc || (s => s ? String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : '');
+var escAttr = window.escAttr || (s => s ? String(s).replace(/'/g, "\\'") : '');
 
 // ==============================================================================
 // ⚠️ 1. WASTAGE & LOSS MANAGEMENT
@@ -227,7 +226,7 @@ function removeWasteCartItem(idx) {
 async function submitPosWaste() {
   if (gWasteCart.length === 0) return showToast("ERROR", "အပျက်စာရင်းသွင်းမည့် ပစ္စည်း အနည်းဆုံး ၁ ခု ရွေးချယ်ပါ။");
 
-  const todayStr = getMMTDateString(); // 🕒 Strict MMT Today
+  const todayStr = getMMTDateString();
   const payload = {
     date: document.getElementById('m-waste-date')?.value || todayStr,
     reason: document.getElementById('m-waste-reason')?.value || 'ပျက်စီးကွဲရှ',
@@ -242,7 +241,7 @@ async function submitPosWaste() {
       showToast("SUCCESS", res.message || "အပျက်/အပျောက်စာရင်း အောင်မြင်စွာ မှတ်တမ်းတင်ပြီးပါပြီ။");
       closeModal('pos-waste-modal');
 
-      // 🎯 Update Memory Cache and IndexedDB with Capital Invariance Guard
+      // 🎯 Capital Invariance Safe stock deduction
       for (const wi of gWasteCart) {
         const item = gItemsCache.find(it => it.barcode === wi.barcode);
         if (item) {
@@ -266,7 +265,6 @@ async function submitPosWaste() {
   }
 }
 
-// 🎯 Delete Waste Entry (Admin Only Rollback)
 async function deletePosWasteEntry(id, wasteNo) {
   const role = getNormalizedRole();
   if (role === 'canteencashier' || role === 'cashier') {

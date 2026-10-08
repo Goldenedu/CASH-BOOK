@@ -22,9 +22,9 @@
     :root {
       --bg-base: #f8fafc;
       --bg-sidebar: #ffffff;
-      --bg-card: #ffffff;
+      --bg-card: rgba(255, 255, 255, 0.95);
       --bg-card-inner: #f1f5f9;
-      --border-color: #e2e8f0;
+      --border-color: rgba(226, 232, 240, 0.9);
       --text-main: #0f172a;
       --text-muted: #64748b;
       --table-header: #f1f5f9;
@@ -32,7 +32,7 @@
     html.dark {
       --bg-base: #050b14;
       --bg-sidebar: #080f1e;
-      --bg-card: rgba(15, 23, 42, 0.85);
+      --bg-card: rgba(15, 23, 42, 0.75);
       --bg-card-inner: #070e1c;
       --border-color: rgba(51, 65, 85, 0.4);
       --text-main: #f8fafc;
@@ -44,7 +44,7 @@
       color: var(--text-main);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
       -webkit-tap-highlight-color: transparent; 
-      transition: background-color 0.15s ease, color 0.15s ease;
+      transition: background-color 0.2s ease, color 0.2s ease;
     }
     .glass-card { 
       background: var(--bg-card); 
@@ -70,15 +70,16 @@
       display: none !important;
     }
 
+    /* Cashier CAN close day and evening clearing, ONLY settings is hidden */
     html.role-cashier #btn-side-settings {
       display: none !important;
     }
   </style>
 
-  <!-- 🕒 MMT UTC+06:30, Theme & Early Role Initialization -->
+  <!-- 🕒 MMT Engine, Real-time Clock, Theme & Early Role Initialization -->
   <script>
     (function() {
-      // 1. Theme Initialization
+      // 1. Theme Pre-Initialization
       const savedTheme = localStorage.getItem('canteen_pos_theme') || 'dark';
       if (savedTheme === 'light') {
         document.documentElement.classList.remove('dark');
@@ -91,7 +92,8 @@
       // 2. Early Role Detection (Zero Flash of Restricted Controls)
       try {
         const userStr = localStorage.getItem('golden_user') || localStorage.getItem('user');
-        const role = userStr ? JSON.parse(userStr).role : (localStorage.getItem('golden_user_role') || '');
+        const user = userStr ? JSON.parse(userStr) : null;
+        const role = user?.role || localStorage.getItem('golden_user_role') || '';
         const normRole = String(role || '').toLowerCase().replace(/[\s_-]/g, '');
         if (normRole.includes('counter')) {
           document.documentElement.classList.add('role-counter');
@@ -102,12 +104,46 @@
         }
       } catch(e) {}
 
-      // 3. Myanmar Standard Time (UTC+06:30) Global Helper
+      // 3. Myanmar Standard Time (UTC+06:30) Helpers
       window.getMMTDateString = function(dInput) {
+        if (dInput && typeof dInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dInput.trim())) {
+          return dInput.trim();
+        }
         const d = dInput ? new Date(dInput) : new Date();
         const targetMs = isNaN(d.getTime()) ? Date.now() : d.getTime();
         const mmt = new Date(targetMs + (6.5 * 60 * 60 * 1000));
         return mmt.toISOString().slice(0, 10);
+      };
+
+      window.getMMTFullDateTimeString = function(dInput) {
+        const d = dInput ? new Date(dInput) : new Date();
+        const targetMs = isNaN(d.getTime()) ? Date.now() : d.getTime();
+        const mmt = new Date(targetMs + (6.5 * 60 * 60 * 1000));
+        const y = mmt.getUTCFullYear();
+        const m = String(mmt.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(mmt.getUTCDate()).padStart(2, '0');
+        let hours = mmt.getUTCHours();
+        const minutes = String(mmt.getUTCMinutes()).padStart(2, '0');
+        const seconds = String(mmt.getUTCSeconds()).padStart(2, '0');
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        const strHours = String(hours).padStart(2, '0');
+        return `${y}-${m}-${day} | ${strHours}:${minutes}:${seconds} ${ampm} (MMT)`;
+      };
+
+      // 4. Live Ticking Clock Starter
+      window.startMMTClock = function() {
+        function tick() {
+          const formatted = window.getMMTFullDateTimeString();
+          const todayDateOnly = window.getMMTDateString();
+          const headerDateEl = document.getElementById('pos-today-date');
+          if (headerDateEl) headerDateEl.textContent = formatted;
+          const sideDateEl = document.getElementById('side-today-date');
+          if (sideDateEl) sideDateEl.textContent = `MMT ${todayDateOnly}`;
+        }
+        tick();
+        setInterval(tick, 1000);
       };
     })();
   </script>
@@ -130,7 +166,7 @@
         </div>
         <div class="min-w-0">
           <h2 class="text-xs font-black tracking-wider uppercase truncate">CANTEEN SYSTEM</h2>
-          <p id="side-user-role" class="text-[10px] font-mono text-emerald-500 font-bold truncate">CANTEEN ADMIN</p>
+          <p id="side-user-role" class="text-[10px] font-mono text-emerald-500 font-bold truncate">AUTHENTICATING...</p>
         </div>
       </div>
 
@@ -228,7 +264,7 @@
     <div class="p-3 border-t border-[var(--border-color)] bg-[var(--bg-sidebar)] space-y-2">
       <div class="px-2 py-1 flex items-center justify-between text-[10px] font-mono text-slate-500">
         <span id="pos-network-status" class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> ONLINE</span>
-        <span id="side-today-date" title="Myanmar Standard Time (UTC+06:30)">MMT 2026-10-01</span>
+        <span id="side-today-date" title="Myanmar Standard Time (UTC+06:30)">MMT 2026-10-08</span>
       </div>
       <button onclick="logoutPos()" class="w-full py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2">
         <i class="fa-solid fa-power-off text-xs"></i>
@@ -242,7 +278,7 @@
   <!-- ============================================================================== -->
   <div class="flex-1 flex flex-col h-screen min-w-0 overflow-hidden bg-[var(--bg-base)]">
     
-    <!-- Top Action Bar -->
+    <!-- Top Action Bar (Live Ticking MMT Clock) -->
     <header class="bg-[var(--bg-sidebar)]/95 backdrop-blur-md border-b border-[var(--border-color)] px-4 py-2 flex items-center justify-between shrink-0 z-40">
       <div class="flex items-center gap-3">
         <button id="btn-toggle-sidebar" onclick="toggleCanteenSidebar()" class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center text-xs lg:hidden">
@@ -250,7 +286,7 @@
         </button>
         <div>
           <h1 id="canteen-view-title" class="text-xs font-black tracking-wider uppercase">CANTEEN POS TERMINAL</h1>
-          <p id="pos-today-date" class="text-[10px] font-mono text-slate-400">Loading MMT...</p>
+          <p id="pos-today-date" class="text-[10px] font-mono text-emerald-500 dark:text-emerald-400 font-bold">Initializing MMT Clock...</p>
         </div>
       </div>
 
@@ -308,7 +344,7 @@
             <div class="p-2.5 rounded-xl bg-indigo-500/20 text-indigo-500 text-lg"><i class="fa-solid fa-calendar-check"></i></div>
             <div>
               <span class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest block font-sans">TODAY'S OPERATIONS OVERVIEW</span>
-              <h3 id="dash-date-label" class="text-xs font-black font-mono mt-0.5">2026-10-01</h3>
+              <h3 id="dash-date-label" class="text-xs font-black font-mono mt-0.5">2026-10-08</h3>
             </div>
           </div>
           <div class="flex items-center gap-2">
@@ -321,6 +357,7 @@
           </div>
         </div>
 
+        <!-- Today Metrics 5-Cards Grid -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
           <div class="glass-card p-3.5 rounded-xl">
             <span class="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold block">ယနေ့ စုစုပေါင်း အရောင်းရငွေ</span>
@@ -346,10 +383,11 @@
             <span class="text-[10px] text-slate-400 font-sans mt-0.5 block">Gross Sales - Cost Price</span>
           </div>
 
+          <!-- ⚠️ NET LOSS (အသားတင် ဆုံးရှုံးငွေ = အပျက် - အပို) -->
           <div class="glass-card p-3.5 rounded-xl border-rose-300 dark:border-rose-500/30 bg-rose-50/50 dark:bg-rose-950/15">
             <div class="flex justify-between items-start">
               <span class="text-[10px] text-rose-500 dark:text-rose-400 uppercase font-bold block">အသားတင် ဆုံးရှုံးငွေ (NET LOSS)</span>
-              <span class="text-[8px] px-1 rounded bg-rose-500/10 text-rose-500 font-bold font-mono">Loss - Gain</span>
+              <span class="text-[8px] px-1 rounded bg-rose-500/10 text-rose-500 font-bold font-mono">Waste - Surplus</span>
             </div>
             <h3 id="dash-today-loss" class="text-lg font-black text-rose-500 dark:text-rose-400 font-mono mt-1">0 MMK</h3>
             <div class="flex justify-between text-[9px] font-mono text-slate-400 mt-0.5">
@@ -1398,12 +1436,12 @@
           <table class="w-full text-left text-xs border-collapse min-w-[550px]">
             <thead class="bg-[var(--table-header)] text-slate-500 text-[11px] sticky top-0">
               <tr>
-                <th class="py-2 px-3 w-10 text-center">စဉ်</th>
-                <th class="py-2 px-3 w-28">INVOICE NO</th>
-                <th class="py-2 px-3 w-24">METHOD</th>
-                <th class="py-2 px-3">ITEMS SUMMARY</th>
-                <th class="py-2 px-3 text-right w-24">AMOUNT</th>
-                <th class="py-2 px-3 text-center w-20">STATUS</th>
+                <th class="py-2.5 px-3 w-10 text-center">စဉ်</th>
+                <th class="py-2.5 px-3 w-28">INVOICE NO</th>
+                <th class="py-2.5 px-3 w-24">METHOD</th>
+                <th class="py-2.5 px-3">ITEMS SUMMARY</th>
+                <th class="py-2.5 px-3 text-right w-24">AMOUNT</th>
+                <th class="py-2.5 px-3 text-center w-20">STATUS</th>
               </tr>
             </thead>
             <tbody id="pending-orders-table-body" class="divide-y divide-[var(--border-color)]"></tbody>
@@ -1473,6 +1511,24 @@
   </div>
 
   <div id="pos-toast-box" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[999999] pointer-events-none w-11/12 max-w-sm"></div>
+
+  <!-- 💡 Immediate Early Role & Clock Invocator (Guarantees Zero Role False Identification) -->
+  <script>
+    (function() {
+      try {
+        const userStr = localStorage.getItem('golden_user') || localStorage.getItem('user');
+        const user = userStr ? JSON.parse(userStr) : null;
+        const role = user?.role || localStorage.getItem('golden_user_role') || 'Cashier';
+        const roleEl = document.getElementById('side-user-role');
+        if (roleEl) {
+          roleEl.textContent = String(role).toUpperCase().replace(/_/g, ' ');
+        }
+      } catch(e) {}
+      if (typeof window.startMMTClock === 'function') {
+        window.startMMTClock();
+      }
+    })();
+  </script>
 
   <!-- 💡 Canteen Modular Client Controllers (Method B) -->
   <script src="js/canteen/canteen-db.js"></script>
