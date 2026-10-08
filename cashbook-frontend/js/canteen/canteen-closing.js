@@ -1,10 +1,10 @@
 /**
  * ==============================================================================
  * GOLDEN ERP - CANTEEN STORE CLOSING, SETTLEMENT & OFFLINE PENDING SYNC
- * File: js/canteen/canteen-closing.js (Enterprise V9.2 Full Production Edition)
+ * File: js/canteen/canteen-closing.js (Enterprise V9.3 Full Production Edition)
  * 💡 Features:
  *   1. 🕒 Strict MMT (UTC+06:30) Timezone Universal Engine (Recursion-Free)
- *   2. 📊 Live Dashboard: Real-time Sales, Margin, Capital & Net Loss Aggregator
+ *   2. 📊 Live Dashboard: Real-time Today, THIS MONTH, Capital & Net Loss Aggregator
  *   3. 🔒 Canteen Store Day Closure (Cashier & Admin Allowed, Pending Guarded)
  *   4. 💵 Evening Finance Settlement (Closure Interlocked)
  *   5. ⏳ Resilient Offline Pending Queue Management & QUIC Settle Auto-Sync
@@ -38,7 +38,7 @@ var escAttr = window.escAttr || (s => s ? String(s).replace(/'/g, "\\'") : '');
 var _isAutoSyncing = false;
 
 // ------------------------------------------------------------------------------
-// 📊 0. LIVE CANTEEN DASHBOARD CONTROLLER (NET LOSS FORMULA ENABLED)
+// 📊 0. LIVE CANTEEN DASHBOARD CONTROLLER (TODAY + THIS MONTH + ALL-TIME)
 // ------------------------------------------------------------------------------
 async function loadCanteenDashboard() {
   try {
@@ -46,8 +46,9 @@ async function loadCanteenDashboard() {
     if (!res || !res.success || !res.data) return;
 
     const { 
-      today, allTime, totalStockCapital, lowStockCount, 
+      today, thisMonth, allTime, totalStockCapital, lowStockCount, 
       todayLossCost, todaySurplusValue, todayNetLoss, 
+      monthLossCost, monthSurplusValue, monthNetLoss,
       allTimeLossCost, allTimeSurplusValue, allTimeNetLoss, date 
     } = res.data;
 
@@ -123,7 +124,52 @@ async function loadCanteenDashboard() {
       }
     }
 
-    // ၄။ All-Time & Capital Investment Render (Defensive Null-Safe)
+    // --------------------------------------------------------------------------
+    // ၄။ 🎯 THIS MONTH'S OPERATIONS KPI RENDER (NEW)
+    // --------------------------------------------------------------------------
+    const monthData = thisMonth || {};
+    const elMonthLabel = document.getElementById('dash-month-label');
+    if (elMonthLabel) elMonthLabel.textContent = monthData.monthPrefix || (date ? date.slice(0, 7) : '');
+
+    const elMonthSales = document.getElementById('dash-month-sales');
+    if (elMonthSales) elMonthSales.textContent = `${Number(monthData.totalSales || 0).toLocaleString()} MMK`;
+
+    const elMonthOrders = document.getElementById('dash-month-orders');
+    if (elMonthOrders) elMonthOrders.textContent = `${monthData.totalOrders || 0} Orders`;
+
+    const elMonthWallet = document.getElementById('dash-month-wallet');
+    if (elMonthWallet) elMonthWallet.textContent = `${Number(monthData.pocketMoneyShare || 0).toLocaleString()} MMK`;
+
+    const elMonthCash = document.getElementById('dash-month-cash');
+    if (elMonthCash) elMonthCash.textContent = `${Number(monthData.cashSalesShare || 0).toLocaleString()} MMK`;
+
+    const elMonthProfit = document.getElementById('dash-month-profit');
+    if (elMonthProfit) elMonthProfit.textContent = `+${Number(monthData.totalProfit || 0).toLocaleString()} MMK`;
+
+    const elMonthWasteSub = document.getElementById('dash-month-waste-sub');
+    if (elMonthWasteSub) elMonthWasteSub.textContent = Number(monthLossCost || monthData.monthLossCost || 0).toLocaleString();
+
+    const elMonthSurplusSub = document.getElementById('dash-month-surplus-sub');
+    if (elMonthSurplusSub) elMonthSurplusSub.textContent = Number(monthSurplusValue || monthData.monthSurplusValue || 0).toLocaleString();
+
+    const elMonthLoss = document.getElementById('dash-month-loss');
+    if (elMonthLoss) {
+      const mNetVal = Number(monthNetLoss !== undefined ? monthNetLoss : (monthData.monthNetLoss || 0));
+      if (mNetVal > 0) {
+        elMonthLoss.className = "text-lg font-black text-rose-500 font-mono mt-1";
+        elMonthLoss.textContent = `-${mNetVal.toLocaleString()} MMK`;
+      } else if (mNetVal < 0) {
+        elMonthLoss.className = "text-lg font-black text-emerald-500 font-mono mt-1";
+        elMonthLoss.textContent = `+${Math.abs(mNetVal).toLocaleString()} MMK`;
+      } else {
+        elMonthLoss.className = "text-lg font-black text-slate-400 font-mono mt-1";
+        elMonthLoss.textContent = `0 MMK`;
+      }
+    }
+
+    // --------------------------------------------------------------------------
+    // ၅။ All-Time & Capital Investment Render (Defensive Null-Safe)
+    // --------------------------------------------------------------------------
     const elAllSales = document.getElementById('dash-all-sales');
     if (elAllSales) elAllSales.textContent = `${Number(allTime?.totalSales || 0).toLocaleString()} MMK`;
 

@@ -1,15 +1,15 @@
 /**
  * ==============================================================================
- * GOLDEN ERP SYSTEM - CANTEEN POS HANDLERS (CLOUDFLARE D1 ENTERPRISE V9.1 FULL)
+ * GOLDEN ERP SYSTEM - CANTEEN POS HANDLERS (CLOUDFLARE D1 ENTERPRISE V9.3 FULL)
  * File: handlers-canteen-pos.js (Location: cashbook-api/handlers-canteen-pos.js)
  * 
- * 💡 Features & Architectural Blueprint V9.1:
+ * 💡 Features & Architectural Blueprint V9.3:
  *   1. 🕒 STRICT MMT TIMEZONE: Universal UTC+06:30 Myanmar Standard Time calculation
- *   2. 📊 LIVE DASHBOARD: 1-Batch Atomic Metrics (Sales, Stock, Net Spoilage Loss & Closure)
- *   3. 💰 CAPITAL INVARIANCE: Surplus stock increases inventory count WITHOUT inflating capital
- *   4. 📈 8% DEFAULT MARKUP: Dynamic Pricing updated from 20% to 8% default
- *   5. 📦 SURPLUS & WASTAGE: Multi-item cost-basis ledgers with atomic rollback engines
- *   6. 🛒 PURCHASES AUDITOR: Real-time Supplier daily purchase total calculator
+ *   2. 📊 LIVE DASHBOARD: 1-Batch Atomic Metrics (Today, THIS MONTH, All-Time & Closure)
+ *   3. 🛒 PURCHASES HUB KPIS: Real-time Today, THIS MONTH & All-Time purchase totals
+ *   4. 💰 CAPITAL INVARIANCE: Surplus stock increases inventory count WITHOUT inflating capital
+ *   5. 📈 8% DEFAULT MARKUP: Dynamic Pricing updated with 50-step cash rounding
+ *   6. 📦 SURPLUS & WASTAGE: Multi-item cost-basis ledgers with atomic rollback engines
  *   7. 🧾 SALES ORDERS AUDITOR: Full 20-row paginated history with profit tracking
  *   8. 🔒 STORE CLOSURE INTERLOCK: Day Close enforcement before Finance Settlement
  *   9. 🌐 OFFLINE BATCH SYNC: Idempotent queue sync with Zero Double-Deduction guarantee
@@ -136,7 +136,7 @@ export function calculateSmartPrice(costPrice, markupPercent = 8, roundTo = 50) 
 }
 
 // ==============================================================================
-// 💡 4. CANTEEN EXECUTIVE DASHBOARD METRICS (SINGLE 7-BATCH AGGREGATOR)
+// 💡 4. CANTEEN EXECUTIVE DASHBOARD METRICS (SINGLE BATCH: TODAY, MONTH, ALL-TIME)
 // ==============================================================================
 export async function getCanteenDashboardMetrics(db, body) {
   try {
@@ -144,7 +144,14 @@ export async function getCanteenDashboardMetrics(db, body) {
     const todayStr = getMyanmarDateString();
     const date = String(body.date || todayStr).trim();
 
-    // 🚀 D1 ULTRA QUOTA-SHIELD: Query (၇) ခုစလုံးကို ၁ ကြိမ်တည်းဖြင့် Single Batch ဆွဲယူသည်
+    // 📅 Calculate Month Range for MMT (e.g., '2026-10-01' to '2026-10-31')
+    const monthPrefix = date.slice(0, 7); // 'YYYY-MM'
+    const monthStart = `${monthPrefix}-01`;
+    const [y, m] = monthPrefix.split('-').map(Number);
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const monthEnd = `${monthPrefix}-${String(lastDay).padStart(2, '0')}`;
+
+    // 🚀 D1 ULTRA QUOTA-SHIELD: Single Batch ဖြင့် Query အားလုံးကို တပြိုင်နက် ဆွဲယူသည်
     const batchQueries = [
       // ၁။ ယနေ့ အရောင်းစာရင်း (Orders, Sales, Wallet Share, Cash Share, Net Margin)
       db.prepare(`
@@ -197,21 +204,23 @@ export async function getCanteenDashboardMetrics(db, body) {
         WHERE is_active = 1
       `),
 
-      // ၅။ အပျက်/အပျောက် ဆုံးရှုံးမှုတန်ဖိုး (ယနေ့ နှင့် သမိုင်းဝင် ဆုံးရှုံးငွေ)
+      // ၅။ အပျက်/အပျောက် ဆုံးရှုံးမှုတန်ဖိုး (ယနေ့၊ ယခုလ နှင့် သမိုင်းဝင် ဆုံးရှုံးငွေ)
       db.prepare(`
         SELECT 
           COALESCE(SUM(CASE WHEN date = ? THEN total_loss_cost ELSE 0 END), 0) as todayLossCost,
+          COALESCE(SUM(CASE WHEN date >= ? AND date <= ? THEN total_loss_cost ELSE 0 END), 0) as monthLossCost,
           COALESCE(SUM(total_loss_cost), 0) as allTimeLossCost
         FROM pos_waste_records
-      `).bind(date),
+      `).bind(date, monthStart, monthEnd),
 
-      // ၆။ အပိုပစ္စည်း ရရှိမှုတန်ဖိုး (ယနေ့ နှင့် သမိုင်းဝင် အပိုငွေ)
+      // ၆။ အပိုပစ္စည်း ရရှိမှုတန်ဖိုး (ယနေ့၊ ယခုလ နှင့် သမိုင်းဝင် အပိုငွေ)
       db.prepare(`
         SELECT 
           COALESCE(SUM(CASE WHEN date = ? THEN total_surplus_value ELSE 0 END), 0) as todaySurplusValue,
+          COALESCE(SUM(CASE WHEN date >= ? AND date <= ? THEN total_surplus_value ELSE 0 END), 0) as monthSurplusValue,
           COALESCE(SUM(total_surplus_value), 0) as allTimeSurplusValue
         FROM pos_surplus_records
-      `).bind(date),
+      `).bind(date, monthStart, monthEnd),
 
       // ၇။ ယနေ့ ကန်တင်းဆိုင်ပိတ်သိမ်းပြီး/မပြီး စစ်ဆေးခြင်း
       db.prepare(`
@@ -223,12 +232,24 @@ export async function getCanteenDashboardMetrics(db, body) {
         FROM canteen_day_closures 
         WHERE date = ? 
         LIMIT 1
-      `).bind(date)
+      `).bind(date),
+
+      // ၈။ 🎯 ယခုလ (THIS MONTH) အရောင်းစာရင်းချုပ်
+      db.prepare(`
+        SELECT 
+          COUNT(id) as monthOrders,
+          COALESCE(SUM(total_amount), 0) as monthSales,
+          COALESCE(SUM(CASE WHEN payment_method = 'Student Pocket Money' THEN total_amount ELSE 0 END), 0) as monthPocketShare,
+          COALESCE(SUM(CASE WHEN payment_method = 'Cash' THEN total_amount ELSE 0 END), 0) as monthCashShare,
+          COALESCE(SUM(net_profit), 0) as monthProfit
+        FROM pos_sales_orders 
+        WHERE date >= ? AND date <= ?
+      `).bind(monthStart, monthEnd)
     ];
 
-    let todayRes, settleRes, allTimeRes, stockRes, wasteRes, surplusRes, closureRes;
+    let todayRes, settleRes, allTimeRes, stockRes, wasteRes, surplusRes, closureRes, monthRes;
     try {
-      [todayRes, settleRes, allTimeRes, stockRes, wasteRes, surplusRes, closureRes] = await db.batch(batchQueries);
+      [todayRes, settleRes, allTimeRes, stockRes, wasteRes, surplusRes, closureRes, monthRes] = await db.batch(batchQueries);
     } catch (batchErr) {
       // Fallback query if surplus_stock column was pending in master table
       const fallbackStockQuery = db.prepare(`
@@ -239,7 +260,7 @@ export async function getCanteenDashboardMetrics(db, body) {
         WHERE is_active = 1
       `);
       batchQueries[3] = fallbackStockQuery;
-      [todayRes, settleRes, allTimeRes, stockRes, wasteRes, surplusRes, closureRes] = await db.batch(batchQueries);
+      [todayRes, settleRes, allTimeRes, stockRes, wasteRes, surplusRes, closureRes, monthRes] = await db.batch(batchQueries);
     }
 
     const todayStats = todayRes?.results?.[0] || {};
@@ -249,14 +270,19 @@ export async function getCanteenDashboardMetrics(db, body) {
     const wasteStats = wasteRes?.results?.[0] || {};
     const surplusStats = surplusRes?.results?.[0] || {};
     const closure = closureRes?.results?.[0] || null;
+    const monthStats = monthRes?.results?.[0] || {};
 
     const lowStockCount = Number(stockStats.lowStockCount || 0);
     const totalStockCapital = parseFloat(stockStats.totalStockCapital || 0);
     
-    // 🎯 အသားတင် ဆုံးရှုံးမှုတန်ဖိုး (Net Loss = Loss - Surplus)
+    // 🎯 Net Loss Formulas (Waste - Surplus)
     const todayLossCost = parseFloat(wasteStats.todayLossCost || 0);
     const todaySurplusValue = parseFloat(surplusStats.todaySurplusValue || 0);
     const todayNetLoss = Math.round((todayLossCost - todaySurplusValue) * 100) / 100;
+
+    const monthLossCost = parseFloat(wasteStats.monthLossCost || 0);
+    const monthSurplusValue = parseFloat(surplusStats.monthSurplusValue || 0);
+    const monthNetLoss = Math.round((monthLossCost - monthSurplusValue) * 100) / 100;
 
     const allTimeLossCost = parseFloat(wasteStats.allTimeLossCost || 0);
     const allTimeSurplusValue = parseFloat(surplusStats.allTimeSurplusValue || 0);
@@ -266,6 +292,7 @@ export async function getCanteenDashboardMetrics(db, body) {
       success: true,
       data: {
         date,
+        monthPrefix,
         today: {
           totalOrders: todayStats.totalOrders || 0,
           totalSales: parseFloat(todayStats.totalSales || 0),
@@ -279,6 +306,17 @@ export async function getCanteenDashboardMetrics(db, body) {
           settlement: settle,
           isClosed: Boolean(closure),
           closure: closure
+        },
+        thisMonth: {
+          monthPrefix,
+          totalOrders: monthStats.monthOrders || 0,
+          totalSales: parseFloat(monthStats.monthSales || 0),
+          pocketMoneyShare: parseFloat(monthStats.monthPocketShare || 0),
+          cashSalesShare: parseFloat(monthStats.monthCashShare || 0),
+          totalProfit: parseFloat(monthStats.monthProfit || 0),
+          monthLossCost,
+          monthSurplusValue,
+          monthNetLoss
         },
         allTime: {
           totalOrders: allTimeStats.allTimeOrders || 0,
@@ -296,6 +334,9 @@ export async function getCanteenDashboardMetrics(db, body) {
         todayLossCost,
         todaySurplusValue,
         todayNetLoss,
+        monthLossCost,
+        monthSurplusValue,
+        monthNetLoss,
         allTimeLossCost,
         allTimeSurplusValue,
         allTimeNetLoss,
@@ -705,10 +746,17 @@ export async function deletePosWasteEntry(db, session, body) {
 }
 
 // ==============================================================================
-// 🛒 7. PURCHASES & SUPPLIERS AUDIT (WITH LIVE DAILY TOTAL BADGE)
+// 🛒 7. PURCHASES & SUPPLIERS AUDIT (WITH LIVE TODAY, THIS MONTH & ALL-TIME KPIS)
 // ==============================================================================
 export async function getPosPurchasesHistory(db, body) {
   try {
+    const todayStr = getMyanmarDateString();
+    const monthPrefix = todayStr.slice(0, 7);
+    const monthStart = `${monthPrefix}-01`;
+    const [y, m] = monthPrefix.split('-').map(Number);
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const monthEnd = `${monthPrefix}-${String(lastDay).padStart(2, '0')}`;
+
     const supplierId = parseInt(body.supplierId, 10) || 0;
     const searchVal = String(body.searchVal || "").trim();
     const dateFrom = String(body.dateFrom || "").trim();
@@ -741,7 +789,8 @@ export async function getPosPurchasesHistory(db, body) {
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-    const [countRes, rowsRes] = await db.batch([
+    // 🚀 D1 Batch: Filtered rows query, count query AND live KPI aggregate query in 1 round-trip!
+    const [countRes, rowsRes, kpiRes] = await db.batch([
       db.prepare(`
         SELECT 
           COUNT(p.id) as totalRows, 
@@ -777,17 +826,36 @@ export async function getPosPurchasesHistory(db, body) {
         ${whereSql} 
         ORDER BY p.id DESC 
         LIMIT ? OFFSET ?
-      `).bind(...params, limit, offset)
+      `).bind(...params, limit, offset),
+
+      // 🎯 Live Purchases KPI Summaries (Today, This Month, All-Time)
+      db.prepare(`
+        SELECT 
+          COALESCE(SUM(CASE WHEN date = ? THEN total_cost ELSE 0 END), 0) as todayPurchasesTotal,
+          COALESCE(SUM(CASE WHEN date >= ? AND date <= ? THEN total_cost ELSE 0 END), 0) as thisMonthPurchasesTotal,
+          COALESCE(SUM(total_cost), 0) as allTimePurchasesTotal,
+          COUNT(CASE WHEN date = ? THEN 1 END) as todayPurchasesCount,
+          COUNT(CASE WHEN date >= ? AND date <= ? THEN 1 END) as thisMonthPurchasesCount,
+          COUNT(id) as allTimePurchasesCount
+        FROM pos_purchases
+      `).bind(todayStr, monthStart, monthEnd, todayStr, monthStart, monthEnd)
     ]);
 
     const totalRows = countRes.results[0]?.totalRows || 0;
     const totalPurchasesAmount = parseFloat(countRes.results[0]?.totalPurchasesAmount || 0);
+    const kpiStats = kpiRes?.results?.[0] || {};
 
     return {
       success: true,
       data: rowsRes.results || [],
       totalRows,
-      totalPurchasesAmount,
+      totalPurchasesAmount, // Currently filtered sum
+      todayPurchasesTotal: parseFloat(kpiStats.todayPurchasesTotal || 0),
+      thisMonthPurchasesTotal: parseFloat(kpiStats.thisMonthPurchasesTotal || 0),
+      allTimePurchasesTotal: parseFloat(kpiStats.allTimePurchasesTotal || 0),
+      todayPurchasesCount: Number(kpiStats.todayPurchasesCount || 0),
+      thisMonthPurchasesCount: Number(kpiStats.thisMonthPurchasesCount || 0),
+      allTimePurchasesCount: Number(kpiStats.allTimePurchasesCount || 0),
       page,
       limit
     };

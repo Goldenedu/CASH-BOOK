@@ -1,0 +1,570 @@
+<!-- ============================================================================== -->
+<!-- 💡 CANTEEN MODALS HUB (10 MODALS + TOAST CONTAINER)                            -->
+<!-- File: components/canteen-modals.html                                           -->
+<!-- ============================================================================== -->
+
+<!-- MODAL 1: ITEM & STOCK PURCHASE (DEFAULT 8% MARKUP) -->
+<div id="pos-item-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
+    <div class="px-5 py-4 border-b border-[var(--border-color)] flex justify-between items-center bg-[var(--table-header)]">
+      <h3 class="text-xs font-black uppercase tracking-wider flex items-center gap-2">
+        <i class="fa-solid fa-box text-emerald-500"></i> ပစ္စည်း / အဝယ်စာရင်း သွင်းယူခြင်း
+      </h3>
+      <button onclick="closeModal('pos-item-modal')" class="text-slate-400 hover:text-[var(--text-main)] p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <form onsubmit="submitPosPurchase(event)" class="p-5 space-y-3 overflow-y-auto text-xs">
+      <div class="grid grid-cols-2 gap-3">
+        <div class="space-y-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Barcode / QR</label>
+          <input type="text" id="m-barcode" placeholder="Scan or Type..." required oninput="lookupExistingBarcode()" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 font-mono font-bold focus:border-emerald-500 outline-none">
+        </div>
+        <div class="space-y-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">Category</label>
+          <select id="m-category" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 font-bold outline-none">
+            <option value="Snack" selected>မုန့် (Snack)</option>
+            <option value="Drink">အအေး / သောက်ရေ (Drink)</option>
+            <option value="Meal">ထမင်း / အစားအစာ (Meal)</option>
+            <option value="Stationery">စာရေးကိရိယာ (Stationery)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="space-y-1">
+        <label class="font-bold text-slate-400 uppercase tracking-wide">ပစ္စည်းအမည်</label>
+        <input type="text" id="m-item-name" placeholder="e.g. ပေါင်မုန့်၊ ပဲနို့..." required class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 font-bold focus:border-emerald-500 outline-none">
+      </div>
+
+      <div class="space-y-1">
+        <div class="flex justify-between items-center">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">ကုန်သည် / ပစ္စည်းသွင်းသူ</label>
+          <button type="button" onclick="openSupplierModal()" class="text-[10px] text-amber-500 hover:underline flex items-center gap-1">
+            <i class="fa-solid fa-plus text-[9px]"></i> ကုန်သည်အသစ်ထည့်
+          </button>
+        </div>
+        <select id="m-supplier-id" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 font-bold outline-none">
+          <option value="">-- ရွေးချယ်ပါ (အထွေထွေ) --</option>
+        </select>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div class="space-y-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">ဝယ်ယူသည့် အရေအတွက်</label>
+          <input type="number" id="m-qty" value="1" min="1" step="any" required class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 font-mono text-right font-bold outline-none">
+        </div>
+        <div class="space-y-1">
+          <label class="font-bold text-amber-500 uppercase tracking-wide">ဝယ်ဈေး Cost Price (ကျပ်)</label>
+          <input type="number" id="m-cost-price" placeholder="0" min="0" step="any" required oninput="triggerSmartPriceCalc()" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 font-mono font-black text-amber-500 text-right outline-none">
+        </div>
+      </div>
+
+      <!-- 🎯 SMART PRICING ENGINE (DEFAULT 8% MARKUP) -->
+      <div class="p-3 bg-sky-500/10 border border-sky-500/20 rounded-2xl space-y-2">
+        <div class="flex justify-between items-center">
+          <span class="text-[10px] font-black text-sky-500 uppercase tracking-wider">SMART PRICING ENGINE</span>
+          <div class="flex items-center gap-1.5">
+            <label class="text-[10px] text-slate-400 font-bold">Markup:</label>
+            <input type="number" id="m-markup-percent" value="8" oninput="triggerSmartPriceCalc()" class="w-14 bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-lg px-1.5 py-0.5 text-center font-mono font-bold text-sky-500 text-xs">
+            <span class="text-[10px] text-slate-400">%</span>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between text-xs pt-1 border-t border-[var(--border-color)]">
+          <div>
+            <span class="text-[10px] text-slate-400 block font-sans">အကြံပြုရောင်းဈေး (၅၀/၁၀၀ ညှိပြီး):</span>
+            <span id="m-suggested-price" class="font-mono font-bold">0 MMK</span>
+          </div>
+          <div class="text-right">
+            <label class="text-[10px] text-emerald-500 font-bold block uppercase">အတည်ပြု ရောင်းဈေး (Manual)</label>
+            <input type="number" id="m-selling-price" placeholder="0" required class="w-32 bg-[var(--bg-card-inner)] border border-emerald-500/50 rounded-xl px-3 py-1 font-mono font-black text-emerald-500 text-right text-sm outline-none">
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black text-xs shadow-lg shadow-emerald-950/20 active:scale-95 transition mt-2">
+        ပစ္စည်းနှင့် အဝယ်စာရင်း အတည်ပြု သိမ်းဆည်းမည်
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL 2: QUICK EDIT STOCK & PRICE (Admin Only) -->
+<div id="pos-quick-edit-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-3xl w-full max-w-sm shadow-2xl p-5 space-y-4">
+    <div class="flex justify-between items-center border-b border-[var(--border-color)] pb-2">
+      <h3 class="text-xs font-black uppercase">Quick Stock & Price Edit</h3>
+      <button onclick="closeModal('pos-quick-edit-modal')" class="text-slate-400 hover:text-[var(--text-main)]"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <div class="space-y-3 text-xs">
+      <div>
+        <span id="qe-item-name" class="font-bold block">Item Name</span>
+        <span id="qe-barcode" class="font-mono text-[10px] text-slate-400 block">Barcode</span>
+      </div>
+      <div class="space-y-1">
+        <label class="font-bold text-slate-400">လက်ကျန် Stock အရေအတွက်</label>
+        <input type="number" id="qe-stock" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 font-mono font-bold text-right outline-none">
+      </div>
+      <div class="space-y-1">
+        <label class="font-bold text-slate-400">ဝယ်ဈေး Cost Price (ကျပ်)</label>
+        <input type="number" id="qe-cost" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-amber-500 font-mono font-bold text-right outline-none">
+      </div>
+      <div class="space-y-1">
+        <label class="font-bold text-emerald-500">ရောင်းဈေး Selling Price (ကျပ်)</label>
+        <input type="number" id="qe-price" class="w-full bg-[var(--bg-card-inner)] border border-emerald-500/50 rounded-xl px-3 py-2 text-emerald-500 font-mono font-black text-right outline-none">
+      </div>
+      <button onclick="submitQuickEdit()" class="w-full py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl font-bold text-xs shadow-md transition active:scale-95">
+        ပြင်ဆင်ချက် အတည်ပြု သိမ်းဆည်းမည်
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL 3: QUICK ADD SUPPLIER -->
+<div id="pos-supplier-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-3xl w-full max-w-sm shadow-2xl p-5 space-y-4">
+    <div class="flex justify-between items-center border-b border-[var(--border-color)] pb-2">
+      <h3 class="text-xs font-black uppercase flex items-center gap-1.5">
+        <i class="fa-solid fa-truck-field text-amber-500"></i> Add Supplier (ကုန်သည်သစ်)
+      </h3>
+      <button onclick="closeModal('pos-supplier-modal')" class="text-slate-400 hover:text-[var(--text-main)]"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <div class="space-y-3 text-xs">
+      <div class="space-y-1">
+        <label class="font-bold text-slate-400">ကုန်သည် / ဆိုင်အမည်</label>
+        <input type="text" id="sup-name" placeholder="e.g. ရွှေမြန်မာ မုန့်တိုက်" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 font-bold outline-none focus:border-amber-500">
+      </div>
+      <div class="space-y-1">
+        <label class="font-bold text-slate-400">ဆက်သွယ်ရမည့်သူ (Contact Person)</label>
+        <input type="text" id="sup-contact" placeholder="e.g. ဦးစိုးနိုင်" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 outline-none focus:border-amber-500">
+      </div>
+      <div class="space-y-1">
+        <label class="font-bold text-slate-400">ဖုန်းနံပါတ်</label>
+        <input type="text" id="sup-phone" placeholder="09xxxxxxxxx" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 outline-none focus:border-amber-500">
+      </div>
+      <div class="space-y-1">
+        <label class="font-bold text-slate-400">ဆိုင်လိပ်စာ / မှတ်ချက်</label>
+        <textarea id="sup-address" rows="2" placeholder="ဆိုင်တည်နေရာ လိပ်စာ..." class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 outline-none focus:border-amber-500"></textarea>
+      </div>
+      <button onclick="submitNewSupplier()" class="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold text-xs shadow-md transition active:scale-95">
+        ကုန်သည်အမည် သိမ်းဆည်းမည်
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL 4: EDIT PURCHASE MODAL (DEFAULT 8% MARKUP) -->
+<div id="pos-edit-purchase-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-3xl w-full max-w-md shadow-2xl p-5 space-y-4">
+    <div class="flex justify-between items-center border-b border-[var(--border-color)] pb-2">
+      <h3 class="text-xs font-black uppercase flex items-center gap-1.5">
+        <i class="fa-solid fa-pen-to-square text-amber-500"></i> Edit Purchase (အဝယ်စာရင်း ပြင်ဆင်ခြင်း)
+      </h3>
+      <button onclick="closeModal('pos-edit-purchase-modal')" class="text-slate-400 hover:text-[var(--text-main)]"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <form onsubmit="submitEditPurchase(event)" class="space-y-3 text-xs">
+      <input type="hidden" id="edit-pur-id">
+      <div>
+        <span id="edit-pur-item-name" class="font-bold block">Item Name</span>
+        <span id="edit-pur-no" class="font-mono text-[10px] text-amber-500 block">PO Number</span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div class="space-y-1">
+          <label class="font-bold text-slate-400">ရက်စွဲ</label>
+          <input type="date" id="edit-pur-date" required class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 outline-none">
+        </div>
+        <div class="space-y-1">
+          <label class="font-bold text-slate-400">ကုန်သည်</label>
+          <select id="edit-pur-supplier" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 font-bold outline-none"></select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div class="space-y-1">
+          <label class="font-bold text-slate-400">အဝယ် Qty</label>
+          <input type="number" id="edit-pur-qty" step="any" min="1" required class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 font-mono font-bold text-right outline-none">
+        </div>
+        <div class="space-y-1">
+          <label class="font-bold text-amber-500">ဝယ်ဈေး Cost</label>
+          <input type="number" id="edit-pur-cost" step="any" min="0" required class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-amber-500 font-mono font-bold text-right outline-none">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div class="space-y-1">
+          <label class="font-bold text-slate-400">Markup %</label>
+          <input type="number" id="edit-pur-markup" value="8" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 text-sky-500 font-mono font-bold text-right outline-none">
+        </div>
+        <div class="space-y-1">
+          <label class="font-bold text-emerald-500">ရောင်းဈေး</label>
+          <input type="number" id="edit-pur-selling" step="any" min="0" required class="w-full bg-[var(--bg-card-inner)] border border-emerald-500/50 rounded-xl px-3 py-2 text-emerald-500 font-mono font-black text-right outline-none">
+        </div>
+      </div>
+
+      <div class="space-y-1">
+        <label class="font-bold text-slate-400">မှတ်ချက်</label>
+        <input type="text" id="edit-pur-remark" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 outline-none">
+      </div>
+
+      <button type="submit" class="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold text-xs shadow-md transition active:scale-95">
+        အဝယ်စာရင်း အတည်ပြု သိမ်းဆည်းမည်
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ⚠️ MODAL 5: RECORD WASTE & DAMAGE (MULTI-ITEM CART) -->
+<div id="pos-waste-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-150">
+    <div class="px-5 py-4 border-b border-[var(--border-color)] flex justify-between items-center bg-rose-500/10">
+      <h3 class="text-xs font-black text-rose-500 uppercase tracking-wider flex items-center gap-2">
+        <i class="fa-solid fa-dumpster-fire text-rose-500"></i> အပျက်/အပျောက်/သက်တမ်းလွန် စာရင်းသွင်းယူခြင်း
+      </h3>
+      <button onclick="closeModal('pos-waste-modal')" class="text-slate-400 hover:text-[var(--text-main)] p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <div class="p-5 space-y-3.5 overflow-y-auto custom-scroll text-xs">
+      <div class="glass-card p-2.5 rounded-xl flex items-center gap-2 relative z-30">
+        <div class="relative flex-1">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400"><i class="fa-solid fa-barcode text-xs"></i></span>
+          <input type="text" id="waste-barcode-input" placeholder="Barcode Scan ဖတ်ပါ သို့မဟုတ် ပစ္စည်းရှာပါ (Enter)..." 
+                 autocomplete="off"
+                 onkeydown="handleWasteBarcodeInput(event)"
+                 class="w-full pl-8 pr-3 py-2 text-xs rounded-lg bg-[var(--bg-card-inner)] border border-[var(--border-color)] font-mono font-bold outline-none focus:border-rose-500">
+          <div id="waste-search-dropdown" class="absolute left-0 right-0 top-full mt-1 bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-xl shadow-2xl max-h-48 overflow-y-auto hidden z-40 custom-scroll"></div>
+        </div>
+        <button type="button" onclick="searchAndAddWasteItem()" class="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold shrink-0 transition shadow">
+          <i class="fa-solid fa-plus text-[10px]"></i> ထည့်မည်
+        </button>
+      </div>
+
+      <div class="glass-card rounded-xl flex flex-col min-h-[160px] max-h-[220px] overflow-hidden">
+        <div class="px-3 py-1.5 bg-[var(--table-header)] border-b border-[var(--border-color)] flex justify-between text-[11px] font-bold text-slate-400">
+          <span>ရွေးချယ်ထားသော ပစ္စည်းများ</span>
+          <span id="waste-cart-badge" class="font-mono text-rose-500">0 items</span>
+        </div>
+        <div id="waste-items-list" class="flex-1 overflow-y-auto custom-scroll p-2 space-y-1.5">
+          <div id="waste-items-empty" class="h-full min-h-[120px] flex flex-col items-center justify-center text-slate-400 text-center space-y-1">
+            <i class="fa-solid fa-basket-shopping text-2xl text-slate-300 dark:text-slate-700"></i>
+            <p class="text-[11px]">ပစ္စည်းများ ထည့်သွင်းထားခြင်း မရှိသေးပါ။</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div class="space-y-1">
+          <label class="font-bold text-slate-400 uppercase">ဆုံးရှုံးရသည့် အကြောင်းပြချက်</label>
+          <select id="m-waste-reason" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 font-bold outline-none focus:border-rose-500">
+            <option value="ပျက်စီးကွဲရှ" selected>ပျက်စီးကွဲရှ (Damaged/Broken)</option>
+            <option value="သက်တမ်းလွန်">သက်တမ်းလွန် (Expired)</option>
+            <option value="ပျောက်ဆုံး">ပျောက်ဆုံး (Missing/Lost)</option>
+            <option value="အခြား">အခြား (Other)</option>
+          </select>
+        </div>
+        <div class="space-y-1">
+          <label class="font-bold text-slate-400 uppercase">ရက်စွဲ (MMT)</label>
+          <input type="date" id="m-waste-date" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 outline-none">
+        </div>
+      </div>
+
+      <div class="space-y-1">
+        <label class="font-bold text-slate-400 uppercase">မှတ်ချက် / အသေးစိတ်</label>
+        <input type="text" id="m-waste-remark" placeholder="e.g. သယ်ယူစဉ် ပုလင်းကွဲသွားခြင်း..." class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 outline-none focus:border-rose-500">
+      </div>
+
+      <div class="p-3 bg-rose-500/10 border border-rose-500/20 rounded-2xl flex items-center justify-between font-mono">
+        <div>
+          <span class="text-[10px] text-slate-400 block font-sans">စုစုပေါင်း ပစ္စည်းအရေအတွက်:</span>
+          <strong id="waste-modal-total-qty" class="text-sm">0 ခု</strong>
+        </div>
+        <div class="text-right">
+          <span class="text-[10px] text-rose-500 font-sans font-bold">ဝယ်ရင်းဈေးဖြင့် ဆုံးရှုံးမှုတန်ဖိုး:</span>
+          <strong id="waste-modal-total-cost" class="text-base font-black text-rose-500">0 MMK</strong>
+        </div>
+      </div>
+
+      <button type="button" onclick="submitPosWaste()" class="w-full py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl font-black text-xs shadow-lg shadow-rose-950/20 active:scale-95 transition mt-2">
+        အပျက်/အပျောက်စာရင်း အတည်ပြု သိမ်းဆည်းမည်
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- 📦 MODAL 6: RECORD STOCK SURPLUS (အပိုစာရင်း သွင်းယူခြင်း) -->
+<div id="pos-surplus-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-150">
+    <div class="px-5 py-4 border-b border-[var(--border-color)] flex justify-between items-center bg-emerald-500/10">
+      <h3 class="text-xs font-black text-emerald-500 uppercase tracking-wider flex items-center gap-2">
+        <i class="fa-solid fa-layer-group text-emerald-500"></i> အပိုပစ္စည်း စာရင်းသွင်းယူခြင်း (Stock Surplus)
+      </h3>
+      <button onclick="closeModal('pos-surplus-modal')" class="text-slate-400 hover:text-[var(--text-main)] p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <div class="p-5 space-y-3.5 overflow-y-auto custom-scroll text-xs">
+      <div class="glass-card p-2.5 rounded-xl flex items-center gap-2 relative z-30">
+        <div class="relative flex-1">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400"><i class="fa-solid fa-barcode text-xs"></i></span>
+          <input type="text" id="surplus-barcode-input" placeholder="Barcode Scan ဖတ်ပါ သို့မဟုတ် ပစ္စည်းရှာပါ (Enter)..." 
+                 autocomplete="off"
+                 onkeydown="handleSurplusBarcodeInput(event)"
+                 class="w-full pl-8 pr-3 py-2 text-xs rounded-lg bg-[var(--bg-card-inner)] border border-[var(--border-color)] font-mono font-bold outline-none focus:border-emerald-500">
+          <div id="surplus-search-dropdown" class="absolute left-0 right-0 top-full mt-1 bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-xl shadow-2xl max-h-48 overflow-y-auto hidden z-40 custom-scroll"></div>
+        </div>
+        <button type="button" onclick="searchAndAddSurplusItem()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shrink-0 transition shadow">
+          <i class="fa-solid fa-plus text-[10px]"></i> ထည့်မည်
+        </button>
+      </div>
+
+      <div class="glass-card rounded-xl flex flex-col min-h-[160px] max-h-[220px] overflow-hidden">
+        <div class="px-3 py-1.5 bg-[var(--table-header)] border-b border-[var(--border-color)] flex justify-between text-[11px] font-bold text-slate-400">
+          <span>အပိုရရှိသော ပစ္စည်းများ</span>
+          <span id="surplus-cart-badge" class="font-mono text-emerald-500">0 items</span>
+        </div>
+        <div id="surplus-items-list" class="flex-1 overflow-y-auto custom-scroll p-2 space-y-1.5">
+          <div id="surplus-items-empty" class="h-full min-h-[120px] flex flex-col items-center justify-center text-slate-400 text-center space-y-1">
+            <i class="fa-solid fa-basket-shopping text-2xl text-slate-300 dark:text-slate-700"></i>
+            <p class="text-[11px]">ပစ္စည်းများ ထည့်သွင်းထားခြင်း မရှိသေးပါ။</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div class="space-y-1">
+          <label class="font-bold text-slate-400 uppercase">အပိုဖြစ်ပေါ်ရသည့် အကြောင်းပြချက်</label>
+          <select id="m-surplus-reason" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 font-bold outline-none focus:border-emerald-500">
+            <option value="ရေတွက်မှုအပို" selected>ရေတွက်မှုအပို (Count Surplus)</option>
+            <option value="လက်ကျန်ပို">လက်ကျန်ပို (Inventory Overage)</option>
+            <option value="အခြား">အခြား (Other)</option>
+          </select>
+        </div>
+        <div class="space-y-1">
+          <label class="font-bold text-slate-400 uppercase">ရက်စွဲ (MMT)</label>
+          <input type="date" id="m-surplus-date" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 outline-none">
+        </div>
+      </div>
+
+      <div class="space-y-1">
+        <label class="font-bold text-slate-400 uppercase">မှတ်ချက် / အသေးစိတ်</label>
+        <input type="text" id="m-surplus-remark" placeholder="e.g. ပစ္စည်းစာရင်းစစ်စဉ် အပိုတွေ့ရှိခြင်း..." class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 outline-none focus:border-emerald-500">
+      </div>
+
+      <div class="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center justify-between font-mono">
+        <div>
+          <span class="text-[10px] text-slate-400 block font-sans">စုစုပေါင်း ပစ္စည်းအရေအတွက်:</span>
+          <strong id="surplus-modal-total-qty" class="text-sm">0 ခု</strong>
+        </div>
+        <div class="text-right">
+          <span class="text-[10px] text-emerald-500 font-sans font-bold">ဝယ်ရင်းဈေးဖြင့် အပိုတန်ဖိုး:</span>
+          <strong id="surplus-modal-total-cost" class="text-base font-black text-emerald-500">0 MMK</strong>
+        </div>
+      </div>
+
+      <div class="p-2 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+        <p class="text-[10px] text-amber-600 dark:text-amber-400 font-sans leading-relaxed">
+          💡 <strong>အသိပေးချက်:</strong> ဤအပိုစာရင်းကို သွင်းယူပါက လက်ကျန်စတော့ (Current Stock) သာ တိုးသွားမည်ဖြစ်ပြီး၊ မူလအရင်းအနှီးငွေ (Capital Investment) တိုးမသွားစေရန် စာရင်းကိုင်စံနှုန်းဖြင့် ထိန်းချုပ်ထားပါသည်။
+        </p>
+      </div>
+
+      <button type="button" onclick="submitPosSurplus()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black text-xs shadow-lg shadow-emerald-950/20 active:scale-95 transition mt-2">
+        အပိုစာရင်း အတည်ပြု သိမ်းဆည်းမည်
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ⚙️ MODAL 7: POS SYSTEM SETTINGS (DAILY ALLOWANCE CAP) -->
+<div id="pos-settings-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-3xl w-full max-w-sm shadow-2xl p-5 space-y-4 animate-in zoom-in-95 duration-150">
+    <div class="flex justify-between items-center border-b border-[var(--border-color)] pb-2">
+      <h3 class="text-xs font-black uppercase flex items-center gap-1.5">
+        <i class="fa-solid fa-sliders text-sky-400"></i> POS Settings & Allowance Cap
+      </h3>
+      <button onclick="closeModal('pos-settings-modal')" class="text-slate-400 hover:text-[var(--text-main)]"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <form onsubmit="submitPosSettings(event)" class="space-y-3.5 text-xs">
+      <div class="space-y-1.5">
+        <label class="font-bold text-sky-500 uppercase">ကျောင်းသား တစ်နေ့တာ အများဆုံး သုံးစွဲခွင့် (MMK)</label>
+        <input type="number" id="m-set-daily-cap" min="0" step="500" required placeholder="10000" class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 font-mono font-black text-emerald-500 text-right text-base outline-none focus:border-sky-500">
+        <p class="text-[10px] text-slate-400 leading-snug">
+          💡 ဤသတ်မှတ်ချက်သည် မုန့်ဖိုးကတ် (Student Pocket Money) ဖြင့် ကောင်တာအားလုံးတွင် တစ်ရက်အတွင်း အများဆုံး ဝယ်ယူနိုင်မည့် ခွဲတမ်းငွေ ဖြစ်ပါသည်။
+        </p>
+      </div>
+
+      <div class="p-2.5 bg-slate-200/50 dark:bg-black/30 border border-[var(--border-color)] rounded-xl flex items-center justify-between text-[11px] font-mono text-slate-400">
+        <span>နောက်ဆုံးပြင်ဆင်ချိန်:</span>
+        <span id="m-set-updated-at" class="font-bold">-</span>
+      </div>
+
+      <button type="submit" id="btn-save-settings" class="w-full py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-bold text-xs shadow-md transition active:scale-95">
+        ဆက်တင်အသစ် အတည်ပြု သိမ်းဆည်းမည်
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- 🔒 MODAL 8: CANTEEN DAY CLOSE (ဆိုင်ပိတ်သိမ်းခြင်း) -->
+<div id="pos-closure-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
+    <div class="px-5 py-4 border-b border-[var(--border-color)] flex justify-between items-center bg-amber-500/10">
+      <h3 class="text-xs font-black text-amber-500 uppercase tracking-wider flex items-center gap-2">
+        <i class="fa-solid fa-store-slash text-amber-500"></i> ကန်တင်း နေ့စဉ် ဆိုင်ပိတ်သိမ်းခြင်း (Day Close)
+      </h3>
+      <button onclick="closeModal('pos-closure-modal')" class="text-slate-400 hover:text-[var(--text-main)] p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <div class="p-5 space-y-4 text-xs font-mono">
+      <div id="closure-stats-card" class="p-3.5 bg-slate-200/50 dark:bg-black/40 border border-[var(--border-color)] rounded-2xl space-y-2">
+        <div class="flex justify-between text-slate-400 font-sans">
+          <span>ပိတ်သိမ်းမည့်ရက်စွဲ (MMT):</span>
+          <strong id="close-modal-date" class="font-mono">-</strong>
+        </div>
+        <div class="flex justify-between text-slate-400 font-sans">
+          <span>ယနေ့ အရောင်းစောင်ရေ:</span>
+          <strong id="close-modal-orders">0 Orders</strong>
+        </div>
+        <div class="flex justify-between text-slate-400 font-sans">
+          <span>စုစုပေါင်း အရောင်းရငွေ:</span>
+          <strong id="close-modal-total" class="text-emerald-500 text-sm font-black">0 MMK</strong>
+        </div>
+        <div class="flex justify-between text-slate-400 font-sans pt-1 border-t border-[var(--border-color)]">
+          <span>ငွေသားရောင်းရငွေ (Cash):</span>
+          <strong id="close-modal-cash">0 MMK</strong>
+        </div>
+        <div class="flex justify-between text-slate-400 font-sans">
+          <span class="text-indigo-500 font-bold">မုန့်ဖိုးကတ်ရောင်းရငွေ (Wallet):</span>
+          <strong id="close-modal-wallet" class="text-indigo-500 font-bold">0 MMK</strong>
+        </div>
+      </div>
+
+      <div class="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-1">
+        <p class="text-[10px] text-amber-600 dark:text-amber-400 font-sans leading-relaxed">
+          ⚠️ <strong>သတိပြုရန်:</strong> ဆိုင်ပိတ်သိမ်းပြီးပါက ယနေ့ရက်စွဲအတွက် အရောင်းပြေစာအသစ်များ ဖွင့်၍ ရတော့မည်မဟုတ်ပါ။ ကန်တင်းဆိုင်ပိတ်ပြီးမှသာ Finance က Pocket Money ရောင်းရငွေကို ထုတ်ပေးရှင်းလင်းခွင့် ရှိပါမည်။
+        </p>
+      </div>
+
+      <div class="space-y-1 font-sans">
+        <label class="font-bold text-slate-400">မှတ်ချက် (Optional)</label>
+        <input type="text" id="close-modal-remark" placeholder="e.g. ပုံမှန်ဆိုင်ပိတ်သိမ်းခြင်း..." class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 outline-none focus:border-amber-500 text-xs">
+      </div>
+
+      <div id="closure-action-box">
+        <button id="btn-confirm-day-close" onclick="executeCanteenDayClose()" class="w-full py-3.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl font-black text-xs shadow-lg shadow-amber-950/20 active:scale-95 transition font-sans">
+          အတည်ပြု ဆိုင်ပိတ်သိမ်းမည် (CLOSE REGISTER)
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ⏳ MODAL 9: PENDING OFFLINE TRANSACTIONS MANAGER -->
+<div id="pos-pending-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
+    <div class="px-5 py-4 border-b border-[var(--border-color)] flex justify-between items-center bg-[var(--table-header)]">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-500 flex items-center justify-center text-sm">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+        </div>
+        <div>
+          <h3 class="text-xs font-black uppercase tracking-wider">Pending Offline Transactions (မရောက်သေးသော အရောင်းများ)</h3>
+          <p class="text-[10px] font-mono text-slate-400">D1 Database သို့ Sync ပေးပို့ရန် ကျန်ရှိနေသော အော့ဖ်လိုင်းပြေစာများ</p>
+        </div>
+      </div>
+      <button onclick="closeModal('pos-pending-modal')" class="text-slate-400 hover:text-[var(--text-main)] p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <div class="p-4 flex-1 overflow-y-auto custom-scroll space-y-3 text-xs">
+      <div class="flex justify-between items-center bg-slate-200/50 dark:bg-black/30 p-3 rounded-xl border border-[var(--border-color)] text-xs font-mono">
+        <div>
+          <span class="text-[10px] text-slate-400 font-sans block">Pending စုစုပေါင်း:</span>
+          <strong id="pending-modal-orders" class="text-sm">0 စောင်</strong>
+        </div>
+        <div class="text-right">
+          <span class="text-[10px] text-amber-500 font-sans block font-bold">ရောင်းရငွေပေါင်း:</span>
+          <strong id="pending-modal-amount" class="text-emerald-500 text-base font-black">0 MMK</strong>
+        </div>
+      </div>
+
+      <div class="table-container glass-card rounded-xl overflow-x-auto max-h-[360px]">
+        <table class="w-full text-left text-xs border-collapse min-w-[550px]">
+          <thead class="bg-[var(--table-header)] text-slate-500 text-[11px] sticky top-0">
+            <tr>
+              <th class="py-2.5 px-3 w-10 text-center">စဉ်</th>
+              <th class="py-2.5 px-3 w-28">INVOICE NO</th>
+              <th class="py-2.5 px-3 w-24">METHOD</th>
+              <th class="py-2.5 px-3">ITEMS SUMMARY</th>
+              <th class="py-2.5 px-3 text-right w-24">AMOUNT</th>
+              <th class="py-2.5 px-3 text-center w-20">STATUS</th>
+            </tr>
+          </thead>
+          <tbody id="pending-orders-table-body" class="divide-y divide-[var(--border-color)]"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="p-4 border-t border-[var(--border-color)] bg-[var(--table-header)] flex items-center justify-between gap-3">
+      <p class="text-[10px] text-slate-400 font-sans">💡 အင်တာနက်လိုင်း ပြန်ရသည်နှင့် စနစ်မှ အလိုအလျောက် Sync ပြုလုပ်ပေးပါမည်။</p>
+      <button id="btn-trigger-sync" onclick="triggerManualOfflineSync()" class="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-black text-xs shadow-lg shadow-emerald-950/20 flex items-center gap-2 active:scale-95 transition">
+        <i class="fa-solid fa-cloud-arrow-up"></i>
+        <span>Sync Now (D1 သို့ ပေးပို့မည်)</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL 10: EVENING CANTEEN SETTLEMENT (CLOSURE INTERLOCKED) -->
+<div id="pos-settlement-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
+    <div class="px-5 py-4 border-b border-[var(--border-color)] flex justify-between items-center bg-[var(--table-header)]">
+      <h3 class="text-xs font-black uppercase tracking-wider flex items-center gap-2">
+        <i class="fa-solid fa-vault text-amber-500"></i> ညနေပိုင်း Canteen ငွေရှင်းလင်းမှု (Evening Clearing)
+      </h3>
+      <button onclick="closeModal('pos-settlement-modal')" class="text-slate-400 hover:text-[var(--text-main)] p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <div class="p-5 space-y-4 text-xs font-mono">
+      <div id="set-closure-status-box" class="p-2.5 rounded-xl border text-[11px] font-sans flex items-center gap-2">
+        <i id="set-closure-icon" class="fa-solid fa-circle-exclamation text-amber-500"></i>
+        <span id="set-closure-text">ကန်တင်းဆိုင်ပိတ်သိမ်းမှု အခြေအနေ စစ်ဆေးနေပါသည်...</span>
+      </div>
+
+      <div class="space-y-2 p-3.5 bg-slate-200/50 dark:bg-black/40 border border-[var(--border-color)] rounded-2xl">
+        <div class="flex justify-between text-slate-400 font-sans">
+          <span>နေ့စဉ်ရောင်းချမှု အကြိမ်ပေါင်း:</span>
+          <strong id="set-orders" class="font-mono">0 Orders</strong>
+        </div>
+        <div class="flex justify-between text-slate-400 font-sans">
+          <span>ကန်တင်း စုစုပေါင်း အရောင်း:</span>
+          <strong id="set-total" class="font-mono text-emerald-500">0 MMK</strong>
+        </div>
+        <div class="flex justify-between text-slate-400 font-sans">
+          <span>ငွေသားတိုက်ရိုက် ရောင်းရငွေ:</span>
+          <strong id="set-cash" class="font-mono">0 MMK</strong>
+        </div>
+        <div class="flex justify-between text-slate-400 font-sans pt-1 border-t border-[var(--border-color)]">
+          <span class="text-amber-500 font-bold">Pocket Money ဖြင့် ရောင်းရငွေ:</span>
+          <strong id="set-pocket" class="font-mono text-amber-500 text-sm font-black">0 MMK</strong>
+        </div>
+      </div>
+
+      <div class="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-1">
+        <p class="text-[10px] text-slate-500 dark:text-slate-300 font-sans leading-relaxed">
+          💡 Finance ဗဟိုဘဏ္ဍာသည် ကျောင်းသားများ၏ Virtual Wallet ဖြင့် ဝယ်ယူသွားသော 
+          <strong id="set-payout-text" class="text-amber-500 font-mono">0 MMK</strong> အား Canteen တာဝန်ခံထံသို့ လက်ငင်းငွေသား ထုတ်ပေးရှင်းလင်းရပါမည်။
+        </p>
+      </div>
+
+      <div id="set-action-box">
+        <button id="btn-confirm-settlement" onclick="confirmCanteenSettlement()" class="w-full py-3.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-black text-xs shadow-lg shadow-amber-950/20 active:scale-95 transition font-sans disabled:opacity-40 disabled:pointer-events-none">
+          Finance မှ ငွေထုတ်ပေးရှင်းလင်းပြီးကြောင်း အတည်ပြုမည်
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST NOTIFICATION CONTAINER -->
+<div id="pos-toast-box" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[999999] pointer-events-none w-11/12 max-w-sm"></div>

@@ -1,0 +1,163 @@
+<!-- ============================================================================== -->
+<!-- 📊 VIEW: CANTEEN EXECUTIVE DASHBOARD (TODAY, THIS MONTH & ALL-TIME)            -->
+<!-- File: components/canteen-dashboard.html                                         -->
+<!-- ============================================================================== -->
+<div class="space-y-4">
+  
+  <!-- ────────────────────────────────────────────────────────────────────────── -->
+  <!-- 1. TODAY'S OPERATIONS OVERVIEW                                             -->
+  <!-- ────────────────────────────────────────────────────────────────────────── -->
+  <div class="flex justify-between items-center bg-indigo-50 dark:bg-[#0c1830] border border-indigo-200 dark:border-indigo-500/30 p-3.5 rounded-2xl shadow-sm">
+    <div class="flex items-center gap-3">
+      <div class="p-2.5 rounded-xl bg-indigo-500/20 text-indigo-500 text-lg"><i class="fa-solid fa-calendar-check"></i></div>
+      <div>
+        <span class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest block font-sans">TODAY'S OPERATIONS OVERVIEW</span>
+        <h3 id="dash-date-label" class="text-xs font-black font-mono mt-0.5">2026-10-08</h3>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <span id="dash-closure-badge" class="px-2.5 py-1 rounded-xl text-[11px] font-black bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 font-mono">
+        REGISTER OPEN
+      </span>
+      <span id="dash-settle-badge" class="px-2.5 py-1 rounded-xl text-[11px] font-black bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30 font-mono">
+        PENDING CLEARING
+      </span>
+    </div>
+  </div>
+
+  <!-- Today Metrics 5-Cards Grid -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+    <div class="glass-card p-3.5 rounded-xl shadow-sm">
+      <span class="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold block">ယနေ့ စုစုပေါင်း အရောင်းရငွေ</span>
+      <h3 id="dash-today-sales" class="text-lg font-black font-mono mt-1">0 MMK</h3>
+      <span id="dash-today-orders" class="text-[10px] font-mono text-slate-400 mt-0.5 block">0 Orders</span>
+    </div>
+
+    <div class="glass-card p-3.5 rounded-xl border-indigo-300 dark:border-indigo-500/30 bg-indigo-50/50 dark:bg-indigo-950/10 shadow-sm">
+      <span class="text-[10px] text-indigo-500 dark:text-indigo-400 uppercase font-bold block">မုန့်ဖိုးကတ် ရောင်းရငွေ (WALLET)</span>
+      <h3 id="dash-today-wallet" class="text-lg font-black text-indigo-600 dark:text-indigo-300 font-mono mt-1">0 MMK</h3>
+      <span class="text-[10px] text-slate-400 font-sans mt-0.5 block">Finance မှ ရှင်းပေးမည့်ငွေ</span>
+    </div>
+
+    <div class="glass-card p-3.5 rounded-xl border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/10 shadow-sm">
+      <span class="text-[10px] text-emerald-600 dark:text-emerald-400 uppercase font-bold block">ငွေသား ရောင်းရငွေ (CASH)</span>
+      <h3 id="dash-today-cash" class="text-lg font-black text-emerald-600 dark:text-emerald-400 font-mono mt-1">0 MMK</h3>
+      <span class="text-[10px] text-slate-400 font-sans mt-0.5 block">ကန်တင်းတွင် လက်ငင်းရငွေသား</span>
+    </div>
+
+    <div class="glass-card p-3.5 rounded-xl border-teal-300 dark:border-teal-500/30 bg-teal-50/50 dark:bg-teal-950/10 shadow-sm">
+      <span class="text-[10px] text-teal-600 dark:text-teal-400 uppercase font-bold block">ယနေ့ အသားတင်အမြတ် (MARGIN)</span>
+      <h3 id="dash-today-profit" class="text-lg font-black text-teal-600 dark:text-teal-300 font-mono mt-1">+0 MMK</h3>
+      <span class="text-[10px] text-slate-400 font-sans mt-0.5 block">Gross Sales - Cost Price</span>
+    </div>
+
+    <div class="glass-card p-3.5 rounded-xl border-rose-300 dark:border-rose-500/30 bg-rose-50/50 dark:bg-rose-950/15 shadow-sm">
+      <div class="flex justify-between items-start">
+        <span class="text-[10px] text-rose-500 dark:text-rose-400 uppercase font-bold block">အသားတင် ဆုံးရှုံးငွေ (NET LOSS)</span>
+        <span class="text-[8px] px-1 rounded bg-rose-500/10 text-rose-500 font-bold font-mono">Waste - Surplus</span>
+      </div>
+      <h3 id="dash-today-loss" class="text-lg font-black text-rose-500 dark:text-rose-400 font-mono mt-1">0 MMK</h3>
+      <div class="flex justify-between text-[9px] font-mono text-slate-400 mt-0.5">
+        <span>အပျက်: <strong id="dash-today-waste-sub">0</strong></span>
+        <span>အပို: <strong id="dash-today-surplus-sub" class="text-emerald-500">0</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ────────────────────────────────────────────────────────────────────────── -->
+  <!-- 2. 🎯 THIS MONTH'S OPERATIONS OVERVIEW (NEW)                               -->
+  <!-- ────────────────────────────────────────────────────────────────────────── -->
+  <div class="flex justify-between items-center bg-sky-50 dark:bg-[#07192f] border border-sky-200 dark:border-sky-500/30 p-3.5 rounded-2xl shadow-sm">
+    <div class="flex items-center gap-3">
+      <div class="p-2.5 rounded-xl bg-sky-500/20 text-sky-500 text-lg"><i class="fa-solid fa-calendar-days"></i></div>
+      <div>
+        <span class="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-widest block font-sans">THIS MONTH'S OPERATIONS OVERVIEW</span>
+        <h3 id="dash-month-label" class="text-xs font-black font-mono mt-0.5">2026-10</h3>
+      </div>
+    </div>
+    <span class="px-2.5 py-1 rounded-xl text-[10px] font-black bg-sky-500/10 text-sky-500 border border-sky-500/30 font-mono">
+      MONTHLY AGGREGATE
+    </span>
+  </div>
+
+  <!-- This Month Metrics 5-Cards Grid -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+    <div class="glass-card p-3.5 rounded-xl shadow-sm">
+      <span class="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold block">ဒီလ စုစုပေါင်း အရောင်းရငွေ</span>
+      <h3 id="dash-month-sales" class="text-lg font-black font-mono mt-1">0 MMK</h3>
+      <span id="dash-month-orders" class="text-[10px] font-mono text-slate-400 mt-0.5 block">0 Orders</span>
+    </div>
+
+    <div class="glass-card p-3.5 rounded-xl border-indigo-300 dark:border-indigo-500/30 bg-indigo-50/50 dark:bg-indigo-950/10 shadow-sm">
+      <span class="text-[10px] text-indigo-500 dark:text-indigo-400 uppercase font-bold block">ဒီလ မုန့်ဖိုးကတ် ရောင်းရငွေ</span>
+      <h3 id="dash-month-wallet" class="text-lg font-black text-indigo-600 dark:text-indigo-300 font-mono mt-1">0 MMK</h3>
+      <span class="text-[10px] text-slate-400 font-sans mt-0.5 block">Monthly Wallet Volume</span>
+    </div>
+
+    <div class="glass-card p-3.5 rounded-xl border-emerald-300 dark:border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/10 shadow-sm">
+      <span class="text-[10px] text-emerald-600 dark:text-emerald-400 uppercase font-bold block">ဒီလ ငွေသား ရောင်းရငွေ</span>
+      <h3 id="dash-month-cash" class="text-lg font-black text-emerald-600 dark:text-emerald-400 font-mono mt-1">0 MMK</h3>
+      <span class="text-[10px] text-slate-400 font-sans mt-0.5 block">Monthly Cash In-Hand</span>
+    </div>
+
+    <div class="glass-card p-3.5 rounded-xl border-teal-300 dark:border-teal-500/30 bg-teal-50/50 dark:bg-teal-950/10 shadow-sm">
+      <span class="text-[10px] text-teal-600 dark:text-teal-400 uppercase font-bold block">ဒီလ အသားတင်အမြတ် (MARGIN)</span>
+      <h3 id="dash-month-profit" class="text-lg font-black text-teal-600 dark:text-teal-300 font-mono mt-1">+0 MMK</h3>
+      <span class="text-[10px] text-slate-400 font-sans mt-0.5 block">Monthly Gross - Cost</span>
+    </div>
+
+    <div class="glass-card p-3.5 rounded-xl border-rose-300 dark:border-rose-500/30 bg-rose-50/50 dark:bg-rose-950/15 shadow-sm">
+      <div class="flex justify-between items-start">
+        <span class="text-[10px] text-rose-500 dark:text-rose-400 uppercase font-bold block">ဒီလ ဆုံးရှုံးငွေ (NET LOSS)</span>
+        <span class="text-[8px] px-1 rounded bg-rose-500/10 text-rose-500 font-bold font-mono">Month Waste - Surplus</span>
+      </div>
+      <h3 id="dash-month-loss" class="text-lg font-black text-rose-500 dark:text-rose-400 font-mono mt-1">0 MMK</h3>
+      <div class="flex justify-between text-[9px] font-mono text-slate-400 mt-0.5">
+        <span>အပျက်: <strong id="dash-month-waste-sub">0</strong></span>
+        <span>အပို: <strong id="dash-month-surplus-sub" class="text-emerald-500">0</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ────────────────────────────────────────────────────────────────────────── -->
+  <!-- 3. ALL-TIME METRICS & CAPITAL INVESTMENT AUDIT                             -->
+  <!-- ────────────────────────────────────────────────────────────────────────── -->
+  <div class="glass-card p-3.5 rounded-2xl space-y-2.5 shadow-sm">
+    <div class="flex justify-between items-center border-b border-[var(--border-color)] pb-2">
+      <h4 class="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
+        <i class="fa-solid fa-chart-line text-emerald-500"></i> သမိုင်းဝင် စာရင်းချုပ်နှင့် ရင်းနှီးငွေ (ALL-TIME & CAPITAL)
+      </h4>
+      <span id="dash-low-stock-alert" class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-500 border border-rose-500/30 hidden">
+        ⚠️ Low Stock: 0 မျိုး
+      </span>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-2.5 text-xs font-mono">
+      <div>
+        <span class="text-[10px] text-slate-400 block font-sans">စုစုပေါင်း အရောင်းရငွေ:</span>
+        <strong id="dash-all-sales" class="text-xs font-black">0 MMK</strong>
+      </div>
+      <div>
+        <span class="text-[10px] text-slate-400 block font-sans">စုစုပေါင်း Wallet:</span>
+        <strong id="dash-all-wallet" class="text-xs font-black text-indigo-500">0 MMK</strong>
+      </div>
+      <div>
+        <span class="text-[10px] text-slate-400 block font-sans">စုစုပေါင်း Cash:</span>
+        <strong id="dash-all-cash" class="text-xs font-black text-emerald-500">0 MMK</strong>
+      </div>
+      <div>
+        <span class="text-[10px] text-slate-400 block font-sans">စုစုပေါင်း ပြေစာစောင်ရေ:</span>
+        <strong id="dash-all-orders" class="text-xs font-black">0 Invoices</strong>
+      </div>
+      <div class="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
+        <span class="text-[10px] text-amber-500 font-bold block font-sans uppercase">ပစ္စည်းရင်းနှီးငွေ:</span>
+        <strong id="dash-stock-capital" class="text-xs font-black text-amber-500">0 MMK</strong>
+      </div>
+      <div class="p-2 rounded-xl bg-rose-500/10 border border-rose-500/20">
+        <span class="text-[10px] text-rose-500 font-bold block font-sans uppercase">အသားတင် ဆုံးရှုံးငွေချုပ်:</span>
+        <strong id="dash-all-loss" class="text-xs font-black text-rose-500">0 MMK</strong>
+      </div>
+    </div>
+  </div>
+
+</div>

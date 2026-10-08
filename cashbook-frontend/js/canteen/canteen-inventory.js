@@ -1,15 +1,16 @@
 /**
  * ==============================================================================
  * GOLDEN ERP - CANTEEN INVENTORY & PURCHASES CONTROLLER
- * File: js/canteen/canteen-inventory.js (Enterprise V9.1 Full Production Edition)
+ * File: js/canteen/canteen-inventory.js (Enterprise V9.3 Full Production Edition)
  * 💡 Features:
  *   1. 🕒 Strict MMT (UTC+06:30) Timezone Universal Support
- *   2. 📈 Default 8% Markup on Purchases & Catalog Smart Pricing
- *   3. 📦 Stock Inventory Auditor with Capital Invariance Harmony
- *   4. 🛒 Purchases History with Live Supplier Total Calculator
- *   5. 🛡️ Robust Role Security & Defensive Input Validation (Zero-Crash)
- *   6. ⚡ D1 Quota Shield with IndexedDB Offline Persistence (0 Read Overhead)
- *   7. 🛡️ Scope-Safe Helper (Zero 'esc' SyntaxError Guarantee)
+ *   2. 🛒 Purchases Hub Live KPIs: Today, THIS MONTH & All-Time purchase totals
+ *   3. 📅 Quick Date Filters: Today & This Month 1-click filter shortcuts
+ *   4. 📈 Default 8% Markup on Purchases & Catalog Smart Pricing (50-Step Rounding)
+ *   5. 📦 Stock Inventory Auditor with Capital Invariance Harmony
+ *   6. 🛡️ Robust Role Security & Defensive Input Validation (Zero-Crash)
+ *   7. ⚡ D1 Quota Shield with IndexedDB Offline Persistence (0 Read Overhead)
+ *   8. 🛡️ Scope-Safe Helper (Zero 'esc' SyntaxError Guarantee)
  * ==============================================================================
  */
 
@@ -252,7 +253,7 @@ async function submitQuickEdit() {
 }
 
 // ------------------------------------------------------------------------------
-// 🛒 5. PURCHASES AUDITOR WITH LIVE SUPPLIER TOTAL CALCULATOR
+// 🛒 5. PURCHASES AUDITOR WITH LIVE KPIS & QUICK DATE SHORTCUTS
 // ------------------------------------------------------------------------------
 function setFilterPurchasesToday() {
   const today = getMMTDateString();
@@ -260,6 +261,22 @@ function setFilterPurchasesToday() {
   const dTo = document.getElementById('pur-date-to');
   if (dFrom) dFrom.value = today;
   if (dTo) dTo.value = today;
+  loadPurchasesHistory(1);
+}
+
+// 🎯 NEW: 1-Click "This Month" Filter Shortcut
+function setFilterPurchasesThisMonth() {
+  const today = getMMTDateString();
+  const monthPrefix = today.slice(0, 7);
+  const monthStart = `${monthPrefix}-01`;
+  const [y, m] = monthPrefix.split('-').map(Number);
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const monthEnd = `${monthPrefix}-${String(lastDay).padStart(2, '0')}`;
+
+  const dFrom = document.getElementById('pur-date-from');
+  const dTo = document.getElementById('pur-date-to');
+  if (dFrom) dFrom.value = monthStart;
+  if (dTo) dTo.value = monthEnd;
   loadPurchasesHistory(1);
 }
 
@@ -306,10 +323,31 @@ async function loadPurchasesHistory(page = 1) {
       gPurchasesData = records;
       gPurchasesTotalRows = res.totalRows || 0;
 
+      // 🎯 1. RENDER LIVE PURCHASES HUB KPIS
+      const kpiToday = document.getElementById('pur-kpi-today');
+      if (kpiToday) kpiToday.textContent = `${Number(res.todayPurchasesTotal || 0).toLocaleString()} MMK`;
+
+      const kpiTodayCount = document.getElementById('pur-kpi-today-count');
+      if (kpiTodayCount) kpiTodayCount.textContent = `${res.todayPurchasesCount || 0} Invoices`;
+
+      const kpiMonth = document.getElementById('pur-kpi-month');
+      if (kpiMonth) kpiMonth.textContent = `${Number(res.thisMonthPurchasesTotal || 0).toLocaleString()} MMK`;
+
+      const kpiMonthCount = document.getElementById('pur-kpi-month-count');
+      if (kpiMonthCount) kpiMonthCount.textContent = `${res.thisMonthPurchasesCount || 0} Invoices`;
+
+      const kpiAll = document.getElementById('pur-kpi-all');
+      if (kpiAll) kpiAll.textContent = `${Number(res.allTimePurchasesTotal || 0).toLocaleString()} MMK`;
+
+      const kpiAllCount = document.getElementById('pur-kpi-all-count');
+      if (kpiAllCount) kpiAllCount.textContent = `${res.allTimePurchasesCount || 0} Invoices`;
+
+      // 🎯 2. Currently Filtered Range/Supplier Total Badge
       const totalPurchasesAmount = res.totalPurchasesAmount || 0;
       const badgeEl = document.getElementById('pur-supplier-total-badge');
       if (badgeEl) badgeEl.textContent = `${Number(totalPurchasesAmount).toLocaleString()} MMK`;
 
+      // 🎯 3. Render Paginated Purchases Records Table
       const tbody = document.getElementById('pur-table-body');
       if (!tbody) return;
       tbody.innerHTML = '';
@@ -665,6 +703,7 @@ window.exportStockInventoryCSV = exportStockInventoryCSV;
 window.openQuickEditModal = openQuickEditModal;
 window.submitQuickEdit = submitQuickEdit;
 window.setFilterPurchasesToday = setFilterPurchasesToday;
+window.setFilterPurchasesThisMonth = setFilterPurchasesThisMonth;
 window.loadPurchasesHistory = loadPurchasesHistory;
 window.onSearchPurchasesDebounced = onSearchPurchasesDebounced;
 window.clearPurchasesFilter = clearPurchasesFilter;
