@@ -1,13 +1,13 @@
 /**
  * ==============================================================================
  * GOLDEN ERP - CANTEEN STORE CLOSING, SETTLEMENT & OFFLINE PENDING SYNC
- * File: js/canteen/canteen-closing.js (Enterprise V9.1 Full Production Edition)
+ * File: js/canteen/canteen-closing.js (Enterprise V9.2 Full Production Edition)
  * 💡 Features:
  *   1. 🕒 Strict MMT (UTC+06:30) Timezone Universal Engine (Recursion-Free)
  *   2. 📊 Live Dashboard: Real-time Sales, Margin, Capital & Net Loss Aggregator
  *   3. 🔒 Canteen Store Day Closure (Cashier & Admin Allowed, Pending Guarded)
  *   4. 💵 Evening Finance Settlement (Closure Interlocked)
- *   5. ⏳ Resilient Offline Pending Queue Management & Auto-Sync (Retry Protected)
+ *   5. ⏳ Resilient Offline Pending Queue Management & QUIC Settle Auto-Sync
  *   6. 🧾 20-Row Paginated Sales History with Slip Thermal Printer
  *   7. 🛡️ Defensive Null-Safe DOM Renderers (Zero Crash Guarantee)
  * ==============================================================================
@@ -348,7 +348,7 @@ async function triggerManualOfflineSync() {
   }
 }
 
-// 🛡️ Resilient Background Auto-Sync with Retry & Error Shield
+// 🛡️ Resilient Background Auto-Sync with QUIC Settle Guard & Silent Retry
 async function autoSyncPendingOrders(retryCount = 0) {
   if (!navigator.onLine || typeof dbGetPendingOrders !== 'function') return;
   if (_isAutoSyncing && retryCount === 0) return;
@@ -358,7 +358,18 @@ async function autoSyncPendingOrders(retryCount = 0) {
 
   _isAutoSyncing = true;
   try {
-    const res = await callApi('syncOfflinePosOrders', { orders: pending });
+    // 🛡️ Settle Guard: On initial attempt after network restoration, pause briefly
+    // to allow browser connection pool to purge stale/dead QUIC (HTTP/3) UDP sessions.
+    if (retryCount === 0) {
+      await new Promise(r => setTimeout(r, 1200));
+    }
+
+    // Verify still online and pending items still exist
+    if (!navigator.onLine) return;
+    const currentPending = await dbGetPendingOrders();
+    if (!currentPending || currentPending.length === 0) return;
+
+    const res = await callApi('syncOfflinePosOrders', { orders: currentPending });
     if (res && res.success) {
       if (typeof dbClearPendingOrders === 'function') await dbClearPendingOrders();
       if (typeof updatePendingBadgeCount === 'function') await updatePendingBadgeCount();
@@ -372,13 +383,12 @@ async function autoSyncPendingOrders(retryCount = 0) {
         await loadCanteenDashboard();
       }
 
-      showToast("SUCCESS", `[Auto-Sync] အော့ဖ်လိုင်းအရောင်း (${res.syncedCount || pending.length}) စောင် D1 သို့ အောင်မြင်စွာ တင်ပို့ပြီးပါပြီ။`);
+      showToast("SUCCESS", `[Auto-Sync] အော့ဖ်လိုင်းအရောင်း (${res.syncedCount || currentPending.length}) စောင် D1 သို့ အောင်မြင်စွာ တင်ပို့ပြီးပါပြီ။`);
     } else if (retryCount < 2 && navigator.onLine) {
-      // 🛡️ Retry after 3 seconds if socket was still resetting
       setTimeout(() => autoSyncPendingOrders(retryCount + 1), 3000);
     }
   } catch (err) {
-    console.warn(`[AutoSync] Background attempt ${retryCount + 1} notice:`, err.message);
+    // Graceful silent retry for background task - prevents showing red error toast during connection stabilization
     if (retryCount < 2 && navigator.onLine) {
       setTimeout(() => autoSyncPendingOrders(retryCount + 1), 3000);
     }

@@ -1,13 +1,13 @@
 /**
  * ==============================================================================
  * GOLDEN ERP - CANTEEN GLOBAL STATE & NETWORK CONTROLLER
- * File: js/canteen/canteen-state.js (Enterprise V9.1 Full Production Edition)
+ * File: js/canteen/canteen-state.js (Enterprise V9.2 Full Production Edition)
  * 💡 Features:
  *   1. 🕒 Live MMT (UTC+06:30) Ticking Clock (Date + Time AM/PM)
  *   2. 🛡️ Scope-Safe Singleton Helpers (Zero SyntaxError Guarantee)
  *   3. ⚡ Quota-Shield: IndexedDB Pre-caching on App Startup (0 D1 Read Waste)
  *   4. 👤 Dynamic Role Authenticator (Fixes Cashier Showing as Admin)
- *   5. 🌐 Network Settle Debounce (Fixes ERR_CONNECTION_RESET on Reconnect)
+ *   5. 🌐 4.5s Network Settle Engine (Fixes QUIC_NETWORK_IDLE_TIMEOUT & ERR_CONNECTION_RESET)
  *   6. 🔄 Universal Robust Async Refresh Engine for All Tab Views
  *   7. ⌨️ Global Hardware Hotkeys (F2, F4, F8, Esc)
  * ==============================================================================
@@ -248,7 +248,7 @@ function toggleCanteenTheme() {
 }
 
 // ------------------------------------------------------------------------------
-// 🌐 7. REAL-TIME NETWORK MONITOR & DEBOUNCED AUTO-SYNC
+// 🌐 7. REAL-TIME NETWORK MONITOR & 4.5S SETTLED AUTO-SYNC
 // ------------------------------------------------------------------------------
 function initNetworkMonitor() {
   const updateStatus = () => {
@@ -269,9 +269,11 @@ function initNetworkMonitor() {
     updateStatus();
     if (_onlineDebounceTimer) clearTimeout(_onlineDebounceTimer);
 
-    // 🛡️ Network Stabilization Delay:
-    // Wait 2500ms for network adapter, DNS, and TLS handshake to settle
-    // Prevents net::ERR_CONNECTION_RESET and Premature Fetch crashes
+    // 🛡️ Enterprise Network Settle & Socket Flush Window (4500ms):
+    // Waits 4.5s for:
+    // 1. OS Wi-Fi / DHCP handshake to obtain valid IP & default gateway route
+    // 2. DNS resolver configuration to settle completely
+    // 3. Browser to purge stale/idle QUIC (HTTP/3) UDP sessions, avoiding QUIC_NETWORK_IDLE_TIMEOUT
     _onlineDebounceTimer = setTimeout(async () => {
       if (!navigator.onLine || _isAutoSyncRunning) return;
       _isAutoSyncRunning = true;
@@ -281,16 +283,22 @@ function initNetworkMonitor() {
           await updatePendingBadgeCount();
         }
 
-        // Silent graceful background sync
-        if (typeof autoSyncPendingOrders === 'function') {
-          await autoSyncPendingOrders();
+        // Check if there are actually pending orders to sync before making remote calls
+        const pendingOrders = (typeof dbGetPendingOrders === 'function') 
+          ? await dbGetPendingOrders() 
+          : [];
+
+        if (pendingOrders && pendingOrders.length > 0) {
+          if (typeof autoSyncPendingOrders === 'function') {
+            await autoSyncPendingOrders();
+          }
         }
       } catch (syncErr) {
         console.warn("[NetworkMonitor] Graceful auto-sync settle notice:", syncErr);
       } finally {
         _isAutoSyncRunning = false;
       }
-    }, 2500);
+    }, 4500);
   });
 
   window.addEventListener('offline', () => {
@@ -298,6 +306,7 @@ function initNetworkMonitor() {
       clearTimeout(_onlineDebounceTimer);
       _onlineDebounceTimer = null;
     }
+    _isAutoSyncRunning = false;
     updateStatus();
     showToast("ERROR", "အင်တာနက်လိုင်း ပြတ်တောက်သွားပါသည်။ Offline POS Mode သို့ ပြောင်းလဲထားပါသည်။");
   });
