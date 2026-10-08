@@ -2,35 +2,33 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - STAFF DIRECTORY & MATRIX MODULE (D1 DATABASE COMPATIBLE)
  * File: js/staff.js (Location: cashbook-frontend/js/staff.js)
- * 💡 Features: Refactored with Global api.js for DRY Principle,
- *              Live D1 Salary Grade Matrix Sync, Auto Basic Amt Fill,
- *              Resigned Date Auto-Inactive Engine (Status & Active Force KPIs),
- *              Compact Segmented Category Tabs Sync, Safe Grade Modal Handler,
- *              🛡️ Bug #2 Fixed: Resilient escapeHtml, escapeJsAttr & safeCsvCell Fallbacks
+ * 💡 Features: Safe Standalone Pure Escapers (Infinite Loop Crash Eliminated),
+ *              1-Row 4-KPI Grid Enforcer, Precision Gender Counting (Fixes Female: 0),
+ *              Compact 1-Row Toolbar & True Client-Side Pagination Slicing
  * ==============================================================================
  */
 
 // ==============================================================================
-// 💡 SAFE UTILITY FALLBACKS (Prevents load order / undefined errors)
+// 💡 SAFE PURE LOGIC HELPERS (Infinite Call Stack Recursion လုံးဝ မဖြစ်စေသော အပိုင်း)
 // ==============================================================================
 
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
-  if (typeof window.escapeHtml === 'function') return window.escapeHtml(str);
-  const div = document.createElement('div');
-  div.textContent = String(str);
-  return div.innerHTML;
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 function escapeJsAttr(str) {
   if (str === null || str === undefined) return '';
-  if (typeof window.escapeJsAttr === 'function') return window.escapeJsAttr(str);
   const jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   return escapeHtml(jsEscaped);
 }
 
 function safeCsvCell(val) {
-  if (typeof window.safeCsvCell === 'function') return window.safeCsvCell(val);
   if (val === null || val === undefined) return '""';
   if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
 
@@ -48,20 +46,20 @@ function safeCsvCell(val) {
 }
 
 function autoDetectGender(nameStr) {
-  if (typeof window.autoDetectGender === 'function') {
-    return window.autoDetectGender(nameStr);
-  }
   if (!nameStr) return 'Male';
   const clean = String(nameStr).trim();
 
+  // ၁။ ယောကျ်ားလေး ရှေ့စာလုံးများ
   if (clean.startsWith('မောင်') || clean.startsWith('ကို') || clean.startsWith('ဦး') ||
       clean.startsWith('မင်း') || /^(Mg|Ko|U|Min)\b/i.test(clean) || /^(မောင်|ကို|ဦး|မင်း)/.test(clean)) {
     return 'Male';
   }
+  // ၂။ မိန်းကလေး ရှေ့စာလုံးများနှင့် တိုင်းရင်းသူအမည်များ
   if (clean.startsWith('မေ') || clean.startsWith('ဒေါ်') || clean.startsWith('နန်း') || clean.startsWith('နော်') ||
       /^(May|Daw|Nang|Naw)\b/i.test(clean)) {
     return 'Female';
   }
+  // ၃။ 'မ' ဖြင့် စပြီး 'မောင်' သို့မဟုတ် 'မင်း' မဟုတ်ပါက Female
   if ((clean.startsWith('မ') && !clean.startsWith('မောင်') && !clean.startsWith('မင်း')) || /^(Ma)\b/i.test(clean)) {
     return 'Female';
   }
@@ -133,7 +131,7 @@ function filterStaffData(list = [], searchVal = '') {
 
 /**
  * 💡 Switch Staff Category (Full Time vs Part Time)
- * 🎯 Updated: Uses sleek compact classes matching views/staff.html segmented tabs
+ * 🎯 Compact Tabs: FID / PID ဖြုတ်ထားသော Class ပုံစံဖြင့် ညီညာစွာ ထားရှိသည်
  */
 async function switchStaffCategory(category) {
   gStaffCategory = category;
@@ -232,7 +230,7 @@ async function loadStaffData(useCache = false) {
       let femaleCount = 0;
       let netPayroll = 0;
 
-      // 💡 Resigned Staff များကို ဖယ်ထုတ်ပြီး တိကျသော Gender Auto-Detect စနစ်ဖြင့် ရေတွက်ခြင်း
+      // 💡 Gender Precision Fix: DB တွင် 'Male' Default မှားယွင်းနေသော်လည်း နာမည်အရ Female ကို မှန်ကန်စွာ ရေတွက်ခြင်း
       gStaffData.forEach(item => {
         const isResigned = Boolean(item.resigned_date || item.resignedDate);
         const isInactive = (item.status || '').toLowerCase() === 'inactive' || isResigned;
@@ -240,14 +238,16 @@ async function loadStaffData(useCache = false) {
         if (!isInactive) {
           actCount++;
           
+          const rawName = item.name || item.staffIdName || item.staff_idname || '';
+          const detectedG = autoDetectGender(rawName);
           let g = String(item.gender || '').toLowerCase().trim();
-          if (!g || g === 'non' || g === 'undefined') {
-            g = autoDetectGender(item.name || item.staffIdName || item.staff_idname).toLowerCase();
+
+          // အကယ်၍ DB ထဲတွင် Male ဟု အလွဲမှတ်ထားသော်လည်း နာမည်က Daw/ဒေါ် ဖြစ်နေပါက Female အဖြစ် ပြန်ပြင်ရေတွက်သည်
+          if (!g || g === 'non' || g === 'undefined' || (g === 'male' && detectedG === 'Female')) {
+            g = detectedG.toLowerCase();
           }
 
-          if (g === 'male' || g === 'm' || g === 'ကျား' || g.startsWith('mal')) {
-            maleCount++;
-          } else if (g === 'female' || g === 'f' || g === 'မ' || g.startsWith('fem')) {
+          if (g === 'female' || g === 'f' || g === 'မ' || g.startsWith('fem')) {
             femaleCount++;
           } else {
             maleCount++;
@@ -275,44 +275,49 @@ async function loadStaffData(useCache = false) {
   }
 }
 
+/**
+ * 💡 Top KPI Cards Grid (၁ တန်းတည်း ၄ ကွက် ပေါ်စေရန် grid-cols-2 sm:grid-cols-4 သတ်မှတ်သည်)
+ */
 function renderStaffKpis(stats) {
   const grid = document.getElementById('staff-kpi-grid');
   if (!grid) return;
 
+  grid.className = "grid grid-cols-2 sm:grid-cols-4 gap-3";
+
   grid.innerHTML = `
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-indigo-500/10 text-indigo-400"><i class="fa-solid fa-users text-xl"></i></div>
-      <div>
-        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Active Force</p>
-        <h3 class="text-base font-extrabold text-white mt-1">${stats.activeCount || 0}</h3>
+    <div class="stats-card p-3.5 sm:p-4 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+      <div class="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-400 shrink-0"><i class="fa-solid fa-users text-base"></i></div>
+      <div class="min-w-0">
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Active Force</p>
+        <h3 class="text-sm sm:text-base font-extrabold text-white mt-0.5">${stats.activeCount || 0}</h3>
       </div>
     </div>
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400"><i class="fa-solid fa-money-bill-wave text-xl"></i></div>
-      <div>
-        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Total Net Payroll</p>
-        <h3 class="text-base font-extrabold text-white mt-1">${Number(stats.totalNetAmt || 0).toLocaleString('en-US')} MMK</h3>
+    <div class="stats-card p-3.5 sm:p-4 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+      <div class="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0"><i class="fa-solid fa-money-bill-wave text-base"></i></div>
+      <div class="min-w-0">
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Total Net Payroll</p>
+        <h3 class="text-sm sm:text-base font-extrabold text-white mt-0.5 truncate">${Number(stats.totalNetAmt || 0).toLocaleString('en-US')} MMK</h3>
       </div>
     </div>
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-sky-500/10 text-sky-400"><i class="fa-solid fa-mars text-xl"></i></div>
-      <div>
-        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Male Staff</p>
-        <h3 class="text-base font-extrabold text-white mt-1">${stats.maleCount || 0}</h3>
+    <div class="stats-card p-3.5 sm:p-4 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+      <div class="p-2.5 rounded-lg bg-sky-500/10 text-sky-400 shrink-0"><i class="fa-solid fa-mars text-base"></i></div>
+      <div class="min-w-0">
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Male Staff</p>
+        <h3 class="text-sm sm:text-base font-extrabold text-white mt-0.5">${stats.maleCount || 0}</h3>
       </div>
     </div>
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-rose-500/10 text-rose-400"><i class="fa-solid fa-venus text-xl"></i></div>
-      <div>
-        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Female Staff</p>
-        <h3 class="text-base font-extrabold text-white mt-1">${stats.femaleCount || 0}</h3>
+    <div class="stats-card p-3.5 sm:p-4 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+      <div class="p-2.5 rounded-lg bg-rose-500/10 text-rose-400 shrink-0"><i class="fa-solid fa-venus text-base"></i></div>
+      <div class="min-w-0">
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Female Staff</p>
+        <h3 class="text-sm sm:text-base font-extrabold text-white mt-0.5">${stats.femaleCount || 0}</h3>
       </div>
     </div>
   `;
 }
 
 /**
- * 💡 Render Table Grid Rows with True Pagination Slicing
+ * 💡 Render Table Grid Rows (Pure Helpers ကြောင့် Error လုံးဝမတက်ဘဲ အမည်စာရင်းများ ပြန်ပေါ်လာမည်)
  */
 function renderStaffTable(rawData) {
   const tbody = document.getElementById('staff-table-body');
@@ -370,7 +375,7 @@ function renderStaffTable(rawData) {
         ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Inactive</span>'
         : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Active</span>';
 
-      const detectedGender = item.gender || autoDetectGender(item.name || staffIdName);
+      const detectedGender = autoDetectGender(item.name || staffIdName);
 
       return `
       <tr class="hover:bg-slate-800/40 transition">
@@ -429,7 +434,7 @@ function renderStaffTable(rawData) {
         ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Inactive</span>'
         : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Active</span>';
 
-      const detectedGender = item.gender || autoDetectGender(item.name || staffIdName);
+      const detectedGender = autoDetectGender(item.name || staffIdName);
 
       return `
       <tr class="hover:bg-slate-800/40 transition">
