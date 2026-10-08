@@ -1,62 +1,79 @@
 <!-- views/uniform.html --> 
-<div class="space-y-5">
+<div class="space-y-4 max-w-[1920px] mx-auto">
 
-  <!-- ၁။ Top KPI Stats Cards Grid -->
-  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-teal-500/10 text-teal-400"><i class="fa-solid fa-shirt text-xl"></i></div>
-      <div>
-        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Selling Unit</p>
-        <h3 id="uni-selling-unit" class="text-base font-extrabold text-white mt-1">0</h3>
+  <!-- 💡 ၁။ Top KPI Stats Cards Grid (Main Bank Book အတိုင်း ထိပ်ဆုံးတွင် ၁ တန်းတည်း ၄ ကွက် ပေါ်စေသည်) -->
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;">
+    <!-- Selling Unit -->
+    <div class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+      <div class="p-2.5 rounded-lg bg-teal-500/10 text-teal-400 shrink-0"><i class="fa-solid fa-shirt text-base"></i></div>
+      <div class="min-w-0">
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Selling Unit</p>
+        <h3 id="uni-selling-unit" class="text-sm sm:text-base font-extrabold text-white mt-0.5">0</h3>
       </div>
     </div>
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400"><i class="fa-solid fa-boxes-stacked text-xl"></i></div>
-      <div>
-        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Current Qty</p>
-        <h3 id="uni-current-qty" class="text-base font-extrabold text-white mt-1">0</h3>
+
+    <!-- Current Qty -->
+    <div class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+      <div class="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0"><i class="fa-solid fa-boxes-stacked text-base"></i></div>
+      <div class="min-w-0">
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Current Qty</p>
+        <h3 id="uni-current-qty" class="text-sm sm:text-base font-extrabold text-white mt-0.5">0</h3>
       </div>
     </div>
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-indigo-500/10 text-indigo-400"><i class="fa-solid fa-piggy-bank text-xl"></i></div>
-      <div>
-        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Total Stock Value</p>
-        <h3 id="uni-stock-value" class="text-base font-extrabold text-white mt-1">0 MMK</h3>
+
+    <!-- Total Stock Value -->
+    <div class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+      <div class="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-400 shrink-0"><i class="fa-solid fa-piggy-bank text-base"></i></div>
+      <div class="min-w-0">
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Total Stock Value</p>
+        <h3 id="uni-stock-value" class="text-sm sm:text-base font-extrabold text-white mt-0.5">0 MMK</h3>
       </div>
     </div>
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-sky-500/10 text-sky-400"><i class="fa-solid fa-list-check text-xl"></i></div>
-      <div>
-        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Total Products</p>
-        <h3 id="uni-total-products" class="text-base font-extrabold text-white mt-1">0</h3>
+
+    <!-- Total Products -->
+    <div class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+      <div class="p-2.5 rounded-lg bg-sky-500/10 text-sky-400 shrink-0"><i class="fa-solid fa-list-check text-base"></i></div>
+      <div class="min-w-0">
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Total Products</p>
+        <h3 id="uni-total-products" class="text-sm sm:text-base font-extrabold text-white mt-0.5">0</h3>
       </div>
     </div>
   </div>
 
-  <!-- ၂။ Control Search & Action Bar -->
-  <div class="flex flex-col md:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
-    <div class="relative w-full md:w-[500px]">
-      <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
-      <!-- 💡 UPDATED SEARCH PLACEHOLDER FOR STRICT CRITERIA (Product ID, Name, Type, Size) -->
-      <input type="text" id="uniform-search" oninput="onSearchInputUniform()" placeholder="Search product ID, name, type, size..." class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white focus:outline-none focus:border-indigo-500 transition-all">
+  <!-- 💡 ၂။ Control Search & Action Bar (Main Bank Book စတိုင်အတိုင်း အကျယ် ညှိထားသည်) -->
+  <div class="flex items-center justify-between bg-[#0c1322] border border-slate-800 p-2.5 sm:p-3 rounded-xl gap-2.5 overflow-x-auto">
+    <div class="flex items-center gap-2.5 shrink-0">
+      
+      <!-- 🎯 Search Input (Main Bank Book အတိုင်း sm:w-64, min-w-[250px] အတိအကျ ညှိထားသည်) -->
+      <div class="relative w-full sm:w-64 shrink-0" style="min-width: 250px;">
+        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500 pointer-events-none">
+          <i class="fa-solid fa-magnifying-glass text-xs"></i>
+        </span>
+        <input type="text" 
+               id="uniform-search" 
+               oninput="onSearchInputUniform()" 
+               placeholder="Search product ID, name, type, size..." 
+               class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all">
+      </div>
     </div>
 
-    <div class="flex items-center gap-2.5 w-full md:w-auto justify-end">
-      <button onclick="loadUniformData(false)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all" title="Refresh Data">
+    <!-- ညာဘက်ခြမ်း Action Buttons -->
+    <div class="flex items-center gap-2 shrink-0">
+      <button onclick="loadUniformData(false)" class="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap" title="Refresh Data">
         <i class="fa-solid fa-rotate text-xs"></i> Refresh
       </button>
 
-      <button onclick="exportToCSVUniform()" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
+      <button onclick="exportToCSVUniform()" class="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap">
         <i class="fa-solid fa-file-export text-xs"></i> Export CSV
       </button>
 
-      <button onclick="openAddModalUniform()" class="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/10 transition-all">
+      <button onclick="openAddModalUniform()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 transition-all whitespace-nowrap">
         <i class="fa-solid fa-plus text-xs"></i> Add New Product
       </button>
     </div>
   </div>
 
-  <!-- ၃။ 13-Column Uniform Inventory Table Grid -->
+  <!-- 💡 ၃။ 13-Column Uniform Inventory Table Grid -->
   <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
     <table class="w-full text-left border-collapse min-w-[1500px]">
       <thead>
@@ -83,17 +100,17 @@
     </table>
   </div>
 
-  <!-- ၄။ Pagination Tray -->
+  <!-- 💡 ၄။ Pagination Tray -->
   <div class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
     <div id="uni-pagination-info" class="text-xs font-semibold text-slate-400 tracking-wide">
       Showing entries...
     </div>
     
     <div class="flex items-center gap-2">
-      <button onclick="changePageUniform(-1)" id="uni-btn-prev" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+      <button onclick="changePageUniform(-1)" id="uni-btn-prev" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
         <i class="fa-solid fa-chevron-left text-[10px]"></i> Previous
       </button>
-      <button onclick="changePageUniform(1)" id="uni-btn-next" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+      <button onclick="changePageUniform(1)" id="uni-btn-next" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
         Next <i class="fa-solid fa-chevron-right text-[10px]"></i>
       </button>
     </div>
@@ -101,7 +118,7 @@
 
 </div>
 
-<!-- ၅။ Add / Edit Uniform Product Modal -->
+<!-- 💡 ၅။ Add / Edit Uniform Product Modal -->
 <div id="uniform-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
   <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
     <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
@@ -166,7 +183,7 @@
 
       <div class="flex justify-end items-center gap-3 pt-4 border-t border-slate-800">
         <button type="button" onclick="closeUniformModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">Cancel</button>
-        <button type="submit" class="px-5 py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10 transition-all">Confirm</button>
+        <button type="submit" class="px-5 py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20 transition-all">Confirm</button>
       </div>
     </form>
   </div>
