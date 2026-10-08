@@ -7,7 +7,7 @@
  *   2. 📊 Live Dashboard: Real-time Sales, Margin, Capital & Net Loss Aggregator
  *   3. 🔒 Canteen Store Day Closure (Cashier & Admin Allowed, Pending Guarded)
  *   4. 💵 Evening Finance Settlement (Closure Interlocked)
- *   5. ⏳ Resilient Offline Pending Queue Management & Auto-Sync
+ *   5. ⏳ Resilient Offline Pending Queue Management & Auto-Sync (Retry Protected)
  *   6. 🧾 20-Row Paginated Sales History with Slip Thermal Printer
  *   7. 🛡️ Defensive Null-Safe DOM Renderers (Zero Crash Guarantee)
  * ==============================================================================
@@ -33,6 +33,9 @@ function getNormalizedRole() {
 // 🛡️ Safe Fallback for HTML Escape
 var esc = window.esc || (s => s ? String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : '');
 var escAttr = window.escAttr || (s => s ? String(s).replace(/'/g, "\\'") : '');
+
+// 🛡️ Sync Mutex Lock (Prevents Socket Storm & ERR_CONNECTION_RESET)
+var _isAutoSyncing = false;
 
 // ------------------------------------------------------------------------------
 // 📊 0. LIVE CANTEEN DASHBOARD CONTROLLER (NET LOSS FORMULA ENABLED)
@@ -321,6 +324,7 @@ async function triggerManualOfflineSync() {
     btnSync.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Sync လုပ်နေပါသည်...`;
   }
 
+  _isAutoSyncing = true;
   try {
     const res = await callApi('syncOfflinePosOrders', { orders: pendingOrders });
     if (res && res.success) {
@@ -329,13 +333,14 @@ async function triggerManualOfflineSync() {
       await renderPendingOrdersTable();
       showToast("SUCCESS", res.message || "အော့ဖ်လိုင်းအရောင်းများ အားလုံး D1 သို့ Sync ပြီးပါပြီ။");
       closeModal('pos-pending-modal');
-      await loadCanteenDashboard();
+      if (typeof loadCanteenDashboard === 'function') await loadCanteenDashboard();
     } else {
       showToast("ERROR", res?.message || "Sync မအောင်မြင်ပါ။");
     }
   } catch (err) {
     showToast("ERROR", "Sync လုပ်ဆောင်မှု အမှား: " + err.message);
   } finally {
+    _isAutoSyncing = false;
     if (btnSync) {
       btnSync.disabled = false;
       btnSync.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> <span>Sync Now (D1 သို့ ပေးပို့မည်)</span>`;
@@ -343,19 +348,43 @@ async function triggerManualOfflineSync() {
   }
 }
 
-async function autoSyncPendingOrders() {
+// 🛡️ Resilient Background Auto-Sync with Retry & Error Shield
+async function autoSyncPendingOrders(retryCount = 0) {
   if (!navigator.onLine || typeof dbGetPendingOrders !== 'function') return;
+  if (_isAutoSyncing && retryCount === 0) return;
+
   const pending = await dbGetPendingOrders();
   if (!pending || pending.length === 0) return;
 
+  _isAutoSyncing = true;
   try {
     const res = await callApi('syncOfflinePosOrders', { orders: pending });
     if (res && res.success) {
       if (typeof dbClearPendingOrders === 'function') await dbClearPendingOrders();
       if (typeof updatePendingBadgeCount === 'function') await updatePendingBadgeCount();
-      showToast("SUCCESS", `[Auto-Sync] အော့ဖ်လိုင်းအရောင်း (${res.syncedCount}) စောင် D1 သို့ အောင်မြင်စွာ တင်ပို့ပြီးပါပြီ။`);
+      
+      const modal = document.getElementById('pos-pending-modal');
+      if (modal && !modal.classList.contains('hidden')) {
+        await renderPendingOrdersTable();
+      }
+
+      if (typeof loadCanteenDashboard === 'function' && gActiveView === 'dashboard') {
+        await loadCanteenDashboard();
+      }
+
+      showToast("SUCCESS", `[Auto-Sync] အော့ဖ်လိုင်းအရောင်း (${res.syncedCount || pending.length}) စောင် D1 သို့ အောင်မြင်စွာ တင်ပို့ပြီးပါပြီ။`);
+    } else if (retryCount < 2 && navigator.onLine) {
+      // 🛡️ Retry after 3 seconds if socket was still resetting
+      setTimeout(() => autoSyncPendingOrders(retryCount + 1), 3000);
     }
-  } catch (e) {}
+  } catch (err) {
+    console.warn(`[AutoSync] Background attempt ${retryCount + 1} notice:`, err.message);
+    if (retryCount < 2 && navigator.onLine) {
+      setTimeout(() => autoSyncPendingOrders(retryCount + 1), 3000);
+    }
+  } finally {
+    _isAutoSyncing = false;
+  }
 }
 
 // ------------------------------------------------------------------------------

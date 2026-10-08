@@ -7,8 +7,9 @@
  *   2. 🛡️ Scope-Safe Singleton Helpers (Zero SyntaxError Guarantee)
  *   3. ⚡ Quota-Shield: IndexedDB Pre-caching on App Startup (0 D1 Read Waste)
  *   4. 👤 Dynamic Role Authenticator (Fixes Cashier Showing as Admin)
- *   5. 🔄 Universal Robust Async Refresh Engine for All Tab Views
- *   6. ⌨️ Global Hardware Hotkeys (F2, F4, F8, Esc)
+ *   5. 🌐 Network Settle Debounce (Fixes ERR_CONNECTION_RESET on Reconnect)
+ *   6. 🔄 Universal Robust Async Refresh Engine for All Tab Views
+ *   7. ⌨️ Global Hardware Hotkeys (F2, F4, F8, Esc)
  * ==============================================================================
  */
 
@@ -45,6 +46,7 @@ function getMMTFullDateTimeString(dInput) {
 }
 window.getMMTFullDateTimeString = getMMTFullDateTimeString;
 
+var _liveClockInterval = null;
 function startLiveClock() {
   function tick() {
     const fullTimeStr = getMMTFullDateTimeString();
@@ -55,7 +57,8 @@ function startLiveClock() {
     if (sideDateEl) sideDateEl.textContent = `MMT ${dateOnlyStr}`;
   }
   tick();
-  setInterval(tick, 1000);
+  if (_liveClockInterval) clearInterval(_liveClockInterval);
+  _liveClockInterval = setInterval(tick, 1000);
 }
 
 // ------------------------------------------------------------------------------
@@ -102,6 +105,10 @@ var gPurchasesPage = 1, gPurchasesLimit = 20, gPurchasesTotalRows = 0, gPurSearc
 var gSalesPage = 1, gSalesLimit = 20, gSalesTotalRows = 0, gSalesSearchTimeout = null;
 var gWastePage = 1, gWasteLimit = 20, gWasteTotalRows = 0, gWasteSearchTimeout = null;
 var gSurplusPage = 1, gSurplusLimit = 20, gSurplusTotalRows = 0, gSurplusSearchTimeout = null;
+
+// Network Stabilization & Mutex Flags
+var _onlineDebounceTimer = null;
+var _isAutoSyncRunning = false;
 
 // ------------------------------------------------------------------------------
 // 🚀 5. APPLICATION BOOTSTRAP & LIFECYCLE
@@ -166,6 +173,14 @@ window.addEventListener('DOMContentLoaded', async () => {
     const btnSettings = document.getElementById('btn-side-settings');
     if (btnSettings) btnSettings.style.display = 'none';
     
+    // Day close & Evening clearing are accessible
+    const btnClose = document.getElementById('btn-header-close-day');
+    if (btnClose) btnClose.style.display = '';
+    const navClose = document.getElementById('nav-btn-close-day');
+    if (navClose) navClose.style.display = '';
+    const navSettle = document.getElementById('nav-btn-settle');
+    if (navSettle) navSettle.style.display = '';
+
     switchCanteenView('pos');
 
   } else {
@@ -233,7 +248,7 @@ function toggleCanteenTheme() {
 }
 
 // ------------------------------------------------------------------------------
-// 🌐 7. REAL-TIME NETWORK MONITOR & AUTO-SYNC
+// 🌐 7. REAL-TIME NETWORK MONITOR & DEBOUNCED AUTO-SYNC
 // ------------------------------------------------------------------------------
 function initNetworkMonitor() {
   const updateStatus = () => {
@@ -250,15 +265,39 @@ function initNetworkMonitor() {
     }
   };
 
-  window.addEventListener('online', async () => {
+  window.addEventListener('online', () => {
     updateStatus();
-    showToast("SUCCESS", "အင်တာနက်လိုင်း ပြန်လည်ရရှိပါပြီ။ အော့ဖ်လိုင်းအရောင်းများ Sync လုပ်ပါမည်။");
-    if (typeof autoSyncPendingOrders === 'function') {
-      await autoSyncPendingOrders();
-    }
+    if (_onlineDebounceTimer) clearTimeout(_onlineDebounceTimer);
+
+    // 🛡️ Network Stabilization Delay:
+    // Wait 2500ms for network adapter, DNS, and TLS handshake to settle
+    // Prevents net::ERR_CONNECTION_RESET and Premature Fetch crashes
+    _onlineDebounceTimer = setTimeout(async () => {
+      if (!navigator.onLine || _isAutoSyncRunning) return;
+      _isAutoSyncRunning = true;
+
+      try {
+        if (typeof updatePendingBadgeCount === 'function') {
+          await updatePendingBadgeCount();
+        }
+
+        // Silent graceful background sync
+        if (typeof autoSyncPendingOrders === 'function') {
+          await autoSyncPendingOrders();
+        }
+      } catch (syncErr) {
+        console.warn("[NetworkMonitor] Graceful auto-sync settle notice:", syncErr);
+      } finally {
+        _isAutoSyncRunning = false;
+      }
+    }, 2500);
   });
 
   window.addEventListener('offline', () => {
+    if (_onlineDebounceTimer) {
+      clearTimeout(_onlineDebounceTimer);
+      _onlineDebounceTimer = null;
+    }
     updateStatus();
     showToast("ERROR", "အင်တာနက်လိုင်း ပြတ်တောက်သွားပါသည်။ Offline POS Mode သို့ ပြောင်းလဲထားပါသည်။");
   });
@@ -431,6 +470,8 @@ function logoutPos() {
 window.getMMTDateString = getMMTDateString;
 window.getMMTFullDateTimeString = getMMTFullDateTimeString;
 window.getNormalizedRole = getNormalizedRole;
+window.startLiveClock = startLiveClock;
+window.startMMTClock = startLiveClock;
 window.switchCanteenView = switchCanteenView;
 window.refreshActiveCanteenView = refreshActiveCanteenView;
 window.toggleCanteenSidebar = toggleCanteenSidebar;
