@@ -4,6 +4,7 @@
   <meta charset="UTF-8"> 
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230c1322'/><path d='M50 20 L90 38 L50 56 L10 38 Z' fill='%23818cf8'/><path d='M25 46.5 V65 C25 75 75 75 75 65 V46.5' fill='none' stroke='%23818cf8' stroke-width='6' stroke-linecap='round'/><circle cx='82' cy='55' r='4' fill='%23fbbf24'/><path d='M82 55 V75' stroke='%23fbbf24' stroke-width='3' stroke-linecap='round'/></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#090d16">
   <title>GOLDEN CASH BOOK - ERP SYSTEM</title>
 
   <!-- 💡 Immediate Auth Check to prevent UI Flash (FOUC) -->
@@ -23,11 +24,14 @@
     html.is-authed #erp-workspace { display: flex; }
     html.not-authed #login-overlay { display: flex; }
     html.not-authed #erp-workspace { display: none; }
+    /* 💡 Print Areas မလိုလားအပ်ဘဲ မျက်နှာပြင်ပေါ် မပေါ်စေရန် ကာကွယ်ခြင်း */
+    #invoice-print-area, #payslip-print-area { display: none; }
   </style>
   
-  <link rel="stylesheet" href="css/tailwind.min.css?v=20260808b">
-  <link rel="stylesheet" href="css/fontawesome.min.css?v=20260808b">
-  <link rel="stylesheet" href="css/style.css?v=20260808b">
+  <!-- 🎯 Cache-Busting Version အသစ်သို့ ပြောင်းထားသည် (ဖိုင်အဟောင်း ငြိနေခြင်းမှ ကာကွယ်ရန်) -->
+  <link rel="stylesheet" href="css/tailwind.min.css?v=20261008">
+  <link rel="stylesheet" href="css/fontawesome.min.css?v=20261008">
+  <link rel="stylesheet" href="css/style.css?v=20261008">
 
   <!-- 💡 SheetJS Library for Multi-Tab Excel (.xlsx) Export with Security Crossorigin -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" crossorigin="anonymous"></script>
@@ -313,7 +317,7 @@
       </div>
       <div class="grid grid-cols-2 gap-4 pt-4 pb-2">
         <div class="text-center"><p class="border-t border-black w-40 mx-auto font-bold pt-1 text-[9px] whitespace-nowrap">Received By (ငွေကိုင်)</p></div>
-<div class="text-center"><p class="border-t border-black w-40 mx-auto font-bold pt-1 text-[9px] whitespace-nowrap">Paid By (ငွေပေးသွင်းသူ)</p></div>
+        <div class="text-center"><p class="border-t border-black w-40 mx-auto font-bold pt-1 text-[9px] whitespace-nowrap">Paid By (ငွေပေးသွင်းသူ)</p></div>
       </div>
     </div>
 
@@ -352,7 +356,7 @@
       </div>
       <div class="grid grid-cols-2 gap-4 pt-4 pb-2">
         <div class="text-center"><p class="border-t border-black w-40 mx-auto font-bold pt-1 text-[9px] whitespace-nowrap">Received By (ငွေကိုင်)</p></div>
-<div class="text-center"><p class="border-t border-black w-40 mx-auto font-bold pt-1 text-[9px] whitespace-nowrap">Paid By (ငွေပေးသွင်းသူ)</p></div>
+        <div class="text-center"><p class="border-t border-black w-40 mx-auto font-bold pt-1 text-[9px] whitespace-nowrap">Paid By (ငွေပေးသွင်းသူ)</p></div>
       </div>
     </div>
   </div>
@@ -441,32 +445,78 @@
   </div>
 
   <!-- ==================== 6. CORE APPLICATION SCRIPTS ==================== -->
-  <script src="js/config.js?v=20260808b" defer></script>
-  <script src="js/offline-sync.js?v=20260808b" defer></script>
-  <script src="js/api.js?v=20260808b" defer></script>
-  <script src="js/auth.js?v=20260808b" defer></script>
-  <script src="js/bank-cash.js?v=20260808b" defer></script>
-  <script src="js/office-kit.js?v=20260808b" defer></script>
-  <script src="js/cashier.js?v=20260808b" defer></script>
-  <script src="js/hr.js?v=20260808b" defer></script>
-  <script src="js/income.js?v=20260808b" defer></script>
-  <script src="js/staff.js?v=20260808b" defer></script>
-  <script src="js/student.js?v=20260808b" defer></script>
-  <script src="js/student-money.js?v=20260808b" defer></script>
-  <script src="js/uniform.js?v=20260808b" defer></script>
-  <script src="js/promotion.js?v=20260808b" defer></script>
-  <script src="js/reports.js?v=20260808b" defer></script>
-  <script src="js/settings.js?v=20260808b" defer></script>
-  <script src="js/dashboard.js?v=20260808b" defer></script>
-  <script src="js/app.js?v=20260808b" defer></script>
+  <!-- 🎯 Version Query String အား အသစ်သို့ ပြောင်းထားသဖြင့် ဖိုင်အဟောင်း Cache ငြိခြင်း မဖြစ်စေပါ -->
+  <script src="js/config.js?v=20261008" defer></script>
+  <script src="js/offline-sync.js?v=20261008" defer></script>
+  <script src="js/api.js?v=20261008" defer></script>
+  <script src="js/auth.js?v=20261008" defer></script>
+  <script src="js/bank-cash.js?v=20261008" defer></script>
+  <script src="js/office-kit.js?v=20261008" defer></script>
+  <script src="js/cashier.js?v=20261008" defer></script>
+  <script src="js/hr.js?v=20261008" defer></script>
+  <script src="js/income.js?v=20261008" defer></script>
+  <script src="js/staff.js?v=20261008" defer></script>
+  <script src="js/student.js?v=20261008" defer></script>
+  <script src="js/student-money.js?v=20261008" defer></script>
+  <script src="js/uniform.js?v=20261008" defer></script>
+  <script src="js/promotion.js?v=20261008" defer></script>
+  <script src="js/reports.js?v=20261008" defer></script>
+  <script src="js/settings.js?v=20261008" defer></script>
+  <script src="js/dashboard.js?v=20261008" defer></script>
+  <script src="js/app.js?v=20261008" defer></script>
 
-  <!-- 💡 Service Worker Registration for 0ms Offline Navigation -->
+  <!-- 💡 Fallback for saveGradeForm (Save Matrix Settings နှိပ်ရာတွင် Error မတက်စေရန်) -->
+  <script>
+    window.saveGradeForm = window.saveGradeForm || async function(event) {
+      if (event && event.preventDefault) event.preventDefault();
+      if (typeof toggleLoading === 'function') toggleLoading(true);
+
+      const payload = {
+        gradeA: parseFloat(document.getElementById('grade-A')?.value || 0),
+        gradeB: parseFloat(document.getElementById('grade-B')?.value || 0),
+        gradeC: parseFloat(document.getElementById('grade-C')?.value || 0),
+        gradeD: parseFloat(document.getElementById('grade-D')?.value || 0),
+        gradeE: parseFloat(document.getElementById('grade-E')?.value || 0),
+        gradeF: parseFloat(document.getElementById('grade-F')?.value || 0),
+        gradeG: parseFloat(document.getElementById('grade-G')?.value || 0),
+        gradeH: parseFloat(document.getElementById('grade-H')?.value || 0),
+        gradeI: parseFloat(document.getElementById('grade-I')?.value || 0),
+        gradeJ: parseFloat(document.getElementById('grade-J')?.value || 0),
+        gradeK: parseFloat(document.getElementById('grade-K')?.value || 0),
+        gradeL: parseFloat(document.getElementById('grade-L')?.value || 0),
+        bonusRate: parseFloat(document.getElementById('grade-bonus')?.value || 0),
+        fundRate: parseFloat(document.getElementById('grade-fund')?.value || 0.05)
+      };
+
+      try {
+        const res = await callApi('updatePayrollSettings', payload);
+        if (res && res.success) {
+          if (typeof showToast === 'function') showToast("SUCCESS", "Salary Grade Matrix နှုန်းထားများကို D1 ထဲသို့ အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။");
+          if (typeof closeGradeModal === 'function') closeGradeModal();
+          if (typeof clearAllApiCache === 'function') clearAllApiCache();
+          if (typeof loadStaffData === 'function') loadStaffData(false);
+        } else {
+          if (typeof showToast === 'function') showToast("ERROR", res?.message || "သိမ်းဆည်းမှု မအောင်မြင်ပါ။");
+        }
+      } catch (err) {
+        if (typeof showToast === 'function') showToast("ERROR", "ဆာဗာ ချိတ်ဆက်မှု အမှား: " + err.message);
+      } finally {
+        if (typeof toggleLoading === 'function') toggleLoading(false);
+      }
+    };
+  </script>
+
+  <!-- 💡 Service Worker Registration with Auto-Update Check -->
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {
         navigator.serviceWorker.register('./sw.js')
           .then(function(reg) {
-            console.log('✅ ServiceWorker Registered Successfully for Offline Mode:', reg.scope);
+            console.log('✅ ServiceWorker Registered Successfully:', reg.scope);
+            // 🎯 ကုတ်အသစ် တင်ထားခြင်း ရှိမရှိ အလိုအလျောက် စစ်ဆေးခိုင်းခြင်း
+            if (reg && typeof reg.update === 'function') {
+              reg.update();
+            }
           })
           .catch(function(err) {
             console.warn('ServiceWorker Registration Error:', err);
@@ -476,4 +526,3 @@
   </script>
 </body>
 </html>
-
