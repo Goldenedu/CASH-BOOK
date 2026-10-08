@@ -83,30 +83,33 @@
     </div>
   </div>
 
-  <!-- 💡 ၃။ 19-Column Table Grid (Header များ စံသတ်မှတ်ချက်အတိုင်း သပ်ရပ်စွာ ညှိထားသည်) -->
+  <!-- 💡 ၃။ 19-Column Table Grid (whitespace-nowrap ဖြင့် ၁ ကြောင်းတည်း အမြင့်ညီအောင် ညှိထားသည်) -->
   <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
-    <table class="w-full text-left border-collapse min-w-[1900px]">
+    <table class="w-full text-left border-collapse min-w-[1950px]">
       <thead>
-        <tr class="bg-[#0e172a]">
-          <th scope="col" class="w-12 text-center text-slate-400 text-xs py-3">NO</th>
-          <th scope="col" class="w-28 text-slate-400 text-xs py-3">EFFECT DATE</th>
-          <th scope="col" class="w-28 text-slate-400 text-xs py-3">DATE</th>
-          <th scope="col" class="w-24 text-slate-400 text-xs py-3">FY</th>
-          <th scope="col" class="w-20 text-slate-400 text-xs py-3">ID</th>
-          <th scope="col" class="w-32 text-slate-400 text-xs py-3">FYID</th>
-          <th scope="col" class="min-w-[200px] text-slate-400 text-xs py-3">FYID NAME</th>
-          <th scope="col" class="w-28 text-slate-400 text-xs py-3">CLASS</th>
-          <th scope="col" class="w-32 text-slate-400 text-xs py-3">CATEGORY</th>
-          <th scope="col" class="w-36 text-slate-400 text-xs py-3">ACCOUNT NAME</th>
-          <th scope="col" class="w-24 text-slate-400 text-xs py-3">METHOD</th>
-          <th scope="col" class="w-32 text-right text-rose-400 text-xs py-3">DEBIT (ပြန်အမ်း)</th>
-          <th scope="col" class="w-32 text-right text-emerald-400 text-xs py-3">CREDIT (ဝင်ငွေ)</th>
-          <th scope="col" class="w-32 text-right text-indigo-400 text-xs py-3">AUT AMOUNT</th>
-          <th scope="col" class="w-24 text-slate-400 text-xs py-3">PROMO</th>
-          <th scope="col" class="w-24 text-slate-400 text-xs py-3">MY</th>
-          <th scope="col" class="w-36 text-slate-400 text-xs py-3">VR NO</th>
-          <th scope="col" class="min-w-[150px] text-slate-400 text-xs py-3">REMARK</th>
-          <th scope="col" class="w-28 text-center text-slate-400 text-xs py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">ACTION</th>
+        <tr class="bg-[#0e172a] whitespace-nowrap">
+          <th scope="col" class="w-12 text-center text-slate-400 text-xs py-3 px-2">NO</th>
+          <th scope="col" class="w-28 text-slate-400 text-xs py-3 px-2">EFFECT DATE</th>
+          <th scope="col" class="w-28 text-slate-400 text-xs py-3 px-2">DATE</th>
+          <th scope="col" class="w-24 text-slate-400 text-xs py-3 px-2">FY</th>
+          <th scope="col" class="w-20 text-slate-400 text-xs py-3 px-2">ID</th>
+          <th scope="col" class="w-32 text-slate-400 text-xs py-3 px-2">FYID</th>
+          <th scope="col" class="min-w-[200px] text-slate-400 text-xs py-3 px-2">FYID NAME</th>
+          <th scope="col" class="w-28 text-slate-400 text-xs py-3 px-2">CLASS</th>
+          <th scope="col" class="w-32 text-slate-400 text-xs py-3 px-2">CATEGORY</th>
+          <th scope="col" class="w-36 text-slate-400 text-xs py-3 px-2">ACCOUNT NAME</th>
+          <th scope="col" class="w-24 text-slate-400 text-xs py-3 px-2">METHOD</th>
+          
+          <!-- 🎯 ၃ ကြောင်း မဆင်းတော့ဘဲ ၁ ကြောင်းတည်း ညီညာစေရန် w-36 နှင့် whitespace-nowrap သတ်မှတ်ထားသည် -->
+          <th scope="col" class="w-36 text-right text-rose-400 text-xs py-3 px-2 whitespace-nowrap">DEBIT (ပြန်အမ်း)</th>
+          <th scope="col" class="w-36 text-right text-emerald-400 text-xs py-3 px-2 whitespace-nowrap">CREDIT (ဝင်ငွေ)</th>
+          
+          <th scope="col" class="w-32 text-right text-indigo-400 text-xs py-3 px-2 whitespace-nowrap">AUT AMOUNT</th>
+          <th scope="col" class="w-24 text-slate-400 text-xs py-3 px-2">PROMO</th>
+          <th scope="col" class="w-24 text-slate-400 text-xs py-3 px-2">MY</th>
+          <th scope="col" class="w-36 text-slate-400 text-xs py-3 px-2">VR NO</th>
+          <th scope="col" class="min-w-[150px] text-slate-400 text-xs py-3 px-2">REMARK</th>
+          <th scope="col" class="w-28 text-center text-slate-400 text-xs py-3 px-2 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">ACTION</th>
         </tr>
       </thead>
       <tbody id="income-table-body" class="divide-y divide-slate-800/40 text-slate-300">
