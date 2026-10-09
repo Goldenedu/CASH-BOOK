@@ -1,7 +1,7 @@
 <!-- views/student.html --> 
 <div class="space-y-5">
 
-  <!-- ၁။ Top KPI Stats Cards Grid -->
+  <!-- 💡 ၁။ Top KPI Stats Cards Grid (Main Bank Book နှင့် Pixel-Perfect တူညီသည်) -->
   <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
     <div class="stats-card p-5 rounded-xl flex items-start gap-4">
       <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400"><i class="fa-solid fa-user-check text-xl"></i></div>
@@ -33,14 +33,14 @@
     </div>
   </div>
 
-  <!-- ၂။ Control Search & Action Bar (Bank Book အတိုင်း ၁ တန်းတည်း ဘေးချင်းယှဉ် စီထားသည်) -->
+  <!-- 💡 ၂။ Control Search & Action Bar (Main Bank Book စတိုင်အတိုင်း ခလုတ်များနှင့် Search Box ၁၀၀% ထပ်တူညီသည်) -->
   <div class="flex flex-col lg:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
     
-    <!-- 💡 ဘယ်ဘက်ခြမ်း: Search Box + FY Dropdown + Grade Dropdown (အောက်မဆင်းဘဲ ဘေးချင်းယှဉ် တန်းစီထားသည်) -->
+    <!-- ဘယ်ဘက်ခြမ်း: Search Box + FY Dropdown + Grade Dropdown -->
     <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
       
-      <!-- 🎯 Search Box (Bank Book အတိုင်း sm:w-64 အပြည့်အဝ ကျယ်ပြန့်သည်) -->
-      <div class="relative w-full sm:w-64" style="min-width: 250px;">
+      <!-- 🎯 Search Box (Bank Book အတိုင်း sm:w-64 min-w-[250px]) -->
+      <div class="relative w-full sm:w-64 shrink-0" style="min-width: 250px;">
         <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500 pointer-events-none">
           <i class="fa-solid fa-magnifying-glass text-xs"></i>
         </span>
@@ -51,15 +51,15 @@
                class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all">
       </div>
 
-      <!-- 💡 FY FILTER DROPDOWN (Search Box ဘေးကပ်လျက်) -->
-      <div class="w-full sm:w-32" style="min-width: 125px;">
+      <!-- 💡 FY FILTER DROPDOWN -->
+      <div class="w-full sm:w-32 shrink-0" style="min-width: 125px;">
         <select id="student-filter-fy" onchange="onFyFilterChangeStudent()" class="w-full text-xs bg-[#0f172a] border border-slate-800 text-white rounded-lg px-2.5 py-2 outline-none focus:border-indigo-500 transition-all font-bold">
           <option value="" selected>-- All FY --</option>
         </select>
       </div>
 
-      <!-- 💡 GRADE / CLASS FILTER DROPDOWN (FY Dropdown ဘေးကပ်လျက်) -->
-      <div class="w-full sm:w-36" style="min-width: 135px;">
+      <!-- 💡 GRADE / CLASS FILTER DROPDOWN -->
+      <div class="w-full sm:w-36 shrink-0" style="min-width: 135px;">
         <select id="student-filter-grade" onchange="onGradeFilterChangeStudent()" class="w-full text-xs bg-[#0f172a] border border-slate-800 text-white rounded-lg px-2.5 py-2 outline-none focus:border-indigo-500 transition-all font-bold">
           <option value="" selected>-- All Grades --</option>
           <option value="Pre School">Pre School</option>
@@ -80,43 +80,45 @@
       </div>
     </div>
 
-    <!-- 💡 ညာဘက်ခြမ်း: Buttons (Refresh / Export CSV / Add Student Record) -->
+    <!-- 🎯 ညာဘက်ခြမ်း Action Buttons (Bank Book အတိုင်း + Add New Entry ဟု သတ်မှတ်ထားသည်) -->
     <div class="flex items-center gap-2.5 w-full lg:w-auto justify-end">
-      <button onclick="loadStudentData(false)" class="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap" title="Refresh Data">
+      <button onclick="loadStudentData(false)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap" title="Refresh Data">
         <i class="fa-solid fa-rotate text-xs"></i> Refresh
       </button>
 
-      <button onclick="exportToCSVStudent()" class="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap">
+      <button onclick="exportToCSVStudent()" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap">
         <i class="fa-solid fa-file-export text-xs"></i> Export CSV
       </button>
 
+      <!-- 🎯 Main Bank Book အတိုင်း + Add New Entry ဟု ပြောင်းထားသည် -->
       <button onclick="openAddModalStudent()" class="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/10 transition-all whitespace-nowrap">
-        <i class="fa-solid fa-plus text-xs"></i> Add Student Record
+        <i class="fa-solid fa-plus text-xs"></i> Add New Entry
       </button>
     </div>
   </div>
 
-  <!-- ၃။ 16-Column Data Grid Table -->
+  <!-- 💡 ၃။ 16-Column Data Grid Table (Main Bank Book အတိုင်း အမြင့် 52px သတ်မှတ်ထားသည်) -->
   <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
     <table class="w-full text-left border-collapse min-w-[1800px]">
       <thead>
-        <tr class="bg-[#0e172a]">
-          <th scope="col" class="w-12 text-center text-slate-400 text-xs py-3">NO</th>
-          <th scope="col" class="w-32 text-slate-400 text-xs py-3">STU STATUS</th>
-          <th scope="col" class="w-28 text-slate-400 text-xs py-3">DATE</th>
-          <th scope="col" class="w-24 text-slate-400 text-xs py-3">FY</th>
-          <th scope="col" class="w-32 text-slate-400 text-xs py-3">FYID</th>
-          <th scope="col" class="min-w-[200px] text-slate-400 text-xs py-3">NAME</th>
-          <th scope="col" class="w-32 text-slate-400 text-xs py-3">CLASS</th>
-          <th scope="col" class="w-32 text-slate-400 text-xs py-3">CATEGORY</th>
-          <th scope="col" class="w-24 text-slate-400 text-xs py-3">PROMO</th>
-          <th scope="col" class="w-24 text-slate-400 text-xs py-3">STATUS</th>
-          <th scope="col" class="w-24 text-slate-400 text-xs py-3">GENDER</th>
-          <th scope="col" class="w-36 text-slate-400 text-xs py-3">TRANSFER DATE</th>
-          <th scope="col" class="w-44 text-slate-400 text-xs py-3">PARENTS NAME</th>
-          <th scope="col" class="w-36 text-slate-400 text-xs py-3">PHONE NO</th>
-          <th scope="col" class="min-w-[200px] text-slate-400 text-xs py-3">ADDRESS</th>
-          <th scope="col" class="w-24 text-center text-slate-400 text-xs py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">ACTION</th>
+        <!-- 🎯 Header Row အမြင့်ကို Main Bank Book အတိုင်း 52px သတ်မှတ်ထားသည် -->
+        <tr class="bg-[#0e172a]" style="height: 52px;">
+          <th scope="col" class="w-12 text-center text-slate-400 text-xs px-2 align-middle whitespace-nowrap">NO</th>
+          <th scope="col" class="w-32 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">STU STATUS</th>
+          <th scope="col" class="w-28 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">DATE</th>
+          <th scope="col" class="w-24 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">FY</th>
+          <th scope="col" class="w-32 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">FYID</th>
+          <th scope="col" class="min-w-[200px] text-slate-400 text-xs px-2 align-middle whitespace-nowrap">NAME</th>
+          <th scope="col" class="w-28 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">CLASS</th>
+          <th scope="col" class="w-32 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">CATEGORY</th>
+          <th scope="col" class="w-28 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">PROMO</th>
+          <th scope="col" class="w-24 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">STATUS</th>
+          <th scope="col" class="w-24 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">GENDER</th>
+          <th scope="col" class="w-36 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">TRANSFER DATE</th>
+          <th scope="col" class="w-44 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">PARENTS NAME</th>
+          <th scope="col" class="w-36 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">PHONE NO</th>
+          <th scope="col" class="min-w-[200px] text-slate-400 text-xs px-2 align-middle whitespace-nowrap">ADDRESS</th>
+          <th scope="col" class="w-24 text-center text-slate-400 text-xs px-2 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg align-middle whitespace-nowrap">ACTION</th>
         </tr>
       </thead>
       <tbody id="student-table-body" class="divide-y divide-slate-800/40 text-slate-300">
@@ -125,15 +127,15 @@
     </table>
   </div>
 
-  <!-- ၄။ Pagination Tray -->
+  <!-- 💡 ၄။ Pagination Tray -->
   <div class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
     <div id="stu-pagination-info" class="text-xs font-semibold text-slate-400 tracking-wide">Showing entries...</div>
 
     <div class="flex items-center gap-2">
-      <button onclick="changePageStudent(-1)" id="stu-btn-prev" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+      <button onclick="changePageStudent(-1)" id="stu-btn-prev" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
         <i class="fa-solid fa-chevron-left text-[10px]"></i> Previous
       </button>
-      <button onclick="changePageStudent(1)" id="stu-btn-next" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+      <button onclick="changePageStudent(1)" id="stu-btn-next" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
         Next <i class="fa-solid fa-chevron-right text-[10px]"></i>
       </button>
     </div>
@@ -141,11 +143,11 @@
 
 </div>
 
-<!-- ၅။ Add / Edit Student Profile Modal -->
+<!-- 💡 ၅။ Add / Edit Student Profile Modal -->
 <div id="student-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
   <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
     <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
-      <h3 id="stu-form-title" class="text-sm font-black text-white uppercase tracking-wider">Add Student Record</h3>
+      <h3 id="stu-form-title" class="text-sm font-black text-white uppercase tracking-wider">Add New Entry</h3>
       <button onclick="closeStudentModal()" aria-label="Close modal" title="Close" class="text-slate-500 hover:text-white transition"><i class="fa-solid fa-xmark text-sm"></i></button>
     </div>
 
