@@ -1,15 +1,16 @@
 /**
  * ==============================================================================
  * GOLDEN ERP - CANTEEN STORE CLOSING, SETTLEMENT & OFFLINE PENDING SYNC
- * File: js/canteen/canteen-closing.js (Enterprise V9.4 Full Production Edition)
+ * File: js/canteen/canteen-closing.js (Enterprise V9.5 Full Production Edition)
  * 💡 Features:
  *   1. 🕒 Strict MMT (UTC+06:30) Timezone Universal Engine (Recursion-Free)
- *   2. 📊 Live Dashboard: Real-time Today, THIS MONTH, Capital & Net Loss Aggregator
- *   3. 🔒 Canteen Store Day Closure (Cashier & Admin Allowed, Pending Guarded)
- *   4. 💵 Evening Finance Settlement (Closure Interlocked)
- *   5. ⏳ Resilient Offline Pending Queue Management & QUIC Settle Auto-Sync
- *   6. 🧾 20-Row Paginated Sales History with Slip Thermal Printer
- *   7. 🛡️ Self-Healing DOM Guards: Automatically ensures component partials are mounted
+ *   2. 🌙 Smart Retrospective Shift Closer: Closes past business shifts across midnight
+ *   3. 📊 Live Dashboard: Real-time Today, THIS MONTH, Capital & Net Loss Aggregator
+ *   4. 🔒 Canteen Store Day Closure (Cashier & Admin Allowed, Pending Guarded)
+ *   5. 💵 Evening Finance Settlement (Retrospective Closure Interlocked)
+ *   6. ⏳ Resilient Offline Pending Queue Management & QUIC Settle Auto-Sync
+ *   7. 🧾 20-Row Paginated Sales History with Slip Thermal Printer
+ *   8. 🛡️ Self-Healing DOM Guards: Automatically ensures component partials are mounted
  * ==============================================================================
  */
 
@@ -224,9 +225,9 @@ async function loadCanteenDashboard() {
 }
 
 // ------------------------------------------------------------------------------
-// 🔒 1. CANTEEN STORE DAY CLOSURE (CASHIER & ADMIN BOTH ALLOWED)
+// 🔒 1. SMART RETROSPECTIVE DAY CLOSURE CONTROLLER (ACROSS MIDNIGHT SAFE)
 // ------------------------------------------------------------------------------
-async function openDayCloseModal() {
+async function openDayCloseModal(dateInput) {
   const role = getNormalizedRole();
   const canClose = role.includes('admin') || role.includes('cashier') || role.includes('owner');
   
@@ -239,12 +240,42 @@ async function openDayCloseModal() {
     await loadCanteenComponents();
   }
 
-  const todayStr = getMMTDateString(); // 🕒 Strict MMT Today
+  const todayStr = getMMTDateString();
+  const nowMMT = new Date(Date.now() + (6.5 * 60 * 60 * 1000));
+  const mmtHour = nowMMT.getUTCHours();
+  const yesterdayStr = new Date(nowMMT.getTime() - 86400000).toISOString().slice(0, 10);
+
+  let targetDate = dateInput;
+  if (!targetDate) {
+    // 🌙 Smart Shift Detection: If past midnight (00:00 - 05:59 AM), check if yesterday is unclosed
+    if (mmtHour < 6) {
+      try {
+        const yRes = await callApi('getCanteenDailySummary', { date: yesterdayStr, _t: Date.now() }, 'POST');
+        if (yRes && yRes.success && yRes.data && !yRes.data.isClosed) {
+          targetDate = yesterdayStr;
+        } else {
+          targetDate = todayStr;
+        }
+      } catch (e) {
+        targetDate = yesterdayStr;
+      }
+    } else {
+      targetDate = todayStr;
+    }
+  }
+
+  await fetchAndRenderClosureModal(targetDate);
+  document.getElementById('pos-closure-modal')?.classList.remove('hidden');
+}
+
+async function fetchAndRenderClosureModal(targetDate) {
+  const datePicker = document.getElementById('close-modal-date-picker');
+  if (datePicker) datePicker.value = targetDate;
   const dateEl = document.getElementById('close-modal-date');
-  if (dateEl) dateEl.textContent = todayStr;
+  if (dateEl) dateEl.textContent = targetDate;
 
   try {
-    const res = await callApi('getCanteenDailySummary', { date: todayStr, _t: Date.now() }, 'POST');
+    const res = await callApi('getCanteenDailySummary', { date: targetDate, _t: Date.now() }, 'POST');
     if (res && res.success && res.data) {
       const dt = res.data;
       
@@ -260,20 +291,32 @@ async function openDayCloseModal() {
       const elWallet = document.getElementById('close-modal-wallet');
       if (elWallet) elWallet.textContent = `${Number(dt.pocketMoneyShare || 0).toLocaleString()} MMK`;
 
+      // 🌙 Unclosed Past Shifts Radar Banner
+      const banner = document.getElementById('close-unclosed-banner');
+      const label = document.getElementById('close-unclosed-date-label');
+      if (banner && label) {
+        const unclosedPast = (dt.unclosedPastDays || []).find(d => d.date !== targetDate);
+        if (unclosedPast) {
+          label.textContent = unclosedPast.date;
+          banner.classList.remove('hidden');
+        } else {
+          banner.classList.add('hidden');
+        }
+      }
+
       const btnClose = document.getElementById('btn-confirm-day-close');
       if (btnClose) {
         if (dt.isClosed) {
           btnClose.disabled = true;
-          btnClose.textContent = "ယနေ့အတွက် ဆိုင်ပိတ်သိမ်းပြီးဖြစ်ပါသည်";
-          btnClose.className = "w-full py-3.5 bg-slate-200 dark:bg-slate-800 text-slate-400 rounded-xl font-black text-xs cursor-not-allowed";
+          btnClose.textContent = `${targetDate} အတွက် ဆိုင်ပိတ်သိမ်းပြီးဖြစ်ပါသည်`;
+          btnClose.className = "w-full py-3.5 bg-slate-200 dark:bg-slate-800 text-slate-400 rounded-xl font-black text-xs cursor-not-allowed font-sans";
         } else {
           btnClose.disabled = false;
-          btnClose.textContent = "အတည်ပြု ဆိုင်ပိတ်သိမ်းမည် (CLOSE REGISTER)";
+          btnClose.textContent = `အတည်ပြု ဆိုင်ပိတ်သိမ်းမည် (${targetDate} - CLOSE REGISTER)`;
           btnClose.className = "w-full py-3.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl font-black text-xs shadow-lg shadow-amber-950/20 active:scale-95 transition font-sans";
         }
       }
-
-      document.getElementById('pos-closure-modal')?.classList.remove('hidden');
+      return dt;
     } else {
       showToast("ERROR", res?.message || "ဆိုင်ပိတ်စာရင်း ဆွဲယူ၍ မရပါ");
     }
@@ -282,8 +325,23 @@ async function openDayCloseModal() {
   }
 }
 
+async function selectClosureDate(date) {
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date.trim())) return;
+  await fetchAndRenderClosureModal(date.trim());
+}
+
+async function onClosureDateChange(date) {
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date.trim())) return;
+  await fetchAndRenderClosureModal(date.trim());
+}
+
 async function executeCanteenDayClose() {
-  const todayStr = getMMTDateString(); // 🕒 Strict MMT Today
+  const pickerVal = document.getElementById('close-modal-date-picker')?.value;
+  const labelVal = document.getElementById('close-modal-date')?.textContent?.trim();
+  const targetDate = (pickerVal && /^\d{4}-\d{2}-\d{2}$/.test(pickerVal.trim())) 
+    ? pickerVal.trim() 
+    : ((labelVal && /^\d{4}-\d{2}-\d{2}$/.test(labelVal)) ? labelVal : getMMTDateString());
+
   const remark = document.getElementById('close-modal-remark')?.value.trim();
 
   // 🛡️ Pending Guard: မရောက်သေးသော အော့ဖ်လိုင်းအရောင်းများ ရှိနေပါက ဆိုင်ပိတ်ခွင့် မပြုပါ
@@ -294,14 +352,14 @@ async function executeCanteenDayClose() {
     }
   }
 
-  if (!confirm(`ယနေ့ရက်စွဲ (${todayStr}) အတွက် အရောင်းစာရင်းအားလုံး ပိတ်သိမ်းမည်မှာ သေချာပါသလား?\n\nသတိပြုရန်: ဆိုင်ပိတ်ပြီးပါက ယနေ့အတွက် အရောင်းဖွင့်၍ ရတော့မည်မဟုတ်ပါ။`)) {
+  if (!confirm(`ရက်စွဲ (${targetDate}) အတွက် အရောင်းစာရင်းအားလုံး ပိတ်သိမ်းမည်မှာ သေချာပါသလား?\n\nသတိပြုရန်: ဆိုင်ပိတ်ပြီးပါက ထိုရက်စွဲအတွက် အရောင်းဖွင့်၍ ရတော့မည်မဟုတ်ပါ။`)) {
     return;
   }
 
   try {
-    const res = await callApi('closeCanteenDay', { date: todayStr, remark });
+    const res = await callApi('closeCanteenDay', { date: targetDate, remark });
     if (res && res.success) {
-      showToast("SUCCESS", res.message || "ကန်တင်းဆိုင်ပိတ်သိမ်းမှု အောင်မြင်ပါသည်။");
+      showToast("SUCCESS", res.message || `ရက်စွဲ (${targetDate}) အတွက် ကန်တင်းဆိုင်ပိတ်သိမ်းမှု အောင်မြင်ပါသည်။`);
       closeModal('pos-closure-modal');
       await loadCanteenDashboard();
     } else {
@@ -316,7 +374,6 @@ async function executeCanteenDayClose() {
 // ⏳ 2. PENDING OFFLINE ORDERS SYNC MANAGER
 // ------------------------------------------------------------------------------
 async function openPendingSyncModal() {
-  // Self-Healing Guard: Ensure modal is mounted
   if (!document.getElementById('pos-pending-modal') && typeof loadCanteenComponents === 'function') {
     await loadCanteenComponents();
   }
@@ -453,9 +510,9 @@ async function autoSyncPendingOrders(retryCount = 0) {
 }
 
 // ------------------------------------------------------------------------------
-// 💵 3. EVENING SETTLEMENT MODAL (CASHIER & ADMIN BOTH ALLOWED)
+// 💵 3. RETROSPECTIVE EVENING SETTLEMENT MODAL (CLOSURE INTERLOCKED)
 // ------------------------------------------------------------------------------
-async function openSettlementModal() {
+async function openSettlementModal(dateInput) {
   const role = getNormalizedRole();
   const canSettle = role.includes('admin') || role.includes('cashier') || role.includes('owner');
 
@@ -468,9 +525,39 @@ async function openSettlementModal() {
     await loadCanteenComponents();
   }
 
-  const todayStr = getMMTDateString(); // 🕒 Strict MMT Today
+  const todayStr = getMMTDateString();
+  const nowMMT = new Date(Date.now() + (6.5 * 60 * 60 * 1000));
+  const mmtHour = nowMMT.getUTCHours();
+  const yesterdayStr = new Date(nowMMT.getTime() - 86400000).toISOString().slice(0, 10);
+
+  let targetDate = dateInput;
+  if (!targetDate) {
+    if (mmtHour < 6) {
+      try {
+        const yRes = await callApi('getCanteenDailySummary', { date: yesterdayStr, _t: Date.now() }, 'POST');
+        if (yRes && yRes.success && yRes.data && !yRes.data.isSettled) {
+          targetDate = yesterdayStr;
+        } else {
+          targetDate = todayStr;
+        }
+      } catch (e) {
+        targetDate = yesterdayStr;
+      }
+    } else {
+      targetDate = todayStr;
+    }
+  }
+
+  await fetchAndRenderSettlementModal(targetDate);
+  document.getElementById('pos-settlement-modal')?.classList.remove('hidden');
+}
+
+async function fetchAndRenderSettlementModal(targetDate) {
+  const datePicker = document.getElementById('set-modal-date-picker');
+  if (datePicker) datePicker.value = targetDate;
+
   try {
-    const res = await callApi('getCanteenDailySummary', { date: todayStr, _t: Date.now() }, 'POST');
+    const res = await callApi('getCanteenDailySummary', { date: targetDate, _t: Date.now() }, 'POST');
     if (res && res.success && res.data) {
       const dt = res.data;
 
@@ -489,6 +576,19 @@ async function openSettlementModal() {
       const elPayout = document.getElementById('set-payout-text');
       if (elPayout) elPayout.textContent = `${Number(dt.pocketMoneyShare || 0).toLocaleString()} MMK`;
 
+      // 🌙 Unsettled Past Shift Radar Banner
+      const banner = document.getElementById('set-unsettled-banner');
+      const label = document.getElementById('set-unsettled-date-label');
+      if (banner && label) {
+        const unclosedPast = (dt.unclosedPastDays || []).find(d => d.date !== targetDate);
+        if (unclosedPast) {
+          label.textContent = unclosedPast.date;
+          banner.classList.remove('hidden');
+        } else {
+          banner.classList.add('hidden');
+        }
+      }
+
       const box = document.getElementById('set-closure-status-box');
       const icon = document.getElementById('set-closure-icon');
       const text = document.getElementById('set-closure-text');
@@ -497,12 +597,12 @@ async function openSettlementModal() {
       if (dt.isSettled) {
         if (box) box.className = "p-2.5 rounded-xl border text-[11px] font-sans flex items-center gap-2 bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400";
         if (icon) icon.className = "fa-solid fa-circle-check text-emerald-500";
-        if (text) text.textContent = `ဤရက်စွဲအတွက် Finance နှင့် ငွေရှင်းပြီးဖြစ်ပါသည် (${dt.settlement?.settlement_no || dt.settlement?.settlementNo})`;
+        if (text) text.textContent = `ရက်စွဲ (${targetDate}) အတွက် Finance နှင့် ငွေရှင်းပြီးဖြစ်ပါသည် (${dt.settlement?.settlement_no || dt.settlement?.settlementNo})`;
         if (btnConfirm) btnConfirm.disabled = true;
       } else if (!dt.isClosed) {
         if (box) box.className = "p-2.5 rounded-xl border text-[11px] font-sans flex items-center gap-2 bg-rose-500/10 border-rose-500/30 text-rose-500";
         if (icon) icon.className = "fa-solid fa-triangle-exclamation text-rose-500";
-        if (text) text.textContent = "သတိပြုရန်: ကန်တင်းဘက်မှ ဆိုင်မပိတ်ရသေးပါ! ဆိုင်ပိတ်ပြီးမှသာ ငွေရှင်းပေးနိုင်ပါမည်။";
+        if (text) text.textContent = `သတိပြုရန်: ရက်စွဲ (${targetDate}) အတွက် ကန်တင်းဘက်မှ ဆိုင်မပိတ်ရသေးပါ! ဆိုင်ပိတ်ပြီးမှသာ ငွေရှင်းပေးနိုင်ပါမည်။`;
         if (btnConfirm) btnConfirm.disabled = true;
       } else {
         if (box) box.className = "p-2.5 rounded-xl border text-[11px] font-sans flex items-center gap-2 bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400";
@@ -510,8 +610,6 @@ async function openSettlementModal() {
         if (text) text.textContent = `ကန်တင်းဆိုင်ပိတ်သိမ်းပြီးဖြစ်ပါသည် (${dt.closure?.closedBy || 'Done'})။ ငွေရှင်းလင်းနိုင်ပါပြီ။`;
         if (btnConfirm) btnConfirm.disabled = false;
       }
-
-      document.getElementById('pos-settlement-modal')?.classList.remove('hidden');
     } else {
       showToast("ERROR", res?.message || "Summary ခေါ်ယူ၍ မရပါ");
     }
@@ -520,15 +618,29 @@ async function openSettlementModal() {
   }
 }
 
-async function confirmCanteenSettlement(pocketShare, cashShare) {
-  if (!confirm("Finance မှ Pocket Money ရောင်းရငွေ အပြင်တွင် အမှန်တကယ် လက်ရောက်ရှင်းပြီးပြီလား?")) return;
+async function selectSettlementDate(date) {
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date.trim())) return;
+  await fetchAndRenderSettlementModal(date.trim());
+}
 
-  const todayStr = getMMTDateString(); // 🕒 Strict MMT Today
+async function onSettlementDateChange(date) {
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date.trim())) return;
+  await fetchAndRenderSettlementModal(date.trim());
+}
+
+async function confirmCanteenSettlement(pocketShare, cashShare) {
+  const pickerVal = document.getElementById('set-modal-date-picker')?.value;
+  const targetDate = (pickerVal && /^\d{4}-\d{2}-\d{2}$/.test(pickerVal.trim())) 
+    ? pickerVal.trim() 
+    : getMMTDateString();
+
+  if (!confirm(`ရက်စွဲ (${targetDate}) အတွက် Finance မှ Pocket Money ရောင်းရငွေ အပြင်တွင် အမှန်တကယ် လက်ရောက်ရှင်းပြီးပြီလား?`)) return;
+
   const pShare = pocketShare !== undefined ? pocketShare : parseFloat(document.getElementById('set-pocket')?.textContent.replace(/[^0-9.-]+/g, '') || 0);
   const cShare = cashShare !== undefined ? cashShare : parseFloat(document.getElementById('set-cash')?.textContent.replace(/[^0-9.-]+/g, '') || 0);
 
   const payload = {
-    date: todayStr,
+    date: targetDate,
     pocketMoneyShare: pShare,
     cashSalesShare: cShare,
     netPayoutAmount: pShare,
@@ -538,7 +650,7 @@ async function confirmCanteenSettlement(pocketShare, cashShare) {
   try {
     const res = await callApi('saveCanteenSettlement', payload);
     if (res && res.success) {
-      showToast("SUCCESS", "ငွေရှင်းလင်းမှု မှတ်တမ်းတင်ပြီးပါပြီ။");
+      showToast("SUCCESS", `ရက်စွဲ (${targetDate}) အတွက် ငွေရှင်းလင်းမှု မှတ်တမ်းတင်ပြီးပါပြီ။`);
       closeModal('pos-settlement-modal');
       if (gActiveView === 'dashboard') loadCanteenDashboard();
     } else {
@@ -728,16 +840,26 @@ function reprintSalesSlip(invoiceNo) {
 // ------------------------------------------------------------------------------
 window.loadCanteenDashboard = loadCanteenDashboard;
 window.openDayCloseModal = openDayCloseModal;
+window.fetchAndRenderClosureModal = fetchAndRenderClosureModal;
+window.selectClosureDate = selectClosureDate;
+window.onClosureDateChange = onClosureDateChange;
 window.executeCanteenDayClose = executeCanteenDayClose;
+
 window.openPendingSyncModal = openPendingSyncModal;
 window.renderPendingOrdersTable = renderPendingOrdersTable;
 window.triggerManualOfflineSync = triggerManualOfflineSync;
 window.autoSyncPendingOrders = autoSyncPendingOrders;
+
 window.openSettlementModal = openSettlementModal;
+window.fetchAndRenderSettlementModal = fetchAndRenderSettlementModal;
+window.selectSettlementDate = selectSettlementDate;
+window.onSettlementDateChange = onSettlementDateChange;
 window.confirmCanteenSettlement = confirmCanteenSettlement;
+
 window.loadPosSettings = loadPosSettings;
 window.openSettingsModal = openSettingsModal;
 window.submitPosSettings = submitPosSettings;
+
 window.loadSalesOrdersHistory = loadSalesOrdersHistory;
 window.onSearchSalesDebounced = onSearchSalesDebounced;
 window.clearSalesFilter = clearSalesFilter;

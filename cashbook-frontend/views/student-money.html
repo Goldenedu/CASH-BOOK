@@ -1,4 +1,7 @@
-<!-- views/student-money.html -->
+<!-- ============================================================================== -->
+<!-- GOLDEN ERP SYSTEM - SPMMS & CANTEEN INTEGRATED FINANCE WORKSPACE               -->
+<!-- File: views/student-money.html (Enterprise V9.5 Full Production Edition)       -->
+<!-- ============================================================================== -->
 <div class="space-y-5">
 
   <!-- 💡 ၁။ Sub-Tab Navigation Bar (4 Core Tabs) -->
@@ -234,7 +237,7 @@
         </div>
       </div>
 
-      <!-- 🔵 ညာဘက်ခြမ်း: Action & Settlement Buttons (သီးခြားစီထားရှိရပါမည်) -->
+      <!-- 🔵 ညာဘက်ခြမ်း: Action & Settlement Buttons -->
       <div class="flex items-center gap-2.5 w-full lg:w-auto justify-end">
         <button onclick="openAdminSettlementModal()" class="p-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-amber-600/10 transition-all">
           <i class="fa-solid fa-scale-balanced text-xs"></i> ညနေစာရင်းရှင်း / ပြေစာထုတ်
@@ -290,7 +293,7 @@
   <!-- ============================================================================== -->
   <div id="stm-cashier-view" class="space-y-4 hidden">
     
-    <!-- 🎯 TAB 3 သီးသန့် 1-Row 4-KPI Grid (Matches Golden ERP stats-card style) -->
+    <!-- 🎯 TAB 3 သီးသန့် 1-Row 4-KPI Grid -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       <!-- Card 1: Cashier 1 -->
       <div class="stats-card p-5 rounded-xl flex items-start gap-4">
@@ -705,7 +708,7 @@
     <!-- Modal Body -->
     <div class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
       
-      <!-- 🎯 Top 3 KPI Cards: Plan 3 စာရင်းကိုင်စံနှုန်းအတိုင်း ကာလတွင်းငွေနှင့် စုစုပေါင်းလက်ကျန်ငွေ ခွဲခြားခြင်း -->
+      <!-- Top 3 KPI Cards -->
       <div class="grid grid-cols-3 gap-3">
         <div class="p-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-center">
           <span class="text-[10px] font-bold text-slate-400 uppercase">Period Deposited (ကာလတွင်း အပ်ငွေ)</span>
@@ -721,7 +724,7 @@
         </div>
       </div>
 
-      <!-- 🎯 STATEMENT DATE FILTER TOOLBAR -->
+      <!-- STATEMENT DATE FILTER TOOLBAR -->
       <div class="flex flex-col sm:flex-row justify-between items-center bg-[#080e1c] border border-slate-800 p-2.5 rounded-xl gap-2">
         <div class="flex items-center gap-2 w-full sm:w-auto">
           <span class="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1.5 pl-1">
@@ -762,7 +765,7 @@
         </table>
       </div>
 
-      <!-- 🎯 STATEMENT PAGINATION CONTROLLER -->
+      <!-- STATEMENT PAGINATION CONTROLLER -->
       <div class="flex justify-between items-center bg-[#080e1c] border border-slate-800 px-4 py-2 rounded-xl text-xs">
         <div id="stm-stmt-pagination-info" class="text-slate-400 font-mono text-[11px]">Showing 0 entries</div>
         <div class="flex items-center gap-2">
@@ -868,14 +871,27 @@
     </div>
 
     <!-- Modal Body -->
-    <div class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+    <div class="p-6 space-y-4 overflow-y-auto flex-1 text-xs custom-scroll">
       
+      <!-- 🌙 Unsettled Past Shift Smart Radar Banner (Shows when past shifts are unsettled) -->
+      <div id="adm-set-unsettled-banner" class="hidden p-3 bg-amber-500/15 border border-amber-500/30 rounded-xl text-xs font-sans flex items-center justify-between gap-3 shadow-sm animate-pulse">
+        <div class="flex items-center gap-2 text-amber-400 font-bold min-w-0">
+          <i class="fa-solid fa-circle-exclamation text-amber-500 shrink-0 text-sm"></i>
+          <span class="truncate">မရှင်းရသေးသော အရောင်းရက်စွဲ (<strong id="adm-set-unsettled-date-label" class="font-mono text-amber-300"></strong>) တွေ့ရှိပါသည်!</span>
+        </div>
+        <button type="button" onclick="selectAdminSettlementDate(document.getElementById('adm-set-unsettled-date-label')?.textContent)" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-black shrink-0 transition active:scale-95 shadow">
+          ထိုရက်စွဲ ရှင်းမည်
+        </button>
+      </div>
+
       <!-- Date Selector & Status Header -->
       <div class="flex flex-col sm:flex-row justify-between items-center bg-[#080e1c] border border-slate-800 p-3 rounded-xl gap-3">
         <div class="flex items-center gap-2">
-          <span class="text-slate-400 font-bold uppercase text-[11px]">စာရင်းစစ်မည့် ရက်စွဲ:</span>
-          <input type="date" id="adm-settle-date" onchange="loadAdminSettlementDailyStats()" class="bg-[#0c1322] border border-slate-700 text-white rounded-lg px-2.5 py-1.5 font-mono outline-none focus:border-amber-500 text-xs">
-          <button onclick="loadAdminSettlementDailyStats()" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs" title="Refresh"><i class="fa-solid fa-rotate"></i></button>
+          <span class="text-slate-400 font-bold uppercase text-[11px] flex items-center gap-1.5">
+            <i class="fa-solid fa-calendar-day text-emerald-400"></i> စာရင်းစစ်မည့် ရက်စွဲ:
+          </span>
+          <input type="date" id="adm-settle-date" onchange="loadAdminSettlementDailyStats(this.value)" class="bg-[#0c1322] border border-slate-700 text-white rounded-lg px-2.5 py-1.5 font-mono font-bold outline-none focus:border-amber-500 text-xs cursor-pointer">
+          <button onclick="loadAdminSettlementDailyStats()" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Refresh"><i class="fa-solid fa-rotate"></i></button>
         </div>
         <div>
           <span id="adm-set-status-badge" class="px-2 py-0.5 rounded text-[10px] font-black bg-slate-800 text-slate-400 border border-slate-700 font-mono">LOADING</span>

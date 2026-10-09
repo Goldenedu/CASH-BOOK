@@ -1,16 +1,30 @@
 /**
  * ==============================================================================
- * GOLDEN ERP SYSTEM - SPMMS FRONTEND CONTROLLER (ENTERPRISE EDITION)
+ * GOLDEN ERP SYSTEM - SPMMS FRONTEND CONTROLLER (ENTERPRISE V9.5 FULL EDITION)
  * File: js/student-money.js
  * 
  * 💡 Features:
- *   1. ⚡ QUOTA-SHIELD: True Server-Side 20-Row Pagination for Both Main & Statement Views
- *   2. 🛡️ ZERO-FREEZE VALIDATION: Form validation completes before loading/closing modals
- *   3. 🎯 HIGH-CONTRAST CENTER TOAST: Dead-center Z-index 999999 alert notifications
- *   4. 📄 DUAL-SLIP A4 TRANSFER VOUCHER: Clean printable vouchers with cut markers
- *   5. 🔄 INSTANT CACHE & LOOKUP: Client-side student directory cache
+ *   1. 🕒 STRICT MMT (UTC+06:30) TIMEZONE: Complete fix for midnight 1-day offset
+ *   2. 🌙 RETROSPECTIVE SETTLEMENT RADAR: Smart clearing of past/unsettled canteen shifts
+ *   3. ⚡ QUOTA-SHIELD: True Server-Side 20-Row Pagination for Both Main & Statement Views
+ *   4. 🛡️ ZERO-FREEZE VALIDATION: Form validation completes before loading/closing modals
+ *   5. 🎯 HIGH-CONTRAST CENTER TOAST: Dead-center Z-index 999999 alert notifications
+ *   6. 📄 DUAL-SLIP A4 TRANSFER VOUCHER: Clean printable vouchers with cut markers
+ *   7. 🔄 INSTANT CACHE & LOOKUP: Client-side student directory cache
  * ==============================================================================
  */
+
+// 🕒 Pure Non-Recursive MMT Date Helper (UTC+06:30)
+function getMMTDateString(dInput) {
+  if (dInput && typeof dInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dInput.trim())) {
+    return dInput.trim();
+  }
+  const d = dInput ? new Date(dInput) : new Date();
+  const targetMs = isNaN(d.getTime()) ? Date.now() : d.getTime();
+  const mmt = new Date(targetMs + (6.5 * 60 * 60 * 1000));
+  return mmt.toISOString().slice(0, 10);
+}
+window.getMMTDateString = getMMTDateString;
 
 var gCurrentStudentMoneyTab = 'main'; // 'main', 'canteen', 'cashier', 'reconcile'
 
@@ -90,7 +104,6 @@ async function loadStudentMoneyData(isSilent) {
     const dateFrom = document.getElementById('stm-date-from')?.value || '';
     const dateTo = document.getElementById('stm-date-to')?.value || '';
 
-    // 🚀 D1 QUOTA SHIELD: Fetch exactly 20 rows per page
     const res = await callApi('getStudentMoneyData', { 
       page: gStudentMoneyPage, 
       limit: gStudentMoneyLimit, 
@@ -128,7 +141,6 @@ function renderStudentMoneyTable() {
   }
 
   gStudentMoneyHistoryData.forEach((row, idx) => {
-    // 🎯 အသစ်ဆုံးစာရင်းကို အကြီးဆုံးနံပါတ်ဖြင့် ပြသခြင်း
     const displayNo = gStudentMoneyTotalRows - ((gStudentMoneyPage - 1) * gStudentMoneyLimit + idx);
     const isTransfer = row.studentId === null || row.studentId === 0 || row.fyid === 'TRANSFER' || row.fyid === 'RETURN';
     const cleanFyid = typeof window.sanitizeFyidStr === 'function' ? window.sanitizeFyidStr(row.fyid) : (row.fyid || '');
@@ -219,7 +231,7 @@ function openAddModalStudentMoney() {
   if (uid) uid.value = '';
 
   const dateEl = document.getElementById('stm-date');
-  if (dateEl) dateEl.value = new Date().toISOString().slice(0, 10);
+  if (dateEl) dateEl.value = getMMTDateString(); // 🕒 Strict MMT Today
 
   const deb = document.getElementById('stm-debit');
   const cred = document.getElementById('stm-credit');
@@ -239,7 +251,6 @@ function closeStudentMoneyModal() {
   document.getElementById('student-money-modal')?.classList.add('hidden'); 
 }
 
-// 🎯 ၁။ Action Type အလိုက် Input Box များအား Enable / Disable အတိအကျ သတ်မှတ်ခြင်း
 function onStudentMoneyEntryTypeChange() {
   const type = document.getElementById('stm-entry-type')?.value || 'Deposit';
   const stuBox = document.getElementById('stm-student-fields');
@@ -248,7 +259,6 @@ function onStudentMoneyEntryTypeChange() {
   const cred = document.getElementById('stm-credit');
   const desc = document.getElementById('stm-remark');
 
-  // Input Box စတိုင်လ် အပိတ်/အဖွင့် Helper
   const lockInput = (el) => {
     if (!el) return;
     el.disabled = true;
@@ -267,8 +277,8 @@ function onStudentMoneyEntryTypeChange() {
     if (stuBox) stuBox.classList.add('hidden');
     if (respBox) respBox.classList.remove('hidden');
 
-    lockInput(deb);    // အရင်းလွှဲချိန်တွင် အပ်ငွေ (Debit) ကို ပိတ်မည်
-    unlockInput(cred); // Credit သာ ရိုက်ခွင့်ပြုမည်
+    lockInput(deb);
+    unlockInput(cred);
     if (desc) desc.value = "Finance မှ PM Cashier သို့ အရင်းငွေလွှဲပေးခြင်း";
 
   } else {
@@ -276,7 +286,6 @@ function onStudentMoneyEntryTypeChange() {
     if (respBox) respBox.classList.add('hidden');
 
     if (type === 'Deposit') {
-      // 🌟 DEPOSIT: အပ်ငွေ (Debit) သာ ရိုက်ခွင့်ပြုပြီး ထုတ်ငွေ (Credit) ကို လုံးဝ ပိတ်ထားမည်
       unlockInput(deb);
       lockInput(cred);
       if (desc && (!desc.value || desc.value.includes('ငွေပြန်ထုတ်') || desc.value.includes('အရင်းငွေလွှဲ'))) {
@@ -284,7 +293,6 @@ function onStudentMoneyEntryTypeChange() {
       }
 
     } else if (type === 'Withdraw') {
-      // 🌟 WITHDRAW: ထုတ်ငွေ (Credit) သာ ရိုက်ခွင့်ပြုပြီး အပ်ငွေ (Debit) ကို လုံးဝ ပိတ်ထားမည်
       lockInput(deb);
       unlockInput(cred);
       if (desc && (!desc.value || desc.value.includes('မုန့်ဖိုးအပ်ငွေ') || desc.value.includes('အရင်းငွေလွှဲ'))) {
@@ -356,7 +364,6 @@ async function onStudentIdOrFYChangeMoney() {
     if (classEl) classEl.value = matched.class || '';
 
     try {
-      // 🎯 FIX: studentId ပါ တိုက်ရိုက် ထည့်သွင်းရှာဖွေခြင်း
       const sumRes = await callApi('getStudentMoneySummary', { 
         fy: fyVal, 
         studentId: targetIdNum, 
@@ -399,7 +406,7 @@ async function saveStudentMoneyForm(e) {
 
   // 1. Validation Before Closing Modal
   if (isTransfer) {
-    debit = 0; // 🛡️ Transfer ဖြစ်ပါက Debit ကို အမြဲတမ်း 0 သတ်မှတ်သည်
+    debit = 0;
     if (credit <= 0) return showToast("ERROR", "PM Cashier သို့ လွှဲမည့် Credit ငွေပမာဏ ထည့်သွင်းပါ။");
 
     const trustBalText = document.getElementById('stm-balance')?.textContent || '0';
@@ -413,15 +420,14 @@ async function saveStudentMoneyForm(e) {
     }
 
   } else {
-    // Regular Student Entry
     if (!studentId) return showToast("ERROR", "ကျောင်းသား ID အတိအကျ ထည့်ပါ။");
 
     if (entryType === 'Deposit') {
-      credit = 0; // 🛡️ Deposit တွင် Credit ကို လုံးဝ 0 သတ်မှတ်သည်
+      credit = 0;
       if (debit <= 0) return showToast("ERROR", "ကျောင်းသား အပ်ငွေ (Deposit) ပမာဏ ထည့်သွင်းပါ။");
 
     } else if (entryType === 'Withdraw') {
-      debit = 0; // 🛡️ Withdraw တွင် Debit ကို လုံးဝ 0 သတ်မှတ်သည်
+      debit = 0;
       if (credit <= 0) return showToast("ERROR", "ကျောင်းသား ထုတ်ယူမည့် (Withdraw) ငွေပမာဏ ထည့်သွင်းပါ။");
 
       const liveBalText = document.getElementById('stm-wallet-live-amount')?.textContent || '0';
@@ -432,14 +438,13 @@ async function saveStudentMoneyForm(e) {
     }
   }
 
-  // 2. Passed Validations: Safely Lock & Show Loading
   isSubmitting = true;
   closeStudentMoneyModal();
   if (typeof toggleLoading === 'function') toggleLoading(true);
 
   const payload = {
     uniqueId: document.getElementById('stm-uniqueId')?.value || '',
-    date: document.getElementById('stm-date')?.value || new Date().toISOString().slice(0, 10),
+    date: document.getElementById('stm-date')?.value || getMMTDateString(),
     fy: document.getElementById('stm-fy')?.value || (typeof window.getCurrentAcademicYear === 'function' ? window.getCurrentAcademicYear() : '2026-2027'),
     entryType: isTransfer ? 'Transfer to PM Cashier' : entryType,
     method: document.getElementById('stm-method')?.value || 'Cash',
@@ -492,7 +497,6 @@ async function deleteStudentMoneyEntry(uniqueId) {
 async function exportToCSVStudentMoney() {
   try {
     if (typeof toggleLoading === 'function') toggleLoading(true);
-    // Export ချိန်တွင်သာ အချက်အလက်အပြည့်အစုံကို လှမ်းခေါ်ယူခြင်း
     const res = await callApi('getStudentMoneyData', { page: 1, limit: 10000, forceRefresh: true }, 'GET');
     const records = res?.data || gStudentMoneyHistoryData;
     if (!records || records.length === 0) return showToast("ERROR", "ထုတ်ယူရန် စာရင်း မရှိပါ။");
@@ -506,7 +510,7 @@ async function exportToCSVStudentMoney() {
     const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `Student_Money_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `Student_Money_${getMMTDateString()}.csv`;
     a.click();
   } catch (e) {
     showToast("ERROR", "CSV Export မအောင်မြင်ပါ။");
@@ -539,7 +543,7 @@ function applyCanteenBookSearchAndRender() {
   const tDate = document.getElementById('canteen-date-to')?.value || '';
 
   let todaySales = 0;
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getMMTDateString(); // 🕒 Strict MMT Today
 
   gCanteenBookFilteredData = gCanteenBookData.filter(row => {
     if (row.date === todayStr && row.category === 'POS Sales') todaySales += Number(row.debit || 0);
@@ -564,7 +568,7 @@ function applyCanteenBookSearchAndRender() {
 }
 
 function setFilterCanteenToday() {
-  const t = new Date().toISOString().slice(0, 10);
+  const t = getMMTDateString(); // 🕒 Strict MMT Today
   document.getElementById('canteen-date-from').value = t;
   document.getElementById('canteen-date-to').value = t;
   applyCanteenBookSearchAndRender();
@@ -638,7 +642,7 @@ function exportToCSVCanteenBook() {
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `Canteen_Book_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `Canteen_Book_${getMMTDateString()}.csv`;
   a.click();
 }
 
@@ -796,7 +800,7 @@ function openAddModalPmCashierBook() {
   if (uid) uid.value = '';
 
   const dateEl = document.getElementById('pm-cashier-date');
-  if (dateEl) dateEl.value = new Date().toISOString().slice(0, 10);
+  if (dateEl) dateEl.value = getMMTDateString(); // 🕒 Strict MMT Today
 
   const badge = document.getElementById('pm-student-wallet-badge');
   if (badge) badge.classList.add('hidden');
@@ -902,7 +906,6 @@ async function savePmCashierBookForm(e) {
   const studentId = parseInt(document.getElementById('pm-student-id-search')?.value, 10) || 0;
   const respPerson = document.getElementById('pm-cashier-responsibility-person')?.value || 'Cashier 1';
 
-  // 1. Basic Field Validations (Before Closing Modal)
   if (category === 'PM Withdraw' && (!studentId || credit <= 0)) {
     return showToast("ERROR", "ကျောင်းသား ID နှင့် ထုတ်ပေးငွေ ထည့်ပါ။");
   }
@@ -911,7 +914,6 @@ async function savePmCashierBookForm(e) {
     return showToast("ERROR", "Finance သို့ ပြန်လွှဲမည့် ငွေပမာဏ ထည့်သွင်းပါ။");
   }
 
-  // 2. Cashier Float Balance Guard
   const c1Text = document.getElementById('pm-c1-balance')?.textContent || '0';
   const c2Text = document.getElementById('pm-c2-balance')?.textContent || '0';
   const c1Bal = parseFloat(c1Text.replace(/[^0-9.-]+/g, "")) || 0;
@@ -922,7 +924,6 @@ async function savePmCashierBookForm(e) {
     return showToast("ERROR", `${respPerson} တွင် လက်ကျန်ငွေ (${targetBal.toLocaleString()} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString()} MMK) ထုတ်ယူ/ပြန်လွှဲခွင့် မပြုပါ!`);
   }
 
-  // 3. Student Overdraft Guard
   if (category === 'PM Withdraw') {
     const stuBalText = document.getElementById('pm-student-wallet-bal')?.textContent || '0';
     const stuBal = parseFloat(stuBalText.replace(/[^0-9.-]+/g, "")) || 0;
@@ -931,13 +932,12 @@ async function savePmCashierBookForm(e) {
     }
   }
 
-  // 4. Validations Passed: Safely Lock & Proceed
   isSubmitting = true;
   closePmCashierBookModal();
   if (typeof toggleLoading === 'function') toggleLoading(true);
 
   const payload = {
-    date: document.getElementById('pm-cashier-date')?.value || new Date().toISOString().slice(0, 10),
+    date: document.getElementById('pm-cashier-date')?.value || getMMTDateString(),
     category: category,
     studentId: category === 'PM Withdraw' ? studentId : null,
     studentName: document.getElementById('pm-student-name')?.value || '',
@@ -998,7 +998,7 @@ function exportToCSVPmCashierBook() {
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `PM_Cashier_Book_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `PM_Cashier_Book_${getMMTDateString()}.csv`;
   a.click();
 }
 
@@ -1066,9 +1066,6 @@ async function openStudentStatementModal(studentId) {
   await loadStudentStatementData();
 }
 
-// ==============================================================================
-// 💡 STATEMENT DATA LOADER (ENTERPRISE EDITION WITH ZERO-RECORD HEADER GUARD)
-// ==============================================================================
 async function loadStudentStatementData() {
   if (!gStmtStudentId) return;
 
@@ -1080,7 +1077,6 @@ async function loadStudentStatementData() {
   try {
     if (typeof toggleLoading === 'function') toggleLoading(true);
 
-    // 🚀 D1 Quota Optimized: Read strictly 20 rows per page
     const res = await callApi('getStudentMoneyData', {
       studentId: gStmtStudentId,
       page: gStmtPage,
@@ -1094,13 +1090,11 @@ async function loadStudentStatementData() {
       const records = res.data || [];
       gStmtTotalRows = res.totalRows || 0;
 
-      // 🎯 1. HEADER PRESERVATION GUARD: Record မရှိသည့် ရက်စွဲစစ်ချိန်တွင်လည်း ကျောင်းသားအမည် မပျောက်စေရန် စီမံခြင်း
       if (records.length > 0) {
         const firstRow = records[0];
         if (nameEl) nameEl.textContent = `${firstRow.fyidName || firstRow.fyid || 'Student'} - Pocket Money Statement`;
         if (infoEl) infoEl.textContent = `FY: ${firstRow.fy || '-'} | Class: ${firstRow.class || '-'} | ID: ${firstRow.studentId || gStmtStudentId}`;
       } else {
-        // စာရင်းမရှိပါက Cache သို့မဟုတ် Single Lookup မှတစ်ဆင့် ကျောင်းသားအချက်အလက်ကို ဆွဲတင်ထိန်းသိမ်းခြင်း
         const currentFy = (typeof window.getCurrentAcademicYear === 'function') ? window.getCurrentAcademicYear() : '2026-2027';
         const cacheList = gStudentCacheForMoney[currentFy] || [];
         const cachedStu = cacheList.find(s => parseInt(s.studentId || s.student_id || s.id, 10) === parseInt(gStmtStudentId, 10));
@@ -1115,7 +1109,6 @@ async function loadStudentStatementData() {
         }
       }
 
-      // 🎯 2. PLAN 3 ACCOUNTING STATS MAPPING
       const stats = res.stats || {};
       const depEl = document.getElementById('stm-stmt-total-deposit');
       const withEl = document.getElementById('stm-stmt-total-withdraw');
@@ -1129,7 +1122,6 @@ async function loadStudentStatementData() {
       if (withEl) withEl.textContent = `${periodExpense.toLocaleString('en-US')} MMK`;
       if (balEl) balEl.textContent = `${allTimeBal.toLocaleString('en-US')} MMK`;
 
-      // 🎯 3. TABLE BODY RENDERING (WITH EXACT ESCAPING & ROW NUMBERING)
       const tbody = document.getElementById('stm-stmt-table-body');
       if (tbody) {
         tbody.innerHTML = '';
@@ -1146,7 +1138,6 @@ async function loadStudentStatementData() {
           const safeEsc = window.escapeHtml || (s => s ? String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : '');
 
           records.forEach((r, idx) => {
-            // အသစ်ဆုံးစာရင်းအား နံပါတ်အကြီးဆုံးဖြင့် စဉ်ပြသခြင်း
             const displayNo = gStmtTotalRows - ((gStmtPage - 1) * gStmtLimit + idx);
             const balStr = Number(r.balances || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
             const deb = Number(r.debit || 0);
@@ -1167,7 +1158,6 @@ async function loadStudentStatementData() {
         }
       }
 
-      // 🎯 4. PAGINATION CONTROLS SYNC
       updateStmtPaginationControls();
     }
   } catch (err) {
@@ -1221,7 +1211,7 @@ function printRowTransferVoucher(uniqueId, source) {
 
   const amount = (row.credit > 0 ? row.credit : row.debit) || 0;
   const vrNo = row.vrNo || 'TRF-' + String(row.date || '').replace(/-/g, '') + '-' + (row.no || '01');
-  const dateStr = row.date || new Date().toISOString().slice(0, 10);
+  const dateStr = row.date || getMMTDateString();
   const respPerson = row.responsibility_person || (row.remark?.includes('Cashier 2') ? 'Cashier 2' : 'Cashier 1');
   const method = row.method || 'Cash';
   const remark = row.remark || row.description || 'Internal Cash Transfer';
@@ -1381,21 +1371,44 @@ window.dismissCenterToast = function() {
 };
 
 // ==============================================================================
-// 💡 9. CANTEEN EVENING SETTLEMENT & PRINT ENGINE (ADMIN / FINANCE CONTROLLER)
+// 💡 9. CANTEEN EVENING SETTLEMENT & PRINT ENGINE (SMART RETROSPECTIVE RADAR)
 // ==============================================================================
 
 var gCanteenSettlementsData = [];
 
-// 🎯 Settlement Audit Modal ဖွင့်ခြင်း
-async function openAdminSettlementModal() {
+// 🎯 Settlement Audit Modal ဖွင့်ခြင်း (Smart Past Shift Detection)
+async function openAdminSettlementModal(dateInput) {
   const modal = document.getElementById('canteen-admin-settle-modal');
   if (modal) modal.classList.remove('hidden');
 
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const targetDateEl = document.getElementById('adm-settle-date');
-  if (targetDateEl && !targetDateEl.value) targetDateEl.value = todayStr;
+  const todayStr = getMMTDateString();
+  const nowMMT = new Date(Date.now() + (6.5 * 60 * 60 * 1000));
+  const mmtHour = nowMMT.getUTCHours();
+  const yesterdayStr = new Date(nowMMT.getTime() - 86400000).toISOString().slice(0, 10);
 
-  await loadAdminSettlementDailyStats();
+  let targetDate = dateInput;
+  if (!targetDate) {
+    // 🌙 Smart Shift Detection: ည ၁၂:၀၀ မှ မနက် ၀၆:၀၀ အတွင်း မနေ့ကစာရင်း မရှင်းရသေးပါက Yesterday ကို ဦးစားပေးရွေးချယ်ခြင်း
+    if (mmtHour < 6) {
+      try {
+        const yRes = await callApi('getCanteenDailySummary', { date: yesterdayStr }, 'POST');
+        if (yRes && yRes.success && yRes.data && !yRes.data.isSettled) {
+          targetDate = yesterdayStr;
+        } else {
+          targetDate = todayStr;
+        }
+      } catch (e) {
+        targetDate = yesterdayStr;
+      }
+    } else {
+      targetDate = todayStr;
+    }
+  }
+
+  const targetDateEl = document.getElementById('adm-settle-date');
+  if (targetDateEl) targetDateEl.value = targetDate;
+
+  await loadAdminSettlementDailyStats(targetDate);
   await loadAdminSettlementHistory();
 }
 
@@ -1403,46 +1416,89 @@ function closeAdminSettlementModal() {
   document.getElementById('canteen-admin-settle-modal')?.classList.add('hidden');
 }
 
-// 🎯 ရွေးချယ်ထားသော ရက်စွဲအတွက် နေ့စဉ်အရောင်း အကျဉ်းချုပ် ရယူခြင်း
-async function loadAdminSettlementDailyStats() {
-  const dateVal = document.getElementById('adm-settle-date')?.value || new Date().toISOString().slice(0, 10);
+// 🎯 ရက်စွဲအလိုက် စာရင်းစစ်ခြင်း (Live Re-calculation & Smart Radar Banner)
+async function loadAdminSettlementDailyStats(dateOverride) {
+  let dateVal = dateOverride || document.getElementById('adm-settle-date')?.value || getMMTDateString();
+  const targetDateEl = document.getElementById('adm-settle-date');
+  if (targetDateEl && targetDateEl.value !== dateVal) targetDateEl.value = dateVal;
+
   try {
     const res = await callApi('getCanteenDailySummary', { date: dateVal }, 'POST');
     if (res && res.success && res.data) {
       const dt = res.data;
-      document.getElementById('adm-set-orders').textContent = `${dt.totalOrders} စောင်`;
-      document.getElementById('adm-set-total').textContent = `${Number(dt.totalSales).toLocaleString('en-US')} MMK`;
-      document.getElementById('adm-set-cash').textContent = `${Number(dt.cashSalesShare).toLocaleString('en-US')} MMK`;
-      document.getElementById('adm-set-pocket').textContent = `${Number(dt.pocketMoneyShare).toLocaleString('en-US')} MMK`;
-      document.getElementById('adm-set-payout-input').value = dt.pocketMoneyShare;
+      const elOrders = document.getElementById('adm-set-orders');
+      const elTotal = document.getElementById('adm-set-total');
+      const elCash = document.getElementById('adm-set-cash');
+      const elPocket = document.getElementById('adm-set-pocket');
+      const elPayout = document.getElementById('adm-set-payout-input');
+
+      if (elOrders) elOrders.textContent = `${dt.totalOrders || 0} စောင်`;
+      if (elTotal) elTotal.textContent = `${Number(dt.totalSales || 0).toLocaleString('en-US')} MMK`;
+      if (elCash) elCash.textContent = `${Number(dt.cashSalesShare || 0).toLocaleString('en-US')} MMK`;
+      if (elPocket) elPocket.textContent = `${Number(dt.pocketMoneyShare || 0).toLocaleString('en-US')} MMK`;
+      if (elPayout) elPayout.value = dt.pocketMoneyShare || 0;
+
+      // 🌙 Unsettled Past Shift Radar Banner
+      const banner = document.getElementById('adm-set-unsettled-banner');
+      const label = document.getElementById('adm-set-unsettled-date-label');
+      if (banner && label) {
+        const unclosedPast = (dt.unclosedPastDays || []).find(d => d.date !== dateVal);
+        if (unclosedPast) {
+          label.textContent = unclosedPast.date;
+          banner.classList.remove('hidden');
+        } else {
+          banner.classList.add('hidden');
+        }
+      }
 
       const badge = document.getElementById('adm-set-status-badge');
       const btnConfirm = document.getElementById('btn-adm-confirm-settle');
 
-      // 🔒 CLOSURE INTERLOCK
+      // 🔒 CLOSURE & SETTLEMENT INTERLOCK
       if (dt.isSettled) {
-        badge.className = "px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
-        badge.textContent = `SETTLED (${dt.settlement?.settlement_no || dt.settlement?.settlementNo})`;
-        btnConfirm.disabled = true;
-        btnConfirm.classList.add('opacity-40', 'cursor-not-allowed');
-        btnConfirm.textContent = "ငွေရှင်းလင်းပြီးဖြစ်ပါသည်";
+        if (badge) {
+          badge.className = "px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+          badge.textContent = `SETTLED (${dt.settlement?.settlement_no || dt.settlement?.settlementNo || 'DONE'})`;
+        }
+        if (btnConfirm) {
+          btnConfirm.disabled = true;
+          btnConfirm.classList.add('opacity-40', 'cursor-not-allowed');
+          btnConfirm.textContent = `${dateVal} အတွက် ငွေရှင်းလင်းပြီးဖြစ်ပါသည်`;
+        }
       } else if (!dt.isClosed) {
-        badge.className = "px-2 py-0.5 rounded text-[10px] font-black bg-rose-500/10 text-rose-400 border border-rose-500/20 animate-pulse";
-        badge.textContent = "REGISTER NOT CLOSED (ဆိုင်မပိတ်ရသေးပါ)";
-        btnConfirm.disabled = true;
-        btnConfirm.classList.add('opacity-40', 'cursor-not-allowed');
-        btnConfirm.textContent = "ဆိုင်မပိတ်သေးသဖြင့် ငွေရှင်း၍ မရပါ";
+        if (badge) {
+          badge.className = "px-2 py-0.5 rounded text-[10px] font-black bg-rose-500/10 text-rose-400 border border-rose-500/20 animate-pulse";
+          badge.textContent = `REGISTER NOT CLOSED (${dateVal} ဆိုင်မပိတ်ရသေးပါ)`;
+        }
+        if (btnConfirm) {
+          btnConfirm.disabled = true;
+          btnConfirm.classList.add('opacity-40', 'cursor-not-allowed');
+          btnConfirm.textContent = `သတိပြုရန်: ${dateVal} အတွက် ဆိုင်မပိတ်သေးသဖြင့် ငွေရှင်း၍ မရပါ`;
+        }
       } else {
-        badge.className = "px-2 py-0.5 rounded text-[10px] font-black bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse";
-        badge.textContent = `REGISTER CLOSED (${dt.closure?.closedBy || 'Ready'})`;
-        btnConfirm.disabled = (dt.pocketMoneyShare <= 0 && dt.totalSales <= 0);
-        btnConfirm.classList.remove('opacity-40', 'cursor-not-allowed');
-        btnConfirm.textContent = "Finance မှ ငွေထုတ်ပေးရှင်းလင်းမှု အတည်ပြုမည်";
+        if (badge) {
+          badge.className = "px-2 py-0.5 rounded text-[10px] font-black bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse";
+          badge.textContent = `REGISTER CLOSED (${dt.closure?.closedBy || 'Ready'})`;
+        }
+        if (btnConfirm) {
+          btnConfirm.disabled = (dt.pocketMoneyShare <= 0 && dt.totalSales <= 0);
+          btnConfirm.classList.remove('opacity-40', 'cursor-not-allowed');
+          btnConfirm.textContent = `Finance မှ ${dateVal} အတွက် ငွေထုတ်ပေးရှင်းလင်းမှု အတည်ပြုမည်`;
+        }
       }
     }
   } catch (e) {
     console.error("Admin Settlement Summary Load Error:", e);
   }
+}
+
+// 🎯 Smart Banner မှတစ်ဆင့် ရက်စွဲ ၁ ချက်နှိပ် ရွေးချယ်ခြင်း
+async function selectAdminSettlementDate(date) {
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date.trim())) return;
+  const target = date.trim();
+  const targetDateEl = document.getElementById('adm-settle-date');
+  if (targetDateEl) targetDateEl.value = target;
+  await loadAdminSettlementDailyStats(target);
 }
 
 // 🎯 အရင်ရှင်းလင်းခဲ့ပြီးသော Settlement မှတ်တမ်းဟောင်းများ ဇယားပြသခြင်း
@@ -1483,7 +1539,7 @@ async function loadAdminSettlementHistory() {
 
 // 🎯 Finance မှ Canteen သို့ ငွေထုတ်ပေးရှင်းလင်းမှု အတည်ပြုခြင်း
 async function submitAdminSettlement() {
-  const dateVal = document.getElementById('adm-settle-date')?.value || new Date().toISOString().slice(0, 10);
+  const dateVal = document.getElementById('adm-settle-date')?.value || getMMTDateString();
   const payout = parseFloat(document.getElementById('adm-set-payout-input')?.value || 0);
   const pocketShareText = document.getElementById('adm-set-pocket')?.textContent || '0';
   const pocketShare = parseFloat(pocketShareText.replace(/[^0-9.-]+/g, '')) || 0;
@@ -1491,7 +1547,7 @@ async function submitAdminSettlement() {
   const cashShare = parseFloat(cashShareText.replace(/[^0-9.-]+/g, '')) || 0;
   const receiver = (document.getElementById('adm-set-receiver')?.value || 'Canteen Manager').trim();
 
-  if (!confirm(`Finance မှ Canteen သို့ Pocket Money ရောင်းရငွေ လက်ငင်း (${Number(payout).toLocaleString('en-US')} MMK) ကို အမှန်တကယ် လက်ရောက် ပေးအပ်ပြီးပြီလား?`)) {
+  if (!confirm(`ရက်စွဲ (${dateVal}) အတွက် Finance မှ Canteen သို့ Pocket Money ရောင်းရငွေ လက်ငင်း (${Number(payout).toLocaleString('en-US')} MMK) ကို အမှန်တကယ် လက်ရောက် ပေးအပ်ပြီးပြီလား?`)) {
     return;
   }
 
@@ -1508,8 +1564,8 @@ async function submitAdminSettlement() {
     if (typeof toggleLoading === 'function') toggleLoading(true);
     const res = await callApi('saveCanteenSettlement', payload);
     if (res && res.success) {
-      showToast("SUCCESS", `Canteen ငွေရှင်းလင်းမှု မှတ်တမ်းတင်ပြီးပါပြီ (${res.settlementNo})`);
-      await loadAdminSettlementDailyStats();
+      showToast("SUCCESS", `ရက်စွဲ (${dateVal}) အတွက် Canteen ငွေရှင်းလင်းမှု မှတ်တမ်းတင်ပြီးပါပြီ (${res.settlementNo})`);
+      await loadAdminSettlementDailyStats(dateVal);
       await loadAdminSettlementHistory();
       printCanteenSettlementVoucher(res.settlementNo);
     } else {
@@ -1526,7 +1582,7 @@ async function submitAdminSettlement() {
 function printCanteenSettlementVoucher(settlementNo) {
   let record = gCanteenSettlementsData.find(r => r.settlementNo === settlementNo);
   
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getMMTDateString();
   const dateStr = record ? record.date : (document.getElementById('adm-settle-date')?.value || todayStr);
   const totalSales = record ? record.totalSalesAmount : parseFloat(document.getElementById('adm-set-total')?.textContent.replace(/[^0-9.-]+/g, '') || 0);
   const cashShare = record ? record.cashSalesShare : parseFloat(document.getElementById('adm-set-cash')?.textContent.replace(/[^0-9.-]+/g, '') || 0);
@@ -1674,5 +1730,7 @@ window.printRowTransferVoucher = printRowTransferVoucher;
 window.openAdminSettlementModal = openAdminSettlementModal;
 window.closeAdminSettlementModal = closeAdminSettlementModal;
 window.loadAdminSettlementDailyStats = loadAdminSettlementDailyStats;
+window.selectAdminSettlementDate = selectAdminSettlementDate;
 window.submitAdminSettlement = submitAdminSettlement;
 window.printCanteenSettlementVoucher = printCanteenSettlementVoucher;
+window.getMMTDateString = getMMTDateString;

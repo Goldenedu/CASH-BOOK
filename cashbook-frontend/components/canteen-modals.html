@@ -1,6 +1,6 @@
 <!-- ============================================================================== -->
 <!-- 💡 CANTEEN MODALS HUB (10 MODALS + TOAST CONTAINER)                            -->
-<!-- File: components/canteen-modals.html (Enterprise V9.4 Full Production Edition) -->
+<!-- File: components/canteen-modals.html (Enterprise V9.5 Full Production Edition) -->
 <!-- ============================================================================== -->
 
 <!-- 📦 MODAL 1: ITEM & STOCK PURCHASE (DEFAULT 8% MARKUP) -->
@@ -406,7 +406,7 @@
   </div>
 </div>
 
-<!-- 🔒 MODAL 8: CANTEEN DAY CLOSE (ဆိုင်ပိတ်သိမ်းခြင်း) -->
+<!-- 🔒 MODAL 8: CANTEEN DAY CLOSE (SMART RETROSPECTIVE BUSINESS SHIFT CLOSE) -->
 <div id="pos-closure-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
   <div class="bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
     <div class="px-5 py-4 border-b border-[var(--border-color)] flex justify-between items-center bg-amber-500/10">
@@ -416,14 +416,35 @@
       <button type="button" onclick="closeModal('pos-closure-modal')" class="text-slate-400 hover:text-[var(--text-main)] p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
     </div>
 
-    <div class="p-5 space-y-4 text-xs font-mono">
-      <div id="closure-stats-card" class="p-3.5 bg-slate-200/50 dark:bg-black/40 border border-[var(--border-color)] rounded-2xl space-y-2">
-        <div class="flex justify-between text-slate-400 font-sans">
-          <span>ပိတ်သိမ်းမည့်ရက်စွဲ (MMT):</span>
-          <strong id="close-modal-date" class="font-mono">-</strong>
+    <div class="p-5 space-y-3.5 text-xs font-mono overflow-y-auto custom-scroll">
+      
+      <!-- 🌙 Unclosed Past Shift Smart Radar Banner (Shows when yesterday is not yet closed) -->
+      <div id="close-unclosed-banner" class="hidden p-2.5 bg-amber-500/15 border border-amber-500/30 rounded-2xl text-[11px] font-sans flex items-center justify-between gap-2 shadow-sm animate-pulse">
+        <div class="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold min-w-0">
+          <i class="fa-solid fa-circle-exclamation text-amber-500 shrink-0"></i>
+          <span class="truncate">မပိတ်ရသေးသော ရက်စွဲ (<strong id="close-unclosed-date-label" class="font-mono"></strong>) တွေ့ရှိပါသည်!</span>
         </div>
+        <button type="button" id="btn-select-unclosed-close" onclick="selectClosureDate(document.getElementById('close-unclosed-date-label')?.textContent)" class="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[10px] font-black shrink-0 transition active:scale-95 shadow">
+          ထိုရက်စွဲ ပိတ်မည်
+        </button>
+      </div>
+
+      <!-- Operations Stats Card with Dynamic Date Picker -->
+      <div id="closure-stats-card" class="p-3.5 bg-slate-200/50 dark:bg-black/40 border border-[var(--border-color)] rounded-2xl space-y-2">
+        
+        <!-- Target Closure Date Selector -->
+        <div class="flex justify-between items-center text-slate-500 dark:text-slate-400 font-sans pb-1.5 border-b border-[var(--border-color)]">
+          <span class="font-bold flex items-center gap-1.5">
+            <i class="fa-solid fa-calendar-day text-amber-500"></i> ပိတ်သိမ်းမည့်ရက်စွဲ (MMT):
+          </span>
+          <div class="flex items-center gap-1.5">
+            <input type="date" id="close-modal-date-picker" onchange="onClosureDateChange(this.value)" class="bg-[var(--bg-card-inner)] border border-[var(--border-color)] text-xs rounded-xl px-2.5 py-1 font-mono font-black text-slate-900 dark:text-white outline-none focus:border-amber-500 transition cursor-pointer dark:[color-scheme:dark]">
+            <span id="close-modal-date" class="hidden font-mono">-</span>
+          </div>
+        </div>
+
         <div class="flex justify-between text-slate-400 font-sans">
-          <span>ယနေ့ အရောင်းစောင်ရေ:</span>
+          <span>အရောင်းစောင်ရေ:</span>
           <strong id="close-modal-orders">0 Orders</strong>
         </div>
         <div class="flex justify-between text-slate-400 font-sans">
@@ -442,17 +463,17 @@
 
       <div class="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-1">
         <p class="text-[10px] text-amber-600 dark:text-amber-400 font-sans leading-relaxed">
-          ⚠️ <strong>သတိပြုရန်:</strong> ဆိုင်ပိတ်သိမ်းပြီးပါက ယနေ့ရက်စွဲအတွက် အရောင်းပြေစာအသစ်များ ဖွင့်၍ ရတော့မည်မဟုတ်ပါ။ ကန်တင်းဆိုင်ပိတ်ပြီးမှသာ Finance က Pocket Money ရောင်းရငွေကို ထုတ်ပေးရှင်းလင်းခွင့် ရှိပါမည်။
+          ⚠️ <strong>သတိပြုရန်:</strong> ဆိုင်ပိတ်သိမ်းပြီးပါက ရွေးချယ်ထားသော ရက်စွဲအတွက် အရောင်းပြေစာအသစ်များ ဖွင့်၍ ရတော့မည်မဟုတ်ပါ။ ကန်တင်းဆိုင်ပိတ်ပြီးမှသာ Finance က Pocket Money ရောင်းရငွေကို ထုတ်ပေးရှင်းလင်းခွင့် ရှိပါမည်။
         </p>
       </div>
 
       <div class="space-y-1 font-sans">
         <label class="font-bold text-slate-400">မှတ်ချက် (Optional)</label>
-        <input type="text" id="close-modal-remark" placeholder="e.g. ပုံမှန်ဆိုင်ပိတ်သိမ်းခြင်း..." class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 outline-none focus:border-amber-500 text-xs">
+        <input type="text" id="close-modal-remark" placeholder="e.g. ပုံမှန်ဆိုင်ပိတ်သိမ်းခြင်း..." class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-2 outline-none focus:border-amber-500 text-xs text-slate-800 dark:text-slate-200">
       </div>
 
       <div id="closure-action-box">
-        <button type="button" id="btn-confirm-day-close" onclick="executeCanteenDayClose()" class="w-full py-3.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl font-black text-xs shadow-lg shadow-amber-950/20 active:scale-95 transition font-sans">
+        <button type="button" id="btn-confirm-day-close" onclick="executeCanteenDayClose()" class="w-full py-3.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl font-black text-xs shadow-lg shadow-amber-950/20 active:scale-95 transition font-sans disabled:opacity-40 disabled:pointer-events-none">
           အတည်ပြု ဆိုင်ပိတ်သိမ်းမည် (CLOSE REGISTER)
         </button>
       </div>
@@ -515,7 +536,7 @@
   </div>
 </div>
 
-<!-- 💵 MODAL 10: EVENING CANTEEN SETTLEMENT (CLOSURE INTERLOCKED) -->
+<!-- 💵 MODAL 10: EVENING CANTEEN SETTLEMENT (RETROSPECTIVE CLEARING) -->
 <div id="pos-settlement-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
   <div class="bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
     <div class="px-5 py-4 border-b border-[var(--border-color)] flex justify-between items-center bg-[var(--table-header)]">
@@ -525,7 +546,27 @@
       <button type="button" onclick="closeModal('pos-settlement-modal')" class="text-slate-400 hover:text-[var(--text-main)] p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
     </div>
 
-    <div class="p-5 space-y-4 text-xs font-mono">
+    <div class="p-5 space-y-3.5 text-xs font-mono overflow-y-auto custom-scroll">
+      
+      <!-- 🌙 Unsettled Past Shift Radar Banner -->
+      <div id="set-unsettled-banner" class="hidden p-2.5 bg-amber-500/15 border border-amber-500/30 rounded-2xl text-[11px] font-sans flex items-center justify-between gap-2 shadow-sm animate-pulse">
+        <div class="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold min-w-0">
+          <i class="fa-solid fa-circle-exclamation text-amber-500 shrink-0"></i>
+          <span class="truncate">ငွေမရှင်းရသေးသော ရက်စွဲ (<strong id="set-unsettled-date-label" class="font-mono"></strong>)</span>
+        </div>
+        <button type="button" id="btn-select-unsettled-date" onclick="selectSettlementDate(document.getElementById('set-unsettled-date-label')?.textContent)" class="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[10px] font-black shrink-0 transition active:scale-95 shadow">
+          ထိုရက်စွဲ ရှင်းမည်
+        </button>
+      </div>
+
+      <!-- Target Settlement Date Selector -->
+      <div class="flex justify-between items-center text-slate-500 dark:text-slate-400 font-sans p-2.5 bg-slate-200/40 dark:bg-black/30 rounded-2xl border border-[var(--border-color)]">
+        <span class="font-bold flex items-center gap-1.5">
+          <i class="fa-solid fa-calendar-check text-emerald-500"></i> ငွေရှင်းလင်းမည့်ရက်စွဲ (MMT):
+        </span>
+        <input type="date" id="set-modal-date-picker" onchange="onSettlementDateChange(this.value)" class="bg-[var(--bg-card-inner)] border border-[var(--border-color)] text-xs rounded-xl px-2.5 py-1 font-mono font-black text-slate-900 dark:text-white outline-none focus:border-amber-500 transition cursor-pointer dark:[color-scheme:dark]">
+      </div>
+
       <div id="set-closure-status-box" class="p-2.5 rounded-xl border text-[11px] font-sans flex items-center gap-2">
         <i id="set-closure-icon" class="fa-solid fa-circle-exclamation text-amber-500"></i>
         <span id="set-closure-text">ကန်တင်းဆိုင်ပိတ်သိမ်းမှု အခြေအနေ စစ်ဆေးနေပါသည်...</span>

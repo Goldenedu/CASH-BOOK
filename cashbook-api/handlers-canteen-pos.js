@@ -1,20 +1,21 @@
 /**
  * ==============================================================================
- * GOLDEN ERP SYSTEM - CANTEEN POS HANDLERS (CLOUDFLARE D1 ENTERPRISE V9.3 FULL)
+ * GOLDEN ERP SYSTEM - CANTEEN POS HANDLERS (CLOUDFLARE D1 ENTERPRISE V9.5 FULL)
  * File: handlers-canteen-pos.js (Location: cashbook-api/handlers-canteen-pos.js)
  * 
- * 💡 Features & Architectural Blueprint V9.3:
+ * 💡 Features & Architectural Blueprint V9.5:
  *   1. 🕒 STRICT MMT TIMEZONE: Universal UTC+06:30 Myanmar Standard Time calculation
- *   2. 📊 LIVE DASHBOARD: 1-Batch Atomic Metrics (Today, THIS MONTH, All-Time & Closure)
- *   3. 🛒 PURCHASES HUB KPIS: Real-time Today, THIS MONTH & All-Time purchase totals
- *   4. 💰 CAPITAL INVARIANCE: Surplus stock increases inventory count WITHOUT inflating capital
- *   5. 📈 8% DEFAULT MARKUP: Dynamic Pricing updated with 50-step cash rounding
- *   6. 📦 SURPLUS & WASTAGE: Multi-item cost-basis ledgers with atomic rollback engines
- *   7. 🧾 SALES ORDERS AUDITOR: Full 20-row paginated history with profit tracking
- *   8. 🔒 STORE CLOSURE INTERLOCK: Day Close enforcement before Finance Settlement
- *   9. 🌐 OFFLINE BATCH SYNC: Idempotent queue sync with Zero Double-Deduction guarantee
- *  10. 🛡️ SELF-HEALING SCHEMA: Auto-verifies and heals missing columns/tables on cold start
- *  11. ⚡ D1 QUOTA-SHIELD: Maximum query batching to minimize read/write charges
+ *   2. 🌙 UNCLOSED SHIFT RADAR: Smart detection of past unclosed/unsettled business days
+ *   3. 📊 LIVE DASHBOARD: 1-Batch Atomic Metrics (Today, THIS MONTH, All-Time & Closure)
+ *   4. 🛒 PURCHASES HUB KPIS: Real-time Today, THIS MONTH & All-Time purchase totals
+ *   5. 💰 CAPITAL INVARIANCE: Surplus stock increases inventory count WITHOUT inflating capital
+ *   6. 📈 8% DEFAULT MARKUP: Dynamic Pricing updated with 50-step cash rounding
+ *   7. 📦 SURPLUS & WASTAGE: Multi-item cost-basis ledgers with atomic rollback engines
+ *   8. 🧾 SALES ORDERS AUDITOR: Full 20-row paginated history with profit tracking
+ *   9. 🔒 STORE CLOSURE INTERLOCK: Safe retrospective Day Close enforcement
+ *  10. 🌐 OFFLINE BATCH SYNC: Idempotent queue sync with Zero Double-Deduction guarantee
+ *  11. 🛡️ SELF-HEALING SCHEMA: Auto-verifies and heals missing columns/tables on cold start
+ *  12. ⚡ D1 QUOTA-SHIELD: Maximum query batching to minimize read/write charges
  * ==============================================================================
  */
 
@@ -234,7 +235,7 @@ export async function getCanteenDashboardMetrics(db, body) {
         LIMIT 1
       `).bind(date),
 
-      // ၈။ 🎯 ယခုလ (THIS MONTH) အရောင်းစာရင်းချုပ်
+      // ၈။ ယခုလ (THIS MONTH) အရောင်းစာရင်းချုပ်
       db.prepare(`
         SELECT 
           COUNT(id) as monthOrders,
@@ -244,14 +245,27 @@ export async function getCanteenDashboardMetrics(db, body) {
           COALESCE(SUM(net_profit), 0) as monthProfit
         FROM pos_sales_orders 
         WHERE date >= ? AND date <= ?
-      `).bind(monthStart, monthEnd)
+      `).bind(monthStart, monthEnd),
+
+      // ၉။ 🌙 UNCLOSED SHIFT RADAR: မပိတ်ရသေးသော ယခင်အရောင်းဆိုင်းများ ရှာဖွေခြင်း
+      db.prepare(`
+        SELECT 
+          p.date,
+          COUNT(p.id) as totalOrders,
+          COALESCE(SUM(p.total_amount), 0) as totalSales
+        FROM pos_sales_orders p
+        LEFT JOIN canteen_day_closures c ON p.date = c.date
+        WHERE c.id IS NULL AND p.date < ?
+        GROUP BY p.date
+        ORDER BY p.date DESC
+        LIMIT 3
+      `).bind(todayStr)
     ];
 
-    let todayRes, settleRes, allTimeRes, stockRes, wasteRes, surplusRes, closureRes, monthRes;
+    let todayRes, settleRes, allTimeRes, stockRes, wasteRes, surplusRes, closureRes, monthRes, unclosedRes;
     try {
-      [todayRes, settleRes, allTimeRes, stockRes, wasteRes, surplusRes, closureRes, monthRes] = await db.batch(batchQueries);
+      [todayRes, settleRes, allTimeRes, stockRes, wasteRes, surplusRes, closureRes, monthRes, unclosedRes] = await db.batch(batchQueries);
     } catch (batchErr) {
-      // Fallback query if surplus_stock column was pending in master table
       const fallbackStockQuery = db.prepare(`
         SELECT 
           COALESCE(SUM(CASE WHEN current_stock <= 10 THEN 1 ELSE 0 END), 0) as lowStockCount,
@@ -260,7 +274,7 @@ export async function getCanteenDashboardMetrics(db, body) {
         WHERE is_active = 1
       `);
       batchQueries[3] = fallbackStockQuery;
-      [todayRes, settleRes, allTimeRes, stockRes, wasteRes, surplusRes, closureRes, monthRes] = await db.batch(batchQueries);
+      [todayRes, settleRes, allTimeRes, stockRes, wasteRes, surplusRes, closureRes, monthRes, unclosedRes] = await db.batch(batchQueries);
     }
 
     const todayStats = todayRes?.results?.[0] || {};
@@ -271,6 +285,7 @@ export async function getCanteenDashboardMetrics(db, body) {
     const surplusStats = surplusRes?.results?.[0] || {};
     const closure = closureRes?.results?.[0] || null;
     const monthStats = monthRes?.results?.[0] || {};
+    const unclosedPastDays = unclosedRes?.results || [];
 
     const lowStockCount = Number(stockStats.lowStockCount || 0);
     const totalStockCapital = parseFloat(stockStats.totalStockCapital || 0);
@@ -293,6 +308,8 @@ export async function getCanteenDashboardMetrics(db, body) {
       data: {
         date,
         monthPrefix,
+        unclosedPastDays,
+        hasUnclosedPastDays: unclosedPastDays.length > 0,
         today: {
           totalOrders: todayStats.totalOrders || 0,
           totalSales: parseFloat(todayStats.totalSales || 0),
@@ -1712,13 +1729,21 @@ export async function syncOfflinePosOrders(db, session, body) {
 }
 
 // ==============================================================================
-// 🔒 15. CANTEEN STORE CLOSURE & SETTLEMENT
+// 🔒 15. CANTEEN STORE CLOSURE & SETTLEMENT (SMART RETROSPECTIVE SHIFT CLOSE)
 // ==============================================================================
 export async function closeCanteenDay(db, session, body) {
   try {
     await ensureCanteenSchema(db);
     const todayStr = getMyanmarDateString();
-    const targetDate = String(body.date || todayStr).trim();
+    let targetDate = String(body.date || "").trim();
+    if (!targetDate || !/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
+      targetDate = todayStr;
+    }
+
+    // 🛡️ Safety Guard: Do not allow accidental closing of future dates
+    if (targetDate > todayStr) {
+      return { success: false, message: `အနာဂတ်ရက်စွဲ (${targetDate}) အတွက် ဆိုင်ပိတ်သိမ်းခွင့် မရှိပါ။` };
+    }
 
     const existing = await db.prepare("SELECT id, closed_at as closedAt, closed_by as closedBy FROM canteen_day_closures WHERE date = ?").bind(targetDate).first();
     if (existing) {
@@ -1760,7 +1785,11 @@ export async function closeCanteenDay(db, session, body) {
 export async function getCanteenClosureStatus(db, body) {
   try {
     const todayStr = getMyanmarDateString();
-    const targetDate = String(body.date || todayStr).trim();
+    let targetDate = String(body.date || "").trim();
+    if (!targetDate || !/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
+      targetDate = todayStr;
+    }
+
     let row = null;
     try {
       row = await db.prepare(`SELECT date, closed_at as closedAt, closed_by as closedBy, total_sales as totalSales, cash_sales as cashSales, wallet_sales as walletSales, total_orders as totalOrders, status, remark FROM canteen_day_closures WHERE date = ? LIMIT 1`).bind(targetDate).first();
@@ -1774,11 +1803,20 @@ export async function getCanteenClosureStatus(db, body) {
 
 export async function getCanteenDailySummary(db, body) {
   try {
-    const targetDate = String(body.date || getMyanmarDateString()).trim();
+    await ensureCanteenSchema(db);
+    const todayStr = getMyanmarDateString();
+    const todayMs = new Date(todayStr + "T00:00:00Z").getTime();
+    const yesterdayStr = new Date(todayMs - 86400000).toISOString().slice(0, 10);
 
-    let stats = { totalOrders: 0, totalSales: 0, pocketMoneyShare: 0, cashSalesShare: 0, totalProfit: 0 };
-    try {
-      const summaryRes = await db.prepare(`
+    let targetDate = String(body.date || "").trim();
+    if (!targetDate || !/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
+      targetDate = todayStr;
+    }
+
+    // 🚀 D1 BATCH: 4 Queries in 1 single network round-trip!
+    const [summaryRes, settleRes, closureRes, unclosedRes] = await db.batch([
+      // ၁။ ရွေးချယ်ထားသော ရက်စွဲ၏ အရောင်းစာရင်းချုပ်
+      db.prepare(`
         SELECT 
           COUNT(id) as totalOrders, 
           COALESCE(SUM(total_amount), 0) as totalSales,
@@ -1787,33 +1825,65 @@ export async function getCanteenDailySummary(db, body) {
           COALESCE(SUM(net_profit), 0) as totalProfit
         FROM pos_sales_orders 
         WHERE date = ?
-      `).bind(targetDate).first();
-      if (summaryRes) stats = summaryRes;
-    } catch (e) {}
+      `).bind(targetDate),
 
-    let settleRow = null;
-    try {
-      settleRow = await db.prepare(`SELECT settlement_no as settlementNo, net_payout_amount as netPayoutAmount, created_at as createdAt, handed_over_by as handedOverBy, received_by as receivedBy FROM canteen_settlements WHERE date = ? LIMIT 1`).bind(targetDate).first();
-    } catch (e) {}
+      // ၂။ ရွေးချယ်ထားသော ရက်စွဲအတွက် Finance နှင့် ငွေရှင်းပြီး/မပြီး
+      db.prepare(`
+        SELECT settlement_no as settlementNo, net_payout_amount as netPayoutAmount, created_at as createdAt, handed_over_by as handedOverBy, received_by as receivedBy 
+        FROM canteen_settlements 
+        WHERE date = ? 
+        LIMIT 1
+      `).bind(targetDate),
 
-    let closureRow = null;
-    try {
-      closureRow = await db.prepare(`SELECT date, closed_at as closedAt, closed_by as closedBy, total_sales as totalSales, status FROM canteen_day_closures WHERE date = ? LIMIT 1`).bind(targetDate).first();
-    } catch (e) {}
+      // ၃။ ရွေးချယ်ထားသော ရက်စွဲအတွက် ဆိုင်ပိတ်သိမ်းပြီး/မပြီး
+      db.prepare(`
+        SELECT date, closed_at as closedAt, closed_by as closedBy, total_sales as totalSales, status 
+        FROM canteen_day_closures 
+        WHERE date = ? 
+        LIMIT 1
+      `).bind(targetDate),
+
+      // ၄။ 🌙 UNCLOSED SHIFT RADAR: မပိတ်ရသေးသော ယခင်အရောင်းဆိုင်းများ ရှာဖွေခြင်း
+      db.prepare(`
+        SELECT 
+          p.date,
+          COUNT(p.id) as totalOrders,
+          COALESCE(SUM(p.total_amount), 0) as totalSales,
+          COALESCE(SUM(CASE WHEN p.payment_method = 'Student Pocket Money' THEN p.total_amount ELSE 0 END), 0) as walletSales,
+          COALESCE(SUM(CASE WHEN p.payment_method = 'Cash' THEN p.total_amount ELSE 0 END), 0) as cashSales
+        FROM pos_sales_orders p
+        LEFT JOIN canteen_day_closures c ON p.date = c.date
+        WHERE c.id IS NULL AND p.date < ?
+        GROUP BY p.date
+        ORDER BY p.date DESC
+        LIMIT 5
+      `).bind(todayStr)
+    ]);
+
+    const stats = summaryRes?.results?.[0] || {};
+    const settleRow = settleRes?.results?.[0] || null;
+    const closureRow = closureRes?.results?.[0] || null;
+    const unclosedPastDays = unclosedRes?.results || [];
+
+    const isYesterdayUnclosed = unclosedPastDays.some(d => d.date === yesterdayStr);
 
     return {
       success: true,
       data: {
         date: targetDate,
+        today: todayStr,
+        yesterday: yesterdayStr,
+        isYesterdayUnclosed,
+        unclosedPastDays,
         totalOrders: stats.totalOrders || 0,
         totalSales: parseFloat(stats.totalSales || 0),
         pocketMoneyShare: parseFloat(stats.pocketMoneyShare || 0),
         cashSalesShare: parseFloat(stats.cashSalesShare || 0),
         totalProfit: parseFloat(stats.totalProfit || 0),
         isSettled: Boolean(settleRow),
-        settlement: settleRow || null,
+        settlement: settleRow,
         isClosed: Boolean(closureRow),
-        closure: closureRow || null
+        closure: closureRow
       }
     };
   } catch (err) {
@@ -1823,7 +1893,12 @@ export async function getCanteenDailySummary(db, body) {
 
 export async function saveCanteenSettlement(db, session, body) {
   try {
-    const entryDate = getMyanmarDateString(body.date);
+    const todayStr = getMyanmarDateString();
+    let entryDate = String(body.date || "").trim();
+    if (!entryDate || !/^\d{4}-\d{2}-\d{2}$/.test(entryDate)) {
+      entryDate = todayStr;
+    }
+
     const pocketMoneyShare = safeAmount(body.pocketMoneyShare);
     const cashSalesShare = safeAmount(body.cashSalesShare);
     const totalSales = Math.round((pocketMoneyShare + cashSalesShare) * 100) / 100;
@@ -1926,6 +2001,42 @@ export async function getCanteenSettlements(db, body) {
     return { success: true, data: res.results || [] };
   } catch (err) {
     return { success: false, message: "Settlement စာရင်း ဆွဲယူ၍ မရပါ: " + err.message };
+  }
+}
+
+// ------------------------------------------------------------------------------
+// 🌙 15.1 UNCLOSED CANTEEN SHIFTS DIRECT RADAR (NEW)
+// ------------------------------------------------------------------------------
+export async function getUnclosedCanteenDates(db, body) {
+  try {
+    await ensureCanteenSchema(db);
+    const todayStr = getMyanmarDateString();
+    const limit = Math.min(20, Math.max(1, parseInt(body?.limit || 10, 10)));
+
+    const res = await db.prepare(`
+      SELECT 
+        p.date,
+        COUNT(p.id) as totalOrders,
+        COALESCE(SUM(p.total_amount), 0) as totalSales,
+        COALESCE(SUM(CASE WHEN p.payment_method = 'Student Pocket Money' THEN p.total_amount ELSE 0 END), 0) as walletSales,
+        COALESCE(SUM(CASE WHEN p.payment_method = 'Cash' THEN p.total_amount ELSE 0 END), 0) as cashSales,
+        MAX(CASE WHEN s.id IS NOT NULL THEN 1 ELSE 0 END) as isSettled
+      FROM pos_sales_orders p
+      LEFT JOIN canteen_day_closures c ON p.date = c.date
+      LEFT JOIN canteen_settlements s ON p.date = s.date
+      WHERE c.id IS NULL AND p.date <= ?
+      GROUP BY p.date
+      ORDER BY p.date DESC
+      LIMIT ?
+    `).bind(todayStr, limit).all();
+
+    return {
+      success: true,
+      today: todayStr,
+      data: res.results || []
+    };
+  } catch (err) {
+    return { success: false, message: "မပိတ်ရသေးသော ရက်စွဲများ ဆွဲယူ၍ မရပါ: " + err.message };
   }
 }
 
