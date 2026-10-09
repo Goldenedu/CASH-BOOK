@@ -34,7 +34,7 @@ function calculateFundDate(joinDateStr) {
 }
 
 /**
- * 💡 Get Staff Data & Compute KPI Stats (Phase 4: Supports Join Date Range Filter)
+ * 💡 Get Staff Data & Compute KPI Stats (With Dynamic Unpaid Balance Aggregation)
  */
 export async function getStaffData(db, body, userSession) {
   try {
@@ -95,6 +95,42 @@ export async function getStaffData(db, body, userSession) {
     const rows = await db.prepare(dataQuery).bind(...params).all();
     const rawStaffList = rows.results || [];
 
+    // 💡 0. Dynamic Payroll Balance Aggregation (Calculate Real-time Unpaid Balance)
+    let payrollAggMap = {};
+    if (!isPartTime) {
+      try {
+        const payrollRows = await db.prepare(`
+          SELECT category, description, credit 
+          FROM payroll 
+          WHERE category LIKE '%Bonus%' OR category LIKE '%Fund%' OR category LIKE '%Salary%'
+        `).all();
+
+        (payrollRows.results || []).forEach(p => {
+          const desc = String(p.description || '');
+          const match = desc.match(/(?:FID|PID)\s*0*(\d+)/i) || desc.match(/\[(\d+)\]/);
+          const staffId = match ? parseInt(match[1], 10) : null;
+
+          if (staffId) {
+            if (!payrollAggMap[staffId]) {
+              payrollAggMap[staffId] = { bonusEarned: 0, bonusPaid: 0, fundEarned: 0, fundPaid: 0 };
+            }
+            const cat = String(p.category || '').toLowerCase();
+            const amt = parseFloat(p.credit || 0);
+
+            if (cat.includes('bonus')) {
+              payrollAggMap[staffId].bonusPaid += amt;
+            } else if (cat.includes('fund')) {
+              payrollAggMap[staffId].fundPaid += amt;
+            } else if (cat.includes('salary')) {
+              // (Optional) Track total months worked based on Salary entries if needed for auto-calculation
+            }
+          }
+        });
+      } catch (err) {
+        console.warn("Payroll balance aggregation warning:", err.message);
+      }
+    }
+
     // 💡 1. ROLE-BASED PII ACCESS CHECK
     const role = userSession?.role || 'Viewer';
     const canSeeSensitive = ['Owner', 'Admin', 'Finance', 'HR', 'HR Staff', 'HRStaff', 'Accountant'].includes(role);
@@ -117,6 +153,23 @@ export async function getStaffData(db, body, userSession) {
         const gender = (item.gender || 'Male').toLowerCase();
         if (gender === 'male' || gender === 'ကျား' || gender.startsWith('mal')) maleCount++;
         else if (gender === 'female' || gender === 'မ' || gender.startsWith('fem')) femaleCount++;
+      }
+
+      // 💡 Calculate or Fallback Unpaid Balance safely
+      const currentStaffId = parseInt(item.staff_id || item.id, 10);
+      let calcUnpaidBonus = parseFloat(item.unpaid_bonus !== undefined ? item.unpaid_bonus : (item.unpaidBonus || 0));
+      let calcUnpaidFund = parseFloat(item.unpaid_fund !== undefined ? item.unpaid_fund : (item.unpaidFund || 0));
+
+      if (calcUnpaidBonus === 0 && payrollAggMap[currentStaffId]) {
+        calcUnpaidBonus = Math.max(0, parseFloat(item.bonus || 0) - payrollAggMap[currentStaffId].bonusPaid);
+      } else if (calcUnpaidBonus === 0 && !isInactive) {
+        calcUnpaidBonus = parseFloat(item.bonus || 0);
+      }
+
+      if (calcUnpaidFund === 0 && payrollAggMap[currentStaffId]) {
+        calcUnpaidFund = Math.max(0, parseFloat(item.fund || 0) - payrollAggMap[currentStaffId].fundPaid);
+      } else if (calcUnpaidFund === 0 && !isInactive) {
+        calcUnpaidFund = parseFloat(item.fund || 0);
       }
 
       // 🛡️ Redact sensitive financial, personal & ID fields for unauthorized roles
@@ -179,8 +232,8 @@ export async function getStaffData(db, body, userSession) {
         phoneNo: item.phone_no || item.phoneNo || '',
         email: item.email || '',
         fundDate: item.fund_date || item.fundDate || '',
-        unpaidBonus: parseFloat(item.unpaid_bonus !== undefined ? item.unpaid_bonus : (item.unpaidBonus || 0)),
-        unpaidFund: parseFloat(item.unpaid_fund !== undefined ? item.unpaid_fund : (item.unpaidFund || 0)),
+        unpaidBonus: calcUnpaidBonus,
+        unpaidFund: calcUnpaidFund,
         uniqueId: item.uniqueid || item.uniqueId || `STF_${item.id}`
       };
     });
@@ -238,6 +291,11 @@ export async function saveStaffEntry(db, userSession, body) {
     const assignedNo = (isMigration && body.no) ? parseInt(body.no, 10) : staffIdNum;
     const sqlInsertVerb = isMigration ? "INSERT OR REPLACE INTO" : "INSERT INTO";
 
+    const bonusVal = parseFloat(body.bonus || 0);
+    const fundVal = parseFloat(body.fund || 0);
+    const initialUnpaidBonus = body.unpaidBonus !== undefined ? parseFloat(body.unpaidBonus) : bonusVal;
+    const initialUnpaidFund = body.unpaidFund !== undefined ? parseFloat(body.unpaidFund) : fundVal;
+
     if (isPartTime) {
       await db.prepare(`${sqlInsertVerb} staff_parttime (
         no, join_date, category, staff_id, name, staff_idname, education, position,
@@ -259,9 +317,9 @@ export async function saveStaffEntry(db, userSession, body) {
         assignedNo, joinDateVal, 'Full Time', staffIdNum, staffName, staffIdName,
         body.education || '', body.position || '', body.salaryGrade || '', parseFloat(body.workingDays || 26),
         parseFloat(body.basicAmt || 0), parseFloat(body.extraAmt || 0), parseFloat(body.totalSalary || 0),
-        parseFloat(body.bonus || 0), parseFloat(body.fund || 0), parseFloat(body.totalNetAmt || 0),
+        bonusVal, fundVal, parseFloat(body.totalNetAmt || 0),
         resignedDateVal, computedStatus, body.gender || 'Male', body.nrcNo || '', body.bankAccount || '',
-        body.phoneNo || '', body.email || '', computedFundDate, parseFloat(body.unpaidBonus || 0), parseFloat(body.unpaidFund || 0),
+        body.phoneNo || '', body.email || '', computedFundDate, initialUnpaidBonus, initialUnpaidFund,
         userSession?.name || 'Admin', uniqueid
       ).run();
     }
@@ -280,7 +338,7 @@ export async function saveStaffEntry(db, userSession, body) {
 }
 
 /**
- * 💡 Update Staff Record
+ * 💡 Update Staff Record (Zero-Overwrite Protected)
  */
 export async function updateStaffEntry(db, userSession, body) {
   try {
@@ -293,7 +351,8 @@ export async function updateStaffEntry(db, userSession, body) {
     const table = isPartTime ? 'staff_parttime' : 'staff_fulltime';
     const prefix = isPartTime ? 'PID' : 'FID';
 
-    const existing = await db.prepare(`SELECT id, staff_id FROM ${table} WHERE uniqueid = ?`).bind(uniqueid).first();
+    // 💡 Prevent resetting unpaid balance to 0 if UI doesn't send it
+    const existing = await db.prepare(`SELECT id, staff_id, unpaid_bonus, unpaid_fund, bonus, fund FROM ${table} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ပြင်ဆင်မည့် ဝန်ထမ်းမှတ်တမ်း ရှာမတွေ့ပါ။" };
     }
@@ -322,6 +381,14 @@ export async function updateStaffEntry(db, userSession, body) {
         body.phoneNo || '', body.email || '', uniqueid
       ).run();
     } else {
+      const finalUnpaidBonus = (body.unpaidBonus !== undefined && !isNaN(parseFloat(body.unpaidBonus))) 
+        ? parseFloat(body.unpaidBonus) 
+        : parseFloat(existing.unpaid_bonus || existing.bonus || 0);
+
+      const finalUnpaidFund = (body.unpaidFund !== undefined && !isNaN(parseFloat(body.unpaidFund))) 
+        ? parseFloat(body.unpaidFund) 
+        : parseFloat(existing.unpaid_fund || existing.fund || 0);
+
       await db.prepare(`UPDATE staff_fulltime SET
         join_date = ?, category = ?, staff_id = ?, name = ?, staff_idname = ?,
         education = ?, position = ?, salary_grade = ?, working_days = ?,
@@ -334,7 +401,7 @@ export async function updateStaffEntry(db, userSession, body) {
         parseFloat(body.basicAmt || 0), parseFloat(body.extraAmt || 0), parseFloat(body.totalSalary || 0),
         parseFloat(body.bonus || 0), parseFloat(body.fund || 0), parseFloat(body.totalNetAmt || 0),
         resignedDateVal, computedStatus, body.gender || 'Male', body.nrcNo || '', body.bankAccount || '',
-        body.phoneNo || '', body.email || '', computedFundDate, parseFloat(body.unpaidBonus || 0), parseFloat(body.unpaidFund || 0),
+        body.phoneNo || '', body.email || '', computedFundDate, finalUnpaidBonus, finalUnpaidFund,
         uniqueid
       ).run();
     }
@@ -362,7 +429,7 @@ export async function deleteStaffEntry(db, userSession, body) {
 }
 
 /**
- * 💡 Save HR Payroll Entry (With Atomic Batch Rollback Guard & March Boundary)
+ * 💡 Save HR Payroll Entry (With Atomic Batch Rollback Guard & ID Regex Extractor)
  */
 export async function saveHrPayrollForm(db, userSession, body) {
   try {
@@ -409,16 +476,15 @@ export async function saveHrPayrollForm(db, userSession, body) {
     const batchStatements = [expenseStmt];
 
     if (!isMigration && staffIdStr) {
-      // 💡 FIX: Extract only numbers if staffIdStr contains text like "FID 001"
+      // 💡 Fix: Safely Extract exact numbers from UI Strings like "FID 001 Mg Mg"
       const extractedIdMatch = staffIdStr.match(/\d+/);
       const targetStaffId = extractedIdMatch ? parseInt(extractedIdMatch[0], 10) : 0;
 
       if (targetStaffId > 0) {
-        // 🚀 ULTRA-OPTIMIZATION: Explicit Column Select
         const staffRow = await db.prepare("SELECT id, unpaid_bonus, unpaid_fund, bonus, fund FROM staff_fulltime WHERE staff_id = ? OR id = ? LIMIT 1").bind(targetStaffId, targetStaffId).first();
 
         if (staffRow) {
-          // 💡 FIX: Make category matching case-insensitive and robust
+          // 💡 Fix: Case-insensitive robust category matching
           const catLower = category.toLowerCase().trim();
 
           if (catLower.includes('salary')) {
