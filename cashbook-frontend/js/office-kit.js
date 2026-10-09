@@ -2,10 +2,68 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - OFFICE EXPENSE & INVENTORY MODULE 
  * File: js/office-kit.js (Location: cashbook-frontend/js/office-kit.js)
- * 💡 Features: Refactored with Global api.js for DRY Principle
- *              🎯 Auto-scaling Font Size & Header Labels update (MMK) exactly like Dashboard
+ * 💡 Features: Refactored with Global api.js for DRY Principle,
+ *              🎯 Button Sync: Strictly Enforces "Add New Entry" (Main Bank Book Parity),
+ *              🎯 Auto-scaling Font Size & Header Labels update (MMK) exactly like Dashboard,
+ *              🛡️ Crash-Proof Pure Helpers (parseCleanNum, escapeHtml, safeCsvCell)
  * ==============================================================================
  */
+
+// ==============================================================================
+// 💡 SAFE PURE LOGIC HELPERS (Crash-Proof Fallbacks)
+// ==============================================================================
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  if (typeof window.escapeHtml === 'function' && window.escapeHtml !== escapeHtml) {
+    return window.escapeHtml(str);
+  }
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function escapeJsAttr(str) {
+  if (str === null || str === undefined) return '';
+  if (typeof window.escapeJsAttr === 'function' && window.escapeJsAttr !== escapeJsAttr) {
+    return window.escapeJsAttr(str);
+  }
+  const jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return escapeHtml(jsEscaped);
+}
+
+function parseCleanNum(val) {
+  if (val === undefined || val === null || val === '') return 0;
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  const str = String(val).replace(/,/g, '').trim();
+  const num = parseFloat(str);
+  return isNaN(num) ? 0 : num;
+}
+
+function safeCsvCell(val) {
+  if (typeof window.safeCsvCell === 'function') return window.safeCsvCell(val);
+  if (val === null || val === undefined) return '""';
+  if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
+
+  let str = String(val).trim();
+  if (str === '') return '""';
+
+  const cleanNumStr = str.replace(/,/g, '');
+  if (!isNaN(Number(cleanNumStr)) && cleanNumStr !== '') {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
+// ==============================================================================
+// 💡 GLOBAL VARIABLES & STATE
+// ==============================================================================
 
 window.OfficeState = {
   page: 1,
@@ -64,7 +122,6 @@ function adjustOffKpiFontSizes() {
   });
 }
 
-// Ensure resizing works on window resize
 window.addEventListener('resize', adjustOffKpiFontSizes);
 
 /**
@@ -131,12 +188,13 @@ function getExpenseBookContext() {
 }
 
 /**
- * 💡 Keeps the "+ Add ... Entry" toolbar button in sync with the current book
+ * 💡 🎯 Main Bank Book အတိုင်း "Add New Entry" ဟု တိကျစွာ သတ်မှတ်ပေးသည့် Function
  */
 function updateOfficeAddButtonLabel() {
-  var ctx = getExpenseBookContext();
   var labelEl = document.getElementById('office-add-btn-label');
-  if (labelEl) labelEl.innerText = 'Add ' + ctx.label + ' Entry';
+  if (labelEl) {
+    labelEl.innerText = 'Add New Entry'; // 🎯 'Add New Entry' ဟု သတ်မှတ်ထားသည်
+  }
 }
 
 /**
@@ -149,14 +207,14 @@ function getUniformItemProps(p) {
   var pname = p.product_name ?? p.productName ?? '';
   var ptype = p.type ?? '';
   var psize = p.size ?? '';
-  var uPrice = window.parseCleanNum(p.unit_price ?? p.unitPrice ?? 0);
-  var sPrice = window.parseCleanNum(p.selling_price ?? p.sellingPrice ?? 0);
+  var uPrice = parseCleanNum(p.unit_price ?? p.unitPrice ?? 0);
+  var sPrice = parseCleanNum(p.selling_price ?? p.sellingPrice ?? 0);
 
-  var openStock = window.parseCleanNum(p.opening_stock ?? p.openingStock ?? 0);
-  var sellUnit = window.parseCleanNum(p.selling_unit ?? p.sellingUnit ?? 0);
+  var openStock = parseCleanNum(p.opening_stock ?? p.openingStock ?? 0);
+  var sellUnit = parseCleanNum(p.selling_unit ?? p.sellingUnit ?? 0);
   var cQty = (p.current_qty !== undefined && p.current_qty !== null) 
-    ? window.parseCleanNum(p.current_qty) 
-    : ((p.currentQty !== undefined && p.currentQty !== null) ? window.parseCleanNum(p.currentQty) : (openStock - sellUnit));
+    ? parseCleanNum(p.current_qty) 
+    : ((p.currentQty !== undefined && p.currentQty !== null) ? parseCleanNum(p.currentQty) : (openStock - sellUnit));
 
   var uniqueKey = p.uniqueid || p.uniqueId || (String(pid).trim() + '|' + String(psize).trim() + '|' + String(ptype).trim());
 
@@ -204,7 +262,7 @@ function buildUniformDropdownOptions(list) {
     if (item.id) {
       var sizeStr = item.size ? ' (' + item.size + ')' : '';
       var typeStr = item.type ? ' - ' + item.type : '';
-      html += '<option value="' + window.escapeHtml(item.uniqueKey) + '" data-pid="' + window.escapeHtml(item.id) + '">' + window.escapeHtml(item.id) + ' - ' + window.escapeHtml(item.name) + window.escapeHtml(typeStr) + window.escapeHtml(sizeStr) + '</option>';
+      html += '<option value="' + escapeHtml(item.uniqueKey) + '" data-pid="' + escapeHtml(item.id) + '">' + escapeHtml(item.id) + ' - ' + escapeHtml(item.name) + escapeHtml(typeStr) + escapeHtml(sizeStr) + '</option>';
     }
   });
   select.innerHTML = html;
@@ -386,7 +444,7 @@ function onProductChangeOffice() {
   var selectedKey = prodEl ? prodEl.value : '';
   var stockBadge = document.getElementById('office-stock-badge');
   var unitEl = document.getElementById('office-unit');
-  var unit = window.parseCleanNum(unitEl ? unitEl.value : 1) || 1;
+  var unit = parseCleanNum(unitEl ? unitEl.value : 1) || 1;
 
   var productsList = getAvailableUniformProducts();
 
@@ -405,7 +463,7 @@ function onProductChangeOffice() {
       }
 
       var unitPriceEl = document.getElementById('office-unit-price');
-      if (unitPriceEl && window.parseCleanNum(unitPriceEl.value) === 0) {
+      if (unitPriceEl && parseCleanNum(unitPriceEl.value) === 0) {
         unitPriceEl.value = prod.unitPrice || 0;
       }
 
@@ -434,9 +492,9 @@ function calculateDebitOffice() {
     var prodEl = document.getElementById('office-product-id');
     var selectedKey = prodEl ? prodEl.value : '';
     var unitEl = document.getElementById('office-unit');
-    var unit = window.parseCleanNum(unitEl ? unitEl.value : 0);
-    var unitPrice = window.parseCleanNum(document.getElementById('office-unit-price')?.value);
-    var creditVal = window.parseCleanNum(document.getElementById('office-credit')?.value);
+    var unit = parseCleanNum(unitEl ? unitEl.value : 0);
+    var unitPrice = parseCleanNum(document.getElementById('office-unit-price')?.value);
+    var creditVal = parseCleanNum(document.getElementById('office-credit')?.value);
 
     if (creditVal === 0 && document.getElementById('office-debit')) {
       document.getElementById('office-debit').value = unit * unitPrice;
@@ -473,7 +531,7 @@ function calculateDebitOffice() {
 }
 
 /**
- * 💡 Phase 3.2: Load Expense Data with Full Dataset Retrieval Support
+ * 💡 Load Expense Data with Full Dataset Retrieval Support
  */
 async function loadOfficeData(isSilent, forceRefresh) {
   var state = window.OfficeState;
@@ -487,7 +545,6 @@ async function loadOfficeData(isSilent, forceRefresh) {
       toggleLoading(true);
     }
 
-    // ⚡ Phase 3.2 Fix: Retrieve full dataset (limit 2000) for cross-page search accuracy
     var response = await callApi('getExpenseData', {
       bookName: bookName,
       page: 1,
@@ -518,20 +575,18 @@ function updateStatsOffice() {
   var stats = window.OfficeState.stats;
   var setT = function(id, val) { var el = document.getElementById(id); if (el) el.innerText = val; };
 
-  updateOffKpiLabels(); // Add (MMK) to titles
+  updateOffKpiLabels();
 
-  // Removed trailing MMK from values
   setT('off-total-income', Number(stats.totalIncome || 0).toLocaleString('en-US'));
   setT('off-total-expense', Number(stats.totalExpense || 0).toLocaleString('en-US'));
   setT('off-balance', Number(stats.balance || 0).toLocaleString('en-US'));
   setT('off-entries-count', window.OfficeState.totalRows.toLocaleString('en-US'));
 
-  // Trigger Auto Scale
   setTimeout(adjustOffKpiFontSizes, 50);
 }
 
 /**
- * 💡 Phase 3.2: Render Office Table Grid Rows with Client-side Pagination Slicing
+ * 💡 Render Office Table Grid Rows
  */
 function renderOfficeTable() {
   var tableBody = document.getElementById('office-table-body');
@@ -558,7 +613,6 @@ function renderOfficeTable() {
     return;
   }
 
-  // ⚡ Client-side slicing
   var totalPages = Math.ceil(totalEntries / state.limit) || 1;
   if (state.page > totalPages) state.page = totalPages;
   var startIndex = (state.page - 1) * state.limit;
@@ -580,7 +634,7 @@ function renderOfficeTable() {
     var lockTitle = row.isLocked ? "Locked (Must be edited from Source Book)" : "";
     var disabledAttr = isLocked ? 'disabled' : '';
 
-    var catBadge = typeof window.formatCategoryBadgeHtml === 'function' ? window.formatCategoryBadgeHtml(row.category) : window.escapeHtml(row.category);
+    var catBadge = typeof window.formatCategoryBadgeHtml === 'function' ? window.formatCategoryBadgeHtml(row.category) : escapeHtml(row.category);
     var debitStr = row.debit > 0 ? Number(row.debit).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-';
     var creditStr = row.credit > 0 ? Number(row.credit).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-';
     var balStr = Number(row.balances || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -594,30 +648,30 @@ function renderOfficeTable() {
     }
 
     var priceStr = Number(row.unitPrice || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    var displayNo = Math.floor(window.parseCleanNum(row.no || row.id)) || 1;
+    var displayNo = Math.floor(parseCleanNum(row.no || row.id)) || 1;
 
     return '<tr class="hover:bg-slate-800/20 text-slate-300">' +
         '<td class="text-center font-mono font-semibold text-slate-500 py-3 px-2">' + displayNo + '</td>' +
-        '<td class="font-mono text-xs py-3 px-2">' + window.escapeHtml(displayDate) + '</td>' +
+        '<td class="font-mono text-xs py-3 px-2">' + escapeHtml(displayDate) + '</td>' +
         '<td class="py-3 px-2">' + catBadge + '</td>' +
-        '<td class="min-w-[280px] max-w-md truncate py-3 px-2" title="' + window.escapeHtml(row.description) + '">' + window.escapeHtml(row.description) + '</td>' +
+        '<td class="min-w-[280px] max-w-md truncate py-3 px-2" title="' + escapeHtml(row.description) + '">' + escapeHtml(row.description) + '</td>' +
         '<td class="text-right font-mono py-3 px-2">' + (row.unit || '0') + '</td>' +
         '<td class="text-right font-mono py-3 px-2">' + priceStr + '</td>' +
-        '<td class="font-bold py-3 px-2">' + window.escapeHtml(row.method || '-') + '</td>' +
+        '<td class="font-bold py-3 px-2">' + escapeHtml(row.method || '-') + '</td>' +
         '<td class="text-right text-emerald-400 font-mono font-semibold py-3 px-2">' + debitStr + '</td>' +
         '<td class="text-right text-rose-400 font-mono font-semibold py-3 px-2">' + creditStr + '</td>' +
         '<td class="text-right text-slate-400 font-mono font-bold py-3 px-2">' + balStr + '</td>' +
         '<td class="office-liab-col text-right ' + (rawLiab < 0 ? 'text-emerald-400' : 'text-rose-400') + ' font-mono font-bold py-3 px-2">' + liabStr + '</td>' +
-        '<td class="text-xs text-indigo-400 py-3 px-2">' + window.escapeHtml(row.transfer || '-') + '</td>' +
-        '<td class="font-mono text-xs text-slate-400 py-3 px-2">' + window.escapeHtml(row.vrNo || '-') + '</td>' +
-        '<td class="font-mono text-xs py-3 px-2">' + window.escapeHtml(row.my || '-') + '</td>' +
-        '<td class="font-mono text-xs font-bold text-indigo-300 py-3 px-2">' + window.escapeHtml(row.fy || '-') + '</td>' +
+        '<td class="text-xs text-indigo-400 py-3 px-2">' + escapeHtml(row.transfer || '-') + '</td>' +
+        '<td class="font-mono text-xs text-slate-400 py-3 px-2">' + escapeHtml(row.vrNo || '-') + '</td>' +
+        '<td class="font-mono text-xs py-3 px-2">' + escapeHtml(row.my || '-') + '</td>' +
+        '<td class="font-mono text-xs font-bold text-indigo-300 py-3 px-2">' + escapeHtml(row.fy || '-') + '</td>' +
         '<td class="right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg text-center py-3 px-2">' +
           '<div class="flex items-center justify-center gap-3">' +
-            '<button onclick="editOfficeEntry(\'' + window.escapeJsAttr(row.uniqueId) + '\')" class="text-indigo-400 hover:text-indigo-300 transition ' + lockClass + '" title="' + lockTitle + '" ' + disabledAttr + '>' +
+            '<button onclick="editOfficeEntry(\'' + escapeJsAttr(row.uniqueId) + '\')" class="text-indigo-400 hover:text-indigo-300 transition ' + lockClass + '" title="' + lockTitle + '" ' + disabledAttr + '>' +
               '<i class="fa-solid fa-pen-to-square"></i>' +
             '</button>' +
-            '<button onclick="deleteOfficeEntry(\'' + window.escapeJsAttr(row.uniqueId) + '\')" class="text-rose-400 hover:text-rose-300 transition ' + lockClass + '" title="' + lockTitle + '" ' + disabledAttr + '>' +
+            '<button onclick="deleteOfficeEntry(\'' + escapeJsAttr(row.uniqueId) + '\')" class="text-rose-400 hover:text-rose-300 transition ' + lockClass + '" title="' + lockTitle + '" ' + disabledAttr + '>' +
               '<i class="fa-solid fa-trash"></i>' +
             '</button>' +
           '</div>' +
@@ -653,11 +707,11 @@ function updatePaginationOffice(currentCount) {
   if (info) {
     var start = totalToDisplay === 0 ? 0 : (state.page - 1) * state.limit + 1;
     var end = Math.min(state.page * state.limit, totalToDisplay);
-    info.innerHTML = 'Showing <span class="text-indigo-400 font-extrabold">' + start + '</span> to <span class="text-indigo-400 font-extrabold">' + end + '</span> of <span class="text-indigo-400 font-extrabold">' + totalToDisplay + '</span> entries';
+    info.innerHTML = 'Showing <span class="text-indigo-400 font-extrabold">${start}</span> to <span class="text-indigo-400 font-extrabold">${end}</span> of <span class="text-indigo-400 font-extrabold">${totalToDisplay}</span> entries';
   }
 
   var prevBtn = document.getElementById('off-btn-prev');
-  if (prevBtn) prevBtn.disabled = (state.page <= 1);
+  if (prevBtn) prevBtn.disabled = (state.page === 1);
 
   var nextBtn = document.getElementById('off-btn-next');
   if (nextBtn) nextBtn.disabled = (state.page * state.limit >= totalToDisplay);
@@ -741,7 +795,7 @@ function closeOfficeModal() {
 }
 
 /**
- * 💡 Save Office / Kitchen Form (Phase 3.1 Inter-Module Sync Hook)
+ * 💡 Save Office / Kitchen Form
  */
 async function saveOfficeForm(e) {
   if (e && e.preventDefault) e.preventDefault();
@@ -759,8 +813,8 @@ async function saveOfficeForm(e) {
   var selectedOpt = prodEl && prodEl.selectedIndex >= 0 ? prodEl.options[prodEl.selectedIndex] : null;
   var cleanPid = selectedOpt ? (selectedOpt.getAttribute('data-pid') || selectedKey) : selectedKey;
 
-  var unit = window.parseCleanNum(document.getElementById('office-unit')?.value);
-  var unitPrice = window.parseCleanNum(document.getElementById('office-unit-price')?.value);
+  var unit = parseCleanNum(document.getElementById('office-unit')?.value);
+  var unitPrice = parseCleanNum(document.getElementById('office-unit-price')?.value);
 
   var productsList = getAvailableUniformProducts();
   var calculatedProfit = 0;
@@ -791,8 +845,8 @@ async function saveOfficeForm(e) {
     unitPrice: unitPrice,
     profit: calculatedProfit,
     method: document.getElementById('office-method')?.value || 'Cash',
-    debit: window.parseCleanNum(document.getElementById('office-debit')?.value),
-    credit: window.parseCleanNum(document.getElementById('office-credit')?.value),
+    debit: parseCleanNum(document.getElementById('office-debit')?.value),
+    credit: parseCleanNum(document.getElementById('office-credit')?.value),
     liabilities: finalLiabilities,
     transfer: document.getElementById('office-transfer')?.value || '',
     description: document.getElementById('office-description')?.value || '',
@@ -813,10 +867,8 @@ async function saveOfficeForm(e) {
         showToast("SUCCESS", isAdd ? (label + " Expense စာရင်းသစ် အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။") : (label + " Expense စာရင်း အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။"));
       }
       
-      // ⚡ Phase 3.1: Inter-Module Invalidation Hook
       if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
 
-      // Clear Uniform and Bank/Cash caches so Uniform Profit & Stocks reflect immediately
       if (category === "Advance Uniform" || category === "Advance Unifrom") {
         window.OfficeState.uniformProducts = [];
         if (typeof window.bckActiveData !== 'undefined') {
@@ -928,7 +980,7 @@ async function deleteOfficeEntry(uniqueId) {
       });
 
       if (response && response.success) {
-        if (typeof showToast === 'function') showToast("SUCCESS", "စာရင်းအား အောင်စွာ ဖျက်သိမ်းပြီးပါပြီ။");
+        if (typeof showToast === 'function') showToast("SUCCESS", "စာရင်းအား အောင်မြင်စွာ ဖျက်သိမ်းပြီးပါပြီ။");
         if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
         loadOfficeData(true, true);
       } else {
@@ -959,38 +1011,38 @@ function exportToCSVOffice() {
     csv = "NO,DATE,CATEGORY,DESCRIPTION,METHOD,DEBIT,CREDIT,BALANCES,TRANSFER,VR NO,MY,FY,UNIQUEID\n";
     data.forEach(function(row) {
       csv += (row.no || '') + ',' +
-             window.safeCsvCell(row.date || '') + ',' +
-             window.safeCsvCell(row.category || '') + ',' +
-             window.safeCsvCell(row.description || '') + ',' +
-             window.safeCsvCell(row.method || '') + ',' +
+             safeCsvCell(row.date || '') + ',' +
+             safeCsvCell(row.category || '') + ',' +
+             safeCsvCell(row.description || '') + ',' +
+             safeCsvCell(row.method || '') + ',' +
              (row.debit || 0) + ',' +
              (row.credit || 0) + ',' +
              (row.balances || 0) + ',' +
-             window.safeCsvCell(row.transfer || '') + ',' +
-             window.safeCsvCell(row.vrNo || row.vr_no || '') + ',' +
-             window.safeCsvCell(row.my || '') + ',' +
-             window.safeCsvCell(row.fy || '') + ',' +
-             window.safeCsvCell(row.uniqueId || row.uniqueid || '') + '\n';
+             safeCsvCell(row.transfer || '') + ',' +
+             safeCsvCell(row.vrNo || row.vr_no || '') + ',' +
+             safeCsvCell(row.my || '') + ',' +
+             safeCsvCell(row.fy || '') + ',' +
+             safeCsvCell(row.uniqueId || row.uniqueid || '') + '\n';
     });
   } else {
     csv = "NO,DATE,CATEGORY,DESCRIPTION,UNIT,UNIT PRICE,METHOD,DEBIT,CREDIT,BALANCES,LIABILITIES,TRANSFER,VR NO,MY,FY,UNIQUEID\n";
     data.forEach(function(row) {
       csv += (row.no || '') + ',' +
-             window.safeCsvCell(row.date || '') + ',' +
-             window.safeCsvCell(row.category || '') + ',' +
-             window.safeCsvCell(row.description || '') + ',' +
+             safeCsvCell(row.date || '') + ',' +
+             safeCsvCell(row.category || '') + ',' +
+             safeCsvCell(row.description || '') + ',' +
              (row.unit || 0) + ',' +
              (row.unitPrice || 0) + ',' +
-             window.safeCsvCell(row.method || '') + ',' +
+             safeCsvCell(row.method || '') + ',' +
              (row.debit || 0) + ',' +
              (row.credit || 0) + ',' +
              (row.balances || 0) + ',' +
              (row.liabilities || 0) + ',' +
-             window.safeCsvCell(row.transfer || '') + ',' +
-             window.safeCsvCell(row.vrNo || row.vr_no || '') + ',' +
-             window.safeCsvCell(row.my || '') + ',' +
-             window.safeCsvCell(row.fy || '') + ',' +
-             window.safeCsvCell(row.uniqueId || row.uniqueid || '') + '\n';
+             safeCsvCell(row.transfer || '') + ',' +
+             safeCsvCell(row.vrNo || row.vr_no || '') + ',' +
+             safeCsvCell(row.my || '') + ',' +
+             safeCsvCell(row.fy || '') + ',' +
+             safeCsvCell(row.uniqueId || row.uniqueid || '') + '\n';
     });
   }
 
