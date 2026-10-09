@@ -412,6 +412,7 @@ export async function saveHrPayrollForm(db, userSession, body) {
       const targetStaffId = parseInt(staffIdStr, 10);
       // 🚀 ULTRA-OPTIMIZATION: Explicit Column Select
       const staffRow = await db.prepare("SELECT id, unpaid_bonus, unpaid_fund, bonus, fund FROM staff_fulltime WHERE staff_id = ? OR id = ? LIMIT 1").bind(targetStaffId, targetStaffId).first();
+      // ...
 
       if (staffRow) {
         if (category === 'Full Time Salary') {
