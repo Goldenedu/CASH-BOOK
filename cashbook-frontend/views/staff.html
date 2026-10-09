@@ -1,17 +1,17 @@
-<!-- views/staff.html (Staff Directory - Full Time / Part Time) --> 
+<!-- views/staff.html (Staff Lists - Full Time / Part Time) --> 
 <div class="space-y-4 max-w-[1920px] mx-auto">
 
-  <!-- 💡 ၁။ Top KPI Stats Cards Grid (၁ တန်းတည်း ၄ ကွက် ပေါ်စေရန် သတ်မှတ်ထားသည်) -->
+  <!-- 💡 ၁။ Top KPI Stats Cards Grid (၁ တန်းတည်း ၄ ကွက်) -->
   <div id="staff-kpi-grid" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;"></div>
 
-  <!-- 💡 ၂။ Search, Category Tabs & Actions Bar (Student List စံနှုန်းအတိုင်း သပ်ရပ်စွာ ပေါ်စေမည့် Layout) -->
-  <div class="flex items-center justify-between bg-[#0c1322] border border-slate-800 p-3 rounded-xl gap-3 overflow-x-auto">
+  <!-- 💡 ၂။ Search, Category Tabs, Edit Grade & Actions Bar (Main Bank Book စံနှုန်းအတိုင်း ညှိထားသော Layout) -->
+  <div class="flex flex-wrap items-center justify-between bg-[#0c1322] border border-slate-800 p-3 rounded-xl gap-3">
     
-    <!-- ဘယ်ဘက်ခြမ်း: Search Box + Category Switcher Tabs -->
-    <div class="flex items-center gap-3 shrink-0">
+    <!-- ဘယ်ဘက်ခြမ်း: Search Box + Category Switcher Tabs + Edit Salary Grade Button -->
+    <div class="flex items-center gap-2.5 flex-wrap shrink-0">
       
-      <!-- 🎯 Search Box (Student List နှင့် အတိအကျ တူညီသော အကျယ်နှင့် ပုံစံ) -->
-      <div class="relative w-full sm:w-64 shrink-0" style="min-width: 250px;">
+      <!-- 🎯 Search Box -->
+      <div class="relative w-full sm:w-64 shrink-0" style="min-width: 240px;">
         <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500 pointer-events-none">
           <i class="fa-solid fa-magnifying-glass text-xs"></i>
         </span>
@@ -19,11 +19,11 @@
                id="staff-search-input" 
                oninput="onSearchInputStaff()" 
                placeholder="Search staff name, ID, position..." 
-               class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all">
+               class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all font-sans">
       </div>
 
-      <!-- 🎯 Category Switcher Tabs (Full Time Staff & Part Time Staff - ကပ်မနေစေရန် gap-2.5 ဖြင့် သပ်ရပ်စွာ ခွာထားသည်) -->
-      <div class="flex items-center gap-2 p-1 bg-[#0f172a] border border-slate-800 rounded-xl shrink-0">
+      <!-- 🎯 Category Switcher Tabs (Full Time Staff & Part Time Staff) -->
+      <div class="flex items-center gap-1.5 p-1 bg-[#0f172a] border border-slate-800 rounded-xl shrink-0">
         <button onclick="switchStaffCategory('Full Time')" id="staff-tab-ft" 
                 class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-600/20 flex items-center gap-1.5 whitespace-nowrap">
           <i class="fa-solid fa-user-check text-[11px]"></i> Full Time Staff
@@ -34,30 +34,33 @@
         </button>
       </div>
 
-    </div>
-
-    <!-- ညာဘက်ခြမ်း: Action Buttons -->
-    <div class="flex items-center gap-2 shrink-0">
-      <button onclick="loadStaffData(false)" class="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap" title="Refresh Data">
-        <i class="fa-solid fa-rotate text-xs"></i> Refresh
-      </button>
-
-      <button onclick="openGradeModal()" id="btn-edit-grade" class="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 border border-amber-500/40 text-amber-300 hover:text-amber-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap shadow-sm">
+      <!-- 🎯 Edit Salary Grade ခလုတ် (Part Time Staff ဘေးသို့ ရွှေ့ထားသည်) -->
+      <button onclick="openGradeModal()" id="btn-edit-grade" 
+              class="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-amber-500/40 text-amber-300 hover:text-amber-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap shadow-sm">
         <i class="fa-solid fa-sliders text-xs text-amber-400"></i> Edit Salary Grade
       </button>
 
-      <button onclick="exportToCSVStaff()" class="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap">
-        <i class="fa-solid fa-file-export text-xs"></i> Export CSV
+    </div>
+
+    <!-- ညာဘက်ခြမ်း: Action Buttons (Main Bank Book အတိုင်း Refresh, Export CSV, Add New Entry တစ်ဆက်တည်း ထားရှိသည်) -->
+    <div class="flex items-center gap-2 shrink-0">
+      <button onclick="loadStaffData(false)" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm whitespace-nowrap" title="Refresh Data">
+        <i class="fa-solid fa-rotate text-xs"></i> Refresh
       </button>
 
-      <button onclick="openAddModalStaff()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/10 transition-all whitespace-nowrap">
-        <i class="fa-solid fa-plus text-xs"></i> Add Staff Record
+      <button onclick="exportToCSVStaff()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm whitespace-nowrap">
+        <i class="fa-solid fa-file-export text-xs text-emerald-400"></i> Export CSV
+      </button>
+
+      <!-- 🎯 Add New Entry ခလုတ် -->
+      <button onclick="openAddModalStaff()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 transition-all whitespace-nowrap">
+        <i class="fa-solid fa-plus text-xs"></i> Add New Entry
       </button>
     </div>
   </div>
 
   <!-- ၃။ Staff Table -->
-  <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
+  <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto rounded-xl">
     <table class="w-full text-left border-collapse min-w-[1800px]">
       <thead id="staff-table-head"></thead>
       <tbody id="staff-table-body" class="divide-y divide-slate-800/40 text-slate-300"></tbody>
@@ -83,7 +86,7 @@
 <div id="staff-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
   <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
     <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
-      <h3 id="staff-form-title" class="text-sm font-black text-white uppercase tracking-wider">Add Staff Record</h3>
+      <h3 id="staff-form-title" class="text-sm font-black text-white uppercase tracking-wider">Add New Entry</h3>
       <button onclick="closeStaffModal()" class="text-slate-500 hover:text-white transition"><i class="fa-solid fa-xmark text-sm"></i></button>
     </div>
 
@@ -198,7 +201,7 @@
 
       <div class="flex justify-end items-center gap-3 pt-4 border-t border-slate-800">
         <button type="button" onclick="closeStaffModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">Cancel</button>
-        <button type="submit" class="px-5 py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10 transition-all">Save Staff Record</button>
+        <button type="submit" class="px-5 py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10 transition-all">Save Entry</button>
       </div>
     </form>
   </div>
