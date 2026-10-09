@@ -1,11 +1,13 @@
 /**
  * ==============================================================================
- * GOLDEN ERP SYSTEM - BACKEND UTILITIES (CLOUDFLARE D1)
+ * GOLDEN ERP SYSTEM - BACKEND UTILITIES (CLOUDFLARE D1 ENTERPRISE V9.6 FULL)
  * File: utils.js (Location: cashbook-api/utils.js)
  * 💡 Features: 
  *    - DRY Principle: Centralized Date, FY, and ID Generators
+ *    - Strict MMT: Universal UTC+06:30 Myanmar Standard Time Engine
  *    - Security: crypto.randomUUID() for secure Unique IDs
  *    - Quota-Shield: O(1) Shared Recalculation Engine for all ledgers
+ *    - Accounting Accuracy: Clean Canteen Receivable Balances (Cash sales excluded from debt)
  *    - Data Parsers: Safe Float & Int Parsing, Myanmar Gender Auto-Detection
  *    🚀 ULTRA-OPTIMIZED: Prevented Full Table Scans. Replaced OR with IN().
  *    🚀 PHASE 1 (INCREMENTAL RECALC): Fast Window Functions bounded by `fromDate`
@@ -13,13 +15,17 @@
  */
 
 // ==========================================
-// 💡 1. DATE & TIME HELPERS
+// 💡 1. DATE & TIME HELPERS (STRICT MMT UTC+06:30)
 // ==========================================
 
 export function getMyanmarDateString(inputDate = null) {
-  if (inputDate) return String(inputDate).trim().split('T')[0];
-  const now = new Date(Date.now() + (6.5 * 3600 * 1000));
-  return now.toISOString().split('T')[0];
+  if (inputDate && typeof inputDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(inputDate.trim())) {
+    return inputDate.trim();
+  }
+  const d = inputDate ? new Date(inputDate) : new Date();
+  const targetMs = isNaN(d.getTime()) ? Date.now() : d.getTime();
+  const mmt = new Date(targetMs + (6.5 * 3600 * 1000));
+  return mmt.toISOString().slice(0, 10);
 }
 
 export function getCurrentAcademicYear(dateInput = null) {
@@ -27,7 +33,7 @@ export function getCurrentAcademicYear(dateInput = null) {
   const validDate = isNaN(d.getTime()) ? new Date() : d;
   let y = validDate.getFullYear();
   if (validDate.getMonth() < 2) {
-    y -= 1; // ဇန်နဝါရီ၊ ဖေဖော်ဝါရီဆိုလျှင် ယခင်နှစ်သို့ သတ်မှတ်မည်
+    y -= 1; // Before March belongs to previous academic year
   }
   return `${y}-${y + 1}`;
 }
@@ -220,7 +226,7 @@ export async function recalculateLedgerBalances(db, tableName, targetFy = null, 
             FROM calculated 
             WHERE student_money.id = calculated.id
               AND (student_money.no IS NOT ((SELECT no FROM student_money sm3 WHERE sm3.fy IN (?, ?) AND sm3.date < ? ORDER BY date DESC, id DESC LIMIT 1) + calculated.calc_no) 
-                   OR ROUND(student_money.balances,2) IS NOT ROUND(calculated.calc_bal,2));
+                   OR ROUND(student_money.balances, 2) IS NOT ROUND(calculated.calc_bal, 2));
           `).bind(normFy, cleanFy, fromDate, normFy, cleanFy, fromDate, normFy, cleanFy, fromDate, normFy, cleanFy, fromDate, normFy, cleanFy, fromDate).run();
         } else if (tableName === 'income') {
           // Income Table: No balances, just serial NO.
@@ -234,8 +240,32 @@ export async function recalculateLedgerBalances(db, tableName, targetFy = null, 
             UPDATE income SET no = calculated.calc_no FROM calculated
             WHERE income.id = calculated.id AND income.no IS NOT calculated.calc_no;
           `).bind(baseNo, normFy, cleanFy, fromDate).run();
+        } else if (tableName === 'canteen_book') {
+          // ⚖️ Canteen Book: Method = 'Cash' does NOT increase Receivable Balance from Finance
+          const baseRow = await db.prepare(`SELECT no, balances FROM canteen_book WHERE fy IN (?, ?) AND date < ? ORDER BY date DESC, id DESC LIMIT 1`).bind(normFy, cleanFy, fromDate).first();
+          const baseNo = baseRow ? (parseInt(baseRow.no, 10) || 0) : 0;
+          const baseBal = baseRow ? (parseFloat(baseRow.balances) || 0) : 0;
+
+          await db.prepare(`
+            WITH calculated AS (
+              SELECT id,
+                     ? + ROW_NUMBER() OVER (ORDER BY date ASC, id ASC) as calc_no,
+                     ? + SUM(CASE WHEN method = 'Cash' THEN 0 ELSE debit END - credit) OVER (
+                           ORDER BY date ASC, id ASC
+                           ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                         ) as calc_bal
+              FROM canteen_book
+              WHERE fy IN (?, ?) AND date >= ?
+            )
+            UPDATE canteen_book
+            SET no = calculated.calc_no, balances = calculated.calc_bal
+            FROM calculated
+            WHERE canteen_book.id = calculated.id
+              AND (canteen_book.no IS NOT calculated.calc_no
+                   OR ROUND(canteen_book.balances, 2) IS NOT ROUND(calculated.calc_bal, 2));
+          `).bind(baseNo, baseBal, normFy, cleanFy, fromDate).run();
         } else {
-          // Main/Cashier Ledgers (bank, cash, office, ca_bank, etc.)
+          // Main/Cashier Ledgers (bank, cash, office, kitchen, payroll, ca_bank, ca_cash, etc.)
           const baseRow = await db.prepare(`SELECT no, balances FROM ${tableName} WHERE fy IN (?, ?) AND date < ? ORDER BY date DESC, id DESC LIMIT 1`).bind(normFy, cleanFy, fromDate).first();
           const baseNo = baseRow ? (parseInt(baseRow.no, 10) || 0) : 0;
           const baseBal = baseRow ? (parseFloat(baseRow.balances) || 0) : 0;
@@ -264,7 +294,7 @@ export async function recalculateLedgerBalances(db, tableName, targetFy = null, 
 
       // 💡 FULL RECALCULATE (Fallback path if fromDate is omitted)
       if (tableName === 'student_money') {
-         await db.prepare(`
+        await db.prepare(`
           WITH calculated AS (
             SELECT id,
                    ROW_NUMBER() OVER (ORDER BY date ASC, id ASC) as calc_no,
@@ -285,6 +315,25 @@ export async function recalculateLedgerBalances(db, tableName, targetFy = null, 
             FROM income WHERE fy IN (?, ?)
           )
           UPDATE income SET no = calculated.new_no FROM calculated WHERE income.id = calculated.id AND income.no IS NOT calculated.new_no;
+        `).bind(normFy, cleanFy).run();
+      } else if (tableName === 'canteen_book') {
+        // ⚖️ Canteen Book: Method = 'Cash' does NOT increase Receivable Balance from Finance
+        await db.prepare(`
+          WITH calculated AS (
+            SELECT id,
+                   ROW_NUMBER() OVER (ORDER BY date ASC, id ASC) as calc_no,
+                   SUM(CASE WHEN method = 'Cash' THEN 0 ELSE debit END - credit) OVER (
+                     ORDER BY date ASC, id ASC 
+                     ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                   ) as calc_bal
+            FROM canteen_book
+            WHERE fy IN (?, ?)
+          )
+          UPDATE canteen_book 
+          SET no = calculated.calc_no, balances = calculated.calc_bal 
+          FROM calculated 
+          WHERE canteen_book.id = calculated.id 
+            AND (canteen_book.no IS NOT calculated.calc_no OR ROUND(canteen_book.balances, 2) IS NOT ROUND(calculated.calc_bal, 2));
         `).bind(normFy, cleanFy).run();
       } else {
         await db.prepare(`
@@ -317,6 +366,23 @@ export async function recalculateLedgerBalances(db, tableName, targetFy = null, 
           )
           UPDATE income SET no = calculated.new_no FROM calculated WHERE income.id = calculated.id AND income.no IS NOT calculated.new_no;
         `).run();
+      } else if (tableName === 'canteen_book') {
+        await db.prepare(`
+          WITH calculated AS (
+            SELECT id,
+                   ROW_NUMBER() OVER (PARTITION BY fy ORDER BY date ASC, id ASC) as calc_no,
+                   SUM(CASE WHEN method = 'Cash' THEN 0 ELSE debit END - credit) OVER (
+                     PARTITION BY fy ORDER BY date ASC, id ASC 
+                     ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                   ) as calc_bal
+            FROM canteen_book
+          )
+          UPDATE canteen_book 
+          SET no = calculated.calc_no, balances = calculated.calc_bal 
+          FROM calculated 
+          WHERE canteen_book.id = calculated.id 
+            AND (canteen_book.no IS NOT calculated.calc_no OR ROUND(canteen_book.balances, 2) IS NOT ROUND(calculated.calc_bal, 2));
+        `).run();
       } else {
         await db.prepare(`
           WITH calculated AS (
@@ -332,4 +398,9 @@ export async function recalculateLedgerBalances(db, tableName, targetFy = null, 
   } catch (e) {
     console.warn(`[Utils] Running Balance Recalculation Warning for ${tableName}:`, e.message);
   }
+}
+
+// 💡 Direct Interoperability Helper for Canteen Handlers
+export async function recalculateCanteenBookBalances(db, fy, fromDate = null) {
+  return recalculateLedgerBalances(db, 'canteen_book', fy, fromDate);
 }

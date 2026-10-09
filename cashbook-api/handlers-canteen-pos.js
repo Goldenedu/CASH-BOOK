@@ -1,9 +1,9 @@
 /**
  * ==============================================================================
- * GOLDEN ERP SYSTEM - CANTEEN POS HANDLERS (CLOUDFLARE D1 ENTERPRISE V9.5 FULL)
+ * GOLDEN ERP SYSTEM - CANTEEN POS HANDLERS (CLOUDFLARE D1 ENTERPRISE V9.6 FULL)
  * File: handlers-canteen-pos.js (Location: cashbook-api/handlers-canteen-pos.js)
  * 
- * 💡 Features & Architectural Blueprint V9.5:
+ * 💡 Features & Architectural Blueprint V9.6:
  *   1. 🕒 STRICT MMT TIMEZONE: Universal UTC+06:30 Myanmar Standard Time calculation
  *   2. 🌙 UNCLOSED SHIFT RADAR: Smart detection of past unclosed/unsettled business days
  *   3. 📊 LIVE DASHBOARD: 1-Batch Atomic Metrics (Today, THIS MONTH, All-Time & Closure)
@@ -13,9 +13,10 @@
  *   7. 📦 SURPLUS & WASTAGE: Multi-item cost-basis ledgers with atomic rollback engines
  *   8. 🧾 SALES ORDERS AUDITOR: Full 20-row paginated history with profit tracking
  *   9. 🔒 STORE CLOSURE INTERLOCK: Safe retrospective Day Close enforcement
- *  10. 🌐 OFFLINE BATCH SYNC: Idempotent queue sync with Zero Double-Deduction guarantee
- *  11. 🛡️ SELF-HEALING SCHEMA: Auto-verifies and heals missing columns/tables on cold start
- *  12. ⚡ D1 QUOTA-SHIELD: Maximum query batching to minimize read/write charges
+ *  10. ⚖️ CLEAN SETTLEMENT RECEIVABLE LEDGER: Cash sales do NOT inflate Canteen Book Balance
+ *  11. ⚡ D1 QUOTA-SHIELD: 20-Row Batch Paginated Evening Settlements Auditor
+ *  12. 🌐 OFFLINE BATCH SYNC: Idempotent queue sync with Zero Double-Deduction guarantee
+ *  13. 🛡️ SELF-HEALING SCHEMA: Auto-verifies and heals missing columns/tables on cold start
  * ==============================================================================
  */
 
@@ -137,6 +138,56 @@ export function calculateSmartPrice(costPrice, markupPercent = 8, roundTo = 50) 
 }
 
 // ==============================================================================
+// ⚖️ 3.1 DEDICATED CANTEEN BOOK BALANCE RECALCULATOR (ZERO PHANTOM CASH DEBT)
+// ==============================================================================
+export async function recalculateCanteenBookBalances(db, fy, fromDate) {
+  try {
+    const cleanFy = normalizeFyStr(fy).replace(/^FY\s*/i, '');
+    const rows = await db.prepare(`
+      SELECT id, date, category, method, debit, credit 
+      FROM canteen_book 
+      WHERE fy IN (?, ?) 
+      ORDER BY date ASC, id ASC
+    `).bind(cleanFy, `FY ${cleanFy}`).all();
+
+    if (!rows || !rows.results || rows.results.length === 0) return;
+
+    let runningBalance = 0;
+    const updateStatements = [];
+
+    for (const r of rows.results) {
+      const method = String(r.method || '').trim();
+      const debit = safeAmount(r.debit);
+      const credit = safeAmount(r.credit);
+      
+      // ⚖️ STRICT ACCOUNTING STANDARD:
+      // - Transfer (Pocket Money) sales: Receivable from Finance (increases Balance).
+      // - Settlement Payout (Finance payout): Settles Receivable (reduces Balance).
+      // - Cash sales: In-hand by Canteen; does NOT increase Receivable Balance from Finance.
+      if (method === 'Transfer') {
+        runningBalance += (debit - credit);
+      } else if (method === 'Cash') {
+        runningBalance -= credit; // Settlement Payout has method='Cash' and credit > 0
+      } else {
+        runningBalance += (debit - credit);
+      }
+      runningBalance = Math.round(runningBalance * 100) / 100;
+
+      updateStatements.push(
+        db.prepare(`UPDATE canteen_book SET balances = ? WHERE id = ?`).bind(runningBalance, r.id)
+      );
+    }
+
+    const CHUNK_SIZE = 50;
+    for (let i = 0; i < updateStatements.length; i += CHUNK_SIZE) {
+      await db.batch(updateStatements.slice(i, i + CHUNK_SIZE));
+    }
+  } catch (err) {
+    console.error("[CanteenBook Recalculate Error]:", err);
+  }
+}
+
+// ==============================================================================
 // 💡 4. CANTEEN EXECUTIVE DASHBOARD METRICS (SINGLE BATCH: TODAY, MONTH, ALL-TIME)
 // ==============================================================================
 export async function getCanteenDashboardMetrics(db, body) {
@@ -145,16 +196,13 @@ export async function getCanteenDashboardMetrics(db, body) {
     const todayStr = getMyanmarDateString();
     const date = String(body.date || todayStr).trim();
 
-    // 📅 Calculate Month Range for MMT (e.g., '2026-10-01' to '2026-10-31')
-    const monthPrefix = date.slice(0, 7); // 'YYYY-MM'
+    const monthPrefix = date.slice(0, 7);
     const monthStart = `${monthPrefix}-01`;
     const [y, m] = monthPrefix.split('-').map(Number);
     const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
     const monthEnd = `${monthPrefix}-${String(lastDay).padStart(2, '0')}`;
 
-    // 🚀 D1 ULTRA QUOTA-SHIELD: Single Batch ဖြင့် Query အားလုံးကို တပြိုင်နက် ဆွဲယူသည်
     const batchQueries = [
-      // ၁။ ယနေ့ အရောင်းစာရင်း (Orders, Sales, Wallet Share, Cash Share, Net Margin)
       db.prepare(`
         SELECT 
           COUNT(id) as totalOrders,
@@ -166,7 +214,6 @@ export async function getCanteenDashboardMetrics(db, body) {
         WHERE date = ?
       `).bind(date),
 
-      // ၂။ ယနေ့အတွက် Finance နှင့် ငွေရှင်းပြီး/မပြီး စစ်ဆေးခြင်း
       db.prepare(`
         SELECT 
           settlement_no as settlementNo, 
@@ -179,7 +226,6 @@ export async function getCanteenDashboardMetrics(db, body) {
         LIMIT 1
       `).bind(date),
 
-      // ၃။ ကန်တင်းသမိုင်းဝင် စုစုပေါင်း အရောင်းစာရင်းချုပ် (All-Time Stats)
       db.prepare(`
         SELECT 
           COUNT(id) as allTimeOrders,
@@ -190,7 +236,6 @@ export async function getCanteenDashboardMetrics(db, body) {
         FROM pos_sales_orders
       `),
 
-      // ၄။ Stock သတိပေးချက်နှင့် စုစုပေါင်း ရင်းနှီးငွေတန်ဖိုး (Capital Investment - Invariance Formula)
       db.prepare(`
         SELECT 
           COALESCE(SUM(CASE WHEN current_stock <= 10 THEN 1 ELSE 0 END), 0) as lowStockCount,
@@ -205,7 +250,6 @@ export async function getCanteenDashboardMetrics(db, body) {
         WHERE is_active = 1
       `),
 
-      // ၅။ အပျက်/အပျောက် ဆုံးရှုံးမှုတန်ဖိုး (ယနေ့၊ ယခုလ နှင့် သမိုင်းဝင် ဆုံးရှုံးငွေ)
       db.prepare(`
         SELECT 
           COALESCE(SUM(CASE WHEN date = ? THEN total_loss_cost ELSE 0 END), 0) as todayLossCost,
@@ -214,7 +258,6 @@ export async function getCanteenDashboardMetrics(db, body) {
         FROM pos_waste_records
       `).bind(date, monthStart, monthEnd),
 
-      // ၆။ အပိုပစ္စည်း ရရှိမှုတန်ဖိုး (ယနေ့၊ ယခုလ နှင့် သမိုင်းဝင် အပိုငွေ)
       db.prepare(`
         SELECT 
           COALESCE(SUM(CASE WHEN date = ? THEN total_surplus_value ELSE 0 END), 0) as todaySurplusValue,
@@ -223,7 +266,6 @@ export async function getCanteenDashboardMetrics(db, body) {
         FROM pos_surplus_records
       `).bind(date, monthStart, monthEnd),
 
-      // ၇။ ယနေ့ ကန်တင်းဆိုင်ပိတ်သိမ်းပြီး/မပြီး စစ်ဆေးခြင်း
       db.prepare(`
         SELECT 
           date, 
@@ -235,7 +277,6 @@ export async function getCanteenDashboardMetrics(db, body) {
         LIMIT 1
       `).bind(date),
 
-      // ၈။ ယခုလ (THIS MONTH) အရောင်းစာရင်းချုပ်
       db.prepare(`
         SELECT 
           COUNT(id) as monthOrders,
@@ -247,7 +288,6 @@ export async function getCanteenDashboardMetrics(db, body) {
         WHERE date >= ? AND date <= ?
       `).bind(monthStart, monthEnd),
 
-      // ၉။ 🌙 UNCLOSED SHIFT RADAR: မပိတ်ရသေးသော ယခင်အရောင်းဆိုင်းများ ရှာဖွေခြင်း
       db.prepare(`
         SELECT 
           p.date,
@@ -290,7 +330,6 @@ export async function getCanteenDashboardMetrics(db, body) {
     const lowStockCount = Number(stockStats.lowStockCount || 0);
     const totalStockCapital = parseFloat(stockStats.totalStockCapital || 0);
     
-    // 🎯 Net Loss Formulas (Waste - Surplus)
     const todayLossCost = parseFloat(wasteStats.todayLossCost || 0);
     const todaySurplusValue = parseFloat(surplusStats.todaySurplusValue || 0);
     const todayNetLoss = Math.round((todayLossCost - todaySurplusValue) * 100) / 100;
@@ -383,18 +422,9 @@ export async function getPosSurplusHistory(db, body) {
     let whereClauses = [];
     let params = [];
 
-    if (reason) {
-      whereClauses.push(`reason = ?`);
-      params.push(reason);
-    }
-    if (dateFrom) {
-      whereClauses.push(`date >= ?`);
-      params.push(dateFrom);
-    }
-    if (dateTo) {
-      whereClauses.push(`date <= ?`);
-      params.push(dateTo);
-    }
+    if (reason) { whereClauses.push(`reason = ?`); params.push(reason); }
+    if (dateFrom) { whereClauses.push(`date >= ?`); params.push(dateFrom); }
+    if (dateTo) { whereClauses.push(`date <= ?`); params.push(dateTo); }
     if (searchVal) {
       whereClauses.push(`(surplus_no LIKE ? OR items_summary LIKE ? OR remark LIKE ? OR reported_by LIKE ?)`);
       const p = `%${searchVal}%`;
@@ -491,7 +521,6 @@ export async function savePosSurplusEntry(db, session, body) {
     const surplusUniqueId = `SUR_${rawCore}`;
     const surplusNo = `SUR-${entryDate.replace(/-/g, '')}-${generateUniqueId('').slice(-3).toUpperCase()}`;
 
-    // ⚡ Atomic Batch: current_stock တိုးပြီး surplus_stock ပါ တပြိုင်နက်တိုးသဖြင့် ရင်းနှီးငွေ မတက်ပါ
     const batchStatements = [
       db.prepare(`
         INSERT INTO pos_surplus_records (surplus_no, date, reason, total_surplus_value, total_items_qty, items_summary, items_json, remark, reported_by, uniqueid) 
@@ -582,18 +611,9 @@ export async function getPosWasteHistory(db, body) {
     let whereClauses = [];
     let params = [];
 
-    if (reason) {
-      whereClauses.push(`reason = ?`);
-      params.push(reason);
-    }
-    if (dateFrom) {
-      whereClauses.push(`date >= ?`);
-      params.push(dateFrom);
-    }
-    if (dateTo) {
-      whereClauses.push(`date <= ?`);
-      params.push(dateTo);
-    }
+    if (reason) { whereClauses.push(`reason = ?`); params.push(reason); }
+    if (dateFrom) { whereClauses.push(`date >= ?`); params.push(dateFrom); }
+    if (dateTo) { whereClauses.push(`date <= ?`); params.push(dateTo); }
     if (searchVal) {
       whereClauses.push(`(waste_no LIKE ? OR items_summary LIKE ? OR remark LIKE ? OR reported_by LIKE ?)`);
       const p = `%${searchVal}%`;
@@ -786,18 +806,9 @@ export async function getPosPurchasesHistory(db, body) {
     let whereClauses = [];
     let params = [];
 
-    if (supplierId > 0) {
-      whereClauses.push(`p.supplier_id = ?`);
-      params.push(supplierId);
-    }
-    if (dateFrom) {
-      whereClauses.push(`p.date >= ?`);
-      params.push(dateFrom);
-    }
-    if (dateTo) {
-      whereClauses.push(`p.date <= ?`);
-      params.push(dateTo);
-    }
+    if (supplierId > 0) { whereClauses.push(`p.supplier_id = ?`); params.push(supplierId); }
+    if (dateFrom) { whereClauses.push(`p.date >= ?`); params.push(dateFrom); }
+    if (dateTo) { whereClauses.push(`p.date <= ?`); params.push(dateTo); }
     if (searchVal) {
       whereClauses.push(`(p.item_barcode LIKE ? OR m.item_name LIKE ? OR p.purchase_no LIKE ? OR s.supplier_name LIKE ?)`);
       const p = `%${searchVal}%`;
@@ -806,7 +817,6 @@ export async function getPosPurchasesHistory(db, body) {
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-    // 🚀 D1 Batch: Filtered rows query, count query AND live KPI aggregate query in 1 round-trip!
     const [countRes, rowsRes, kpiRes] = await db.batch([
       db.prepare(`
         SELECT 
@@ -845,7 +855,6 @@ export async function getPosPurchasesHistory(db, body) {
         LIMIT ? OFFSET ?
       `).bind(...params, limit, offset),
 
-      // 🎯 Live Purchases KPI Summaries (Today, This Month, All-Time)
       db.prepare(`
         SELECT 
           COALESCE(SUM(CASE WHEN date = ? THEN total_cost ELSE 0 END), 0) as todayPurchasesTotal,
@@ -866,7 +875,7 @@ export async function getPosPurchasesHistory(db, body) {
       success: true,
       data: rowsRes.results || [],
       totalRows,
-      totalPurchasesAmount, // Currently filtered sum
+      totalPurchasesAmount,
       todayPurchasesTotal: parseFloat(kpiStats.todayPurchasesTotal || 0),
       thisMonthPurchasesTotal: parseFloat(kpiStats.thisMonthPurchasesTotal || 0),
       allTimePurchasesTotal: parseFloat(kpiStats.allTimePurchasesTotal || 0),
@@ -889,7 +898,6 @@ export async function savePosPurchase(db, session, body) {
     const category = String(body.category || 'Snack').trim();
     const qty = safeAmount(body.qty);
     const costPrice = safeAmount(body.costPrice || body.cost_price);
-    // 🎯 DEFAULT 8% MARKUP
     const markupPercent = Math.max(0, Number(body.markupPercent !== undefined ? body.markupPercent : (body.markup_percent !== undefined ? body.markup_percent : 8)));
 
     if (!barcode) return { success: false, message: "ပစ္စည်း Barcode ရွေးချယ်ပေးပါ။" };
@@ -945,7 +953,6 @@ export async function updatePosPurchase(db, session, body) {
     const supplierId = body.supplierId ? parseInt(body.supplierId, 10) : null;
     const newQty = safeAmount(body.qty);
     const newCostPrice = safeAmount(body.costPrice || body.cost_price);
-    // 🎯 DEFAULT 8% MARKUP
     const markupPercent = Math.max(0, Number(body.markupPercent !== undefined ? body.markupPercent : (body.markup_percent !== undefined ? body.markup_percent : 8)));
     let newSellingPrice = safeAmount(body.sellingPrice || body.selling_price);
 
@@ -1013,7 +1020,7 @@ export async function deletePosPurchase(db, session, body) {
 }
 
 // ==============================================================================
-// 🧾 8. SALES ORDERS HISTORY AUDITOR (SOLVES CLOUDFLARE BUILD WARNING)
+// 🧾 8. SALES ORDERS HISTORY AUDITOR
 // ==============================================================================
 export async function getPosSalesOrdersHistory(db, body) {
   try {
@@ -1029,18 +1036,9 @@ export async function getPosSalesOrdersHistory(db, body) {
     let whereClauses = [];
     let params = [];
 
-    if (dateFrom) {
-      whereClauses.push(`date >= ?`);
-      params.push(dateFrom);
-    }
-    if (dateTo) {
-      whereClauses.push(`date <= ?`);
-      params.push(dateTo);
-    }
-    if (paymentMethod) {
-      whereClauses.push(`payment_method = ?`);
-      params.push(paymentMethod);
-    }
+    if (dateFrom) { whereClauses.push(`date >= ?`); params.push(dateFrom); }
+    if (dateTo) { whereClauses.push(`date <= ?`); params.push(dateTo); }
+    if (paymentMethod) { whereClauses.push(`payment_method = ?`); params.push(paymentMethod); }
     if (searchVal) {
       whereClauses.push(`(invoice_no LIKE ? OR items_summary LIKE ? OR CAST(student_id AS TEXT) LIKE ? OR created_by LIKE ?)`);
       const p = `%${searchVal}%`;
@@ -1113,15 +1111,9 @@ export async function getPosStockInventory(db, body) {
     let whereClauses = [];
     let params = [];
 
-    if (category) {
-      whereClauses.push(`category = ?`);
-      params.push(category);
-    }
-    if (stockStatus === 'low_stock') {
-      whereClauses.push(`current_stock > 0 AND current_stock <= 10`);
-    } else if (stockStatus === 'out_of_stock') {
-      whereClauses.push(`current_stock <= 0`);
-    }
+    if (category) { whereClauses.push(`category = ?`); params.push(category); }
+    if (stockStatus === 'low_stock') { whereClauses.push(`current_stock > 0 AND current_stock <= 10`); }
+    else if (stockStatus === 'out_of_stock') { whereClauses.push(`current_stock <= 0`); }
 
     if (searchVal) {
       whereClauses.push(`(item_name LIKE ? OR barcode LIKE ?)`);
@@ -1240,7 +1232,6 @@ export async function updatePosItemQuick(db, session, body) {
       const newStock = Math.max(0, Number(body.currentStock) || 0);
       updates.push(`current_stock = ?`);
       params.push(newStock);
-      // 💰 Guard against surplusStock becoming greater than currentStock
       updates.push(`surplus_stock = MIN(COALESCE(surplus_stock, 0), ?)`);
       params.push(newStock);
     }
@@ -1262,7 +1253,7 @@ export async function updatePosItemQuick(db, session, body) {
 }
 
 // ==============================================================================
-// 💡 10. POS CATALOG & PRICING (PURE BULLETPROOF - NEVER CRASHES)
+// 💡 10. POS CATALOG & PRICING
 // ==============================================================================
 export async function getPosItems(db, body) {
   try {
@@ -1275,17 +1266,9 @@ export async function getPosItems(db, body) {
     let whereClauses = [];
     let params = [];
 
-    if (barcode) {
-      whereClauses.push(`barcode = ?`);
-      params.push(barcode);
-    }
-    if (category) {
-      whereClauses.push(`category = ?`);
-      params.push(category);
-    }
-    if (onlyActive) {
-      whereClauses.push(`is_active = 1`);
-    }
+    if (barcode) { whereClauses.push(`barcode = ?`); params.push(barcode); }
+    if (category) { whereClauses.push(`category = ?`); params.push(category); }
+    if (onlyActive) { whereClauses.push(`is_active = 1`); }
     if (searchVal) {
       whereClauses.push(`(item_name LIKE ? OR barcode LIKE ?)`);
       const p = `%${searchVal}%`;
@@ -1298,17 +1281,10 @@ export async function getPosItems(db, body) {
     try {
       res = await db.prepare(`
         SELECT 
-          id, 
-          barcode, 
-          item_name as itemName, 
-          category, 
-          cost_price as costPrice,
-          markup_percent as markupPercent, 
-          selling_price as sellingPrice,
-          current_stock as currentStock, 
-          COALESCE(surplus_stock, 0) as surplusStock,
-          is_active as isActive, 
-          updated_at as updatedAt
+          id, barcode, item_name as itemName, category, 
+          cost_price as costPrice, markup_percent as markupPercent, 
+          selling_price as sellingPrice, current_stock as currentStock, 
+          COALESCE(surplus_stock, 0) as surplusStock, is_active as isActive, updated_at as updatedAt
         FROM pos_items_master 
         ${whereSql}
         ORDER BY item_name ASC 
@@ -1317,17 +1293,10 @@ export async function getPosItems(db, body) {
     } catch (colErr) {
       res = await db.prepare(`
         SELECT 
-          id, 
-          barcode, 
-          item_name as itemName, 
-          category, 
-          cost_price as costPrice,
-          markup_percent as markupPercent, 
-          selling_price as sellingPrice,
-          current_stock as currentStock, 
-          0 as surplusStock,
-          is_active as isActive, 
-          updated_at as updatedAt
+          id, barcode, item_name as itemName, category, 
+          cost_price as costPrice, markup_percent as markupPercent, 
+          selling_price as sellingPrice, current_stock as currentStock, 
+          0 as surplusStock, is_active as isActive, updated_at as updatedAt
         FROM pos_items_master 
         ${whereSql}
         ORDER BY item_name ASC 
@@ -1349,7 +1318,6 @@ export async function savePosItem(db, session, body) {
 
     const category = String(body.category || 'Snack').trim();
     const costPrice = safeAmount(body.costPrice || body.cost_price);
-    // 🎯 DEFAULT 8% MARKUP
     const markupPercent = Math.max(0, Number(body.markupPercent !== undefined ? body.markupPercent : (body.markup_percent !== undefined ? body.markup_percent : 8)));
     
     let sellingPrice = safeAmount(body.sellingPrice || body.selling_price);
@@ -1459,7 +1427,7 @@ export async function lookupStudentForPos(db, body) {
 }
 
 // ------------------------------------------------------------------------------
-// 🎓 12. OFFLINE POS STUDENT DIRECTORY SNAPSHOT (1-BATCH FOR INDEXED-DB)
+// 🎓 12. OFFLINE POS STUDENT DIRECTORY SNAPSHOT
 // ------------------------------------------------------------------------------
 export async function getPosStudentsSnapshot(db) {
   try {
@@ -1507,7 +1475,7 @@ export async function getPosStudentsSnapshot(db) {
 }
 
 // ==============================================================================
-// 💡 13. ATOMIC SINGLE BATCH POS CHECKOUT (MULTI-COUNTER SAFE)
+// 💡 13. ATOMIC SINGLE BATCH POS CHECKOUT
 // ==============================================================================
 export async function checkoutPosSale(db, session, body) {
   try {
@@ -1592,7 +1560,6 @@ export async function checkoutPosSale(db, session, body) {
       );
     }
 
-    // 🛡️ Multi-Counter Concurrency Safe Atomic Stock Deduction
     for (const item of stockDeductions) {
       const bCode = String(item.barcode || "").trim();
       const q = safeAmount(item.qty);
@@ -1610,7 +1577,9 @@ export async function checkoutPosSale(db, session, body) {
     }
 
     await db.batch(batchStatements);
-    await recalculateLedgerBalances(db, 'canteen_book', fy, entryDate);
+    
+    // ⚖️ Strict Clean Balance Recalculation (Only Transfer increases Balance)
+    await recalculateCanteenBookBalances(db, fy, entryDate);
     if (isWallet && studentId > 0) {
       await recalculateLedgerBalances(db, 'student_money', cleanFy, entryDate);
     }
@@ -1622,7 +1591,7 @@ export async function checkoutPosSale(db, session, body) {
 }
 
 // ==============================================================================
-// 🌐 14. OFFLINE BATCH IDEMPOTENT SYNC (ZERO DOUBLE-DEDUCTION PIPELINE)
+// 🌐 14. OFFLINE BATCH IDEMPOTENT SYNC
 // ==============================================================================
 export async function syncOfflinePosOrders(db, session, body) {
   try {
@@ -1712,7 +1681,11 @@ export async function syncOfflinePosOrders(db, session, body) {
 
     for (const item of affectedLedgers) {
       const [book, academicFy, date] = item.split(':');
-      await recalculateLedgerBalances(db, book, academicFy, date);
+      if (book === 'canteen_book') {
+        await recalculateCanteenBookBalances(db, academicFy, date);
+      } else {
+        await recalculateLedgerBalances(db, book, academicFy, date);
+      }
     }
 
     return {
@@ -1729,7 +1702,7 @@ export async function syncOfflinePosOrders(db, session, body) {
 }
 
 // ==============================================================================
-// 🔒 15. CANTEEN STORE CLOSURE & SETTLEMENT (SMART RETROSPECTIVE SHIFT CLOSE)
+// 🔒 15. CANTEEN STORE CLOSURE & SETTLEMENT
 // ==============================================================================
 export async function closeCanteenDay(db, session, body) {
   try {
@@ -1740,7 +1713,6 @@ export async function closeCanteenDay(db, session, body) {
       targetDate = todayStr;
     }
 
-    // 🛡️ Safety Guard: Do not allow accidental closing of future dates
     if (targetDate > todayStr) {
       return { success: false, message: `အနာဂတ်ရက်စွဲ (${targetDate}) အတွက် ဆိုင်ပိတ်သိမ်းခွင့် မရှိပါ။` };
     }
@@ -1813,9 +1785,7 @@ export async function getCanteenDailySummary(db, body) {
       targetDate = todayStr;
     }
 
-    // 🚀 D1 BATCH: 4 Queries in 1 single network round-trip!
     const [summaryRes, settleRes, closureRes, unclosedRes] = await db.batch([
-      // ၁။ ရွေးချယ်ထားသော ရက်စွဲ၏ အရောင်းစာရင်းချုပ်
       db.prepare(`
         SELECT 
           COUNT(id) as totalOrders, 
@@ -1827,7 +1797,6 @@ export async function getCanteenDailySummary(db, body) {
         WHERE date = ?
       `).bind(targetDate),
 
-      // ၂။ ရွေးချယ်ထားသော ရက်စွဲအတွက် Finance နှင့် ငွေရှင်းပြီး/မပြီး
       db.prepare(`
         SELECT settlement_no as settlementNo, net_payout_amount as netPayoutAmount, created_at as createdAt, handed_over_by as handedOverBy, received_by as receivedBy 
         FROM canteen_settlements 
@@ -1835,7 +1804,6 @@ export async function getCanteenDailySummary(db, body) {
         LIMIT 1
       `).bind(targetDate),
 
-      // ၃။ ရွေးချယ်ထားသော ရက်စွဲအတွက် ဆိုင်ပိတ်သိမ်းပြီး/မပြီး
       db.prepare(`
         SELECT date, closed_at as closedAt, closed_by as closedBy, total_sales as totalSales, status 
         FROM canteen_day_closures 
@@ -1843,7 +1811,6 @@ export async function getCanteenDailySummary(db, body) {
         LIMIT 1
       `).bind(targetDate),
 
-      // ၄။ 🌙 UNCLOSED SHIFT RADAR: မပိတ်ရသေးသော ယခင်အရောင်းဆိုင်းများ ရှာဖွေခြင်း
       db.prepare(`
         SELECT 
           p.date,
@@ -1950,7 +1917,8 @@ export async function saveCanteenSettlement(db, session, body) {
       )
     ]);
 
-    await recalculateLedgerBalances(db, 'canteen_book', fy, entryDate);
+    // ⚖️ Clear Inter-department Receivable Balance to 0!
+    await recalculateCanteenBookBalances(db, fy, entryDate);
     return {
       success: true,
       settlementNo,
@@ -1962,50 +1930,85 @@ export async function saveCanteenSettlement(db, session, body) {
   }
 }
 
+// ------------------------------------------------------------------------------
+// ⚡ 15.1 20-ROW D1 BATCH PAGINATED EVENING SETTLEMENTS AUDITOR (NEW)
+// ------------------------------------------------------------------------------
 export async function getCanteenSettlements(db, body) {
   try {
     const dateFrom = String(body.dateFrom || "").trim();
     const dateTo = String(body.dateTo || "").trim();
-    const limit = Math.min(100, Math.max(1, parseInt(body.limit || 30, 10)));
+    const searchVal = String(body.searchVal || "").trim();
+    const page = Math.max(1, parseInt(body.page || 1, 10));
+    const limit = Math.min(100, Math.max(1, parseInt(body.limit || 20, 10)));
+    const offset = (page - 1) * limit;
 
     let whereClauses = [];
     let params = [];
 
     if (dateFrom) { whereClauses.push(`date >= ?`); params.push(dateFrom); }
     if (dateTo) { whereClauses.push(`date <= ?`); params.push(dateTo); }
+    if (searchVal) {
+      whereClauses.push(`(settlement_no LIKE ? OR handed_over_by LIKE ? OR received_by LIKE ? OR remark LIKE ?)`);
+      const p = `%${searchVal}%`;
+      params.push(p, p, p, p);
+    }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-    const query = `
-      SELECT 
-        id, 
-        settlement_no as settlementNo, 
-        date, 
-        settlement_type as settlementType,
-        total_sales_amount as totalSalesAmount, 
-        pocket_money_share as pocketMoneyShare,
-        cash_sales_share as cashSalesShare, 
-        net_payout_amount as netPayoutAmount,
-        handed_over_by as handedOverBy, 
-        received_by as receivedBy, 
-        remark, 
-        uniqueid, 
-        created_at as createdAt
-      FROM canteen_settlements 
-      ${whereSql}
-      ORDER BY date DESC, id DESC 
-      LIMIT ?
-    `;
-    params.push(limit);
 
-    const res = await db.prepare(query).bind(...params).all();
-    return { success: true, data: res.results || [] };
+    // 🚀 D1 BATCH QUOTA-SHIELD: Single Roundtrip for Count/Aggregate & Paginated Rows
+    const [countRes, rowsRes] = await db.batch([
+      db.prepare(`
+        SELECT 
+          COUNT(id) as totalRows,
+          COALESCE(SUM(total_sales_amount), 0) as totalSalesAmount,
+          COALESCE(SUM(pocket_money_share), 0) as totalPocketMoneyShare,
+          COALESCE(SUM(cash_sales_share), 0) as totalCashSalesShare,
+          COALESCE(SUM(net_payout_amount), 0) as totalPayoutAmount
+        FROM canteen_settlements
+        ${whereSql}
+      `).bind(...params),
+
+      db.prepare(`
+        SELECT 
+          id, 
+          settlement_no as settlementNo, 
+          date, 
+          settlement_type as settlementType,
+          total_sales_amount as totalSalesAmount, 
+          pocket_money_share as pocketMoneyShare,
+          cash_sales_share as cashSalesShare, 
+          net_payout_amount as netPayoutAmount,
+          handed_over_by as handedOverBy, 
+          received_by as receivedBy, 
+          remark, 
+          uniqueid, 
+          created_at as createdAt
+        FROM canteen_settlements 
+        ${whereSql}
+        ORDER BY date DESC, id DESC 
+        LIMIT ? OFFSET ?
+      `).bind(...params, limit, offset)
+    ]);
+
+    const stats = countRes?.results?.[0] || {};
+    return {
+      success: true,
+      data: rowsRes?.results || [],
+      totalRows: stats.totalRows || 0,
+      totalSalesAmount: parseFloat(stats.totalSalesAmount || 0),
+      totalPocketMoneyShare: parseFloat(stats.totalPocketMoneyShare || 0),
+      totalCashSalesShare: parseFloat(stats.totalCashSalesShare || 0),
+      totalPayoutAmount: parseFloat(stats.totalPayoutAmount || 0),
+      page,
+      limit
+    };
   } catch (err) {
     return { success: false, message: "Settlement စာရင်း ဆွဲယူ၍ မရပါ: " + err.message };
   }
 }
 
 // ------------------------------------------------------------------------------
-// 🌙 15.1 UNCLOSED CANTEEN SHIFTS DIRECT RADAR (NEW)
+// 🌙 15.2 UNCLOSED CANTEEN SHIFTS DIRECT RADAR
 // ------------------------------------------------------------------------------
 export async function getUnclosedCanteenDates(db, body) {
   try {
@@ -2041,7 +2044,7 @@ export async function getUnclosedCanteenDates(db, body) {
 }
 
 // ==============================================================================
-// 💡 16. SUPPLIERS MASTER (FULL PROFILE: PH NO & ADDRESS)
+// 💡 16. SUPPLIERS MASTER
 // ==============================================================================
 export async function getPosSuppliers(db) {
   try {
