@@ -1,14 +1,19 @@
 /**
+ * ==============================================================================
  * GOLDEN ERP SYSTEM - PROGRESSIVE WEB APP (PWA) SERVICE WORKER
- * File: sw.js (Location: cashbook-frontend/sw.js)
- * 💡 Features: Fault-Tolerant Parallel Pre-caching (Zero Install Bottlenecks),
- *              Native Route Reconciliation via ignoreSearch (Phase 4.3),
- *              0ms Instant Offline Navigation (Stale-While-Revalidate Engine),
- *              🎯 Phase 4.1: Font Awesome WebFonts Pre-caching (Zero Broken Icons Offline),
- *              Crash-Proof Fetch Interceptor (Zero TypeError on Offline Drop)
+ * File: sw.js (Location: cashbook-frontend/sw.js - Enterprise V9.6 Full Edition)
+ * 💡 Features:
+ *   1. 🔄 INSTANT CACHE INVALIDATION: Bumped to v2026.10.10 to purge legacy UTC scripts
+ *   2. ⚡ FAULT-TOLERANT PRE-CACHING: Parallel caching with zero install bottlenecks
+ *   3. 🔀 NATIVE ROUTE RECONCILIATION: URL normalization via ignoreSearch
+ *   4. 🚀 0MS OFFLINE NAVIGATION: Resilient Stale-While-Revalidate caching engine
+ *   5. 🎨 WEBFONTS OFFLINE READY: Pre-caches FontAwesome for zero broken icons
+ *   6. 🛡️ BYPASS API TRAFFIC: Completely bypasses /api, workers.dev & actions
+ * ==============================================================================
  */
 
-const CACHE_NAME = 'golden-erp-cache-v2026.09.13';
+// 🎯 Version Bump: Forces client browsers to drop legacy cache and fetch fresh MMT scripts
+const CACHE_NAME = 'golden-erp-cache-v2026.10.10';
 
 // 💡 အော့ဖ်လိုင်းသုံးနိုင်ရန် စက်ထဲ ကြိုတင်သိမ်းဆည်းမည့် ဖိုင်များအားလုံး (CSS + JS + HTML Views + WebFonts)
 const PRECACHE_ASSETS = [
@@ -81,7 +86,7 @@ self.addEventListener('install', (event) => {
 });
 
 /**
- * 💡 2. Activate Event - Clean Old Cache Versions
+ * 💡 2. Activate Event - Clean Old Cache Versions & Claim Clients Instantly
  */
 self.addEventListener('activate', (event) => {
   console.log('[Service Worker] Activating & Cleaning Old Caches...');
@@ -112,7 +117,7 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
-  // Bypass API calls & Cloudflare Worker endpoints (Handled by offline-sync.js)
+  // Bypass API calls & Cloudflare Worker endpoints (Handled by offline-sync.js / api.js)
   if (
     request.method !== 'GET' ||
     url.pathname.startsWith('/api') ||
@@ -130,7 +135,11 @@ self.addEventListener('fetch', (event) => {
 
       const fetchPromise = fetch(request)
         .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200 && (networkResponse.type === 'basic' || networkResponse.type === 'cors')) {
+          if (
+            networkResponse && 
+            networkResponse.status === 200 && 
+            (networkResponse.type === 'basic' || networkResponse.type === 'cors')
+          ) {
             cache.put(request, networkResponse.clone());
           }
           return networkResponse;

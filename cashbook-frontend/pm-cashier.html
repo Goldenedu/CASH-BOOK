@@ -187,9 +187,23 @@
   <div id="pm-toast-box" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[999999] pointer-events-none w-11/12 max-w-sm"></div>
 
   <!-- ============================================================================== -->
-  <!-- 💡 JAVASCRIPT APP LOGIC (20-ROWS PAGINATED)                                    -->
+  <!-- 💡 JAVASCRIPT APP LOGIC (STRICT MMT UTC+06:30 & 20-ROWS PAGINATED)             -->
   <!-- ============================================================================== -->
   <script>
+    // 🕒 Pure Non-Recursive MMT Date Helper (UTC+06:30)
+    function getMMTDateString(dInput) {
+      if (typeof window.getMMTDateString === 'function') {
+        return window.getMMTDateString(dInput);
+      }
+      if (dInput && typeof dInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dInput.trim())) {
+        return dInput.trim();
+      }
+      const d = dInput ? new Date(dInput) : new Date();
+      const targetMs = isNaN(d.getTime()) ? Date.now() : d.getTime();
+      return new Date(targetMs + (6.5 * 60 * 60 * 1000)).toISOString().slice(0, 10);
+    }
+    window.getMMTDateString = getMMTDateString;
+
     let gSession = null;
     let gCashierList = [];
     let gMatchedStudent = null;
@@ -230,8 +244,8 @@
       else if (role === 'pm_cashier2') titleEl.textContent = 'PM CASHIER 2 (ငွေကိုင် ၂)';
       else titleEl.textContent = gSession.name || 'PM CASHIER';
 
-      const d = new Date();
-      document.getElementById('pm-today-date').textContent = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      // 🕒 Strict MMT Today Display
+      document.getElementById('pm-today-date').textContent = getMMTDateString();
 
       await loadPmCashierData();
     });
@@ -245,7 +259,7 @@
         const res = await callApi('getPmCashierBookData', { 
           page: gPmPage, 
           limit: gPmPageLimit,
-          responsibilityPerson: targetPerson, // 🎯 မိမိ Cashier သီးသန့် ခေါ်ယူခြင်း
+          responsibilityPerson: targetPerson,
           forceRefresh: true 
         }, 'GET');
 
@@ -254,7 +268,6 @@
           const stats = res.stats || {};
           gPmTotalRows = stats.totalRows || gCashierList.length;
 
-          // 🎯 Cashier 1 ၏ သီးသန့် အမှန်တကယ် လက်ကျန်ငွေသာ ပေါ်မည်
           const bal = stats.balance || 0;
           const tIn = stats.totalIn || 0;
           const tOut = stats.totalOut || 0;
@@ -283,7 +296,8 @@
         return;
       }
 
-      const todayStr = new Date().toISOString().slice(0, 10);
+      // 🕒 Strict MMT Today Filter
+      const todayStr = getMMTDateString();
 
       gCashierList.forEach(r => {
         const isFloat = r.category === 'Float Receive';
@@ -291,7 +305,6 @@
         const isToday = (r.date === todayStr);
         const canDelete = !isFloat && isToday;
 
-        // 🎯 ကျောင်းသား အချက်အလက်နှင့် မှတ်ချက်အား ၂ ပိုင်းခွဲ၍ သပ်ရပ်စွာ ပုံဖော်ခြင်း
         let descHtml = '';
         const match = (r.description || '').match(/^(\[[^\]]+\]\s*[^-]+)(?:\s*-\s*(.*))?$/);
         
@@ -404,20 +417,20 @@
         return showToast("ERROR", `ငွေကိုင်လက်ထဲတွင် လက်ကျန် (${curCash.toLocaleString()} MMK) သာ ရှိသဖြင့် မလုံလောက်ပါ!`);
       }
 
-      // 🎯 ကျောင်းသား ID နှင့် အမည်ကို ရှေ့တွင် အမြဲမပြတ် ထည့်သွင်းပေးခြင်း
       const stuPrefix = `[${gMatchedStudent.fyid || ''}] ${gMatchedStudent.name}`.trim();
       const userRemark = (document.getElementById('w-remark').value || '').trim();
       const finalDesc = userRemark ? `${stuPrefix} - ${userRemark}` : `${stuPrefix} - မုန့်ဖိုးထုတ်ပေးငွေ`;
 
+      // 🕒 Strict MMT Date Payload
       const payload = {
-        date: new Date().toISOString().slice(0, 10),
+        date: getMMTDateString(),
         category: 'PM Withdraw',
         studentId: parseInt(gMatchedStudent.studentId || gMatchedStudent.id, 10),
         studentName: gMatchedStudent.name,
         fyid: gMatchedStudent.fyid,
         studentClass: gMatchedStudent.class,
         credit: amount,
-        description: finalDesc // 🌟 [FYID] Name - Remark အပြည့်အစုံ သိမ်းဆည်းသည်
+        description: finalDesc
       };
 
       closeModal('pm-withdraw-modal');
@@ -441,8 +454,9 @@
         return showToast("ERROR", `လက်ထဲတွင် ငွေသား (${curCash.toLocaleString()} MMK) သာ ရှိသဖြင့် (${amount.toLocaleString()} MMK) ပြန်အပ်၍ မရပါ!`);
       }
 
+      // 🕒 Strict MMT Date Payload
       const payload = {
-        date: new Date().toISOString().slice(0, 10),
+        date: getMMTDateString(),
         category: 'Return to Finance',
         credit: amount,
         description: document.getElementById('r-remark').value
@@ -477,7 +491,8 @@
       const isFloat = row.category === 'Float Receive';
       const amount = (row.credit > 0 ? row.credit : row.debit) || 0;
       const vrNo = row.vrNo || 'TRF-' + String(row.date || '').replace(/-/g, '') + '-' + (row.no || '01');
-      const dateStr = row.date || new Date().toISOString().slice(0, 10);
+      // 🕒 Strict MMT Voucher Date
+      const dateStr = row.date || getMMTDateString();
       const respPerson = row.responsibility_person || gSession?.name || 'Cashier';
 
       const copyTitleTop = isFloat ? "FINANCE COPY (ဗဟိုဘဏ္ဍာသိမ်းဆည်းရန်ပြေစာ)" : "FINANCE COPY (ဗဟိုဘဏ္ဍာလက်ခံပြေစာ)";

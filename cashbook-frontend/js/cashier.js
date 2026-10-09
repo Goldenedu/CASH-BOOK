@@ -518,7 +518,11 @@ function openAddModalCashier() {
   if (uidEl) uidEl.value = '';
 
   const dateEl = document.getElementById('ca-date');
-  if (dateEl) dateEl.value = new Date().toISOString().slice(0, 10);
+  if (dateEl) {
+    dateEl.value = (typeof window.getMMTDateString === 'function')
+      ? window.getMMTDateString()
+      : new Date(Date.now() + (6.5 * 3600 * 1000)).toISOString().slice(0, 10);
+  }
 
   const debitEl = document.getElementById('ca-debit');
   if (debitEl) debitEl.value = 0;
@@ -707,7 +711,10 @@ function exportToCSVCashier() {
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = `${currentCashierSubBook}_export_${new Date().toISOString().slice(0, 10)}.csv`;
+  const todayMmtStr = (typeof window.getMMTDateString === 'function')
+    ? window.getMMTDateString()
+    : new Date(Date.now() + (6.5 * 3600 * 1000)).toISOString().slice(0, 10);
+  link.download = `${currentCashierSubBook}_export_${todayMmtStr}.csv`;
   link.style.display = 'none';
   document.body.appendChild(link);
   link.click();
