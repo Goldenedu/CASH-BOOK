@@ -5,19 +5,16 @@
  * 💡 Features: Refactored with Global api.js for DRY Principle,
  *              ⚡ ZERO-QUOTA FILTERING: In-Memory Multi-Filtering (FY + Grade + Search),
  *              🎯 Live Dynamic KPI Synchronization for Class & Year Selections,
- *              🛡️ Standalone Crash-Proof Pure Helpers, Title Sync to "Student Lists"
+ *              🛡️ Pure Standalone Helpers (Zero Recursion / Stack Overflow Eliminated)
  * ==============================================================================
  */
 
 // ==============================================================================
-// 💡 SAFE PURE LOGIC HELPERS (Crash-Proof Fallbacks)
+// 💡 SAFE PURE LOGIC HELPERS (Recursion Loop လုံးဝ မဖြစ်စေသော Pure Functions)
 // ==============================================================================
 
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
-  if (typeof window.escapeHtml === 'function' && window.escapeHtml !== escapeHtml) {
-    return window.escapeHtml(str);
-  }
   return String(str)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -28,15 +25,11 @@ function escapeHtml(str) {
 
 function escapeJsAttr(str) {
   if (str === null || str === undefined) return '';
-  if (typeof window.escapeJsAttr === 'function' && window.escapeJsAttr !== escapeJsAttr) {
-    return window.escapeJsAttr(str);
-  }
   const jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   return escapeHtml(jsEscaped);
 }
 
 function safeCsvCell(val) {
-  if (typeof window.safeCsvCell === 'function') return window.safeCsvCell(val);
   if (val === null || val === undefined) return '""';
   if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
 
@@ -53,10 +46,8 @@ function safeCsvCell(val) {
   return `"${str.replace(/"/g, '""')}"`;
 }
 
+// 🎯 Pure Logic (Recursion Loop မဖြစ်စေရန် window.* သို့ ပြန်မလှည့်ပါ)
 function autoDetectGender(nameStr) {
-  if (typeof window.autoDetectGender === 'function') {
-    return window.autoDetectGender(nameStr);
-  }
   if (!nameStr) return 'Male';
   const clean = String(nameStr).trim();
 
@@ -74,10 +65,8 @@ function autoDetectGender(nameStr) {
   return 'Male';
 }
 
+// 🎯 Pure Logic (RangeError မဖြစ်စေရန် တိုက်ရိုက်တွက်ချက်ပါသည်)
 function getCurrentAcademicYear(dateInput) {
-  if (typeof window.getCurrentAcademicYear === 'function') {
-    return window.getCurrentAcademicYear(dateInput);
-  }
   const d = dateInput ? new Date(dateInput) : new Date();
   const validDate = isNaN(d.getTime()) ? new Date() : d;
   let y = validDate.getFullYear();
@@ -87,10 +76,8 @@ function getCurrentAcademicYear(dateInput) {
   return `${y}-${y + 1}`;
 }
 
+// 🎯 Pure Logic (Recursion မဖြစ်စေရန် တိုက်ရိုက်တွက်ချက်ပါသည်)
 function getFyShortCode(fyStr) {
-  if (typeof window.getFyShortCode === 'function') {
-    return window.getFyShortCode(fyStr);
-  }
   if (fyStr) {
     const clean = String(fyStr).replace(/^FY\s*/i, '').trim();
     const parts = clean.split(/[-/]/);
@@ -199,7 +186,6 @@ function filterStudentData(list = [], searchVal = '', fyFilter = '', gradeFilter
 async function loadStudentData(isSilent = false) {
   if (!isSilent && typeof toggleLoading === 'function') toggleLoading(true);
 
-  // 🎯 စာမျက်နှာ ခေါင်းစဉ်ကို 'Student Lists' ဟု ရိုးရှင်းစွာ အလိုအလျောက် သတ်မှတ်ပေးခြင်း
   const pageTitle = document.getElementById('page-title');
   if (pageTitle) {
     pageTitle.textContent = "Student Lists";
@@ -317,7 +303,7 @@ function updateStatsStudent() {
 }
 
 /**
- * 💡 Render Table Grid Rows (Crash-Proof Escapers)
+ * 💡 Render Table Grid Rows
  */
 function renderStudentTable() {
   const tableBody = document.getElementById('student-table-body');
@@ -368,7 +354,6 @@ function renderStudentTable() {
     const parentsNameVal = row.parents_name || row.parentsName || "-";
     const phoneNoVal = row.phone_no || row.phoneNo || "-";
 
-    // 💡 Gender Precision Fix
     let detectedGender = String(row.gender || '').trim();
     const autoGen = autoDetectGender(row.name);
     if (!detectedGender || detectedGender.toLowerCase() === 'non' || (detectedGender.toLowerCase() === 'male' && autoGen === 'Female')) {
@@ -647,7 +632,6 @@ function openAddModalStudent() {
     dateEl.value = `${yyyy}-${mm}-${dd}`;
   }
 
-  // 🎯 Modal Form Title ကို 'Add New Entry' ဟု သတ်မှတ်သည်
   const title = document.getElementById('stu-form-title');
   if (title) title.textContent = 'Add New Entry';
 
@@ -664,7 +648,7 @@ function closeStudentModal() {
 }
 
 /**
- * 💡 Edit Student Entry (Modal Title "Edit Student Entry" ဖြင့် သပ်ရပ်စွာ ပေါ်စေသည်)
+ * 💡 Edit Student Entry
  */
 function editStudentEntry(uniqueId) {
   const row = window.StudentState.activeData.find(item => item.uniqueid === uniqueId || item.uniqueId === uniqueId);
@@ -675,7 +659,6 @@ function editStudentEntry(uniqueId) {
 
   openAddModalStudent();
 
-  // 🎯 Edit လုပ်ချိန်တွင် ခေါင်းစဉ် ပြောင်းပေးသည်
   const title = document.getElementById('stu-form-title');
   if (title) title.textContent = 'Edit Student Entry';
 
