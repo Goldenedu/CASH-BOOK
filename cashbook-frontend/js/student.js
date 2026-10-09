@@ -4,9 +4,121 @@
  * File: js/student.js (Location: cashbook-frontend/js/student.js)
  * 💡 Features: Refactored with Global api.js for DRY Principle,
  *              ⚡ ZERO-QUOTA FILTERING: In-Memory Multi-Filtering (FY + Grade + Search),
- *              🎯 Live Dynamic KPI Synchronization for Class & Year Selections
+ *              🎯 Live Dynamic KPI Synchronization for Class & Year Selections,
+ *              🛡️ Standalone Crash-Proof Pure Helpers, Title Sync to "Student Lists"
  * ==============================================================================
  */
+
+// ==============================================================================
+// 💡 SAFE PURE LOGIC HELPERS (Crash-Proof Fallbacks)
+// ==============================================================================
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  if (typeof window.escapeHtml === 'function' && window.escapeHtml !== escapeHtml) {
+    return window.escapeHtml(str);
+  }
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function escapeJsAttr(str) {
+  if (str === null || str === undefined) return '';
+  if (typeof window.escapeJsAttr === 'function' && window.escapeJsAttr !== escapeJsAttr) {
+    return window.escapeJsAttr(str);
+  }
+  const jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return escapeHtml(jsEscaped);
+}
+
+function safeCsvCell(val) {
+  if (typeof window.safeCsvCell === 'function') return window.safeCsvCell(val);
+  if (val === null || val === undefined) return '""';
+  if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
+
+  let str = String(val).trim();
+  if (str === '') return '""';
+
+  const cleanNumStr = str.replace(/,/g, '');
+  if (!isNaN(Number(cleanNumStr)) && cleanNumStr !== '') {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
+function autoDetectGender(nameStr) {
+  if (typeof window.autoDetectGender === 'function') {
+    return window.autoDetectGender(nameStr);
+  }
+  if (!nameStr) return 'Male';
+  const clean = String(nameStr).trim();
+
+  if (clean.startsWith('မေ') || clean.startsWith('ဒေါ်') || clean.startsWith('နန်း') || clean.startsWith('နော်') ||
+      /^(May|Daw|Nang|Naw)\b/i.test(clean) || clean.includes('Daw ') || clean.includes('ဒေါ်')) {
+    return 'Female';
+  }
+  if (clean.startsWith('မောင်') || clean.startsWith('ကို') || clean.startsWith('ဦး') ||
+      clean.startsWith('မင်း') || /^(Mg|Ko|U|Min)\b/i.test(clean) || /^(မောင်|ကို|ဦး|မင်း)/.test(clean)) {
+    return 'Male';
+  }
+  if ((clean.startsWith('မ') && !clean.startsWith('မောင်') && !clean.startsWith('မင်း')) || /^(Ma)\b/i.test(clean)) {
+    return 'Female';
+  }
+  return 'Male';
+}
+
+function getCurrentAcademicYear(dateInput) {
+  if (typeof window.getCurrentAcademicYear === 'function') {
+    return window.getCurrentAcademicYear(dateInput);
+  }
+  const d = dateInput ? new Date(dateInput) : new Date();
+  const validDate = isNaN(d.getTime()) ? new Date() : d;
+  let y = validDate.getFullYear();
+  if (validDate.getMonth() < 3) {
+    y -= 1;
+  }
+  return `${y}-${y + 1}`;
+}
+
+function getFyShortCode(fyStr) {
+  if (typeof window.getFyShortCode === 'function') {
+    return window.getFyShortCode(fyStr);
+  }
+  if (fyStr) {
+    const clean = String(fyStr).replace(/^FY\s*/i, '').trim();
+    const parts = clean.split(/[-/]/);
+    if (parts.length >= 2 && parts[0].trim() && parts[1].trim()) {
+      return parts[0].trim().slice(-2) + parts[1].trim().slice(-2);
+    }
+  }
+  const currentFy = getCurrentAcademicYear();
+  const p = currentFy.split('-');
+  return p[0].slice(-2) + p[1].slice(-2);
+}
+
+function sanitizeFyidStr(fyidStr) {
+  const s = String(fyidStr || '').trim();
+  if (!s) return s;
+  if (s.indexOf('.0') === -1) return s;
+  const cleaned = s.replace(/\.0/g, '');
+  const parts = cleaned.split(/-STU-/i);
+  if (parts.length === 2) {
+    const numPart = parseInt(parts[1], 10) || 0;
+    return `${parts[0]}-STU-${String(numPart).padStart(4, '0')}`;
+  }
+  return cleaned;
+}
+
+// ==============================================================================
+// 💡 GLOBAL VARIABLES & STATE
+// ==============================================================================
 
 window.StudentState = {
   page: 1,
@@ -15,7 +127,7 @@ window.StudentState = {
   activeData: [],
   searchVal: '',
   fyFilter: '',
-  gradeFilter: '', // 💡 Grade / Class Filter State
+  gradeFilter: '',
   stats: { totalActive: 0, totalInactive: 0, total: 0 }
 };
 
@@ -44,7 +156,7 @@ const CLASS_PROMOTION_MAP = {
  * ⚡ Multi-Parameter In-Memory Filtering (0 D1 Quota Used)
  */
 function filterStudentData(list = [], searchVal = '', fyFilter = '', gradeFilter = '') {
-  let filtered = list;
+  let filtered = [...list];
 
   // 1. Fiscal Year Filter
   if (fyFilter && fyFilter.trim()) {
@@ -71,7 +183,7 @@ function filterStudentData(list = [], searchVal = '', fyFilter = '', gradeFilter
     });
   }
 
-  // Strict NO Sequential Sorting
+  // Strict NO Sequential Sorting (Descending)
   filtered.sort((a, b) => {
     const noA = parseInt(a.no, 10) || 0;
     const noB = parseInt(b.no, 10) || 0;
@@ -81,8 +193,17 @@ function filterStudentData(list = [], searchVal = '', fyFilter = '', gradeFilter
   return filtered;
 }
 
+/**
+ * 💡 Load Student Data & Sync Page Title to "Student Lists"
+ */
 async function loadStudentData(isSilent = false) {
   if (!isSilent && typeof toggleLoading === 'function') toggleLoading(true);
+
+  // 🎯 စာမျက်နှာ ခေါင်းစဉ်ကို 'Student Lists' ဟု ရိုးရှင်းစွာ အလိုအလျောက် သတ်မှတ်ပေးခြင်း
+  const pageTitle = document.getElementById('page-title');
+  if (pageTitle) {
+    pageTitle.textContent = "Student Lists";
+  }
 
   const state = window.StudentState;
 
@@ -117,7 +238,7 @@ function populateMainFYFilterStudent() {
 
   const rawData = window.StudentState.activeData || [];
   const fySet = new Set();
-  fySet.add(window.getCurrentAcademicYear());
+  fySet.add(getCurrentAcademicYear());
 
   rawData.forEach(r => {
     if (r.fy) fySet.add(String(r.fy).trim().replace(/^FY\s*/i, ''));
@@ -143,9 +264,6 @@ function onFyFilterChangeStudent() {
   }
 }
 
-/**
- * 💡 Grade / Class Filter Handler (Instant In-Memory Update)
- */
 function onGradeFilterChangeStudent() {
   const select = document.getElementById('student-filter-grade');
   if (select) {
@@ -157,7 +275,7 @@ function onGradeFilterChangeStudent() {
 }
 
 /**
- * ⚡ Live Synchronized KPI Cards (Calculates based on Active Filter Selection)
+ * ⚡ Live Synchronized KPI Cards
  */
 function updateStatsStudent() {
   const rawData = window.StudentState.activeData || [];
@@ -198,6 +316,9 @@ function updateStatsStudent() {
   if (countEl) countEl.innerText = Number(list.length).toLocaleString('en-US');
 }
 
+/**
+ * 💡 Render Table Grid Rows (Crash-Proof Escapers)
+ */
 function renderStudentTable() {
   const tableBody = document.getElementById('student-table-body');
   if (!tableBody) return;
@@ -247,37 +368,43 @@ function renderStudentTable() {
     const parentsNameVal = row.parents_name || row.parentsName || "-";
     const phoneNoVal = row.phone_no || row.phoneNo || "-";
 
-    const detectedGender = row.gender || window.autoDetectGender(row.name);
-    const displayFyid = window.sanitizeFyidStr(row.fyid || '-');
+    // 💡 Gender Precision Fix
+    let detectedGender = String(row.gender || '').trim();
+    const autoGen = autoDetectGender(row.name);
+    if (!detectedGender || detectedGender.toLowerCase() === 'non' || (detectedGender.toLowerCase() === 'male' && autoGen === 'Female')) {
+      detectedGender = autoGen;
+    }
+
+    const displayFyid = sanitizeFyidStr(row.fyid || '-');
     const displayNo = parseInt(row.no, 10) || 1;
 
     return `
       <tr class="hover:bg-slate-800/20 text-slate-300">
         <td class="text-center font-mono font-bold text-slate-400 py-3 px-2">${displayNo}</td>
-        <td class="py-3 px-2"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">${window.escapeHtml(stuStatusVal)}</span></td>
-        <td class="font-mono text-xs py-3 px-2">${window.escapeHtml(displayDate || '-')}</td>
-        <td class="font-mono font-bold text-indigo-300 py-3 px-2">${window.escapeHtml(row.fy || '-')}</td>
-        <td class="font-bold text-slate-200 font-mono py-3 px-2">${window.escapeHtml(displayFyid)}</td>
-        <td class="font-bold text-slate-100 py-3 px-2">${window.escapeHtml(row.name || '-')}</td>
-        <td class="py-3 px-2">${window.escapeHtml(row.class || '-')}</td>
-        <td class="py-3 px-2"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400">${window.escapeHtml(row.category || '-')}</span></td>
-        <td class="py-3 px-2">${window.escapeHtml(row.promo || '-')}</td>
+        <td class="py-3 px-2"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">${escapeHtml(stuStatusVal)}</span></td>
+        <td class="font-mono text-xs py-3 px-2">${escapeHtml(displayDate || '-')}</td>
+        <td class="font-mono font-bold text-indigo-300 py-3 px-2">${escapeHtml(row.fy || '-')}</td>
+        <td class="font-bold text-slate-200 font-mono py-3 px-2">${escapeHtml(displayFyid)}</td>
+        <td class="font-bold text-slate-100 py-3 px-2">${escapeHtml(row.name || '-')}</td>
+        <td class="py-3 px-2">${escapeHtml(row.class || '-')}</td>
+        <td class="py-3 px-2"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400">${escapeHtml(row.category || '-')}</span></td>
+        <td class="py-3 px-2">${escapeHtml(row.promo || '-')}</td>
         <td class="py-3 px-2">
           <span class="px-2 py-0.5 rounded text-[10px] font-bold ${!isInactive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}">
-            ${window.escapeHtml(finalStatus)}
+            ${escapeHtml(finalStatus)}
           </span>
         </td>
-        <td class="font-semibold py-3 px-2">${window.escapeHtml(detectedGender)}</td>
-        <td class="font-mono text-xs py-3 px-2">${window.escapeHtml(displayTransDate || '-')}</td>
-        <td class="py-3 px-2">${window.escapeHtml(parentsNameVal)}</td>
-        <td class="font-mono text-xs whitespace-normal max-w-xs py-3 px-2">${window.escapeHtml(phoneNoVal)}</td>
-        <td class="max-w-xs truncate py-3 px-2" title="${window.escapeHtml(row.address || '')}">${window.escapeHtml(row.address || '-')}</td>
+        <td class="font-semibold py-3 px-2">${escapeHtml(detectedGender)}</td>
+        <td class="font-mono text-xs py-3 px-2">${escapeHtml(displayTransDate || '-')}</td>
+        <td class="py-3 px-2">${escapeHtml(parentsNameVal)}</td>
+        <td class="font-mono text-xs whitespace-normal max-w-xs py-3 px-2">${escapeHtml(phoneNoVal)}</td>
+        <td class="max-w-xs truncate py-3 px-2" title="${escapeHtml(row.address || '')}">${escapeHtml(row.address || '-')}</td>
         <td class="right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg text-center py-3 px-2">
           <div class="flex items-center justify-center gap-3 ${isViewer ? 'hidden' : ''}">
-            <button onclick="editStudentEntry('${window.escapeJsAttr(uniqueIdVal)}')" class="text-indigo-400 hover:text-indigo-300 transition" title="Edit Profile">
+            <button onclick="editStudentEntry('${escapeJsAttr(uniqueIdVal)}')" class="text-indigo-400 hover:text-indigo-300 transition" title="Edit Profile">
               <i class="fa-solid fa-pen-to-square"></i>
             </button>
-            <button onclick="deleteStudentEntry('${window.escapeJsAttr(uniqueIdVal)}')" class="text-rose-400 hover:text-rose-300 transition btn-delete" title="Delete Profile">
+            <button onclick="deleteStudentEntry('${escapeJsAttr(uniqueIdVal)}')" class="text-rose-400 hover:text-rose-300 transition btn-delete" title="Delete Profile">
               <i class="fa-solid fa-trash"></i>
             </button>
           </div>
@@ -331,7 +458,7 @@ function populateDynamicFYDropdownStudent(selectId) {
   const select = document.getElementById(selectId);
   if (!select) return;
 
-  const currentFY = window.getCurrentAcademicYear();
+  const currentFY = getCurrentAcademicYear();
   const startYear = parseInt(currentFY.split('-')[0], 10);
 
   const prevFY = `${startYear - 1}-${startYear}`;
@@ -426,6 +553,9 @@ function onOldStudentIdLookup() {
   }, 400);
 }
 
+/**
+ * 💡 Save Student Form (Modal Title Reset Included)
+ */
 async function saveStudentForm(e) {
   if (e && e.preventDefault) e.preventDefault();
 
@@ -438,11 +568,11 @@ async function saveStudentForm(e) {
   const transferDateVal = document.getElementById('stu-transferdate')?.value || "";
   const calculatedStatus = transferDateVal ? "Inactive" : "Active";
 
-  const fyVal = document.getElementById('stu-fy')?.value || window.getCurrentAcademicYear();
+  const fyVal = document.getElementById('stu-fy')?.value || getCurrentAcademicYear();
   const nameVal = document.getElementById('stu-name')?.value || "";
 
-  const detectedGender = window.autoDetectGender(nameVal);
-  const fyShort = window.getFyShortCode(fyVal);
+  const detectedGender = autoDetectGender(nameVal);
+  const fyShort = getFyShortCode(fyVal);
   const inputStudentId = document.getElementById('stu-id-input')?.value.trim();
   const hiddenStudentId = document.getElementById('stu-id')?.value.trim();
   const studentIdVal = inputStudentId || hiddenStudentId || "";
@@ -495,6 +625,9 @@ async function saveStudentForm(e) {
   }
 }
 
+/**
+ * 💡 Open Add Modal (Modal Title "Add New Entry" ဖြင့် ညှိထားသည်)
+ */
 function openAddModalStudent() {
   const form = document.getElementById('student-form');
   if (form) form.reset();
@@ -514,6 +647,10 @@ function openAddModalStudent() {
     dateEl.value = `${yyyy}-${mm}-${dd}`;
   }
 
+  // 🎯 Modal Form Title ကို 'Add New Entry' ဟု သတ်မှတ်သည်
+  const title = document.getElementById('stu-form-title');
+  if (title) title.textContent = 'Add New Entry';
+
   populateDynamicFYDropdownStudent('stu-fy');
   onStudentStatusChange();
 
@@ -526,6 +663,9 @@ function closeStudentModal() {
   if (modalEl) modalEl.classList.add('hidden');
 }
 
+/**
+ * 💡 Edit Student Entry (Modal Title "Edit Student Entry" ဖြင့် သပ်ရပ်စွာ ပေါ်စေသည်)
+ */
 function editStudentEntry(uniqueId) {
   const row = window.StudentState.activeData.find(item => item.uniqueid === uniqueId || item.uniqueId === uniqueId);
   if (!row) {
@@ -534,6 +674,10 @@ function editStudentEntry(uniqueId) {
   }
 
   openAddModalStudent();
+
+  // 🎯 Edit လုပ်ချိန်တွင် ခေါင်းစဉ် ပြောင်းပေးသည်
+  const title = document.getElementById('stu-form-title');
+  if (title) title.textContent = 'Edit Student Entry';
 
   const uidEl = document.getElementById('stu-uniqueId');
   if (uidEl) uidEl.value = row.uniqueid || row.uniqueId || "";
@@ -583,24 +727,24 @@ function editStudentEntry(uniqueId) {
 }
 
 async function deleteStudentEntry(uniqueId) {
-  if (confirm("ဤ ကျောင်းသား မှတ်တမ်းအား အပြီးတိုင် ဖျက်သိမ်းလိုပါသလား။")) {
+  if (!confirm("ဤ ကျောင်းသား မှတ်တမ်းအား အပြီးတိုင် ဖျက်သိမ်းလိုပါသလား။")) return;
+
+  try {
     if (typeof toggleLoading === 'function') toggleLoading(true);
-    try {
-      const response = await callApi('deleteStudentEntry', { uniqueId });
-      if (response && response.success) {
-        if (typeof showToast === 'function') showToast("SUCCESS", "ကျောင်းသား စာရင်း ဖျက်သိမ်းခြင်း အောင်မြင်ပါသည်။");
-        if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
-        window.studentsByFyCache = {};
-        window.gStudentCacheForMoney = {};
-        loadStudentData(true);
-      } else {
-        if (typeof showToast === 'function') showToast("ERROR", "ဖျက်သိမ်းမှု မအောင်မြင်ပါ: " + (response ? response.message : ""));
-      }
-    } catch (err) {
-      if (typeof showToast === 'function') showToast("ERROR", "ဆာဗာ ချိတ်ဆက်မှု အမှား: " + err.message);
-    } finally {
-      if (typeof toggleLoading === 'function') toggleLoading(false);
+    const response = await callApi('deleteStudentEntry', { uniqueId });
+    if (response && response.success) {
+      if (typeof showToast === 'function') showToast("SUCCESS", "ကျောင်းသား စာရင်း ဖျက်သိမ်းခြင်း အောင်မြင်ပါသည်။");
+      if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
+      window.studentsByFyCache = {};
+      window.gStudentCacheForMoney = {};
+      loadStudentData(true);
+    } else {
+      if (typeof showToast === 'function') showToast("ERROR", "ဖျက်သိမ်းမှု မအောင်မြင်ပါ: " + (response ? response.message : ""));
     }
+  } catch (err) {
+    if (typeof showToast === 'function') showToast("ERROR", "ဆာဗာ ချိတ်ဆက်မှု အမှား: " + err.message);
+  } finally {
+    if (typeof toggleLoading === 'function') toggleLoading(false);
   }
 }
 
@@ -618,26 +762,26 @@ function exportToCSVStudent() {
     let stat = isTransferred ? 'Inactive' : (row.status || 'Active');
 
     const displayNo = parseInt(row.no, 10) || (idx + 1);
-    const genderVal = row.gender || window.autoDetectGender(row.name);
-    const fyidClean = window.sanitizeFyidStr(row.fyid || '');
+    const genderVal = row.gender || autoDetectGender(row.name);
+    const fyidClean = sanitizeFyidStr(row.fyid || '');
 
     csv += `${displayNo},` +
-           `${window.safeCsvCell(row.stu_status || row.stuStatus || '')},` +
-           `${window.safeCsvCell(row.date || '')},` +
-           `${window.safeCsvCell(row.fy || '')},` +
-           `${window.safeCsvCell(row.student_id || row.id || '')},` +
-           `${window.safeCsvCell(fyidClean)},` +
-           `${window.safeCsvCell(row.name || '')},` +
-           `${window.safeCsvCell(row.class || '')},` +
-           `${window.safeCsvCell(row.category || '')},` +
-           `${window.safeCsvCell(row.promo || '')},` +
-           `${window.safeCsvCell(stat)},` +
-           `${window.safeCsvCell(genderVal)},` +
-           `${window.safeCsvCell(transDate)},` +
-           `${window.safeCsvCell(row.parents_name || row.parentsName || '')},` +
-           `${window.safeCsvCell(row.phone_no || row.phoneNo || '')},` +
-           `${window.safeCsvCell(row.address || '')},` +
-           `${window.safeCsvCell(row.uniqueid || row.uniqueId || '')}\n`;
+           `${safeCsvCell(row.stu_status || row.stuStatus || '')},` +
+           `${safeCsvCell(row.date || '')},` +
+           `${safeCsvCell(row.fy || '')},` +
+           `${safeCsvCell(row.student_id || row.id || '')},` +
+           `${safeCsvCell(fyidClean)},` +
+           `${safeCsvCell(row.name || '')},` +
+           `${safeCsvCell(row.class || '')},` +
+           `${safeCsvCell(row.category || '')},` +
+           `${safeCsvCell(row.promo || '')},` +
+           `${safeCsvCell(stat)},` +
+           `${safeCsvCell(genderVal)},` +
+           `${safeCsvCell(transDate)},` +
+           `${safeCsvCell(row.parents_name || row.parentsName || '')},` +
+           `${safeCsvCell(row.phone_no || row.phoneNo || '')},` +
+           `${safeCsvCell(row.address || '')},` +
+           `${safeCsvCell(row.uniqueid || row.uniqueId || '')}\n`;
   });
 
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
@@ -664,4 +808,8 @@ window.changePageStudent = changePageStudent;
 window.onStudentStatusChange = onStudentStatusChange;
 window.onOldStudentIdLookup = onOldStudentIdLookup;
 window.onFyFilterChangeStudent = onFyFilterChangeStudent;
-window.onGradeFilterChangeStudent = onGradeFilterChangeStudent; // 💡 NEW EXPOSURE
+window.onGradeFilterChangeStudent = onGradeFilterChangeStudent;
+window.getCurrentAcademicYear = getCurrentAcademicYear;
+window.getFyShortCode = getFyShortCode;
+window.sanitizeFyidStr = sanitizeFyidStr;
+window.autoDetectGender = autoDetectGender;
