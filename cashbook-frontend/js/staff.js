@@ -4,7 +4,8 @@
  * File: js/staff.js (Location: cashbook-frontend/js/staff.js)
  * 💡 Features: Safe Standalone Pure Escapers, 1-Row 4-KPI Grid Enforcer,
  *              Precision Gender Counting (Daw/ဒေါ် -> Female),
- *              Full Time Staff & Part Time Staff Spaced Buttons, Student-width Search
+ *              🎯 2-Line TOTAL NET AMT Table Head (Main Bank Book Style),
+ *              🎯 Uniform Add New Entry & Toolbar Buttons Integration
  * ==============================================================================
  */
 
@@ -160,54 +161,59 @@ async function switchStaffCategory(category) {
   await loadStaffData(false);
 }
 
+/**
+ * 💡 Main Bank Book စတိုင်အတိုင်း ညှိထားသော Table Head (TOTAL NET AMT ၂ ကြောင်း အတိအကျ)
+ */
 function renderStaffTableHead() {
   const thead = document.getElementById('staff-table-head');
   if (!thead) return;
 
   if (gStaffCategory === 'Full Time') {
     thead.innerHTML = `
-      <tr class="bg-[#0e172a]">
-        <th scope="col" class="w-12 text-center text-slate-400 text-xs py-3">NO</th>
-        <th scope="col" class="w-28 text-slate-400 text-xs py-3">JOIN DATE</th>
-        <th scope="col" class="min-w-[200px] text-slate-400 text-xs py-3">STAFF IDNAME</th>
-        <th scope="col" class="w-28 text-slate-400 text-xs py-3">EDUCATION</th>
-        <th scope="col" class="w-36 text-slate-400 text-xs py-3">POSITION</th>
-        <th scope="col" class="w-28 text-slate-400 text-xs py-3">SALARY GRADE</th>
-        <th scope="col" class="w-28 text-right text-slate-400 text-xs py-3">WORKING DAYS</th>
-        <th scope="col" class="w-32 text-right text-slate-400 text-xs py-3">BASIC AMT</th>
-        <th scope="col" class="w-32 text-right text-slate-400 text-xs py-3">EXTRA AMT</th>
-        <th scope="col" class="w-32 text-right text-slate-400 text-xs py-3">TOTAL SALARY</th>
-        <th scope="col" class="w-28 text-right text-emerald-400 text-xs py-3">BONUS</th>
-        <th scope="col" class="w-28 text-right text-teal-400 text-xs py-3">FUND</th>
-        <th scope="col" class="w-36 text-right text-indigo-400 text-xs py-3">TOTAL NET AMT</th>
-        <th scope="col" class="w-24 text-center text-slate-400 text-xs py-3">STATUS</th>
-        <th scope="col" class="w-24 text-slate-400 text-xs py-3">GENDER</th>
-        <th scope="col" class="w-36 text-slate-400 text-xs py-3">NRC NO</th>
-        <th scope="col" class="w-36 text-slate-400 text-xs py-3">BANK ACCOUNT</th>
-        <th scope="col" class="w-36 text-slate-400 text-xs py-3">PHONE NO</th>
-        <th scope="col" class="w-44 text-slate-400 text-xs py-3">EMAIL</th>
-        <th scope="col" class="w-28 text-slate-400 text-xs py-3">FUND DATE</th>
-        <th scope="col" class="w-32 text-right text-emerald-400 text-xs py-3">UNPAID BONUS</th>
-        <th scope="col" class="w-32 text-right text-teal-400 text-xs py-3">UNPAID FUND</th>
-        <th scope="col" class="w-24 text-center text-slate-400 text-xs py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">ACTION</th>
+      <tr class="bg-[#0e172a] text-slate-400 text-xs font-bold uppercase border-b border-slate-800">
+        <th scope="col" class="w-12 text-center text-slate-500 py-3 px-2">NO</th>
+        <th scope="col" class="w-28 py-3 px-2">JOIN DATE</th>
+        <th scope="col" class="min-w-[200px] py-3 px-2 text-slate-200">STAFF IDNAME</th>
+        <th scope="col" class="w-28 py-3 px-2">EDUCATION</th>
+        <th scope="col" class="w-36 py-3 px-2">POSITION</th>
+        <th scope="col" class="w-28 py-3 px-2 text-amber-400">SALARY GRADE</th>
+        <th scope="col" class="w-24 text-right py-3 px-2">WORKING DAYS</th>
+        <th scope="col" class="w-28 text-right py-3 px-2">BASIC AMT</th>
+        <th scope="col" class="w-28 text-right py-3 px-2">EXTRA AMT</th>
+        <th scope="col" class="w-32 text-right py-3 px-2">TOTAL SALARY</th>
+        <th scope="col" class="w-24 text-right text-emerald-400 py-3 px-2">BONUS</th>
+        <th scope="col" class="w-24 text-right text-teal-400 py-3 px-2">FUND</th>
+        <!-- 🎯 TOTAL NET AMT အား ၂ ကြောင်း အတိအကျ သတ်မှတ်ထားသည် -->
+        <th scope="col" class="w-32 text-right text-indigo-400 py-3 px-2 leading-tight min-w-[120px]">TOTAL<br>NET AMT</th>
+        <th scope="col" class="w-24 text-center py-3 px-2">STATUS</th>
+        <th scope="col" class="w-24 py-3 px-2">GENDER</th>
+        <th scope="col" class="w-36 py-3 px-2">NRC NO</th>
+        <th scope="col" class="w-36 py-3 px-2">BANK ACCOUNT</th>
+        <th scope="col" class="w-36 py-3 px-2">PHONE NO</th>
+        <th scope="col" class="w-44 py-3 px-2">EMAIL</th>
+        <th scope="col" class="w-28 py-3 px-2">FUND DATE</th>
+        <th scope="col" class="w-32 text-right text-emerald-400 py-3 px-2">UNPAID BONUS</th>
+        <th scope="col" class="w-32 text-right text-teal-400 py-3 px-2">UNPAID FUND</th>
+        <th scope="col" class="w-24 text-center py-3 px-2 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg text-slate-400">ACTION</th>
       </tr>`;
   } else {
     thead.innerHTML = `
-      <tr class="bg-[#0e172a]">
-        <th scope="col" class="w-12 text-center text-slate-400 text-xs py-3">NO</th>
-        <th scope="col" class="w-28 text-slate-400 text-xs py-3">JOIN DATE</th>
-        <th scope="col" class="min-w-[200px] text-slate-400 text-xs py-3">STAFF IDNAME</th>
-        <th scope="col" class="w-28 text-slate-400 text-xs py-3">EDUCATION</th>
-        <th scope="col" class="w-36 text-slate-400 text-xs py-3">POSITION</th>
-        <th scope="col" class="w-32 text-right text-indigo-400 text-xs py-3">TOTAL SALARY</th>
-        <th scope="col" class="w-36 text-right text-indigo-400 text-xs py-3">TOTAL NET AMT</th>
-        <th scope="col" class="w-24 text-center text-slate-400 text-xs py-3">STATUS</th>
-        <th scope="col" class="w-24 text-slate-400 text-xs py-3">GENDER</th>
-        <th scope="col" class="w-36 text-slate-400 text-xs py-3">NRC NO</th>
-        <th scope="col" class="w-36 text-slate-400 text-xs py-3">BANK ACCOUNT</th>
-        <th scope="col" class="w-36 text-slate-400 text-xs py-3">PHONE NO</th>
-        <th scope="col" class="w-44 text-slate-400 text-xs py-3">EMAIL</th>
-        <th scope="col" class="w-24 text-center text-slate-400 text-xs py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">ACTION</th>
+      <tr class="bg-[#0e172a] text-slate-400 text-xs font-bold uppercase border-b border-slate-800">
+        <th scope="col" class="w-12 text-center text-slate-500 py-3 px-2">NO</th>
+        <th scope="col" class="w-28 py-3 px-2">JOIN DATE</th>
+        <th scope="col" class="min-w-[200px] py-3 px-2 text-slate-200">STAFF IDNAME</th>
+        <th scope="col" class="w-28 py-3 px-2">EDUCATION</th>
+        <th scope="col" class="w-36 py-3 px-2">POSITION</th>
+        <th scope="col" class="w-32 text-right text-indigo-400 py-3 px-2">TOTAL SALARY</th>
+        <!-- 🎯 TOTAL NET AMT အား ၂ ကြောင်း အတိအကျ သတ်မှတ်ထားသည် -->
+        <th scope="col" class="w-36 text-right text-indigo-400 py-3 px-2 leading-tight min-w-[120px]">TOTAL<br>NET AMT</th>
+        <th scope="col" class="w-24 text-center py-3 px-2">STATUS</th>
+        <th scope="col" class="w-24 py-3 px-2">GENDER</th>
+        <th scope="col" class="w-36 py-3 px-2">NRC NO</th>
+        <th scope="col" class="w-36 py-3 px-2">BANK ACCOUNT</th>
+        <th scope="col" class="w-36 py-3 px-2">PHONE NO</th>
+        <th scope="col" class="w-44 py-3 px-2">EMAIL</th>
+        <th scope="col" class="w-24 text-center py-3 px-2 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg text-slate-400">ACTION</th>
       </tr>`;
   }
 }
@@ -590,6 +596,9 @@ function calculateLiveStaffSalary() {
   if (pNet) pNet.textContent = `${totalNet.toLocaleString('en-US')} MMK`;
 }
 
+/**
+ * 🎯 Modal Form Title ကို "Add New Entry" ဟု စနစ်တကျ သတ်မှတ်ခြင်း
+ */
 async function openAddModalStaff() {
   const modal = document.getElementById('staff-modal');
   const form = document.getElementById('staff-form');
@@ -603,7 +612,7 @@ async function openAddModalStaff() {
   if (joinDate) joinDate.value = new Date().toISOString().slice(0, 10);
 
   const title = document.getElementById('staff-form-title');
-  if (title) title.textContent = `Add ${gStaffCategory} Record`;
+  if (title) title.textContent = "Add New Entry";
 
   const ftFields = document.getElementById('staff-fulltime-fields');
   const ptFields = document.getElementById('staff-parttime-fields');
@@ -627,9 +636,6 @@ function closeStaffModal() {
   if (modal) modal.classList.add('hidden');
 }
 
-/**
- * 💡 Salary Grade Matrix Modal Handlers (Fail-Safe)
- */
 async function openGradeModal() {
   const modal = document.getElementById('grade-modal') || document.getElementById('salary-grade-modal');
   if (modal) {
@@ -654,7 +660,7 @@ async function editStaffEntry(uniqueId) {
   await openAddModalStaff();
 
   const title = document.getElementById('staff-form-title');
-  if (title) title.textContent = `Edit ${gStaffCategory} Record`;
+  if (title) title.textContent = `Edit Entry (${gStaffCategory})`;
 
   if (document.getElementById('staff-uniqueId')) document.getElementById('staff-uniqueId').value = item.uniqueid || item.uniqueId || '';
   if (document.getElementById('staff-joindate')) document.getElementById('staff-joindate').value = item.join_date || item.joinDate || '';
@@ -682,9 +688,6 @@ async function editStaffEntry(uniqueId) {
   calculateLiveStaffSalary();
 }
 
-/**
- * 💡 SAVE STAFF FORM (With Auto Status: Inactive on Resigned Date & Cache Clearing)
- */
 async function saveStaffForm(event) {
   if (event && event.preventDefault) event.preventDefault();
 
@@ -794,9 +797,6 @@ async function deleteStaffEntry(uniqueId) {
   }
 }
 
-/**
- * 💡 FULL 26-COLUMN CSV EXPORTER
- */
 function exportToCSVStaff() {
   if (!gStaffData || gStaffData.length === 0) {
     if (typeof showToast === 'function') showToast("ERROR", "ထုတ်ယူရန် မည်သည့် အချက်အလက်မျှ မရှိပါ။");
