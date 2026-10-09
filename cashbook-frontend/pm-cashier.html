@@ -192,15 +192,13 @@
   <script>
     // 🕒 Pure Non-Recursive MMT Date Helper (UTC+06:30)
     function getMMTDateString(dInput) {
-      if (typeof window.getMMTDateString === 'function') {
-        return window.getMMTDateString(dInput);
-      }
       if (dInput && typeof dInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dInput.trim())) {
         return dInput.trim();
       }
       const d = dInput ? new Date(dInput) : new Date();
       const targetMs = isNaN(d.getTime()) ? Date.now() : d.getTime();
-      return new Date(targetMs + (6.5 * 60 * 60 * 1000)).toISOString().slice(0, 10);
+      const mmt = new Date(targetMs + (6.5 * 60 * 60 * 1000));
+      return mmt.toISOString().slice(0, 10);
     }
     window.getMMTDateString = getMMTDateString;
 
