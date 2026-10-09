@@ -409,24 +409,31 @@ export async function saveHrPayrollForm(db, userSession, body) {
     const batchStatements = [expenseStmt];
 
     if (!isMigration && staffIdStr) {
-      const targetStaffId = parseInt(staffIdStr, 10);
-      // 🚀 ULTRA-OPTIMIZATION: Explicit Column Select
-      const staffRow = await db.prepare("SELECT id, unpaid_bonus, unpaid_fund, bonus, fund FROM staff_fulltime WHERE staff_id = ? OR id = ? LIMIT 1").bind(targetStaffId, targetStaffId).first();
-      // ...
+      // 💡 FIX: Extract only numbers if staffIdStr contains text like "FID 001"
+      const extractedIdMatch = staffIdStr.match(/\d+/);
+      const targetStaffId = extractedIdMatch ? parseInt(extractedIdMatch[0], 10) : 0;
 
-      if (staffRow) {
-        if (category === 'Full Time Salary') {
-          const newUnpaidBonus = (parseFloat(staffRow.unpaid_bonus || 0)) + parseFloat(staffRow.bonus || 0);
-          const newUnpaidFund = (parseFloat(staffRow.unpaid_fund || 0)) + parseFloat(staffRow.fund || 0);
-          batchStatements.push(db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ?, unpaid_fund = ? WHERE id = ?`).bind(newUnpaidBonus, newUnpaidFund, staffRow.id));
-        } else if (category === 'Full Time Bonus') {
-          const currentBonus = parseFloat(staffRow.unpaid_bonus || 0);
-          const newUnpaidBonus = Math.max(0, currentBonus - creditVal);
-          batchStatements.push(db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ? WHERE id = ?`).bind(newUnpaidBonus, staffRow.id));
-        } else if (category === 'Full Time Fund') {
-          const currentFund = parseFloat(staffRow.unpaid_fund || 0);
-          const newUnpaidFund = Math.max(0, currentFund - creditVal);
-          batchStatements.push(db.prepare(`UPDATE staff_fulltime SET unpaid_fund = ? WHERE id = ?`).bind(newUnpaidFund, staffRow.id));
+      if (targetStaffId > 0) {
+        // 🚀 ULTRA-OPTIMIZATION: Explicit Column Select
+        const staffRow = await db.prepare("SELECT id, unpaid_bonus, unpaid_fund, bonus, fund FROM staff_fulltime WHERE staff_id = ? OR id = ? LIMIT 1").bind(targetStaffId, targetStaffId).first();
+
+        if (staffRow) {
+          // 💡 FIX: Make category matching case-insensitive and robust
+          const catLower = category.toLowerCase().trim();
+
+          if (catLower.includes('salary')) {
+            const newUnpaidBonus = (parseFloat(staffRow.unpaid_bonus || 0)) + parseFloat(staffRow.bonus || 0);
+            const newUnpaidFund = (parseFloat(staffRow.unpaid_fund || 0)) + parseFloat(staffRow.fund || 0);
+            batchStatements.push(db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ?, unpaid_fund = ? WHERE id = ?`).bind(newUnpaidBonus, newUnpaidFund, staffRow.id));
+          } else if (catLower.includes('bonus')) {
+            const currentBonus = parseFloat(staffRow.unpaid_bonus || 0);
+            const newUnpaidBonus = Math.max(0, currentBonus - creditVal);
+            batchStatements.push(db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ? WHERE id = ?`).bind(newUnpaidBonus, staffRow.id));
+          } else if (catLower.includes('fund')) {
+            const currentFund = parseFloat(staffRow.unpaid_fund || 0);
+            const newUnpaidFund = Math.max(0, currentFund - creditVal);
+            batchStatements.push(db.prepare(`UPDATE staff_fulltime SET unpaid_fund = ? WHERE id = ?`).bind(newUnpaidFund, staffRow.id));
+          }
         }
       }
     }
