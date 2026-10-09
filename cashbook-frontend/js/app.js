@@ -4,9 +4,11 @@
  * File: js/app.js (Location: cashbook-frontend/js/app.js)
  * 💡 Features: 🛡️ 404 View Crash Eliminated (Canonical Unified Reports Mapping),
  *              🎯 Sub-Report Sidebar Highlight Memory & Panel Visibility Fix,
- *              Dynamic Header Academic Year Calculator (No Hardcoded 26-27),
+ *              🎯 Dynamic Header Academic Year Synchronizer (Aligned with Calendar),
+ *              🎯 Simplified "Staff Lists" Title Map (Consistent UI),
  *              Double-Submit Guard for Salary Grade Matrix Settings,
- *              Event-Safe Animated Refresh Controller & Centralized Modal Loaders
+ *              Event-Safe Animated Refresh Controller (No premature fake toasts),
+ *              🛡️ XSS-Safe Category Badge Formatter
  * ==============================================================================
  */
 
@@ -14,39 +16,41 @@ window.viewCache = window.viewCache || {};
 var isGradeSubmitting = false;
 
 /**
- * 💡 Universal Category Badge Formatter Across the Entire App
+ * 💡 Universal Category Badge Formatter Across the Entire App (XSS-Safe)
  */
 window.formatCategoryBadgeHtml = function (categoryStr) {
   const cat = String(categoryStr || '-').trim();
   if (!cat || cat === '-') return '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-800 text-slate-400 border border-slate-700/60">-</span>';
 
+  // 🛡️ Safe HTML Escaping
+  const safeCat = (typeof window.escapeHtml === 'function') ? window.escapeHtml(cat) : cat;
   const lower = cat.toLowerCase();
 
   if (lower.includes('loan') || lower.includes('adv') || lower.includes('expense') || lower.includes('liability')) {
-    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-sm shadow-rose-950/20"><i class="fa-solid fa-triangle-exclamation text-[9px] text-rose-400"></i> ${cat}</span>`;
+    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-sm shadow-rose-950/20"><i class="fa-solid fa-triangle-exclamation text-[9px] text-rose-400"></i> ${safeCat}</span>`;
   }
 
   if (lower.includes('income') || lower.includes('sale') || lower.includes('service') || lower.includes('fee') || lower.includes('tuition')) {
-    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-950/20"><i class="fa-solid fa-circle-arrow-down text-[9px] text-emerald-400"></i> ${cat}</span>`;
+    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-950/20"><i class="fa-solid fa-circle-arrow-down text-[9px] text-emerald-400"></i> ${safeCat}</span>`;
   }
 
   if (lower.includes('transfer') || lower.includes('move')) {
-    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-sm shadow-sky-950/20"><i class="fa-solid fa-right-left text-[9px] text-sky-400"></i> ${cat}</span>`;
+    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-sm shadow-sky-950/20"><i class="fa-solid fa-right-left text-[9px] text-sky-400"></i> ${safeCat}</span>`;
   }
 
   if (lower.includes('open') || lower.includes('balance') || lower.includes('capital')) {
-    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm shadow-amber-950/20"><i class="fa-solid fa-vault text-[9px] text-amber-400"></i> ${cat}</span>`;
+    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm shadow-amber-950/20"><i class="fa-solid fa-vault text-[9px] text-amber-400"></i> ${safeCat}</span>`;
   }
 
   if (lower.includes('payroll') || lower.includes('salary') || lower.includes('bonus') || lower.includes('fund') || lower.includes('staff')) {
-    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-950/20"><i class="fa-solid fa-user-tag text-[9px] text-purple-400"></i> ${cat}</span>`;
+    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-950/20"><i class="fa-solid fa-user-tag text-[9px] text-purple-400"></i> ${safeCat}</span>`;
   }
 
   if (lower.includes('boarder') || lower.includes('student') || lower.includes('uniform') || lower.includes('stock')) {
-    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-sm shadow-teal-950/20"><i class="fa-solid fa-tag text-[9px] text-teal-400"></i> ${cat}</span>`;
+    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-sm shadow-teal-950/20"><i class="fa-solid fa-tag text-[9px] text-teal-400"></i> ${safeCat}</span>`;
   }
 
-  return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700/60">${cat}</span>`;
+  return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700/60">${safeCat}</span>`;
 };
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -89,7 +93,7 @@ function initApp() {
 }
 
 /**
- * 💡 Dynamic Header Academic Year & Time Indicator
+ * 💡 Dynamic Header Academic Year & Time Indicator (Aligned with 100% Calendar Boundary)
  */
 function updateHeaderMetadata(username) {
   const metaEl = document.getElementById('live-metadata');
@@ -101,10 +105,15 @@ function updateHeaderMetadata(username) {
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const dayName = days[d.getDay()];
 
-  // 🎯 DYNAMIC FISCAL YEAR: မတ်လစတင်သည့် Academic Boundary အတိုင်း အလိုအလျောက် တွက်ချက်သည်
-  let fyYear = d.getFullYear();
-  if (d.getMonth() < 2) fyYear -= 1;
-  const currentFyStr = `FY ${fyYear}-${fyYear + 1}`;
+  // 🎯 FIX: တခြားဖိုင်များနှင့် တစ်ပြေးညီဖြစ်စေရန် getCurrentAcademicYear ကို ဦးစားပေးသုံးသည်
+  let currentFyStr = "";
+  if (typeof window.getCurrentAcademicYear === 'function') {
+    currentFyStr = `FY ${window.getCurrentAcademicYear()}`;
+  } else {
+    let fyYear = d.getFullYear();
+    if (d.getMonth() < 3) fyYear -= 1; // ဇန်နဝါရီ၊ ဖေဖော်ဝါရီ၊ မတ်လ (0, 1, 2) သည် ယခင်ပညာသင်နှစ်ထဲတွင် ရှိဆဲဖြစ်သည်
+    currentFyStr = `FY ${fyYear}-${fyYear + 1}`;
+  }
 
   let hours = d.getHours();
   const minutes = String(d.getMinutes()).padStart(2, '0');
@@ -135,7 +144,6 @@ async function switchTab(tabId) {
     return;
   }
 
-  // ⚡ FIX: 'report-staff-fund' သည် မရှိသော 'reports-fund.html' သို့ မသွားဘဲ 'reports.html' သို့ သွားရမည်
   const viewMap = {
     'dashboard': 'dashboard',
     'bank': 'bank-cash',
@@ -154,10 +162,11 @@ async function switchTab(tabId) {
     'report-in-detail': 'reports',
     'report-in-rep': 'reports',
     'report-student': 'reports',
-    'report-staff-fund': 'reports', // 🎯 FIX: 404 View Crash အပြီးတိုင် ရှင်းလင်းပြီး
+    'report-staff-fund': 'reports',
     'settings': 'settings'
   };
 
+  // 🎯 FIX: 'staff' Title ကို ရိုးရှင်းသော "Staff Lists" သို့ အဆင့်မြှင့်တင်ထားသည်
   const titleMap = {
     'dashboard': 'Home Dashboard',
     'bank': 'Main Bank Book',
@@ -166,7 +175,7 @@ async function switchTab(tabId) {
     'office': 'Office Expense Book',
     'kitchen': 'Kitchen Expense Book',
     'hr': 'HR Payroll Expense Book',
-    'staff': 'Staff Directory & Matrix List',
+    'staff': 'Staff Lists',
     'cashier': 'Cashier Cash Book',
     'student': 'Student Directory List',
     'student-money': 'Student Money Ledger & Wallet',
@@ -340,7 +349,6 @@ async function triggerModuleInit(tabId) {
         break;
 
       case 'report-staff-fund':
-        // ⚡ FIX: Panel ကို အရင်ပြသပြီးမှ Data ဆွဲတင်စေသည်
         if (typeof showReportPanel === 'function') {
           showReportPanel('panel-report-staff-fund');
         } else if (typeof loadReportStaffFundData === 'function') {
@@ -349,6 +357,10 @@ async function triggerModuleInit(tabId) {
         break;
 
       case 'settings':
+        // 🎯 FIX: Settings သို့ ပြန်လာတိုင်း ပထမ Sub-Tab ဖြစ်သော 'balances' ကို Default ဖွင့်ပေးသည်
+        if (typeof window.switchSettingsSubTab === 'function') {
+          window.switchSettingsSubTab('balances');
+        }
         if (typeof loadSettingsData === 'function') {
           await loadSettingsData(false);
         }
@@ -364,7 +376,6 @@ async function triggerModuleInit(tabId) {
 
 /**
  * 💡 Sidebar Active State Synchronization
- * Sub-Report Tab ၅ ခုစလုံးအတွက် "Financial Reports" ခလုတ်ကို အမြဲတမ်း Highlight ထိန်းထားပေးသည်
  */
 function updateSidebarHighlight(activeTabId) {
   const navBtns = document.querySelectorAll('.nav-btn');
@@ -372,7 +383,6 @@ function updateSidebarHighlight(activeTabId) {
     btn.classList.remove('active');
   });
 
-  // 🎯 Sub-Reports များကို Main Sidebar Button နှင့် ချိတ်ဆက်ပေးခြင်း
   let highlightTarget = activeTabId;
   if (activeTabId.startsWith('report-')) {
     highlightTarget = 'report-financial';
@@ -479,6 +489,7 @@ async function saveGradeForm(event) {
 
 /**
  * 💡 Universal Animated Refresh Button Controller (Event-Safe Timing)
+ * 🎯 FIX: အချိန်မတိုင်မီ Fake Toast ပြသခြင်းကို ဖယ်ရှားပြီး Animation နှင့် Cache Invalidation သာ သန့်ရှင်းစွာ ပြုလုပ်သည်
  */
 document.addEventListener('click', function(e) {
   const refreshBtn = e.target.closest('button');
@@ -487,28 +498,19 @@ document.addEventListener('click', function(e) {
   const btnText = refreshBtn.innerText || '';
   const hasRotateIcon = refreshBtn.querySelector('.fa-rotate, .fa-arrows-rotate, .fa-sync');
 
-  // Refresh ဟုပါသော ခလုတ်အားလုံးကို လှပသော Animation ထည့်ပေးခြင်း
+  // Refresh ခလုတ်ဖြစ်ပါက လှပသော Animation လှည့်ပေးခြင်းနှင့် Cache ရှင်းပေးခြင်း
   if (btnText.includes('Refresh') || hasRotateIcon) {
     const icon = refreshBtn.querySelector('i');
     if (icon) icon.classList.add('fa-spin');
 
-    // ⚡ Clear Cache to force fresh server fetch
+    // ⚡ Cache ရှင်းထုတ်ပြီး Server သို့ တိုက်ရိုက်ခေါ်စေခြင်း
     if (typeof window.clearAllApiCache === 'function') {
       window.clearAllApiCache();
     }
 
-    // Event Handler execute ဖြစ်ပြီးမှ disabled လုပ်ရန် ခေတ္တစောင့်သည်
-    setTimeout(() => {
-      refreshBtn.disabled = true;
-    }, 10);
-
     setTimeout(() => {
       if (icon) icon.classList.remove('fa-spin');
-      refreshBtn.disabled = false;
-      if (typeof window.showToast === 'function') {
-        window.showToast("SUCCESS", "🔄 စာရင်း အချက်အလက်များ အသစ်ပြန်လည် ရယူပြီးပါပြီ။");
-      }
-    }, 600);
+    }, 800);
   }
 });
 
