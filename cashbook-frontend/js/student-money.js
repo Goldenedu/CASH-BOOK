@@ -1,17 +1,18 @@
 /**
  * ==============================================================================
- * GOLDEN ERP SYSTEM - SPMMS FRONTEND CONTROLLER (ENTERPRISE V9.6 FULL EDITION)
+ * GOLDEN ERP SYSTEM - SPMMS FRONTEND CONTROLLER (ENTERPRISE V9.7 FULL EDITION)
  * File: js/student-money.js (Location: cashbook-frontend/js/student-money.js)
  * 
  * 💡 Features:
  *   1. 🕒 STRICT MMT (UTC+06:30) TIMEZONE: Complete fix for midnight 1-day offset
- *   2. 🌙 RETROSPECTIVE SETTLEMENT RADAR: Smart clearing of past/unsettled canteen shifts
- *   3. ⚡ QUOTA-SHIELD: True Server-Side 20-Row Pagination for Main, Statement & Settlement Views
- *   4. ⚖️ CLEAN INTER-DEPARTMENT RECEIVABLE: Cash sales do not inflate Canteen Book Balance
- *   5. 🛡️ ZERO-FREEZE VALIDATION: Form validation completes before loading/closing modals
- *   6. 🎯 HIGH-CONTRAST CENTER TOAST: Dead-center Z-index 999999 alert notifications
- *   7. 📄 DUAL-SLIP A4 TRANSFER VOUCHER: Clean printable vouchers with cut markers
- *   8. 🔄 INSTANT CACHE & LOOKUP: Client-side student directory cache
+ *   2. 🎯 WALLET BALANCE FILTER: Instant filtering for students with remaining wallet balance (> 0)
+ *   3. 🌙 RETROSPECTIVE SETTLEMENT RADAR: Smart clearing of past/unsettled canteen shifts
+ *   4. ⚡ QUOTA-SHIELD: True Server-Side 20-Row Pagination for Main, Statement & Settlement Views
+ *   5. ⚖️ CLEAN INTER-DEPARTMENT RECEIVABLE: Cash sales do not inflate Canteen Book Balance
+ *   6. 🛡️ ZERO-FREEZE VALIDATION: Form validation completes before loading/closing modals
+ *   7. 🎯 HIGH-CONTRAST CENTER TOAST: Dead-center Z-index 999999 alert notifications
+ *   8. 📄 DUAL-SLIP A4 TRANSFER VOUCHER: Clean printable vouchers with cut markers
+ *   9. 🔄 INSTANT CACHE & LOOKUP: Client-side student directory cache
  * ==============================================================================
  */
 
@@ -113,6 +114,8 @@ async function loadStudentMoneyData(isSilent) {
     if (!isSilent && typeof toggleLoading === 'function') toggleLoading(true);
 
     const searchVal = (document.getElementById('stm-search')?.value || '').trim();
+    // 🎯 Wallet Balance Filter ('has_balance' | 'zero_balance' | '')
+    const balanceFilter = (document.getElementById('stm-balance-filter')?.value || '').trim();
     const dateFrom = document.getElementById('stm-date-from')?.value || '';
     const dateTo = document.getElementById('stm-date-to')?.value || '';
 
@@ -120,6 +123,7 @@ async function loadStudentMoneyData(isSilent) {
       page: gStudentMoneyPage, 
       limit: gStudentMoneyLimit, 
       searchVal,
+      balanceFilter,
       dateFrom,
       dateTo,
       forceRefresh: true 
@@ -508,7 +512,22 @@ async function deleteStudentMoneyEntry(uniqueId) {
 async function exportToCSVStudentMoney() {
   try {
     if (typeof toggleLoading === 'function') toggleLoading(true);
-    const res = await callApi('getStudentMoneyData', { page: 1, limit: 10000, forceRefresh: true }, 'GET');
+    const searchVal = (document.getElementById('stm-search')?.value || '').trim();
+    // 🎯 Filtered CSV Export Support
+    const balanceFilter = (document.getElementById('stm-balance-filter')?.value || '').trim();
+    const dateFrom = document.getElementById('stm-date-from')?.value || '';
+    const dateTo = document.getElementById('stm-date-to')?.value || '';
+
+    const res = await callApi('getStudentMoneyData', { 
+      page: 1, 
+      limit: 10000, 
+      searchVal,
+      balanceFilter,
+      dateFrom,
+      dateTo,
+      forceRefresh: true 
+    }, 'GET');
+
     const records = res?.data || gStudentMoneyHistoryData;
     if (!records || records.length === 0) return showToast("ERROR", "ထုတ်ယူရန် စာရင်း မရှိပါ။");
 
@@ -685,7 +704,7 @@ function exportToCSVCanteenBook() {
 // 💡 4. CANTEEN EVENING SETTLEMENT (NEW TAB 3 - 20-ROW D1 QUOTA PAGINATED)
 // ==============================================================================
 
-// 🎯 ရွေးချယ်ထားသော ရက်စွဲအတွက် နေ့စဉ်အရောင်း အကျဉ်းချုပ် ရယူခြင်း
+// 🎯 ရွေးချယ်ထားသော ရက်စွဲအတွက် နေ့စဉ်အရောင်း အကျဉ်းချုပ် ရယူခြင်း[cite: 15]
 async function loadAdminSettlementDailyStats(dateOverride) {
   let dateVal = dateOverride || document.getElementById('adm-settle-date')?.value || getMMTDateString();
   const targetDateEl = document.getElementById('adm-settle-date');
@@ -1045,7 +1064,7 @@ function printCanteenSettlementVoucher(settlementNo) {
 }
 
 // ==============================================================================
-// 💡 5. PM CASHIER BOOK
+// 💡 5. PM CASHIER BOOK[cite: 12]
 // ==============================================================================
 async function loadPmCashierBookData(isSilent) {
   try {

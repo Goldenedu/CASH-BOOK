@@ -1,14 +1,16 @@
 /**
  * ==============================================================================
- * GOLDEN ERP SYSTEM - SPMMS HANDLERS (CLOUDFLARE D1 ENTERPRISE V9.5 FULL)
+ * GOLDEN ERP SYSTEM - SPMMS HANDLERS (CLOUDFLARE D1 ENTERPRISE V9.6 FULL)
  * File: handlers-money.js (Location: cashbook-api/handlers-money.js)
  * 
  * 💡 Features:
  *   1. ⚡ ULTRA QUOTA-SHIELD: Zero Full-Table-Scans (Index-Only Equality Lookups)
  *   2. ⚖️ ACCOUNTING ACCURACY: Strict Balance Sheet Liability vs Filtered Period Separation
- *   3. 🛡️ ZERO-OVERDRAFT GUARDS: Real-time concurrency validation
- *   4. 🔒 SECURITY & NUMERICAL INTEGRITY: Strict NaN defense & 2-decimal floating safe
- *   5. 🔄 ATOMIC CASCADE: Non-blocking deterministic cleanup across all 3 ledgers + Settlement Sync
+ *   3. 🎯 WALLET BALANCE FILTER: Instant filtering for students with remaining wallet balance (> 0)
+ *   4. 📅 CASHIER DAILY OPERATIONAL METRICS: Real-time MMT Today's In & Out aggregates
+ *   5. 🛡️ ZERO-OVERDRAFT GUARDS: Real-time concurrency validation
+ *   6. 🔒 SECURITY & NUMERICAL INTEGRITY: Strict NaN defense & 2-decimal floating safe
+ *   7. 🔄 ATOMIC CASCADE: Non-blocking deterministic cleanup across all 3 ledgers + Settlement Sync
  * ==============================================================================
  */
 
@@ -41,6 +43,8 @@ export async function getStudentMoneyData(db, body) {
     const fy = normalizeFyStr(body.fy || getCurrentAcademicYear()).replace(/^FY\s*/i, '');
     const searchVal = String(body.searchVal || "").trim();
     const studentIdFilter = parseInt(body.studentId, 10) || 0;
+    const balanceFilter = String(body.balanceFilter || "").trim(); // 'has_balance' | 'zero_balance'
+    
     const page = Math.max(1, parseInt(body.page || 1, 10));
     const limit = Math.min(100, Math.max(1, parseInt(body.limit || 20, 10)));
     const offset = (page - 1) * limit;
@@ -69,6 +73,27 @@ export async function getStudentMoneyData(db, body) {
       whereClauses.push(`(fyid_name LIKE ? OR fyid LIKE ? OR remark LIKE ?)`);
       const p = `%${searchVal}%`;
       params.push(p, p, p);
+    }
+
+    // 🎯 FEATURE: ငွေလက်ကျန်ရှိသော ကျောင်းသားများအား သီးသန့် စစ်ထုတ်ခြင်း
+    if (balanceFilter === 'has_balance') {
+      whereClauses.push(`student_id IN (
+        SELECT student_id 
+        FROM student_money 
+        WHERE fy IN (?, ?) AND student_id IS NOT NULL 
+        GROUP BY student_id 
+        HAVING SUM(debit - credit) > 0
+      )`);
+      params.push(fy, `FY ${fy}`);
+    } else if (balanceFilter === 'zero_balance') {
+      whereClauses.push(`student_id IN (
+        SELECT student_id 
+        FROM student_money 
+        WHERE fy IN (?, ?) AND student_id IS NOT NULL 
+        GROUP BY student_id 
+        HAVING SUM(debit - credit) <= 0
+      )`);
+      params.push(fy, `FY ${fy}`);
     }
 
     const whereSql = `WHERE ${whereClauses.join(' AND ')}`;
@@ -140,7 +165,8 @@ export async function getStudentMoneyData(db, body) {
         totalExpense: parseFloat(stats.c || 0), 
         balance: cumulativeTrustBal,
         pmCashierCash,
-        financeVaultCash
+        financeVaultCash,
+        filteredBalance: parseFloat(stats.d || 0) - parseFloat(stats.c || 0)
       }
     };
   } catch (err) { return { success: false, message: err.message }; }
@@ -152,6 +178,7 @@ export async function getStudentMoneySummary(db, body) {
     const targetDateStr = getMyanmarDateString(body.date);
     const searchVal = String(body.searchVal || "").trim();
     const studentIdFilter = parseInt(body.studentId, 10) || 0;
+    const balanceFilter = String(body.balanceFilter || "").trim();
 
     let whereClauses = [`(sm.fy IN (?, ?)) AND sm.student_id IS NOT NULL`];
     let params = [targetDateStr, fy, `FY ${fy}`];
@@ -163,6 +190,13 @@ export async function getStudentMoneySummary(db, body) {
       whereClauses.push(`(sm.fyid_name LIKE ? OR sm.fyid LIKE ? OR CAST(sm.student_id AS TEXT) LIKE ?)`);
       const p = `%${searchVal}%`;
       params.push(p, p, p);
+    }
+
+    let havingClause = '';
+    if (balanceFilter === 'has_balance') {
+      havingClause = 'HAVING (SUM(sm.debit) - SUM(sm.credit)) > 0';
+    } else if (balanceFilter === 'zero_balance') {
+      havingClause = 'HAVING (SUM(sm.debit) - SUM(sm.credit)) <= 0';
     }
 
     const query = `
@@ -178,7 +212,9 @@ export async function getStudentMoneySummary(db, body) {
         GROUP BY student_id
       ) today_orders ON today_orders.student_id = sm.student_id
       WHERE ${whereClauses.join(' AND ')}
-      GROUP BY sm.student_id ORDER BY netBalance DESC
+      GROUP BY sm.student_id 
+      ${havingClause}
+      ORDER BY netBalance DESC
     `;
     
     const rowsRes = await db.prepare(query).bind(...params).all();
@@ -342,12 +378,13 @@ export async function deleteStudentMoneyEntry(db, session, body) {
 }
 
 // ==============================================================================
-// 💡 2. PM CASHIER BOOK (WITH ROLE-BASED ANTI-IMPERSONATION & SCOPED QUERIES)
+// 💡 2. PM CASHIER BOOK (WITH ROLE-BASED ANTI-IMPERSONATION, TODAY METRICS & SCOPED QUERIES)
 // ==============================================================================
 
 export async function getPmCashierBookData(db, body, session) {
   try {
     const fy = normalizeFyStr(body.fy || getCurrentAcademicYear()).replace(/^FY\s*/i, '');
+    const todayStr = getMyanmarDateString(body.date);
     const role = session?.role || '';
     
     const isPaginated = Boolean(body.page || body.limit);
@@ -369,15 +406,18 @@ export async function getPmCashierBookData(db, body, session) {
 
     const whereSql = `WHERE ${whereClauses.join(' AND ')}`;
 
+    // 🚀 D1 BATCH OPTIMIZATION: All-Time Stats + Today's Metrics (todayIn, todayOut) in 1 Round-Trip!
     if (isPaginated) {
       const [statsRes, rowsRes] = await db.batch([
         db.prepare(`
           SELECT 
             COUNT(id) as totalRows,
             COALESCE(SUM(debit), 0) as totalIn,
-            COALESCE(SUM(credit), 0) as totalOut
+            COALESCE(SUM(credit), 0) as totalOut,
+            COALESCE(SUM(CASE WHEN date = ? THEN debit ELSE 0 END), 0) as todayIn,
+            COALESCE(SUM(CASE WHEN date = ? THEN credit ELSE 0 END), 0) as todayOut
           FROM pm_cashier_book ${whereSql}
-        `).bind(...params),
+        `).bind(todayStr, todayStr, ...params),
         db.prepare(`
           SELECT * FROM pm_cashier_book 
           ${whereSql} 
@@ -386,22 +426,66 @@ export async function getPmCashierBookData(db, body, session) {
         `).bind(...params, limit, offset)
       ]);
 
-      const stats = statsRes.results[0] || { totalRows: 0, totalIn: 0, totalOut: 0 };
+      const stats = statsRes.results[0] || { totalRows: 0, totalIn: 0, totalOut: 0, todayIn: 0, todayOut: 0 };
       const totalIn = parseFloat(stats.totalIn || 0);
       const totalOut = parseFloat(stats.totalOut || 0);
       const balance = totalIn - totalOut;
+      const todayIn = parseFloat(stats.todayIn || 0);
+      const todayOut = parseFloat(stats.todayOut || 0);
+      const todayBalance = todayIn - todayOut;
       const totalRows = parseInt(stats.totalRows || 0, 10);
 
       return {
         success: true,
         data: (rowsRes.results || []).map(r => ({ ...r, uniqueId: r.uniqueid })),
-        stats: { totalIn, totalOut, balance, totalRows },
+        stats: { 
+          totalIn, 
+          totalOut, 
+          balance, 
+          totalRows,
+          todayIn,
+          todayOut,
+          todayBalance,
+          todayDate: todayStr
+        },
         page,
         limit
       };
     } else {
-      const rowsRes = await db.prepare(`SELECT * FROM pm_cashier_book ${whereSql} ORDER BY date DESC, id DESC LIMIT 5000`).bind(...params).all();
-      return { success: true, data: (rowsRes.results || []).map(r => ({ ...r, uniqueId: r.uniqueid })) };
+      const [statsRes, rowsRes] = await db.batch([
+        db.prepare(`
+          SELECT 
+            COUNT(id) as totalRows,
+            COALESCE(SUM(debit), 0) as totalIn,
+            COALESCE(SUM(credit), 0) as totalOut,
+            COALESCE(SUM(CASE WHEN date = ? THEN debit ELSE 0 END), 0) as todayIn,
+            COALESCE(SUM(CASE WHEN date = ? THEN credit ELSE 0 END), 0) as todayOut
+          FROM pm_cashier_book ${whereSql}
+        `).bind(todayStr, todayStr, ...params),
+        db.prepare(`SELECT * FROM pm_cashier_book ${whereSql} ORDER BY date DESC, id DESC LIMIT 5000`).bind(...params)
+      ]);
+
+      const stats = statsRes.results[0] || { totalRows: 0, totalIn: 0, totalOut: 0, todayIn: 0, todayOut: 0 };
+      const totalIn = parseFloat(stats.totalIn || 0);
+      const totalOut = parseFloat(stats.totalOut || 0);
+      const balance = totalIn - totalOut;
+      const todayIn = parseFloat(stats.todayIn || 0);
+      const todayOut = parseFloat(stats.todayOut || 0);
+      const totalRows = parseInt(stats.totalRows || 0, 10);
+
+      return { 
+        success: true, 
+        data: (rowsRes.results || []).map(r => ({ ...r, uniqueId: r.uniqueid })),
+        stats: { 
+          totalIn, 
+          totalOut, 
+          balance, 
+          totalRows,
+          todayIn, 
+          todayOut, 
+          todayDate: todayStr 
+        }
+      };
     }
   } catch (err) { 
     return { success: false, message: err.message }; 
