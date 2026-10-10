@@ -1,21 +1,30 @@
 /** 
  * ==============================================================================
  * GOLDEN ERP SYSTEM - CENTRAL API BRIDGE & OFFLINE INTERCEPTOR (D1 DATABASE EDITION)
- * File: js/api.js (Location: cashbook-frontend/js/api.js)
- * 💡 Features: 🛡️ Quota-Safe In-Memory & LocalStorage Cache (Zero QuotaExceededError),
- *              Offline-First Network Interceptor & Background Outbox Auto-Routing,
- *              Clean 401 Session Revocation & Complete Storage Purge,
- *              Pre-fetched 'staff' & Core Views for 0ms Instant Navigation,
- *              Universal CSV Formula Injection Sanitizer (window.safeCsvCell),
- *              Resilient DOM & Inline Event Escapers (escapeHtml & escapeJsAttr),
- *              🎯 Refactored: Added Global Formatters & Parsers to eliminate Duplication
+ * File: js/api.js (Location: cashbook-frontend/js/api.js - Enterprise V9.6 Full Edition)
+ * 💡 Features: 
+ *    1. 🛡️ Quota-Safe In-Memory & LocalStorage Cache (Zero QuotaExceededError)
+ *    2. 📶 Offline-First Network Interceptor & Background Outbox Auto-Routing
+ *    3. 🔒 Clean 401 Session Revocation: Dynamic Redirect for Standalone POS & PM Cashier
+ *    4. 🚀 Pre-fetched 'staff' & Core Views for 0ms Instant Navigation
+ *    5. 🛡️ Universal CSV Formula Injection Sanitizer (window.safeCsvCell)
+ *    6. 🧼 Resilient DOM & Inline Event Escapers (escapeHtml & escapeJsAttr)
+ *    7. 🎯 Global Formatters, Parsers & Universal Toast Target Resolver
  * ==============================================================================
  */
 
-// 💡 Development Worker URL matching Cloudflare Secondary Account (cashbook-app-api-dev)
-const API_WORKER_URL = (typeof window !== 'undefined' && window.CONFIG?.API_URL) 
-  ? window.CONFIG.API_URL 
-  : "https://cashbook-app-api-dev.thantoeaung734.workers.dev/";
+// 💡 Dynamic Worker URL Resolver
+function getApiWorkerUrl() {
+  if (typeof window !== 'undefined') {
+    if (window.CONFIG?.API_URL) return window.CONFIG.API_URL;
+    if (window.CONFIG?.API_BASE_URL) return window.CONFIG.API_BASE_URL;
+    if (window.API_BASE_URL) return window.API_BASE_URL;
+  }
+  return "https://cashbook-app-api-dev.thantoeaung734.workers.dev";
+}
+
+const API_WORKER_URL = getApiWorkerUrl();
+window.API_WORKER_URL = API_WORKER_URL;
 
 // 💡 Global AppState
 window.AppState = window.AppState || {
@@ -86,7 +95,7 @@ window.safeCsvCell = function(val) {
 };
 
 // ==============================================================================
-// 💡 2. GLOBAL FORMATTERS, PARSERS & BUSINESS LOGIC (Added to eliminate duplication)
+// 💡 2. GLOBAL FORMATTERS, PARSERS & BUSINESS LOGIC
 // ==============================================================================
 
 window.parseCleanNum = function(val) {
@@ -305,12 +314,13 @@ window.toggleLoading = function(show) {
 };
 
 // ==============================================================================
-// 💡 5. CENTRAL D1 API FETCH ENGINE WITH OFFLINE INTERCEPTOR
+// 💡 5. CENTRAL D1 API FETCH ENGINE WITH STANDALONE POS AUTO-LOGOUT & OFFLINE QUEUE
 // ==============================================================================
 
 window.callApi = async function(action, payload = {}, method = 'POST') {
   let serverPayload = {};
-  let url = API_WORKER_URL;
+  let baseUrl = getApiWorkerUrl();
+  let url = String(baseUrl).trim().replace(/\/+$/, '');
 
   const isReadAction = action.startsWith('get') || action.startsWith('check') || action.startsWith('lookup');
   
@@ -325,6 +335,7 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
 
   const cacheKey = `${action}_${JSON.stringify(serverPayload)}`;
 
+  // 📶 Offline Interceptor: Enqueue to IndexedDB when offline
   if (isActualMutation && !navigator.onLine && window.OfflineSync) {
     console.warn(`[OfflineSync] Offline detected. Enqueueing ${action} immediately...`);
     await window.OfflineSync.enqueue(action, serverPayload, method);
@@ -356,7 +367,12 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
       headers['Authorization'] = `Bearer ${currentToken}`;
     }
 
-    const options = { method: method, headers: headers };
+    // 🛡️ Socket Hygiene: cache 'no-store' avoids stale connection pool deadlocks
+    const options = { 
+      method: method, 
+      headers: headers,
+      cache: 'no-store'
+    };
 
     if (method === 'GET') {
       const params = new URLSearchParams({
@@ -365,7 +381,8 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
         role: currentRole,
         ...serverPayload
       });
-      url += `?${params.toString()}`;
+      const separator = url.includes('?') ? '&' : '?';
+      url = `${url}${separator}${params.toString()}`;
     } else {
       options.body = JSON.stringify({
         action: action,
@@ -378,9 +395,11 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
 
     const response = await fetch(url, options);
 
+    // 🔒 401 Session Revocation & Intelligent Auto-Logout
     if (response.status === 401) {
       console.warn(`[API 401] Unauthorized access for action: ${action}`);
 
+      // 1. Purge all auth and session keys
       if (typeof window.clearAuthStorage === 'function') {
         window.clearAuthStorage();
       } else {
@@ -389,6 +408,8 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
         localStorage.removeItem('golden_user_role');
         localStorage.removeItem('golden_user');
         localStorage.removeItem('golden_token_expires_at');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
       }
 
       if (window.AppState) {
@@ -398,6 +419,25 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
       }
 
       window.clearAllApiCache();
+
+      // 2. Intelligent Detection: Standalone Pages (Canteen POS / PM Cashier) vs Main ERP
+      const currentUrl = (window.location.href || '').toLowerCase();
+      const isStandalonePage = currentUrl.includes('canteen-pos') || currentUrl.includes('pm-cashier');
+
+      if (isStandalonePage) {
+        if (!window._isRedirecting401) {
+          window._isRedirecting401 = true;
+          if (typeof window.showToast === 'function') {
+            window.showToast("ERROR", "⚠️ Session သက်တမ်း ကုန်ဆုံးသွားပါပြီ။ Login သို့ ပြန်လည်ပို့ဆောင်နေပါသည်...");
+          }
+          setTimeout(() => {
+            window.location.href = '/?session_expired=1';
+          }, 600);
+        }
+        throw new Error("HTTP Error: 401 (Session Expired - Redirecting to Login)");
+      }
+
+      // 3. Main ERP (index.html) Behavior
       document.documentElement.className = 'dark not-authed';
 
       const loginErrBox = document.getElementById('login-error');
@@ -471,7 +511,7 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
 
     console.error(`API Error [${action}]:`, err);
 
-    if (!err.message || !err.message.includes("401")) {
+    if (!err.message || (!err.message.includes("401") && !err.message.includes("Session Expired"))) {
       window.showToast("ERROR", "ဆာဗာ ချိတ်ဆက်မှု မအောင်မြင်ပါ: " + err.message);
     }
 
@@ -480,7 +520,7 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
 };
 
 // ==============================================================================
-// 💡 6. BACKGROUND PREFETCHING ENGINE
+// 💡 6. BACKGROUND PREFETCHING ENGINE & UNIVERSAL TOAST NOTIFIER
 // ==============================================================================
 
 window.prefetchCoreModules = function() {
@@ -507,7 +547,10 @@ window.showToast = function(type, message) {
     return;
   }
 
-  let toastContainer = document.getElementById('toast-container');
+  // 🎯 Target Resolver: Supports Main ERP (#toast-container), POS (#pos-toast-box), and PM Cashier (#pm-toast-box)
+  let toastContainer = document.getElementById('toast-container') || 
+                       document.getElementById('pos-toast-box') || 
+                       document.getElementById('pm-toast-box');
   if (!toastContainer) return;
 
   let msg = String(message || "").trim();

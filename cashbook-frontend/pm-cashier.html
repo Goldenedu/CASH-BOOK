@@ -187,7 +187,7 @@
   <div id="pm-toast-box" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[999999] pointer-events-none w-11/12 max-w-sm"></div>
 
   <!-- ============================================================================== -->
-  <!-- 💡 JAVASCRIPT APP LOGIC (STRICT MMT UTC+06:30 & 20-ROWS PAGINATED)             -->
+  <!-- 💡 JAVASCRIPT APP LOGIC (STRICT MMT, AUTO-LOGOUT WATCHDOG & 20-ROWS FEED)      -->
   <!-- ============================================================================== -->
   <script>
     // 🕒 Pure Non-Recursive MMT Date Helper (UTC+06:30)
@@ -201,6 +201,57 @@
       return mmt.toISOString().slice(0, 10);
     }
     window.getMMTDateString = getMMTDateString;
+
+    // 🔒 Token Validity & Session Expiration Checker
+    function isTokenExpired() {
+      const token = localStorage.getItem('golden_auth_token') || localStorage.getItem('token');
+      if (!token) return true;
+
+      const expAt = localStorage.getItem('golden_token_expires_at');
+      if (expAt) {
+        const expTime = Number(expAt);
+        if (!isNaN(expTime) && expTime > 0) {
+          const expMs = expTime < 10000000000 ? expTime * 1000 : expTime;
+          if (Date.now() >= expMs) return true;
+        }
+      }
+
+      try {
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          const base64Url = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+          const payload = JSON.parse(atob(base64Url));
+          if (payload && payload.exp && Date.now() >= payload.exp * 1000) return true;
+        }
+      } catch (e) {}
+
+      return false;
+    }
+
+    var _isSessionRedirecting = false;
+    function handleSessionExpired() {
+      if (_isSessionRedirecting) return;
+      _isSessionRedirecting = true;
+      showToast("ERROR", "⚠️ Session သက်တမ်း ကုန်ဆုံးသွားပါပြီ။ Login သို့ ပြန်လည်ပို့ဆောင်နေပါသည်...");
+      setTimeout(() => logoutCashier(true), 600);
+    }
+
+    function initSessionWatchdog() {
+      // Background check every 30 seconds
+      setInterval(() => {
+        if (navigator.onLine && isTokenExpired()) {
+          handleSessionExpired();
+        }
+      }, 30000);
+
+      window.addEventListener('focus', () => {
+        if (navigator.onLine && isTokenExpired()) handleSessionExpired();
+      });
+
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && navigator.onLine && isTokenExpired()) handleSessionExpired();
+      });
+    }
 
     let gSession = null;
     let gCashierList = [];
@@ -225,13 +276,15 @@
       `;
       setTimeout(() => { if (box) box.innerHTML = ''; }, 3500);
     }
+    window.showToast = showToast; // Bridge for api.js
 
     window.addEventListener('DOMContentLoaded', async () => {
       const userStr = localStorage.getItem('golden_user') || localStorage.getItem('user');
       const token = localStorage.getItem('golden_auth_token') || localStorage.getItem('token');
 
-      if (!userStr || !token) {
-        window.location.href = '/';
+      // 🔒 Proactive Expiration Check on Load
+      if (!userStr || !token || (navigator.onLine && isTokenExpired())) {
+        logoutCashier(true);
         return;
       }
       gSession = JSON.parse(userStr);
@@ -245,6 +298,7 @@
       // 🕒 Strict MMT Today Display
       document.getElementById('pm-today-date').textContent = getMMTDateString();
 
+      initSessionWatchdog();
       await loadPmCashierData();
     });
 
@@ -281,7 +335,9 @@
           showToast("ERROR", res?.message || "Data ဆွဲယူ၍ မရပါ။");
         }
       } catch (err) {
-        showToast("ERROR", "Data ဆွဲယူ၍ မရပါ: " + err.message);
+        if (!err.message?.includes("401") && !err.message?.includes("Session Expired")) {
+          showToast("ERROR", "Data ဆွဲယူ၍ မရပါ: " + err.message);
+        }
       }
     }
 
@@ -432,13 +488,19 @@
       };
 
       closeModal('pm-withdraw-modal');
-      const res = await callApi('savePmCashierBookEntry', payload);
-      if (res && res.success) {
-        showToast("SUCCESS", "မုန့်ဖိုး ထုတ်ပေးပြီးပါပြီ။");
-        gPmPage = 1;
-        loadPmCashierData();
-      } else {
-        showToast("ERROR", res?.message || "မအောင်မြင်ပါ။");
+      try {
+        const res = await callApi('savePmCashierBookEntry', payload);
+        if (res && res.success) {
+          showToast("SUCCESS", "မုန့်ဖိုး ထုတ်ပေးပြီးပါပြီ။");
+          gPmPage = 1;
+          loadPmCashierData();
+        } else {
+          showToast("ERROR", res?.message || "မအောင်မြင်ပါ။");
+        }
+      } catch (err) {
+        if (!err.message?.includes("401") && !err.message?.includes("Session Expired")) {
+          showToast("ERROR", err.message);
+        }
       }
     }
 
@@ -461,24 +523,36 @@
       };
 
       closeModal('pm-return-modal');
-      const res = await callApi('savePmCashierBookEntry', payload);
-      if (res && res.success) {
-        showToast("SUCCESS", "Finance သို့ ငွေပြန်အပ်ပြီးပါပြီ။");
-        gPmPage = 1;
-        loadPmCashierData();
-      } else {
-        showToast("ERROR", res?.message || "မအောင်မြင်ပါ။");
+      try {
+        const res = await callApi('savePmCashierBookEntry', payload);
+        if (res && res.success) {
+          showToast("SUCCESS", "Finance သို့ ငွေပြန်အပ်ပြီးပါပြီ။");
+          gPmPage = 1;
+          loadPmCashierData();
+        } else {
+          showToast("ERROR", res?.message || "မအောင်မြင်ပါ။");
+        }
+      } catch (err) {
+        if (!err.message?.includes("401") && !err.message?.includes("Session Expired")) {
+          showToast("ERROR", err.message);
+        }
       }
     }
 
     async function deleteEntry(uid) {
       if (!confirm("ဤစာရင်းအား ဖျက်မည်မှာ သေချာပါသလား?")) return;
-      const res = await callApi('deletePmCashierBookEntry', { uniqueId: uid });
-      if (res && res.success) {
-        showToast("SUCCESS", "စာရင်း ဖျက်ပြီးပါပြီ။");
-        loadPmCashierData();
-      } else {
-        showToast("ERROR", res?.message || "ဖျက်ခွင့် မရှိပါ။");
+      try {
+        const res = await callApi('deletePmCashierBookEntry', { uniqueId: uid });
+        if (res && res.success) {
+          showToast("SUCCESS", "စာရင်း ဖျက်ပြီးပါပြီ။");
+          loadPmCashierData();
+        } else {
+          showToast("ERROR", res?.message || "ဖျက်ခွင့် မရှိပါ။");
+        }
+      } catch (err) {
+        if (!err.message?.includes("401") && !err.message?.includes("Session Expired")) {
+          showToast("ERROR", err.message);
+        }
       }
     }
 
@@ -557,7 +631,7 @@
       document.getElementById(id).classList.add('hidden'); 
     }
 
-    function logoutCashier() {
+    function logoutCashier(isExpired = false) {
       localStorage.removeItem('golden_auth_token');
       localStorage.removeItem('golden_user');
       localStorage.removeItem('golden_user_role');
@@ -565,7 +639,7 @@
       localStorage.removeItem('golden_token_expires_at');
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/';
+      window.location.href = isExpired ? '/?session_expired=1' : '/';
     }
   </script>
 </body>

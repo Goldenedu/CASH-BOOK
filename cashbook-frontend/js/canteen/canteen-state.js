@@ -1,16 +1,17 @@
 /**
  * ==============================================================================
  * GOLDEN ERP - CANTEEN GLOBAL STATE & NETWORK CONTROLLER
- * File: js/canteen/canteen-state.js (Enterprise V9.4 Full Production Edition)
+ * File: js/canteen/canteen-state.js (Enterprise V9.6 Full Production Edition)
  * 💡 Features:
  *   1. 🕒 Live MMT (UTC+06:30) Ticking Clock (Date + Time AM/PM)
- *   2. 🛡️ Scope-Safe Singleton Helpers (Zero SyntaxError Guarantee)
- *   3. ⚡ Quota-Shield: IndexedDB Pre-caching on App Startup (0 D1 Read Waste)
- *   4. 👤 Dynamic Role Authenticator (Fixes Cashier Showing as Admin)
- *   5. 🌐 4.5s Network Settle & QUIC Socket Flush (Fixes QUIC_NETWORK_IDLE_TIMEOUT)
- *   6. 🧩 Direct Partials Auto-Mount: Zero Recursion Stack Overflow Guarantee
- *   7. 🔄 Universal Robust Async Refresh Engine for All Tab Views
- *   8. ⌨️ Global Hardware Hotkeys (F2, F4, F8, Esc)
+ *   2. 🔒 ACTIVE SESSION WATCHDOG: Graceful Auto-Logout on Token/Session Expiration
+ *   3. 🛡️ Scope-Safe Singleton Helpers (Zero SyntaxError Guarantee)
+ *   4. ⚡ Quota-Shield: IndexedDB Pre-caching on App Startup (0 D1 Read Waste)
+ *   5. 👤 Dynamic Role Authenticator (Fixes Cashier Showing as Admin)
+ *   6. 🌐 4.5s Network Settle & QUIC Socket Flush (Fixes QUIC_NETWORK_IDLE_TIMEOUT)
+ *   7. 🧩 Direct Partials Auto-Mount: Zero Recursion Stack Overflow Guarantee
+ *   8. 🔄 Universal Robust Async Refresh Engine for All Tab Views
+ *   9. ⌨️ Global Hardware Hotkeys (F2, F4, F8, Esc)
  * ==============================================================================
  */
 
@@ -63,6 +64,88 @@ function startLiveClock() {
 }
 
 // ------------------------------------------------------------------------------
+// 🔒 1.1 ACTIVE SESSION WATCHDOG & AUTO-LOGOUT CONTROLLER (NEW)
+// ------------------------------------------------------------------------------
+var _sessionWatchdogInterval = null;
+var _isLoggingOut = false;
+
+function isTokenExpired() {
+  const token = localStorage.getItem('golden_auth_token') || localStorage.getItem('token');
+  if (!token) return true;
+
+  // ၁။ Explicit Expiration Timestamp စစ်ဆေးခြင်း
+  const expAt = localStorage.getItem('golden_token_expires_at');
+  if (expAt) {
+    const expTime = Number(expAt);
+    if (!isNaN(expTime) && expTime > 0) {
+      const expMs = expTime < 10000000000 ? expTime * 1000 : expTime;
+      if (Date.now() >= expMs) return true;
+    }
+  }
+
+  // ၂။ Base64 Decoded JWT Payload စစ်ဆေးခြင်း
+  try {
+    const parts = token.split('.');
+    if (parts.length === 3) {
+      const base64Url = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(atob(base64Url));
+      if (payload && payload.exp) {
+        if (Date.now() >= payload.exp * 1000) return true;
+      }
+    }
+  } catch (e) {}
+
+  return false;
+}
+
+function triggerSessionExpiredLogout() {
+  if (_isLoggingOut) return;
+  _isLoggingOut = true;
+
+  const savedTheme = localStorage.getItem('canteen_pos_theme');
+  localStorage.removeItem('golden_auth_token');
+  localStorage.removeItem('golden_user');
+  localStorage.removeItem('golden_user_role');
+  localStorage.removeItem('golden_user_name');
+  localStorage.removeItem('golden_token_expires_at');
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  if (savedTheme) localStorage.setItem('canteen_pos_theme', savedTheme);
+
+  if (typeof showToast === 'function') {
+    showToast("ERROR", "⚠️ Session သက်တမ်း ကုန်ဆုံးသွားပါပြီ။ Login သို့ ပြန်လည်ပို့ဆောင်နေပါသည်...");
+  }
+
+  setTimeout(() => {
+    window.location.href = '/?session_expired=1';
+  }, 700);
+}
+
+function checkSessionValidity() {
+  const token = localStorage.getItem('golden_auth_token') || localStorage.getItem('token');
+  if (!token) {
+    triggerSessionExpiredLogout();
+    return;
+  }
+  // အင်တာနက် ချိတ်ဆက်ထားချိန်တွင် token သက်တမ်းကုန်သွားပါက auto-logout ပြုလုပ်သည်
+  if (navigator.onLine && isTokenExpired()) {
+    triggerSessionExpiredLogout();
+  }
+}
+
+function initSessionWatchdog() {
+  if (_sessionWatchdogInterval) clearInterval(_sessionWatchdogInterval);
+  // စက္ကန့် ၃၀ လျှင် တစ်ကြိမ် ပုံမှန်စစ်ဆေးခြင်း
+  _sessionWatchdogInterval = setInterval(checkSessionValidity, 30000);
+
+  // Tab ပြန်ပွင့်ချိန် သို့မဟုတ် Window Focus ပြန်ရချိန်တွင် တပြိုင်နက် စစ်ဆေးခြင်း
+  window.addEventListener('focus', checkSessionValidity);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) checkSessionValidity();
+  });
+}
+
+// ------------------------------------------------------------------------------
 // 🛡️ 2. SAFE ROLE NORMALIZATION HELPER
 // ------------------------------------------------------------------------------
 function getNormalizedRole() {
@@ -72,7 +155,7 @@ function getNormalizedRole() {
 window.getNormalizedRole = getNormalizedRole;
 
 // ------------------------------------------------------------------------------
-// 🛡️ 3. SCOPE-SAFE SINGLETON HELPERS (PREVENTS 'ESC ALREADY DECLARED' SYNTAX ERROR)
+// 🛡️ 3. SCOPE-SAFE SINGLETON HELPERS
 // ------------------------------------------------------------------------------
 window.esc = window.esc || window.escapeHtml || (s => s ? String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : '');
 window.escAttr = window.escAttr || window.escapeJsAttr || (s => s ? String(s).replace(/'/g, "\\'") : '');
@@ -112,7 +195,7 @@ var _onlineDebounceTimer = null;
 var _isAutoSyncRunning = false;
 
 // ------------------------------------------------------------------------------
-// 🧩 5. RECURSION-FREE COMPONENT PARTIALS LOADER (OFFLINE CACHED TEMPLATE ENGINE)
+// 🧩 5. RECURSION-FREE COMPONENT PARTIALS LOADER
 // ------------------------------------------------------------------------------
 async function loadCanteenComponents() {
   async function loadPartial(containerId, url, cacheKey) {
@@ -166,8 +249,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   const userStr = localStorage.getItem('golden_user') || localStorage.getItem('user');
   const token = localStorage.getItem('golden_auth_token') || localStorage.getItem('token');
 
-  if (!userStr || !token) {
-    window.location.href = '/';
+  // 🔒 Session Validation: If token missing or expired while online, redirect to login
+  if (!userStr || !token || (navigator.onLine && isTokenExpired())) {
+    triggerSessionExpiredLogout();
     return;
   }
 
@@ -187,8 +271,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   const sideRole = document.getElementById('side-user-role');
   if (sideRole) sideRole.textContent = roleDisplay;
 
-  // 🕒 START LIVE TICKING CLOCK
+  // 🕒 START LIVE TICKING CLOCK & SESSION WATCHDOG
   startLiveClock();
+  initSessionWatchdog();
 
   // INITIALIZE OFFLINE DB & NETWORK MONITOR
   if (typeof initCanteenDB === 'function') await initCanteenDB();
@@ -316,6 +401,7 @@ function initNetworkMonitor() {
 
   window.addEventListener('online', () => {
     updateStatus();
+    checkSessionValidity(); // Check token status when reconnecting online
     if (_onlineDebounceTimer) clearTimeout(_onlineDebounceTimer);
 
     // 🛡️ Enterprise Network Settle & Socket Flush Window (4500ms):
@@ -522,7 +608,16 @@ function closeModal(id) {
 }
 
 function logoutPos() {
-  localStorage.clear();
+  // Clear auth info safely while preserving user theme preference
+  const savedTheme = localStorage.getItem('canteen_pos_theme');
+  localStorage.removeItem('golden_auth_token');
+  localStorage.removeItem('golden_user');
+  localStorage.removeItem('golden_user_role');
+  localStorage.removeItem('golden_user_name');
+  localStorage.removeItem('golden_token_expires_at');
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  if (savedTheme) localStorage.setItem('canteen_pos_theme', savedTheme);
   window.location.href = '/';
 }
 
@@ -545,3 +640,7 @@ window.closeModal = closeModal;
 window.logoutPos = logoutPos;
 window.updatePendingBadgeCount = updatePendingBadgeCount;
 window.cacheStudentDirectoryForOffline = cacheStudentDirectoryForOffline;
+window.isTokenExpired = isTokenExpired;
+window.checkSessionValidity = checkSessionValidity;
+window.triggerSessionExpiredLogout = triggerSessionExpiredLogout;
+window.initSessionWatchdog = initSessionWatchdog;
