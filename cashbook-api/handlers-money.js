@@ -319,7 +319,8 @@ export async function saveStudentMoneyEntry(db, session, body) {
       }
 
       const noStu = await generateFyNo(db, 'student_money', cleanFy);
-      const stuName = body.name ? `[${body.fyid}] ${body.name}` : `[ID ${studentId}]`;
+      const cleanStuName = String(body.name || '').replace(/^(\[[^\]]+\]\s*)+/, '').trim();
+      const stuName = cleanStuName ? `[${body.fyid || 'ID ' + studentId}] ${cleanStuName}` : `[ID ${studentId}]`;
       const prefix = rawType.toLowerCase().includes('withdraw') ? '[Finance] Withdraw' : '[Finance] Deposit';
       const remark = `${prefix}: ${body.remark || ''}`.trim();
 

@@ -468,7 +468,7 @@ async function saveStudentMoneyForm(e) {
     remark: document.getElementById('stm-remark')?.value || '',
     studentId: isTransfer ? null : studentId,
     fyid: document.getElementById('stm-fyid-show')?.value || '',
-    name: document.getElementById('stm-fyidname-show')?.value || '',
+    name: (document.getElementById('stm-fyidname-show')?.value || '').replace(/^(\[[^\]]+\]\s*)+/, '').trim(),
     class: document.getElementById('stm-class')?.value || '',
     responsibilityPerson: document.getElementById('stm-responsibility-person')?.value || 'Cashier 1'
   };
