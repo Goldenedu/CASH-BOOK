@@ -204,3 +204,9 @@ ON CONFLICT(setting_key) DO NOTHING;
 -- 💡 လက်ရှိ Database ထဲတွင် surplus_stock ကော်လံ မရှိသေးပါက တိုက်ရိုက် run ပေးပါ-
 -- ------------------------------------------------------------------------------
 -- ALTER TABLE pos_items_master ADD COLUMN surplus_stock REAL NOT NULL DEFAULT 0;
+
+-- ၁။ student_money ၏ fy နှင့် student_id အတွက် Index ဖန်တီးခြင်း
+CREATE INDEX IF NOT EXISTS idx_sm_fy_student ON student_money(fy, student_id);
+
+-- ၂။ pos_sales_orders ၏ date, payment_method နှင့် student_id အတွက် Index ဖန်တီးခြင်း
+CREATE INDEX IF NOT EXISTS idx_pos_orders_snap ON pos_sales_orders(date, payment_method, student_id);

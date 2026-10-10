@@ -1450,13 +1450,13 @@ export async function getPosStudentsSnapshot(db) {
         FROM student_money 
         WHERE fy IN (?, ?) 
         GROUP BY student_id
-      ) b ON (b.student_id = s.student_id OR b.student_id = s.id)
+      ) b ON b.student_id = COALESCE(s.student_id, s.id)
       LEFT JOIN (
         SELECT student_id, SUM(total_amount) as todaySpent 
         FROM pos_sales_orders 
         WHERE date = ? AND payment_method = 'Student Pocket Money' 
         GROUP BY student_id
-      ) o ON (o.student_id = s.student_id OR o.student_id = s.id)
+      ) o ON o.student_id = COALESCE(s.student_id, s.id)
       ORDER BY s.student_id ASC
     `;
 
