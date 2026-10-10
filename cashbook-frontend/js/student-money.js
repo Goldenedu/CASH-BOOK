@@ -1787,6 +1787,18 @@ window.dismissCenterToast = function() {
   setTimeout(() => wrapper.remove(), 250);
 };
 
+// 🎯 Backward-Compatible Helper: Modal အစား Tab 3 (Settlement) သို့ အလိုအလျောက် ပြောင်းပေးခြင်း
+function openAdminSettlementModal(dateInput) {
+  switchStudentMoneySubTab('settlement');
+  if (dateInput && typeof selectAdminSettlementDate === 'function') {
+    selectAdminSettlementDate(dateInput);
+  }
+}
+
+function closeAdminSettlementModal() {
+  switchStudentMoneySubTab('canteen');
+}
+
 // ==============================================================================
 // 💡 GLOBAL EXPORTS (CLEAN & NON-DUPLICATE)
 // ==============================================================================
