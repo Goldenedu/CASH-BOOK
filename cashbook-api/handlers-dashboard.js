@@ -183,10 +183,10 @@ export async function getDashboardData(db, body) {
       safeFirstNum(db, `SELECT COALESCE(SUM(credit - debit), 0) as total FROM office WHERE category LIKE '%unif%'`),
       safeFirstNum(db, `SELECT COALESCE(SUM(credit - debit), 0) as total FROM office WHERE (category LIKE '%adv%' OR category LIKE '%ကြိုတင်%') AND category NOT LIKE '%snack%' AND category NOT LIKE '%unif%'`),
 
-      // 💡 6. Active Demographic Info Rows (Excludes Resigned/Transferred)
-      safeAllRows(db, `SELECT gender, name, fyid_name FROM student WHERE status NOT LIKE '%inactive%' AND (transfer_date IS NULL OR transfer_date = '') AND fy IN (?, ?)`, [activeFy, fyPrefixed]),
-      safeAllRows(db, `SELECT gender, name, staff_idname FROM staff_fulltime WHERE status NOT LIKE '%inactive%' AND (resigned_date IS NULL OR resigned_date = '')`),
-      safeAllRows(db, `SELECT gender, name, staff_idname FROM staff_parttime WHERE status NOT LIKE '%inactive%' AND (resigned_date IS NULL OR resigned_date = '')`)
+      // 💡 6. Active Demographic Info Rows (Optimized for Index Equality Matching)
+      safeAllRows(db, `SELECT gender, name, fyid_name FROM student WHERE status = 'Active' AND COALESCE(transfer_date, '') = '' AND fy IN (?, ?)`, [activeFy, fyPrefixed]),
+      safeAllRows(db, `SELECT gender, name, staff_idname FROM staff_fulltime WHERE status = 'Active' AND COALESCE(resigned_date, '') = ''`),
+      safeAllRows(db, `SELECT gender, name, staff_idname FROM staff_parttime WHERE status = 'Active' AND COALESCE(resigned_date, '') = ''`)
     ]);
 
     // Financial Computations

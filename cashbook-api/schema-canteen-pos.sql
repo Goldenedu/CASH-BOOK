@@ -210,3 +210,15 @@ CREATE INDEX IF NOT EXISTS idx_sm_fy_student ON student_money(fy, student_id);
 
 -- ၂။ pos_sales_orders ၏ date, payment_method နှင့် student_id အတွက် Index ဖန်တီးခြင်း
 CREATE INDEX IF NOT EXISTS idx_pos_orders_snap ON pos_sales_orders(date, payment_method, student_id);
+
+-- ၁။ Student Table အတွက် Composite Covering Index
+CREATE INDEX IF NOT EXISTS idx_student_dash_active 
+ON student(fy, status, transfer_date);
+
+-- ၂။ Full-time Staff အတွက် Index
+CREATE INDEX IF NOT EXISTS idx_staff_ft_active 
+ON staff_fulltime(status, resigned_date);
+
+-- ၃။ Part-time Staff အတွက် Index
+CREATE INDEX IF NOT EXISTS idx_staff_pt_active 
+ON staff_parttime(status, resigned_date);
