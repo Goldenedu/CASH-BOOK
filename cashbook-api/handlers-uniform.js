@@ -92,7 +92,8 @@ export async function saveUniformEntry(db, userSession, body) {
     const uniqueid = body.uniqueId || body.uniqueid || generateUniqueId('UNI');
     const createdBy = userSession?.name || userSession?.username || body.createdBy || 'Admin';
 
-    const maxNoRow = await db.prepare("SELECT MAX(CAST(no AS INTEGER)) as max_no FROM uniform_ledger").first();
+    // 🚀 Direct Integer Index Read (no သည် INTEGER ဖြစ်သဖြင့် CAST မလိုပါ)
+    const maxNoRow = await db.prepare("SELECT MAX(no) as max_no FROM uniform_ledger").first();
     const currentMax = maxNoRow && maxNoRow.max_no ? parseInt(maxNoRow.max_no, 10) : 0;
     const nextNo = currentMax + 1;
 
@@ -159,10 +160,10 @@ export async function updateUniformEntry(db, userSession, body) {
     }
 
     // 1. Fetch Existing Record to prevent wiping selling_unit
-    // 🚀 OPTIMIZATION: Explicit columns
-    const existing = await db.prepare(
-      `SELECT opening_stock, selling_unit, unit_price, selling_price, product_id, product_name, type, size FROM uniform_ledger WHERE uniqueid = ? OR id = ? LIMIT 1`
-    ).bind(uniqueid || '', rowId || 0).first();
+    // 🚀 Separate Exact Index Lookups (No OR scanning)
+    const existing = uniqueid 
+      ? await db.prepare(`SELECT opening_stock, selling_unit, unit_price, selling_price, product_id, product_name, type, size FROM uniform_ledger WHERE uniqueid = ? LIMIT 1`).bind(uniqueid).first()
+      : await db.prepare(`SELECT opening_stock, selling_unit, unit_price, selling_price, product_id, product_name, type, size FROM uniform_ledger WHERE id = ? LIMIT 1`).bind(rowId).first();
 
     const existingSellingUnit = existing ? parseFloat(existing.selling_unit || 0) : 0;
     const openingStock = parseFloat(body.openingStock ?? body.opening_stock ?? (existing ? existing.opening_stock : 0));
@@ -185,11 +186,14 @@ export async function updateUniformEntry(db, userSession, body) {
     const rawPid = body.productId || body.product_id;
     const productIdVal = rawPid ? String(rawPid).trim() : (existing ? existing.product_id : '');
 
+    const whereClause = uniqueid ? "uniqueid = ?" : "id = ?";
+    const whereTarget = uniqueid || rowId;
+
     await db.prepare(`UPDATE uniform_ledger SET 
       product_id = ?, product_name = ?, type = ?, size = ?, opening_stock = ?, unit_price = ?, 
       total_amount = ?, selling_price = ?, profit_amount = ?, selling_unit = ?, 
       current_qty = ?, total_stock_value = ? 
-      WHERE uniqueid = ? OR id = ?`).bind(
+      WHERE ${whereClause}`).bind(
       productIdVal,
       body.productName || body.product_name || (existing ? existing.product_name : ''),
       body.type || (existing ? existing.type : ''),
@@ -202,8 +206,7 @@ export async function updateUniformEntry(db, userSession, body) {
       sellingUnit,
       currentQty,
       totalStockValue,
-      uniqueid || '',
-      rowId || 0
+      whereTarget
     ).run();
 
     return { success: true, message: "ယူနီဖောင်း ကုန်ပစ္စည်း အချက်အလက်များ အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။" };

@@ -89,7 +89,8 @@ async function getAvailableFysFromD1(db) {
 
   const tables = ['bank', 'cash', 'office', 'kitchen', 'payroll', 'income', 'student', 'student_money'];
   
-  for (const tbl of tables) {
+  // 🚀 Parallel Concurrent Seeks (Zero Sequential Latency)
+  await Promise.all(tables.map(async (tbl) => {
     try {
       const res = await db.prepare(`SELECT DISTINCT fy FROM ${tbl} WHERE fy IS NOT NULL AND fy != ''`).all();
       if (res && res.results) {
@@ -100,10 +101,8 @@ async function getAvailableFysFromD1(db) {
           }
         });
       }
-    } catch (e) {
-      // Silently ignore if table doesn't exist
-    }
-  }
+    } catch (e) {}
+  }));
   return Array.from(fys).sort().reverse();
 }
 
@@ -228,18 +227,22 @@ export async function getSettingsData(db, body) {
   try {
     const activeFy = normalizeFyClean(body.fy || getCurrentAcademicYear());
 
-    // 🚀 OPTIMIZED Phase 3: Scoped Balances to Current FY
-    const bAcc = await safeSumBal(db, 'bank', activeFy);
-    const cAcc = await safeSumBal(db, 'cash', activeFy);
-    const oAcc = await safeSumBal(db, 'office', activeFy);
-    const kAcc = await safeSumBal(db, 'kitchen', activeFy);
-    const pAcc = await safeSumBal(db, 'payroll', activeFy);
-
-    const bCas = await safeSumBal(db, 'ca_bank', activeFy);
-    const cCas = await safeSumBal(db, 'ca_cash', activeFy);
-    const oCas = await safeSumBal(db, 'ca_office', activeFy);
-    const kCas = await safeSumBal(db, 'ca_kitchen', activeFy);
-    const pCas = await safeSumBal(db, 'ca_payroll', activeFy);
+    // 🚀 Concurrent Multi-Book Balances Fetching (1 Wave Round-trip)
+    const [
+      bAcc, cAcc, oAcc, kAcc, pAcc,
+      bCas, cCas, oCas, kCas, pCas
+    ] = await Promise.all([
+      safeSumBal(db, 'bank', activeFy),
+      safeSumBal(db, 'cash', activeFy),
+      safeSumBal(db, 'office', activeFy),
+      safeSumBal(db, 'kitchen', activeFy),
+      safeSumBal(db, 'payroll', activeFy),
+      safeSumBal(db, 'ca_bank', activeFy),
+      safeSumBal(db, 'ca_cash', activeFy),
+      safeSumBal(db, 'ca_office', activeFy),
+      safeSumBal(db, 'ca_kitchen', activeFy),
+      safeSumBal(db, 'ca_payroll', activeFy)
+    ]);
 
     const dataRows = [
       ["Bank Book", bAcc, bCas, bAcc - bCas],

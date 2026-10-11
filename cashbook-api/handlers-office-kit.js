@@ -79,14 +79,14 @@ async function syncUniformStock(db, productId, unitDelta) {
     const rawPid = String(productId).trim();
     const cleanNum = rawPid.replace(/^PID\s*/i, '').trim();
     const formattedPid = `PID ${cleanNum.padStart(3, '0')}`;
+    const numId = parseInt(cleanNum, 10) || 0;
 
+    // 🚀 ULTRA-OPTIMIZATION: Direct Equality Seek (Leverages idx_uniform_product_id & PK)
     const item = await db.prepare(`
       SELECT id, opening_stock, selling_unit, unit_price FROM uniform_ledger 
-      WHERE uniqueid = ? 
-         OR LOWER(product_id) IN (LOWER(?), LOWER(?)) 
-         OR CAST(id AS TEXT) = ? 
+      WHERE product_id = ? OR product_id = ? OR id = ? OR uniqueid = ? 
       LIMIT 1
-    `).bind(rawPid, rawPid, formattedPid, cleanNum).first();
+    `).bind(formattedPid, rawPid, numId, rawPid).first();
 
     if (item) {
       const openStock = parseFloat(item.opening_stock || 0);
@@ -122,26 +122,45 @@ export async function getExpenseData(db, body) {
     const offset = (page - 1) * limit;
     
     const activeFy = normalizeFyStr(body.fy || `FY ${getCurrentAcademicYear()}`);
+    const fyClean = activeFy.replace(/^FY\s*/i, '');
+    const isAllFy = String(body.fy || '').toLowerCase() === 'all';
 
-    const statsResult = await db.prepare(`
-      SELECT 
-        COALESCE(SUM(debit), 0) as totalIncome,
-        COALESCE(SUM(credit), 0) as totalExpense
-      FROM ${tableName}
-      WHERE fy IN (?, ?)
-    `).bind(activeFy, activeFy.replace(/^FY\s*/i, '')).first() || { totalIncome: 0, totalExpense: 0 };
+    // 🚀 ULTRA-OPTIMIZATION: Scoped Stats by Fiscal Year (Zero Full-Table Scan)
+    let statsResult;
+    if (!isAllFy) {
+      statsResult = await db.prepare(`
+        SELECT 
+          COALESCE(SUM(debit), 0) as totalIncome,
+          COALESCE(SUM(credit), 0) as totalExpense
+        FROM ${tableName}
+        WHERE fy IN (?, ?)
+      `).bind(activeFy, fyClean).first();
+    } else {
+      statsResult = await db.prepare(`
+        SELECT 
+          COALESCE(SUM(debit), 0) as totalIncome,
+          COALESCE(SUM(credit), 0) as totalExpense
+        FROM ${tableName}
+      `).first();
+    }
 
-    let totalIncome = parseFloat(statsResult.totalIncome || 0);
-    let totalExpense = parseFloat(statsResult.totalExpense || 0);
+    const totalIncome = parseFloat(statsResult?.totalIncome || 0);
+    const totalExpense = parseFloat(statsResult?.totalExpense || 0);
     const balance = totalIncome - totalExpense;
 
     let whereClauses = [];
     let params = [];
 
+    // 🚀 Default Scoped by Active FY (Index Range Scan သာ ဖတ်စေခြင်း)
+    if (!isAllFy) {
+      whereClauses.push(`fy IN (?, ?)`);
+      params.push(activeFy, fyClean);
+    }
+
     if (searchVal) {
       whereClauses.push(`(description LIKE ? OR category LIKE ? OR vr_no LIKE ? OR method LIKE ? OR transfer LIKE ? OR CAST(debit AS TEXT) LIKE ? OR CAST(credit AS TEXT) LIKE ?)`);
       const p = `%${searchVal}%`;
-      params.push(p, p, p, p, p, p, p);
+      params.push(p, p, p, p, p);
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';

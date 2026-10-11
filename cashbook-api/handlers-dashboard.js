@@ -126,8 +126,8 @@ export async function getDashboardData(db, body) {
       // 4. Liabilities (5 Queries)
       bankLoan, cashLoan, officeLiabilities, hrUnpaidBonus, hrUnpaidFund,
 
-      // 5. Receivables (3 Queries)
-      advSnack, advUniform, othersAdv,
+      // 5. Receivables (Single-Pass 1 Query Object)
+      advStats,
 
       // 6. Demographics Rows (3 Queries)
       stuRows, ftRows, ptRows
@@ -161,8 +161,9 @@ export async function getDashboardData(db, body) {
       safeCount(db, `SELECT COUNT(id) as cnt FROM student WHERE fy IN (?, ?)`, [activeFy, fyPrefixed]),
       safeCount(db, `SELECT COUNT(id) as cnt FROM promotion WHERE fy IN (?, ?)`, [activeFy, fyPrefixed]),
       safeCount(db, `SELECT COUNT(product_id) as cnt FROM uniform_ledger`),
-      safeCount(db, `SELECT COUNT(id) as cnt FROM staff_fulltime WHERE status NOT LIKE '%inactive%' AND (resigned_date IS NULL OR resigned_date = '')`),
-      safeCount(db, `SELECT COUNT(id) as cnt FROM staff_parttime WHERE status NOT LIKE '%inactive%' AND (resigned_date IS NULL OR resigned_date = '')`),
+      // 🚀 Index-Friendly Equality Seek (Uses idx_staff_ft_active & idx_staff_pt_active)
+      safeCount(db, `SELECT COUNT(id) as cnt FROM staff_fulltime WHERE status = 'Active' AND COALESCE(resigned_date, '') = ''`),
+      safeCount(db, `SELECT COUNT(id) as cnt FROM staff_parttime WHERE status = 'Active' AND COALESCE(resigned_date, '') = ''`),
 
       // 💡 3. Daily Balances (Current Ledger Net Balances)
       safeFirstNum(db, "SELECT COALESCE(SUM(debit - credit), 0) as total FROM bank"),
@@ -178,10 +179,18 @@ export async function getDashboardData(db, body) {
       safeFirstNum(db, "SELECT COALESCE(SUM(unpaid_bonus), 0) as total FROM staff_fulltime"),
       safeFirstNum(db, "SELECT COALESCE(SUM(unpaid_fund), 0) as total FROM staff_fulltime"),
 
-      // 💡 5. Receivables (Strict Category-Based Calculation)
-      safeFirstNum(db, `SELECT COALESCE(SUM(credit - debit), 0) as total FROM office WHERE category LIKE '%snack%'`),
-      safeFirstNum(db, `SELECT COALESCE(SUM(credit - debit), 0) as total FROM office WHERE category LIKE '%unif%'`),
-      safeFirstNum(db, `SELECT COALESCE(SUM(credit - debit), 0) as total FROM office WHERE (category LIKE '%adv%' OR category LIKE '%ကြိုတင်%') AND category NOT LIKE '%snack%' AND category NOT LIKE '%unif%'`),
+      // 💡 5. Receivables (Single-Pass Single Table Scan)
+      db.prepare(`
+        SELECT 
+          COALESCE(SUM(CASE WHEN category LIKE '%snack%' THEN (credit - debit) ELSE 0 END), 0) as advSnack,
+          COALESCE(SUM(CASE WHEN category LIKE '%unif%' THEN (credit - debit) ELSE 0 END), 0) as advUniform,
+          COALESCE(SUM(CASE WHEN (category LIKE '%adv%' OR category LIKE '%ကြိုတင်%') AND category NOT LIKE '%snack%' AND category NOT LIKE '%unif%' THEN (credit - debit) ELSE 0 END), 0) as othersAdv
+        FROM office
+      `).first().then(r => ({
+        advSnack: parseFloat(r?.advSnack || 0),
+        advUniform: parseFloat(r?.advUniform || 0),
+        othersAdv: parseFloat(r?.othersAdv || 0)
+      })).catch(() => ({ advSnack: 0, advUniform: 0, othersAdv: 0 })),
 
       // 💡 6. Active Demographic Info Rows (Optimized for Index Equality Matching)
       safeAllRows(db, `SELECT gender, name, fyid_name FROM student WHERE status = 'Active' AND COALESCE(transfer_date, '') = '' AND fy IN (?, ?)`, [activeFy, fyPrefixed]),
@@ -197,6 +206,10 @@ export async function getDashboardData(db, body) {
     const totalEntries = incCnt + cashCnt + bankCnt + offCnt + kitCnt + payCnt + stmCnt +
                          caBankCnt + caCashCnt + caOffCnt + caKitCnt + caPayCnt +
                          stuCnt + promoCnt + uniCnt + ftStaffCnt + ptStaffCnt;
+    
+    const advSnack = advStats.advSnack; 
+    const advUniform = advStats.advUniform; 
+    const othersAdv = advStats.othersAdv;
 
     // Demographic Counters
     const stuDemo = parseGenderCount(stuRows);

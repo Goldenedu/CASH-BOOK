@@ -129,36 +129,40 @@ export async function getBankCashData(db, body) {
 
     const activeFy = normalizeFyStr(body.fy || `FY ${getCurrentAcademicYear()}`);
     const fyClean = activeFy.replace(/^FY\s*/i, '');
+    const isAllFy = String(body.fy || '').toLowerCase() === 'all';
 
-    // 🚀 ULTRA-OPTIMIZATION: Replace `fy = ? OR fy = ?` with `fy IN (?, ?)`
-    const statsResult = await db.prepare(`
-      SELECT 
-        COALESCE(SUM(debit), 0) as totalIncome,
-        COALESCE(SUM(credit), 0) as totalExpense
-      FROM ${tableName}
-      WHERE fy IN (?, ?)
-    `).bind(activeFy, fyClean).first() || { totalIncome: 0, totalExpense: 0 };
-
-    let totalIncome = parseFloat(statsResult.totalIncome || 0);
-    let totalExpense = parseFloat(statsResult.totalExpense || 0);
-
-    if (totalIncome === 0 && totalExpense === 0) {
-      const allStats = await db.prepare(`
+    // 🚀 ULTRA-OPTIMIZATION: Scoped Stats by Fiscal Year (Zero Full-Table Scan)
+    let statsResult;
+    if (!isAllFy) {
+      statsResult = await db.prepare(`
         SELECT 
           COALESCE(SUM(debit), 0) as totalIncome,
           COALESCE(SUM(credit), 0) as totalExpense
         FROM ${tableName}
-      `).first() || { totalIncome: 0, totalExpense: 0 };
-      totalIncome = parseFloat(allStats.totalIncome || 0);
-      totalExpense = parseFloat(allStats.totalExpense || 0);
+        WHERE fy IN (?, ?)
+      `).bind(activeFy, fyClean).first();
+    } else {
+      statsResult = await db.prepare(`
+        SELECT 
+          COALESCE(SUM(debit), 0) as totalIncome,
+          COALESCE(SUM(credit), 0) as totalExpense
+        FROM ${tableName}
+      `).first();
     }
 
+    const totalIncome = parseFloat(statsResult?.totalIncome || 0);
+    const totalExpense = parseFloat(statsResult?.totalExpense || 0);
     const balance = totalIncome - totalExpense;
 
     let whereClauses = [];
     let params = [];
 
-    // Search Mode: Usually cross-FY or explicit search
+    // 🚀 Default Scoped by Active FY (Index Range Scan သာ ဖတ်စေခြင်း)
+    if (!isAllFy) {
+      whereClauses.push(`fy IN (?, ?)`);
+      params.push(activeFy, fyClean);
+    }
+
     if (searchVal) {
       whereClauses.push(`(description LIKE ? OR category LIKE ? OR CAST(debit AS TEXT) LIKE ? OR CAST(credit AS TEXT) LIKE ? OR vr_no LIKE ?)`);
       const p = `%${searchVal}%`;
@@ -167,7 +171,7 @@ export async function getBankCashData(db, body) {
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-    // 🚀 OPTIMIZATION: COUNT(id)
+    // 🚀 OPTIMIZATION: COUNT(id) using Index
     const countRow = await db.prepare(`SELECT COUNT(id) as count FROM ${tableName} ${whereSql}`).bind(...params).first();
     const totalRows = countRow ? countRow.count : 0;
 

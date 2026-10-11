@@ -143,16 +143,33 @@ export function calculateSmartPrice(costPrice, markupPercent = 8, roundTo = 50) 
 export async function recalculateCanteenBookBalances(db, fy, fromDate) {
   try {
     const cleanFy = normalizeFyStr(fy).replace(/^FY\s*/i, '');
-    const rows = await db.prepare(`
-      SELECT id, date, category, method, debit, credit 
+
+    // 🚀 OPTIMIZATION 1: fromDate ပါပါက ထိုရက်စွဲမတိုင်မီ နောက်ဆုံးလက်ကျန်ကို Base အဖြစ်ယူပါမည်
+    let runningBalance = 0;
+    let query = `
+      SELECT id, date, category, method, debit, credit, balances 
       FROM canteen_book 
       WHERE fy IN (?, ?) 
-      ORDER BY date ASC, id ASC
-    `).bind(cleanFy, `FY ${cleanFy}`).all();
+    `;
+    const params = [cleanFy, `FY ${cleanFy}`];
 
+    if (fromDate) {
+      const prevBalRow = await db.prepare(`
+        SELECT balances FROM canteen_book 
+        WHERE fy IN (?, ?) AND date < ? 
+        ORDER BY date DESC, id DESC LIMIT 1
+      `).bind(cleanFy, `FY ${cleanFy}`, fromDate).first();
+      runningBalance = parseFloat(prevBalRow?.balances || 0);
+
+      query += ` AND date >= ? `;
+      params.push(fromDate);
+    }
+
+    query += ` ORDER BY date ASC, id ASC`;
+
+    const rows = await db.prepare(query).bind(...params).all();
     if (!rows || !rows.results || rows.results.length === 0) return;
 
-    let runningBalance = 0;
     const updateStatements = [];
 
     for (const r of rows.results) {
@@ -160,23 +177,25 @@ export async function recalculateCanteenBookBalances(db, fy, fromDate) {
       const debit = safeAmount(r.debit);
       const credit = safeAmount(r.credit);
       
-      // ⚖️ STRICT ACCOUNTING STANDARD:
-      // - Transfer (Pocket Money) sales: Receivable from Finance (increases Balance).
-      // - Settlement Payout (Finance payout): Settles Receivable (reduces Balance).
-      // - Cash sales: In-hand by Canteen; does NOT increase Receivable Balance from Finance.
+      // ⚖️ မူရင်း စာရင်းကိုင်စံနှုန်းအတိုင်း ၁၀၀% မပြောင်းလဲဘဲ ထိန်းသိမ်းထားပါသည်
       if (method === 'Transfer') {
         runningBalance += (debit - credit);
       } else if (method === 'Cash') {
-        runningBalance -= credit; // Settlement Payout has method='Cash' and credit > 0
+        runningBalance -= credit; 
       } else {
         runningBalance += (debit - credit);
       }
       runningBalance = Math.round(runningBalance * 100) / 100;
 
-      updateStatements.push(
-        db.prepare(`UPDATE canteen_book SET balances = ? WHERE id = ?`).bind(runningBalance, r.id)
-      );
+      // 🚀 OPTIMIZATION 2: လက်ကျန် အမှန်တကယ် ပြောင်းလဲမှသာ UPDATE ရိုက်မည် (Row Writes ချွေတာခြင်း)
+      if (Number(r.balances) !== runningBalance) {
+        updateStatements.push(
+          db.prepare(`UPDATE canteen_book SET balances = ? WHERE id = ?`).bind(runningBalance, r.id)
+        );
+      }
     }
+
+    if (updateStatements.length === 0) return;
 
     const CHUNK_SIZE = 50;
     for (let i = 0; i < updateStatements.length; i += CHUNK_SIZE) {
@@ -1386,13 +1405,13 @@ export async function lookupStudentForPos(db, body) {
     const realStudentId = parseInt(student.studentId || student.id, 10);
     const realFyid = student.fyid || rawInput;
 
+    // 🚀 Index တိုက်ရိုက်ထိမှန်စေရန် student_id ရှိပါက student_id ဖြင့်သာ Equality Seek လုပ်ပါမည်
+    const balStmt = (realStudentId > 0)
+      ? db.prepare(`SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND student_id = ?`).bind(cleanFy, `FY ${cleanFy}`, realStudentId)
+      : db.prepare(`SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND fyid = ?`).bind(cleanFy, `FY ${cleanFy}`, realFyid);
+
     const [balRow, spentRow, capRow] = await db.batch([
-      db.prepare(`
-        SELECT COALESCE(SUM(debit - credit), 0) as bal 
-        FROM student_money 
-        WHERE fy IN (?, ?) 
-          AND (student_id = ? OR CAST(student_id AS TEXT) = ? OR (fyid IS NOT NULL AND fyid = ?))
-      `).bind(cleanFy, `FY ${cleanFy}`, realStudentId, String(realStudentId), realFyid),
+      balStmt,
 
       db.prepare(`
         SELECT COALESCE(SUM(total_amount), 0) as todaySpent 
@@ -1515,8 +1534,13 @@ export async function checkoutPosSale(db, session, body) {
     if (isWallet) {
       if (!studentId || studentId <= 0) return { success: false, message: "မုန့်ဖိုးအကောင့်ဖြင့် ဝယ်ယူရန် ကျောင်းသား ID လိုအပ်ပါသည်။" };
 
+      // 🚀 student_id ဖြင့် တိုက်ရိုက် Index Seek ပြုလုပ်ပါမည်
+      const checkBalStmt = (studentId && studentId > 0)
+        ? db.prepare(`SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND student_id = ?`).bind(cleanFy, `FY ${cleanFy}`, studentId)
+        : db.prepare(`SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND fyid = ?`).bind(cleanFy, `FY ${cleanFy}`, body.fyid || '');
+
       const [balRes, spentRes, capRes] = await db.batch([
-        db.prepare(`SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND (student_id = ? OR CAST(student_id AS TEXT) = ? OR (fyid IS NOT NULL AND fyid = ?))`).bind(cleanFy, `FY ${cleanFy}`, studentId, String(studentId), body.fyid || ''),
+        checkBalStmt,
         db.prepare(`SELECT COALESCE(SUM(total_amount), 0) as todaySpent FROM pos_sales_orders WHERE student_id = ? AND date = ? AND payment_method = 'Student Pocket Money'`).bind(studentId, entryDate),
         db.prepare(`SELECT setting_value as capVal FROM pos_settings WHERE setting_key = 'daily_spending_cap' LIMIT 1`)
       ]);

@@ -112,34 +112,40 @@ export async function getCashierData(db, body) {
     const offset = (page - 1) * limit;
 
     const activeFy = normalizeFyStr(body.fy || `FY ${getCurrentAcademicYear()}`);
+    const fyClean = activeFy.replace(/^FY\s*/i, '');
+    const isAllFy = String(body.fy || '').toLowerCase() === 'all';
 
-    // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)` limits Row Scans to matching Index only
-    const statsResult = await db.prepare(`
-      SELECT 
-        COALESCE(SUM(debit), 0) as totalIncome,
-        COALESCE(SUM(credit), 0) as totalExpense
-      FROM ${tableName}
-      WHERE fy IN (?, ?)
-    `).bind(activeFy, activeFy.replace(/^FY\s*/i, '')).first() || { totalIncome: 0, totalExpense: 0 };
-
-    let totalIncome = parseFloat(statsResult.totalIncome || 0);
-    let totalExpense = parseFloat(statsResult.totalExpense || 0);
-
-    if (totalIncome === 0 && totalExpense === 0) {
-      const allStats = await db.prepare(`
+    // 🚀 ULTRA-OPTIMIZATION: Scoped Stats by Fiscal Year (Zero Full-Table Scan)
+    let statsResult;
+    if (!isAllFy) {
+      statsResult = await db.prepare(`
         SELECT 
           COALESCE(SUM(debit), 0) as totalIncome,
           COALESCE(SUM(credit), 0) as totalExpense
         FROM ${tableName}
-      `).first() || { totalIncome: 0, totalExpense: 0 };
-      totalIncome = parseFloat(allStats.totalIncome || 0);
-      totalExpense = parseFloat(allStats.totalExpense || 0);
+        WHERE fy IN (?, ?)
+      `).bind(activeFy, fyClean).first();
+    } else {
+      statsResult = await db.prepare(`
+        SELECT 
+          COALESCE(SUM(debit), 0) as totalIncome,
+          COALESCE(SUM(credit), 0) as totalExpense
+        FROM ${tableName}
+      `).first();
     }
 
+    const totalIncome = parseFloat(statsResult?.totalIncome || 0);
+    const totalExpense = parseFloat(statsResult?.totalExpense || 0);
     const balance = totalIncome - totalExpense;
 
     let whereClauses = [];
     let params = [];
+
+    // 🚀 Default Scoped by Active FY (Index Range Scan သာ ဖတ်စေခြင်း)
+    if (!isAllFy) {
+      whereClauses.push(`fy IN (?, ?)`);
+      params.push(activeFy, fyClean);
+    }
 
     if (searchVal) {
       whereClauses.push(`(description LIKE ? OR category LIKE ? OR responsibility_person LIKE ? OR vr_no LIKE ? OR method LIKE ? OR transfer LIKE ? OR CAST(debit AS TEXT) LIKE ? OR CAST(credit AS TEXT) LIKE ?)`);

@@ -96,8 +96,10 @@ export async function savePromotionEntry(db, userSession, body) {
     // 💡 Duplicate Check: Prevent identical FY + Class + Category rate rows
     // 🚀 ULTRA-OPTIMIZATION: Replace OR with IN() to leverage Index Seek
     if (className && category) {
+      
+      // 🚀 Index-Friendly Case-Insensitive Seek (Uses idx_promotion_fy_class_cat)
       const existing = await db.prepare(
-        `SELECT id FROM promotion WHERE fy IN (?, ?) AND LOWER(class) = LOWER(?) AND LOWER(category) = LOWER(?)`
+        `SELECT id FROM promotion WHERE fy IN (?, ?) AND class = ? COLLATE NOCASE AND category = ? COLLATE NOCASE`
       ).bind(fy, `FY ${fy}`, className, category).first();
 
       if (existing) {

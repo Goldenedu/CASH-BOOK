@@ -65,8 +65,8 @@ export async function getStudentData(db, body) {
     const statsQuery = `
       SELECT 
         COUNT(id) as totalCount,
-        COALESCE(SUM(CASE WHEN LOWER(status) = 'active' THEN 1 ELSE 0 END), 0) as activeCount,
-        COALESCE(SUM(CASE WHEN LOWER(status) = 'inactive' THEN 1 ELSE 0 END), 0) as inactiveCount
+        COALESCE(SUM(CASE WHEN status = 'Active' THEN 1 ELSE 0 END), 0) as activeCount,
+        COALESCE(SUM(CASE WHEN COALESCE(status, '') != 'Active' THEN 1 ELSE 0 END), 0) as inactiveCount
       FROM student ${whereSql}
     `;
     const statsRow = await db.prepare(statsQuery).bind(...params).first() || { totalCount: 0, activeCount: 0, inactiveCount: 0 };
@@ -136,9 +136,16 @@ export async function lookupStudentById(db, body) {
       return { success: false, message: "Student ID မမှန်ကန်ပါ။" };
     }
 
-    const row = await db.prepare(
-      `SELECT student_id, id, name, class, category, promo, status, parents_name, phone_no, address, fyid FROM student WHERE student_id = ? OR id = ? ORDER BY id DESC LIMIT 1`
-    ).bind(studentId, studentId).first();
+    // 🚀 Exact Index Seek (idx_student_student_id) with PK Fallback (Zero Table Scan)
+    let row = await db.prepare(
+      `SELECT student_id, id, name, class, category, promo, status, parents_name, phone_no, address, fyid FROM student WHERE student_id = ? ORDER BY id DESC LIMIT 1`
+    ).bind(studentId).first();
+
+    if (!row) {
+      row = await db.prepare(
+        `SELECT student_id, id, name, class, category, promo, status, parents_name, phone_no, address, fyid FROM student WHERE id = ? ORDER BY id DESC LIMIT 1`
+      ).bind(studentId).first();
+    }
 
     if (!row) {
       return { success: false, message: "ကျောင်းသား ရှာမတွေ့ပါ။" };
@@ -181,7 +188,8 @@ export async function saveStudentEntry(db, userSession, body) {
 
     let studentId = parseInt(body.studentId || body.id, 10);
     if (!studentId || isNaN(studentId)) {
-      const maxRow = await db.prepare("SELECT MAX(CAST(student_id AS INTEGER)) as max_id FROM student WHERE fy IN (?, ?)").bind(cleanFy, `FY ${cleanFy}`).first();
+      // 🚀 Index-Friendly Max Seek (student_id သည် schema အရ INTEGER ဖြစ်၍ CAST မလိုပါ)
+      const maxRow = await db.prepare("SELECT MAX(student_id) as max_id FROM student WHERE fy IN (?, ?)").bind(cleanFy, `FY ${cleanFy}`).first();
       const currentMax = maxRow && maxRow.max_id ? parseInt(maxRow.max_id, 10) : 0;
       studentId = currentMax + 1;
     }
