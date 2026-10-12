@@ -22,25 +22,85 @@ function cleanIntegerId(val) {
   return String(val).trim().replace(/\.0+$/, '');
 }
 
-function parseSafeMonthYear(dateStr) {
-  if (!dateStr) return '';
-  const parts = String(dateStr).split('T')[0].split(/[-/]/);
-  if (parts.length >= 2) {
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const mIdx = parseInt(parts[1], 10) - 1;
-    const yStr = parts[0].slice(-2);
-    if (mIdx >= 0 && mIdx < 12) {
-      return `${monthNames[mIdx]}-${yStr}`;
+const REPORT_MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+const REPORT_MONTH_MAP = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+  january: 0, february: 1, march: 2, april: 3, june: 5,
+  july: 6, august: 7, september: 8, october: 9, november: 10, december: 11,
+  "ဇန်နဝါရီ": 0, "ဖေဖော်ဝါရီ": 1, "မတ်": 2, "ဧပြီ": 3, "မေ": 4, "ဇွန်": 5,
+  "ဇူလိုင်": 6, "သြဂုတ်": 7, "ဩဂုတ်": 7, "စက်တင်ဘာ": 8, "အောက်တိုဘာ": 9, "နိုဝင်ဘာ": 10, "ဒီဇင်ဘာ": 11
+};
+
+/**
+ * 💡 ပုံစံစုံ (YYYY-MM-DD, DD/MM/YYYY, Month-Year, Burmese Months) အား MMM-YY (e.g. Jun-26) သို့ အတိအကျ ပြောင်းပေးသည့် Parser
+ */
+function parseSafeMonthYear(val, activeFy = '') {
+  if (!val || typeof val !== 'string') return '';
+  const str = val.trim();
+  if (!str) return '';
+
+  const lower = str.toLowerCase();
+
+  // ၁။ စာသားဖြင့် လအမည် ပါဝင်နေမှု စစ်ဆေးခြင်း (e.g. "Jun-2026", "June 2026", "ဇွန်-26")
+  for (const [mName, mIdx] of Object.entries(REPORT_MONTH_MAP)) {
+    if (lower.includes(mName)) {
+      const yrMatch = str.match(/(?:20)?(2[4-9]|[3-9]\d)/);
+      let yStr = '';
+      if (yrMatch) {
+        yStr = yrMatch[1].slice(-2);
+      } else {
+        const cleanFy = String(activeFy || '').replace(/^FY\s*/i, '');
+        const startY = parseInt(cleanFy.split(/[-/]/)[0], 10) || 2026;
+        const actualY = (mIdx >= 2) ? startY : startY + 1;
+        yStr = String(actualY).slice(-2);
+      }
+      return `${REPORT_MONTH_NAMES[mIdx]}-${yStr}`;
     }
   }
+
+  // ၂။ ဂဏန်းရက်စွဲ ပုံစံများ စစ်ဆေးခြင်း (YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY, YYYY-MM စသည်)
+  const cleanStr = str.split('T')[0].trim();
+  const parts = cleanStr.split(/[-/.]/);
+
+  if (parts.length >= 2) {
+    let year = null;
+    let month = null;
+
+    // YYYY-MM-DD သို့မဟုတ် YYYY-MM
+    if (parts[0].length === 4 && parseInt(parts[0], 10) >= 2020) {
+      year = parts[0].slice(-2);
+      month = parseInt(parts[1], 10);
+    }
+    // DD/MM/YYYY သို့မဟုတ် DD-MM-YYYY
+    else if (parts.length >= 3 && parts[2].length === 4 && parseInt(parts[2], 10) >= 2020) {
+      year = parts[2].slice(-2);
+      month = parseInt(parts[1], 10);
+    }
+    // MM/YYYY သို့မဟုတ် MM-YYYY
+    else if (parts[1].length === 4 && parseInt(parts[1], 10) >= 2020) {
+      year = parts[1].slice(-2);
+      month = parseInt(parts[0], 10);
+    }
+    // DD/MM/YY
+    else if (parts.length === 3 && parts[2].length === 2) {
+      year = parts[2];
+      month = parseInt(parts[1], 10);
+    }
+
+    if (year && month >= 1 && month <= 12) {
+      return `${REPORT_MONTH_NAMES[month - 1]}-${year}`;
+    }
+  }
+
   return '';
 }
 
 function monthLabelToYYYYMM(label) {
-  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const parts = String(label).trim().split('-');
   if (parts.length !== 2) return null;
-  const mIdx = monthNames.indexOf(parts[0]);
+  const mIdx = REPORT_MONTH_NAMES.indexOf(parts[0]);
   if (mIdx === -1) return null;
   const mm = String(mIdx + 1).padStart(2, '0');
   const yy = parts[1].length === 2 ? '20' + parts[1] : parts[1];
@@ -259,9 +319,10 @@ export async function getIncomeDetailReportData(db, body) {
       FROM student s ${whereSql}
     `).bind(...params).all()).results || [];
     
-    // Fetch Income Data including remark (Zero extra query)
+    
+    // Fetch Income Data including 'my' and 'remark'
     const allIncome = (await db.prepare(`
-      SELECT student_id, account_name, credit, debit, effect_date, date, remark 
+      SELECT student_id, account_name, credit, debit, effect_date, date, my, remark 
       FROM income 
       WHERE fy IN (?, ?)
     `).bind(activeFy, fyClean).all()).results || [];
@@ -308,8 +369,13 @@ export async function getIncomeDetailReportData(db, body) {
       const credit = parseFloat(row.credit || 0) - parseFloat(row.debit || 0);
       const effDate = row.effect_date || row.date || '';
 
-      const mStr = parseSafeMonthYear(effDate);
-      const mIdx = monthKeys.indexOf(mStr);
+      // 🚀 Fail-Safe Month-Year Resolver: effect_date -> my -> date -> remark စဉ်ဆက်မပြတ် စစ်ဆေးခြင်း
+      let mStr = parseSafeMonthYear(row.effect_date, activeFy);
+      if (!mStr || !monthKeys.includes(mStr)) mStr = parseSafeMonthYear(row.my, activeFy);
+      if (!mStr || !monthKeys.includes(mStr)) mStr = parseSafeMonthYear(row.date, activeFy);
+      if (!mStr || !monthKeys.includes(mStr)) mStr = parseSafeMonthYear(row.remark, activeFy);
+
+      const mIdx = mStr ? monthKeys.indexOf(mStr) : -1;
 
       if (row.remark) {
         stGroup.remarksList.push(row.remark);
@@ -334,20 +400,30 @@ export async function getIncomeDetailReportData(db, body) {
         }
       }
 
-      if (acc.includes('service')) {
+      // 🚀 Account Classification & Safe Allocation (Logic Refined)
+      const isReg = acc.includes('registration');
+      const isFerry = acc.includes('ferry');
+      const isNight = acc.includes('night');
+      const isService = acc.includes('service') || acc.includes('tuition') || acc.includes('monthly') || acc.includes('school') || acc.includes('လခ') || acc.includes('လစဥ်');
+
+      if (isReg) {
+        stGroup.registration += credit;
+      } else if (isFerry) {
+        stGroup.ferry += credit;
+      } else if (isNight) {
+        stGroup.nightStudy += credit;
+      } else if (isService) {
         if (!stGroup.joinDate || (effDate && effDate < stGroup.joinDate)) {
           stGroup.joinDate = effDate;
         }
         if (mIdx >= 0) {
           stGroup.monthlyServices[mIdx] += credit;
+        } else {
+          // လအမည် ခွဲမရပါက စာရင်းမပျောက်စေရန် Others ထဲ ထည့်သွင်းခြင်း
+          stGroup.others += credit;
         }
-      } else if (acc.includes('registration')) {
-        stGroup.registration += credit;
-      } else if (acc.includes('ferry')) {
-        stGroup.ferry += credit;
-      } else if (acc.includes('night')) {
-        stGroup.nightStudy += credit;
       } else {
+        // Uniform, Books, စာမေးပွဲကြေးနှင့် အခြားခေါင်းစဉ်များသည် Others ထဲသို့ မှန်ကန်စွာ ရောက်ရှိမည်
         stGroup.others += credit;
       }
     });
@@ -490,7 +566,7 @@ export async function getMonthlyIncomeReportData(db, body) {
     const activeFy = normalizeFyStr(body.fy || fallbackFy);
     const fyClean = activeFy.replace(/^FY\s*/i, '');
 
-    const rowsRes = await db.prepare(`SELECT account_name, category, credit, debit, effect_date, date FROM income WHERE fy IN (?, ?)`).bind(activeFy, fyClean).all();
+    const rowsRes = await db.prepare(`SELECT account_name, category, credit, debit, effect_date, date, my FROM income WHERE fy IN (?, ?)`).bind(activeFy, fyClean).all();
     const list = rowsRes.results || [];
 
     const monthKeys = get12FiscalMonths(activeFy);
@@ -502,9 +578,11 @@ export async function getMonthlyIncomeReportData(db, body) {
     const t1Data = accounts.map(acc => {
       const monthAmts = new Array(12).fill(0);
       list.filter(r => String(r.account_name || '').toLowerCase().trim() === acc.toLowerCase()).forEach(r => {
-        const effDate = r.effect_date || r.date || '';
-        const mStr = parseSafeMonthYear(effDate);
-        const idx = monthKeys.indexOf(mStr);
+        let mStr = parseSafeMonthYear(r.effect_date, activeFy);
+        if (!mStr || !monthKeys.includes(mStr)) mStr = parseSafeMonthYear(r.my, activeFy);
+        if (!mStr || !monthKeys.includes(mStr)) mStr = parseSafeMonthYear(r.date, activeFy);
+
+        const idx = mStr ? monthKeys.indexOf(mStr) : -1;
         if (idx >= 0) monthAmts[idx] += (parseFloat(r.credit || 0) - parseFloat(r.debit || 0));
       });
 
