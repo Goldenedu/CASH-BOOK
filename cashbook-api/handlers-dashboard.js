@@ -176,8 +176,8 @@ export async function getDashboardData(db, body) {
       safeFirstNum(db, "SELECT COALESCE(SUM(debit - credit), 0) as total FROM bank WHERE category LIKE '%loan%'"),
       safeFirstNum(db, "SELECT COALESCE(SUM(debit - credit), 0) as total FROM cash WHERE category LIKE '%loan%'"),
       safeFirstNum(db, "SELECT COALESCE(SUM(liabilities), 0) as total FROM office"),
-      safeFirstNum(db, "SELECT COALESCE(SUM(unpaid_bonus), 0) as total FROM staff_fulltime"),
-      safeFirstNum(db, "SELECT COALESCE(SUM(unpaid_fund), 0) as total FROM staff_fulltime"),
+      safeFirstNum(db, "SELECT COALESCE(SUM(unpaid_bonus), 0) as total FROM payroll"),
+      safeFirstNum(db, "SELECT COALESCE(SUM(unpaid_fund), 0) as total FROM payroll"),
 
       // 💡 5. Receivables (Single-Pass Single Table Scan)
       db.prepare(`
