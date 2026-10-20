@@ -20,37 +20,37 @@ var isGradeSubmitting = false;
  */
 window.formatCategoryBadgeHtml = function (categoryStr) {
   const cat = String(categoryStr || '-').trim();
-  if (!cat || cat === '-') return '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-800 text-slate-400 border border-slate-700/60">-</span>';
+  if (!cat || cat === '-') return '<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-800 text-slate-400">-</span>';
 
   // 🛡️ Safe HTML Escaping
   const safeCat = (typeof window.escapeHtml === 'function') ? window.escapeHtml(cat) : cat;
   const lower = cat.toLowerCase();
 
   if (lower.includes('loan') || lower.includes('adv') || lower.includes('expense') || lower.includes('liability')) {
-    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-sm shadow-rose-950/20"><i class="fa-solid fa-triangle-exclamation text-[9px] text-rose-400"></i> ${safeCat}</span>`;
+    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-300 shadow-sm shadow-rose-950/20"><i class="fa-solid fa-triangle-exclamation text-[9px] text-rose-400"></i> ${safeCat}</span>`;
   }
 
   if (lower.includes('income') || lower.includes('sale') || lower.includes('service') || lower.includes('fee') || lower.includes('tuition')) {
-    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-950/20"><i class="fa-solid fa-circle-arrow-down text-[9px] text-emerald-400"></i> ${safeCat}</span>`;
+    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 shadow-sm shadow-emerald-950/20"><i class="fa-solid fa-circle-arrow-down text-[9px] text-emerald-400"></i> ${safeCat}</span>`;
   }
 
   if (lower.includes('transfer') || lower.includes('move')) {
-    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-sm shadow-sky-950/20"><i class="fa-solid fa-right-left text-[9px] text-sky-400"></i> ${safeCat}</span>`;
+    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-sky-500/20 text-sky-300 shadow-sm shadow-sky-950/20"><i class="fa-solid fa-right-left text-[9px] text-sky-400"></i> ${safeCat}</span>`;
   }
 
   if (lower.includes('open') || lower.includes('balance') || lower.includes('capital')) {
-    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm shadow-amber-950/20"><i class="fa-solid fa-vault text-[9px] text-amber-400"></i> ${safeCat}</span>`;
+    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 shadow-sm shadow-amber-950/20"><i class="fa-solid fa-vault text-[9px] text-amber-400"></i> ${safeCat}</span>`;
   }
 
   if (lower.includes('payroll') || lower.includes('salary') || lower.includes('bonus') || lower.includes('fund') || lower.includes('staff')) {
-    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-950/20"><i class="fa-solid fa-user-tag text-[9px] text-purple-400"></i> ${safeCat}</span>`;
+    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-500/20 text-purple-300 shadow-sm shadow-purple-950/20"><i class="fa-solid fa-user-tag text-[9px] text-purple-400"></i> ${safeCat}</span>`;
   }
 
   if (lower.includes('boarder') || lower.includes('student') || lower.includes('uniform') || lower.includes('stock')) {
-    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-sm shadow-teal-950/20"><i class="fa-solid fa-tag text-[9px] text-teal-400"></i> ${safeCat}</span>`;
+    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-teal-500/20 text-teal-300 shadow-sm shadow-teal-950/20"><i class="fa-solid fa-tag text-[9px] text-teal-400"></i> ${safeCat}</span>`;
   }
 
-  return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700/60">${safeCat}</span>`;
+  return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300">${safeCat}</span>`;
 };
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -491,7 +491,7 @@ async function saveGradeForm(event) {
  * 💡 Universal Animated Refresh Button Controller (Event-Safe Timing)
  * 🎯 FIX: အချိန်မတိုင်မီ Fake Toast ပြသခြင်းကို ဖယ်ရှားပြီး Animation နှင့် Cache Invalidation သာ သန့်ရှင်းစွာ ပြုလုပ်သည်
  */
-document.addEventListener('click', function(e) {
+document.addEventListener('click', function (e) {
   const refreshBtn = e.target.closest('button');
   if (!refreshBtn) return;
 
@@ -513,6 +513,28 @@ document.addEventListener('click', function(e) {
     }, 800);
   }
 });
+
+/**
+ * 💡 Universal Toast Notification Engine (Right-Top Corner Alignment)
+ */
+if (typeof window.showToast !== 'function') {
+  window.showToast = function (type, message) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const isError = String(type).toUpperCase() === 'ERROR';
+    const toast = document.createElement('div');
+    toast.className = `pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl text-xs font-bold shadow-2xl transition-all duration-300 animate-in fade-in slide-in-from-top-4 ${isError
+        ? 'bg-[#1e1017] text-rose-300 border border-rose-500/30'
+        : 'bg-[#0c1e18] text-emerald-300 border border-emerald-500/30'
+      }`;
+    toast.innerHTML = `<i class="fa-solid ${isError ? 'fa-circle-xmark text-rose-400 text-sm' : 'fa-circle-check text-emerald-400 text-sm'}"></i> <span>${typeof window.escapeHtml === 'function' ? window.escapeHtml(message) : message}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.classList.add('opacity-0', 'translate-x-3');
+      setTimeout(() => toast.remove(), 300);
+    }, 3500);
+  };
+}
 
 // 💡 EXPOSE GLOBALLY TO WINDOW
 window.initApp = initApp;

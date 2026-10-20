@@ -1,10 +1,11 @@
-<!-- views/student.html --> 
+<!-- views/student.html -->
 <div class="space-y-5">
 
   <!-- 💡 ၁။ Top KPI Stats Cards Grid (Main Bank Book နှင့် Pixel-Perfect တူညီသည်) -->
   <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
     <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400"><i class="fa-solid fa-user-check text-xl"></i></div>
+      <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400"><i class="fa-solid fa-user-check text-xl"></i>
+      </div>
       <div>
         <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Total Active</p>
         <h3 id="stu-total-active" class="text-base font-extrabold text-white mt-1">0</h3>
@@ -18,7 +19,8 @@
       </div>
     </div>
     <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-indigo-500/10 text-indigo-400"><i class="fa-solid fa-user-graduate text-xl"></i></div>
+      <div class="p-3.5 rounded-lg bg-indigo-500/10 text-indigo-400"><i class="fa-solid fa-user-graduate text-xl"></i>
+      </div>
       <div>
         <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Total Students</p>
         <h3 id="stu-total-students" class="text-base font-extrabold text-white mt-1">0</h3>
@@ -33,68 +35,77 @@
     </div>
   </div>
 
-  <!-- 💡 ၂။ Control Search & Action Bar (Main Bank Book စတိုင်အတိုင်း ၁၀၀% ထပ်တူညီသည်) -->
-<div class="flex flex-col lg:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
-  
-  <!-- ဘယ်ဘက်ခြမ်း: Search Box + FY Dropdown + Grade Dropdown -->
-  <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
-    
-    <!-- 🎯 Search Box (Main Bank Book ထဲကအတိုင်း w-full sm:w-64) -->
-    <div class="relative w-full sm:w-64">
-      <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
-        <i class="fa-solid fa-magnifying-glass text-xs"></i>
-      </span>
-      <input type="text" 
-             id="student-search" 
-             oninput="onSearchInputStudent()" 
-             placeholder="Search student name, FYID..." 
-             class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all">
+
+  <!-- 💡 ၂။ Control Search & Action Bar (Main Bank Book စတိုင်အတိုင်း အလျားနှင့် ဖောင်းကြွခလုတ်များ ညှိထားသည်) -->
+  <div
+    class="flex flex-col lg:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
+
+    <!-- ဘယ်ဘက်ခြမ်း: Search Box + FY Dropdown + Grade Dropdown -->
+    <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
+
+      <!-- 🎯 Search Box (အခြား Page များနှင့် အလျား အတိအကျတူညီစေရန် min-w-[250px] sm:w-64 shrink-0 သတ်မှတ်ထားသည်) -->
+      <div class="relative w-full sm:w-64 shrink-0" style="min-width: 250px;">
+        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500 pointer-events-none">
+          <i class="fa-solid fa-magnifying-glass text-xs"></i>
+        </span>
+        <input type="text" id="student-search" oninput="onSearchInputStudent()"
+          placeholder="Search student name, FYID..."
+          class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all">
+      </div>
+
+      <!-- 💡 FY FILTER DROPDOWN -->
+      <div class="w-full sm:w-32">
+        <select id="student-filter-fy" onchange="onFyFilterChangeStudent()"
+          class="w-full text-xs bg-[#0f172a] border border-slate-800 text-white rounded-lg px-2.5 py-2 outline-none focus:border-indigo-500 transition-all font-bold">
+          <option value="" selected>-- All FY --</option>
+        </select>
+      </div>
+
+      <!-- 💡 GRADE / CLASS FILTER DROPDOWN -->
+      <div class="w-full sm:w-36">
+        <select id="student-filter-grade" onchange="onGradeFilterChangeStudent()"
+          class="w-full text-xs bg-[#0f172a] border border-slate-800 text-white rounded-lg px-2.5 py-2 outline-none focus:border-indigo-500 transition-all font-bold">
+          <option value="" selected>-- All Grades --</option>
+          <option value="Pre School">Pre School</option>
+          <option value="KG Student">KG Student</option>
+          <option value="Grade 1">Grade 1</option>
+          <option value="Grade 2">Grade 2</option>
+          <option value="Grade 3">Grade 3</option>
+          <option value="Grade 4">Grade 4</option>
+          <option value="Grade 5">Grade 5</option>
+          <option value="Grade 6">Grade 6</option>
+          <option value="Grade 7">Grade 7</option>
+          <option value="Grade 8">Grade 8</option>
+          <option value="Grade 9">Grade 9</option>
+          <option value="Grade 10">Grade 10</option>
+          <option value="Grade 11">Grade 11</option>
+          <option value="Grade 12">Grade 12</option>
+        </select>
+      </div>
     </div>
 
-    <!-- 💡 FY FILTER DROPDOWN -->
-    <div class="w-full sm:w-32">
-      <select id="student-filter-fy" onchange="onFyFilterChangeStudent()" class="w-full text-xs bg-[#0f172a] border border-slate-800 text-white rounded-lg px-2.5 py-2 outline-none focus:border-indigo-500 transition-all font-bold">
-        <option value="" selected>-- All FY --</option>
-      </select>
-    </div>
+    <!-- 🎯 ညာဘက်ခြမ်း Action Buttons (ဖောင်းကြွ 3D Raised စတိုင်၊ Border မပါ၊ အရောင်မပါ) -->
+    <div class="flex items-center gap-2.5 w-full lg:w-auto justify-end">
+      <!-- 🎯 Embossed Refresh Button -->
+      <button onclick="loadStudentData(false)"
+        class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md shadow-slate-950/60 active:translate-y-0.5 transition-all whitespace-nowrap"
+        title="Refresh Data">
+        <i class="fa-solid fa-rotate text-xs"></i> Refresh
+      </button>
 
-    <!-- 💡 GRADE / CLASS FILTER DROPDOWN -->
-    <div class="w-full sm:w-36">
-      <select id="student-filter-grade" onchange="onGradeFilterChangeStudent()" class="w-full text-xs bg-[#0f172a] border border-slate-800 text-white rounded-lg px-2.5 py-2 outline-none focus:border-indigo-500 transition-all font-bold">
-        <option value="" selected>-- All Grades --</option>
-        <option value="Pre School">Pre School</option>
-        <option value="KG Student">KG Student</option>
-        <option value="Grade 1">Grade 1</option>
-        <option value="Grade 2">Grade 2</option>
-        <option value="Grade 3">Grade 3</option>
-        <option value="Grade 4">Grade 4</option>
-        <option value="Grade 5">Grade 5</option>
-        <option value="Grade 6">Grade 6</option>
-        <option value="Grade 7">Grade 7</option>
-        <option value="Grade 8">Grade 8</option>
-        <option value="Grade 9">Grade 9</option>
-        <option value="Grade 10">Grade 10</option>
-        <option value="Grade 11">Grade 11</option>
-        <option value="Grade 12">Grade 12</option>
-      </select>
+      <!-- 🎯 Embossed Export CSV Button -->
+      <button onclick="exportToCSVStudent()"
+        class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md shadow-slate-950/60 active:translate-y-0.5 transition-all whitespace-nowrap">
+        <i class="fa-solid fa-file-export text-xs"></i> Export CSV
+      </button>
+
+      <!-- Add New Entry Button -->
+      <button onclick="openAddModalStudent()"
+        class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 active:translate-y-0.5 transition-all whitespace-nowrap">
+        <i class="fa-solid fa-plus text-xs"></i> Add New Entry
+      </button>
     </div>
   </div>
-
-  <!-- 🎯 ညာဘက်ခြမ်း Action Buttons (Main Bank Book နည်းတူ p-2 Padding အသုံးပြုထားပါသည်) -->
-  <div class="flex items-center gap-2.5 w-full lg:w-auto justify-end">
-    <button onclick="loadStudentData(false)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all" title="Refresh Data">
-      <i class="fa-solid fa-rotate text-xs"></i> Refresh
-    </button>
-
-    <button onclick="exportToCSVStudent()" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
-      <i class="fa-solid fa-file-export text-xs"></i> Export CSV
-    </button>
-
-    <button onclick="openAddModalStudent()" class="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/10 transition-all">
-      <i class="fa-solid fa-plus text-xs"></i> Add New Entry
-    </button>
-  </div>
-</div>
 
   <!-- 💡 ၃။ 16-Column Data Grid Table (Main Bank Book အတိုင်း အမြင့် 52px သတ်မှတ်ထားသည်) -->
   <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
@@ -117,7 +128,9 @@
           <th scope="col" class="w-44 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">PARENTS NAME</th>
           <th scope="col" class="w-36 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">PHONE NO</th>
           <th scope="col" class="min-w-[200px] text-slate-400 text-xs px-2 align-middle whitespace-nowrap">ADDRESS</th>
-          <th scope="col" class="w-24 text-center text-slate-400 text-xs px-2 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg align-middle whitespace-nowrap">ACTION</th>
+          <th scope="col"
+            class="w-24 text-center text-slate-400 text-xs px-2 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg align-middle whitespace-nowrap">
+            ACTION</th>
         </tr>
       </thead>
       <tbody id="student-table-body" class="divide-y divide-slate-800/40 text-slate-300">
@@ -127,14 +140,17 @@
   </div>
 
   <!-- 💡 ၄။ Pagination Tray -->
-  <div class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
+  <div
+    class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
     <div id="stu-pagination-info" class="text-xs font-semibold text-slate-400 tracking-wide">Showing entries...</div>
 
     <div class="flex items-center gap-2">
-      <button onclick="changePageStudent(-1)" id="stu-btn-prev" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+      <button onclick="changePageStudent(-1)" id="stu-btn-prev"
+        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
         <i class="fa-solid fa-chevron-left text-[10px]"></i> Previous
       </button>
-      <button onclick="changePageStudent(1)" id="stu-btn-next" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+      <button onclick="changePageStudent(1)" id="stu-btn-next"
+        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
         Next <i class="fa-solid fa-chevron-right text-[10px]"></i>
       </button>
     </div>
@@ -143,11 +159,14 @@
 </div>
 
 <!-- 💡 ၅။ Add / Edit Student Profile Modal -->
-<div id="student-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-  <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+<div id="student-modal"
+  class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div
+    class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
     <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
       <h3 id="stu-form-title" class="text-sm font-black text-white uppercase tracking-wider">Add New Entry</h3>
-      <button onclick="closeStudentModal()" aria-label="Close modal" title="Close" class="text-slate-500 hover:text-white transition"><i class="fa-solid fa-xmark text-sm"></i></button>
+      <button onclick="closeStudentModal()" aria-label="Close modal" title="Close"
+        class="text-slate-500 hover:text-white transition"><i class="fa-solid fa-xmark text-sm"></i></button>
     </div>
 
     <form id="student-form" onsubmit="saveStudentForm(event)" class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
@@ -158,18 +177,21 @@
       <div class="grid grid-cols-3 gap-4">
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Date</label>
-          <input type="date" id="stu-date" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+          <input type="date" id="stu-date" required
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
         </div>
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Student Status</label>
-          <select id="stu-stustatus" onchange="onStudentStatusChange()" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500 font-bold">
+          <select id="stu-stustatus" onchange="onStudentStatusChange()" required
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500 font-bold">
             <option value="New Student">New Student (ကျောင်းသားသစ်)</option>
             <option value="Old Student">Old Student (ကျောင်းသားဟောင်း)</option>
           </select>
         </div>
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Fiscal Year</label>
-          <select id="stu-fy" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500 font-bold"></select>
+          <select id="stu-fy" required
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500 font-bold"></select>
         </div>
       </div>
 
@@ -177,11 +199,13 @@
       <div class="grid grid-cols-3 gap-4">
         <div class="flex flex-col gap-1">
           <label id="stu-id-label" class="font-bold text-indigo-400 uppercase tracking-wide">Student ID</label>
-          <input type="text" id="stu-id-input" oninput="onOldStudentIdLookup()" placeholder="Auto Generated" class="w-full font-mono font-bold bg-[#0f172a] border border-slate-800 text-indigo-300 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+          <input type="text" id="stu-id-input" oninput="onOldStudentIdLookup()" placeholder="Auto Generated"
+            class="w-full font-mono font-bold bg-[#0f172a] border border-slate-800 text-indigo-300 rounded-lg p-2.5 outline-none focus:border-indigo-500">
         </div>
         <div style="grid-column: span 2 / span 2;" class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Student Name (ကျောင်းသားအမည်)</label>
-          <input type="text" id="stu-name" required placeholder="မောင် / မ xxxx..." class="w-full font-bold text-slate-100 bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+          <input type="text" id="stu-name" required placeholder="မောင် / မ xxxx..."
+            class="w-full font-bold text-slate-100 bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-indigo-500">
         </div>
       </div>
 
@@ -189,7 +213,8 @@
       <div class="grid grid-cols-3 gap-4">
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Class (အတန်း)</label>
-          <select id="stu-class" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500 font-bold">
+          <select id="stu-class" required
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500 font-bold">
             <option value="Pre School">Pre School</option>
             <option value="KG Student">KG Student</option>
             <option value="Grade 1">Grade 1</option>
@@ -208,7 +233,8 @@
         </div>
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Category (နေထိုင်မှု)</label>
-          <select id="stu-category" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+          <select id="stu-category" required
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
             <option value="Boarder">Boarder</option>
             <option value="Semi Boarder">Semi Boarder</option>
             <option value="Day Student">Day Student</option>
@@ -216,7 +242,8 @@
         </div>
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Promo Plan</label>
-          <select id="stu-promo" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+          <select id="stu-promo" required
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
             <option value="Original price">Original price</option>
             <option value="Pro A">Pro A</option>
             <option value="Pro B">Pro B</option>
@@ -233,29 +260,36 @@
       <div class="grid grid-cols-2 gap-4">
         <div class="flex flex-col gap-1">
           <label class="font-bold text-rose-400 uppercase tracking-wide">Transfer Date (နုတ်ထွက်ရက်)</label>
-          <input type="date" id="stu-transferdate" class="w-full text-rose-400 bg-rose-500/5 border border-slate-800 rounded-lg p-2.5 outline-none focus:border-rose-500">
+          <input type="date" id="stu-transferdate"
+            class="w-full text-rose-400 bg-rose-500/5 border border-slate-800 rounded-lg p-2.5 outline-none focus:border-rose-500">
         </div>
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Parents Name (မိဘအမည်)</label>
-          <input type="text" id="stu-parents" placeholder="အဘ ဦးxxxx / အမိ ဒေါ်xxxx..." class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+          <input type="text" id="stu-parents" placeholder="အဘ ဦးxxxx / အမိ ဒေါ်xxxx..."
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
         </div>
       </div>
 
       <!-- Row 5: Phone No -->
       <div class="flex flex-col gap-1">
-        <label class="font-bold text-slate-400 uppercase tracking-wide">Phone No (ဖုန်းနံပါတ် - ကော်မာခြား၍ ရေးနိုင်သည်)</label>
-        <input type="text" id="stu-phone" placeholder="09-123456789, 09-987654321" class="w-full font-mono bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+        <label class="font-bold text-slate-400 uppercase tracking-wide">Phone No (ဖုန်းနံပါတ် - ကော်မာခြား၍
+          ရေးနိုင်သည်)</label>
+        <input type="text" id="stu-phone" placeholder="09-123456789, 09-987654321"
+          class="w-full font-mono bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
       </div>
 
       <!-- Row 6: Address -->
       <div class="flex flex-col gap-1">
         <label class="font-bold text-slate-400 uppercase tracking-wide">Address (နေရပ်လိပ်စာ)</label>
-        <textarea id="stu-address" rows="2" placeholder="အသေးစိတ် နေရပ်လိပ်စာ..." class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500"></textarea>
+        <textarea id="stu-address" rows="2" placeholder="အသေးစိတ် နေရပ်လိပ်စာ..."
+          class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500"></textarea>
       </div>
 
       <div class="flex justify-end items-center gap-3 pt-4 border-t border-slate-800">
-        <button type="button" onclick="closeStudentModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">Cancel</button>
-        <button type="submit" class="px-5 py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10 transition-all">Confirm</button>
+        <button type="button" onclick="closeStudentModal()"
+          class="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">Cancel</button>
+        <button type="submit"
+          class="px-5 py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10 transition-all">Confirm</button>
       </div>
     </form>
   </div>

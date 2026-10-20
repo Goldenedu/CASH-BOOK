@@ -1,4 +1,4 @@
-<!-- views/staff.html (Staff Lists - Full Time / Part Time) --> 
+<!-- views/staff.html (Staff Lists - Full Time / Part Time) -->
 <div class="space-y-4 max-w-[1920px] mx-auto">
 
   <!-- 💡 ၁။ Top KPI Stats Cards Grid (၁ တန်းတည်း ၄ ကွက်) -->
@@ -6,54 +6,55 @@
 
   <!-- 💡 ၂။ Search, Category Tabs, Edit Grade & Actions Bar (Main Bank Book စံနှုန်းအတိုင်း ညှိထားသော Layout) -->
   <div class="flex flex-wrap items-center justify-between bg-[#0c1322] border border-slate-800 p-3 rounded-xl gap-3">
-    
+
     <!-- ဘယ်ဘက်ခြမ်း: Search Box + Category Switcher Tabs + Edit Salary Grade Button -->
     <div class="flex items-center gap-2.5 flex-wrap shrink-0">
-      
+
       <!-- 🎯 Search Box -->
       <div class="relative w-full sm:w-64 shrink-0" style="min-width: 240px;">
         <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500 pointer-events-none">
           <i class="fa-solid fa-magnifying-glass text-xs"></i>
         </span>
-        <input type="text" 
-               id="staff-search-input" 
-               oninput="onSearchInputStaff()" 
-               placeholder="Search staff name, ID, position..." 
-               class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all font-sans">
+        <input type="text" id="staff-search-input" oninput="onSearchInputStaff()"
+          placeholder="Search staff name, ID, position..."
+          class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all font-sans">
       </div>
 
       <!-- 🎯 Category Switcher Tabs (Full Time Staff & Part Time Staff) -->
       <div class="flex items-center gap-1.5 p-1 bg-[#0f172a] border border-slate-800 rounded-xl shrink-0">
-        <button onclick="switchStaffCategory('Full Time')" id="staff-tab-ft" 
-                class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-600/20 flex items-center gap-1.5 whitespace-nowrap">
+        <button onclick="switchStaffCategory('Full Time')" id="staff-tab-ft"
+          class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-600/20 flex items-center gap-1.5 whitespace-nowrap">
           <i class="fa-solid fa-user-check text-[11px]"></i> Full Time Staff
         </button>
-        <button onclick="switchStaffCategory('Part Time')" id="staff-tab-pt" 
-                class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white flex items-center gap-1.5 whitespace-nowrap">
+        <button onclick="switchStaffCategory('Part Time')" id="staff-tab-pt"
+          class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white flex items-center gap-1.5 whitespace-nowrap">
           <i class="fa-solid fa-user-clock text-[11px]"></i> Part Time Staff
         </button>
       </div>
 
       <!-- 🎯 Edit Salary Grade ခလုတ် (Part Time Staff ဘေးသို့ ရွှေ့ထားသည်) -->
-      <button onclick="openGradeModal()" id="btn-edit-grade" 
-              class="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-amber-500/40 text-amber-300 hover:text-amber-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap shadow-sm">
+      <button onclick="openGradeModal()" id="btn-edit-grade"
+        class="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-amber-500/40 text-amber-300 hover:text-amber-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap shadow-sm">
         <i class="fa-solid fa-sliders text-xs text-amber-400"></i> Edit Salary Grade
       </button>
 
     </div>
 
-    <!-- ညာဘက်ခြမ်း: Action Buttons (Main Bank Book အတိုင်း Refresh, Export CSV, Add New Entry တစ်ဆက်တည်း ထားရှိသည်) -->
-    <div class="flex items-center gap-2 shrink-0">
-      <button onclick="loadStaffData(false)" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm whitespace-nowrap" title="Refresh Data">
+    <!-- ညာဘက်ခြမ်း: Action Buttons (ဖောင်းကြွ 3D Raised စတိုင်၊ Border မပါ၊ အရောင်မပါ) -->
+    <div class="flex items-center gap-2.5 shrink-0">
+      <button onclick="loadStaffData(false)"
+        class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md shadow-slate-950/60 active:translate-y-0.5 transition-all whitespace-nowrap"
+        title="Refresh Data">
         <i class="fa-solid fa-rotate text-xs"></i> Refresh
       </button>
 
-      <button onclick="exportToCSVStaff()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm whitespace-nowrap">
-        <i class="fa-solid fa-file-export text-xs text-emerald-400"></i> Export CSV
+      <button onclick="exportToCSVStaff()"
+        class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md shadow-slate-950/60 active:translate-y-0.5 transition-all whitespace-nowrap">
+        <i class="fa-solid fa-file-export text-xs"></i> Export CSV
       </button>
 
-      <!-- 🎯 Add New Entry ခလုတ် -->
-      <button onclick="openAddModalStaff()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 transition-all whitespace-nowrap">
+      <button onclick="openAddModalStaff()"
+        class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 active:translate-y-0.5 transition-all whitespace-nowrap">
         <i class="fa-solid fa-plus text-xs"></i> Add New Entry
       </button>
     </div>
@@ -68,13 +69,16 @@
   </div>
 
   <!-- ၄။ Pagination Controls -->
-  <div class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
+  <div
+    class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
     <div id="staff-pagination-info" class="text-xs font-semibold text-slate-400 tracking-wide">Showing entries...</div>
     <div class="flex items-center gap-2">
-      <button onclick="changePageStaff(-1)" id="staff-btn-prev" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white font-bold transition-all text-xs">
+      <button onclick="changePageStaff(-1)" id="staff-btn-prev"
+        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white font-bold transition-all text-xs">
         <i class="fa-solid fa-chevron-left text-[10px]"></i> Previous
       </button>
-      <button onclick="changePageStaff(1)" id="staff-btn-next" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white font-bold transition-all text-xs">
+      <button onclick="changePageStaff(1)" id="staff-btn-next"
+        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white font-bold transition-all text-xs">
         Next <i class="fa-solid fa-chevron-right text-[10px]"></i>
       </button>
     </div>
@@ -83,11 +87,14 @@
 </div>
 
 <!-- ADD / EDIT STAFF MODAL -->
-<div id="staff-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-  <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+<div id="staff-modal"
+  class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div
+    class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
     <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
       <h3 id="staff-form-title" class="text-sm font-black text-white uppercase tracking-wider">Add New Entry</h3>
-      <button onclick="closeStaffModal()" class="text-slate-500 hover:text-white transition"><i class="fa-solid fa-xmark text-sm"></i></button>
+      <button onclick="closeStaffModal()" class="text-slate-500 hover:text-white transition"><i
+          class="fa-solid fa-xmark text-sm"></i></button>
     </div>
 
     <form id="staff-form" onsubmit="saveStaffForm(event)" class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
@@ -96,22 +103,26 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Join Date</label>
-          <input type="date" id="staff-joindate" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+          <input type="date" id="staff-joindate" required
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
         </div>
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Staff Name (အမည်)</label>
-          <input type="text" id="staff-name" placeholder="e.g. Daw Thin Za Li" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+          <input type="text" id="staff-name" placeholder="e.g. Daw Thin Za Li" required
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
         </div>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Education</label>
-          <select id="staff-education" class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500"></select>
+          <select id="staff-education"
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500"></select>
         </div>
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Position (ရာထူး)</label>
-          <select id="staff-position" class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500"></select>
+          <select id="staff-position"
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500"></select>
         </div>
       </div>
 
@@ -120,22 +131,26 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div class="flex flex-col gap-1">
             <label class="font-bold text-amber-400 uppercase tracking-wide">Salary Grade</label>
-            <select id="staff-grade" onchange="onSalaryGradeChangeStaff()" class="w-full bg-[#0f172a] border border-slate-800 text-amber-300 font-bold rounded-lg p-2.5 outline-none focus:border-amber-500"></select>
+            <select id="staff-grade" onchange="onSalaryGradeChangeStaff()"
+              class="w-full bg-[#0f172a] border border-slate-800 text-amber-300 font-bold rounded-lg p-2.5 outline-none focus:border-amber-500"></select>
           </div>
           <div class="flex flex-col gap-1">
             <label class="font-bold text-slate-400 uppercase tracking-wide">Working Days (လုပ်ငန်းရက်)</label>
-            <input type="number" id="staff-working-days" value="26" oninput="calculateLiveStaffSalary()" class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+            <input type="number" id="staff-working-days" value="26" oninput="calculateLiveStaffSalary()"
+              class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
           </div>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div class="flex flex-col gap-1">
             <label class="font-bold text-emerald-400 uppercase tracking-wide">Basic Amt (အခြေခံလစာ)</label>
-            <input type="number" id="staff-basic" value="0" oninput="calculateLiveStaffSalary()" class="w-full bg-[#0f172a] border border-slate-800 text-emerald-400 font-bold rounded-lg p-2.5 outline-none focus:border-emerald-500">
+            <input type="number" id="staff-basic" value="0" oninput="calculateLiveStaffSalary()"
+              class="w-full bg-[#0f172a] border border-slate-800 text-emerald-400 font-bold rounded-lg p-2.5 outline-none focus:border-emerald-500">
           </div>
           <div class="flex flex-col gap-1">
             <label class="font-bold text-rose-400 uppercase tracking-wide">Extra Amt (အပိုကြေး)</label>
-            <input type="number" id="staff-extra" value="0" oninput="calculateLiveStaffSalary()" class="w-full bg-[#0f172a] border border-slate-800 text-rose-400 font-bold rounded-lg p-2.5 outline-none focus:border-rose-500">
+            <input type="number" id="staff-extra" value="0" oninput="calculateLiveStaffSalary()"
+              class="w-full bg-[#0f172a] border border-slate-800 text-rose-400 font-bold rounded-lg p-2.5 outline-none focus:border-rose-500">
           </div>
         </div>
 
@@ -168,40 +183,50 @@
       <div id="staff-parttime-fields" class="hidden">
         <div class="flex flex-col gap-1">
           <label class="font-bold text-indigo-400 uppercase tracking-wide">Total Salary (စုစုပေါင်း လစာ)</label>
-          <input type="number" id="staff-total-salary" value="0" class="w-full bg-[#0f172a] border border-slate-800 text-indigo-300 font-bold rounded-lg p-2.5 outline-none focus:border-indigo-500">
+          <input type="number" id="staff-total-salary" value="0"
+            class="w-full bg-[#0f172a] border border-slate-800 text-indigo-300 font-bold rounded-lg p-2.5 outline-none focus:border-indigo-500">
         </div>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">NRC No</label>
-          <input type="text" id="staff-nrc" placeholder="12/MAMANA(N)123456" class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+          <input type="text" id="staff-nrc" placeholder="12/MAMANA(N)123456"
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
         </div>
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Bank Account</label>
-          <input type="text" id="staff-bank" placeholder="KBZ / CB / AYA Account" class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+          <input type="text" id="staff-bank" placeholder="KBZ / CB / AYA Account"
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
         </div>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Phone No</label>
-          <input type="text" id="staff-phone" placeholder="09xxxxxxxxx" class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+          <input type="text" id="staff-phone" placeholder="09xxxxxxxxx"
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
         </div>
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Email</label>
-          <input type="email" id="staff-email" placeholder="staff@example.com" class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+          <input type="email" id="staff-email" placeholder="staff@example.com"
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
         </div>
       </div>
 
       <div class="flex flex-col gap-1">
-        <label class="font-bold text-rose-400 uppercase tracking-wide">Resigned Date (အလုပ်မှ နှုတ်ထွက်သည့်ရက် - ရှိပါက)</label>
-        <input type="date" id="staff-resigned" onchange="calculateLiveStaffSalary()" class="w-full bg-[#0f172a] border border-slate-800 text-rose-300 rounded-lg p-2.5 outline-none focus:border-rose-500">
+        <label class="font-bold text-rose-400 uppercase tracking-wide">Resigned Date (အလုပ်မှ နှုတ်ထွက်သည့်ရက် -
+          ရှိပါက)</label>
+        <input type="date" id="staff-resigned" onchange="calculateLiveStaffSalary()"
+          class="w-full bg-[#0f172a] border border-slate-800 text-rose-300 rounded-lg p-2.5 outline-none focus:border-rose-500">
       </div>
 
       <div class="flex justify-end items-center gap-3 pt-4 border-t border-slate-800">
-        <button type="button" onclick="closeStaffModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">Cancel</button>
-        <button type="submit" class="px-5 py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10 transition-all">Save Entry</button>
+        <button type="button" onclick="closeStaffModal()"
+          class="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">Cancel</button>
+        <button type="submit"
+          class="px-5 py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10 transition-all">Save
+          Entry</button>
       </div>
     </form>
   </div>

@@ -1,11 +1,13 @@
-<!-- views/cashier.html -->  
+<!-- views/cashier.html -->
 <div class="space-y-4 max-w-[1920px] mx-auto">
 
   <!-- 💡 ၁။ Top KPI Stats Cards Grid (ထိပ်ဆုံးတွင် ၁ တန်းတည်း ၄ ကွက် ပေါ်စေသည်) -->
   <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;">
     <!-- 1. Total Income -->
-    <div class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
-      <div class="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0"><i class="fa-solid fa-arrow-trend-up text-base"></i></div>
+    <div
+      class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+      <div class="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0"><i
+          class="fa-solid fa-arrow-trend-up text-base"></i></div>
       <div class="min-w-0">
         <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Total Income (MMK)</p>
         <h3 id="ca-total-income" class="text-sm sm:text-base font-extrabold text-white mt-0.5">0 MMK</h3>
@@ -13,8 +15,10 @@
     </div>
 
     <!-- 2. Total Expense -->
-    <div class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
-      <div class="p-2.5 rounded-lg bg-rose-500/10 text-rose-400 shrink-0"><i class="fa-solid fa-arrow-trend-down text-base"></i></div>
+    <div
+      class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+      <div class="p-2.5 rounded-lg bg-rose-500/10 text-rose-400 shrink-0"><i
+          class="fa-solid fa-arrow-trend-down text-base"></i></div>
       <div class="min-w-0">
         <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Total Expense (MMK)</p>
         <h3 id="ca-total-expense" class="text-sm sm:text-base font-extrabold text-white mt-0.5">0 MMK</h3>
@@ -22,8 +26,10 @@
     </div>
 
     <!-- 3. Balances -->
-    <div class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
-      <div class="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-400 shrink-0"><i class="fa-solid fa-scale-balanced text-base"></i></div>
+    <div
+      class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+      <div class="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-400 shrink-0"><i
+          class="fa-solid fa-scale-balanced text-base"></i></div>
       <div class="min-w-0">
         <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Total Balances (MMK)</p>
         <h3 id="ca-balance" class="text-sm sm:text-base font-extrabold text-white mt-0.5">0 MMK</h3>
@@ -31,8 +37,10 @@
     </div>
 
     <!-- 4. Total Entries -->
-    <div class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
-      <div class="p-2.5 rounded-lg bg-sky-500/10 text-sky-400 shrink-0"><i class="fa-solid fa-list-check text-base"></i></div>
+    <div
+      class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+      <div class="p-2.5 rounded-lg bg-sky-500/10 text-sky-400 shrink-0"><i class="fa-solid fa-list-check text-base"></i>
+      </div>
       <div class="min-w-0">
         <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Total Entries</p>
         <h3 id="ca-entries-count" class="text-sm sm:text-base font-extrabold text-white mt-0.5">0</h3>
@@ -41,43 +49,52 @@
   </div>
 
   <!-- 💡 ၂။ Control Search & Action Bar (Main Bank Book စတိုင်အတိုင်း Border Slate-800 ဖြင့် ၁ တန်းတည်း ထားရှိသည်) -->
-  <div class="flex items-center justify-between bg-[#0c1322] border border-slate-800 p-2.5 sm:p-3 rounded-xl gap-2.5 overflow-x-auto">
+  <div
+    class="flex items-center justify-between bg-[#0c1322] border border-slate-800 p-2.5 sm:p-3 rounded-xl gap-2.5 overflow-x-auto">
     <div class="flex items-center gap-2.5 shrink-0">
-      
+
       <!-- 🎯 Search Input (Main Bank Book အတိုင်း အကျယ် min-w-[250px]) -->
       <div class="relative w-full sm:w-64 shrink-0" style="min-width: 250px;">
         <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500 pointer-events-none">
           <i class="fa-solid fa-magnifying-glass text-xs"></i>
         </span>
-        <input type="text" 
-               id="cashier-search" 
-               oninput="onSearchInputCashier()" 
-               placeholder="Search description, category, debit..." 
-               class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all">
+        <input type="text" id="cashier-search" oninput="onSearchInputCashier()"
+          placeholder="Search description, category, debit..."
+          class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all">
       </div>
 
       <!-- 💡 DATE RANGE FILTER CONTROLS -->
-      <div class="flex items-center gap-1.5 bg-[#0f172a] border border-slate-800 px-2 py-1.5 rounded-lg text-xs shrink-0">
+      <div
+        class="flex items-center gap-1.5 bg-[#0f172a] border border-slate-800 px-2 py-1.5 rounded-lg text-xs shrink-0">
         <span class="text-[10px] text-slate-400 font-bold px-1 uppercase">From:</span>
-        <input type="date" id="ca-date-from" onchange="onSearchInputCashier()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
+        <input type="date" id="ca-date-from" onchange="onSearchInputCashier()"
+          class="bg-transparent text-white text-xs outline-none cursor-pointer">
         <span class="text-[10px] text-slate-400 font-bold px-1 uppercase">To:</span>
-        <input type="date" id="ca-date-to" onchange="onSearchInputCashier()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
-        <button onclick="clearDateFilterCashier()" class="p-1 text-slate-400 hover:text-rose-400 transition" title="Clear Date Filter"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
+        <input type="date" id="ca-date-to" onchange="onSearchInputCashier()"
+          class="bg-transparent text-white text-xs outline-none cursor-pointer">
+        <button onclick="clearDateFilterCashier()" class="p-1 text-slate-400 hover:text-rose-400 transition"
+          title="Clear Date Filter"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
       </div>
     </div>
 
-    <!-- ညာဘက်ခြမ်း Actions (Main Bank Book အတိုင်း ခရမ်းရောင် Add Button) -->
+    <!-- ညာဘက်ခြမ်း Actions (ဖောင်းကြွ 3D Raised စတိုင်၊ Border မပါ၊ အရောင်မပါ) -->
     <div class="flex items-center gap-2 shrink-0">
-      <button onclick="loadCashierData(false)" class="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap" title="Refresh Data">
+      <!-- 🎯 Embossed Refresh Button -->
+      <button onclick="loadCashierData(false)"
+        class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md shadow-slate-950/60 active:translate-y-0.5 transition-all whitespace-nowrap"
+        title="Refresh Data">
         <i class="fa-solid fa-rotate text-xs"></i> Refresh
       </button>
 
-      <button onclick="exportToCSVCashier()" class="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap">
+      <!-- 🎯 Embossed Export CSV Button -->
+      <button onclick="exportToCSVCashier()"
+        class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md shadow-slate-950/60 active:translate-y-0.5 transition-all whitespace-nowrap">
         <i class="fa-solid fa-file-export text-xs"></i> Export CSV
       </button>
 
-      <!-- 🎯 Main Bank Book အတိုင်း ခရမ်းရောင် (Indigo) Theme သို့ ပြောင်းလဲထားသည် -->
-      <button onclick="openAddModalCashier()" id="ca-btn-add" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 transition-all whitespace-nowrap">
+      <!-- Add Cashier Entry Button -->
+      <button onclick="openAddModalCashier()" id="ca-btn-add"
+        class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 active:translate-y-0.5 transition-all whitespace-nowrap">
         <i class="fa-solid fa-plus text-xs"></i> Add Cashier Entry
       </button>
     </div>
@@ -85,41 +102,42 @@
 
   <!-- 💡 ၃။ Cashier Sub-Tabs Bar (အဖြူရောင်ဘောင် မပါဘဲ Search Box ကဲ့သို့ မသိသာသော Dark Border ဖြင့် ၁ တန်းတည်း ၆ ကွက် ပေါ်စေသည်) -->
   <div class="bg-[#0c1322] border border-slate-800 p-2 rounded-xl shadow-lg overflow-x-auto">
-    <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px;" class="w-full min-w-[780px] xl:min-w-0">
+    <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px;"
+      class="w-full min-w-[780px] xl:min-w-0">
 
       <!-- 1. CABank (Active: မသိသာသော Amber Dark Border) -->
-      <button onclick="switchCashierSubTab('CABank')" id="ca-tab-CABank" 
-              class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-amber-500/50 bg-amber-500/15 text-amber-300 whitespace-nowrap">
+      <button onclick="switchCashierSubTab('CABank')" id="ca-tab-CABank"
+        class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-amber-500/50 bg-amber-500/15 text-amber-300 whitespace-nowrap">
         <i class="fa-solid fa-building-columns text-amber-400 text-xs"></i> Bank (CABank)
       </button>
-      
+
       <!-- 2. CACash (Inactive: Search Box အတိုင်း border-slate-800) -->
-      <button onclick="switchCashierSubTab('CACash')" id="ca-tab-CACash" 
-              class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-800 bg-[#0f172a] text-slate-400 hover:text-white hover:border-slate-700 whitespace-nowrap">
+      <button onclick="switchCashierSubTab('CACash')" id="ca-tab-CACash"
+        class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-800 bg-[#0f172a] text-slate-400 hover:text-white hover:border-slate-700 whitespace-nowrap">
         <i class="fa-solid fa-money-bill-wave text-emerald-400 text-xs"></i> Cash (CACash)
       </button>
 
       <!-- 3. CAOffice (Inactive: border-slate-800) -->
-      <button onclick="switchCashierSubTab('CAOffice')" id="ca-tab-CAOffice" 
-              class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-800 bg-[#0f172a] text-slate-400 hover:text-white hover:border-slate-700 whitespace-nowrap">
+      <button onclick="switchCashierSubTab('CAOffice')" id="ca-tab-CAOffice"
+        class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-800 bg-[#0f172a] text-slate-400 hover:text-white hover:border-slate-700 whitespace-nowrap">
         <i class="fa-solid fa-briefcase text-cyan-400 text-xs"></i> Office (CAOffice)
       </button>
 
       <!-- 4. CAKitchen (Inactive: border-slate-800) -->
-      <button onclick="switchCashierSubTab('CAKitchen')" id="ca-tab-CAKitchen" 
-              class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-800 bg-[#0f172a] text-slate-400 hover:text-white hover:border-slate-700 whitespace-nowrap">
+      <button onclick="switchCashierSubTab('CAKitchen')" id="ca-tab-CAKitchen"
+        class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-800 bg-[#0f172a] text-slate-400 hover:text-white hover:border-slate-700 whitespace-nowrap">
         <i class="fa-solid fa-utensils text-rose-400 text-xs"></i> Kitchen (CAKitchen)
       </button>
 
       <!-- 5. CAPayroll (Inactive: border-slate-800) -->
-      <button onclick="switchCashierSubTab('CAPayroll')" id="ca-tab-CAPayroll" 
-              class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-800 bg-[#0f172a] text-slate-400 hover:text-white hover:border-slate-700 whitespace-nowrap">
+      <button onclick="switchCashierSubTab('CAPayroll')" id="ca-tab-CAPayroll"
+        class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-800 bg-[#0f172a] text-slate-400 hover:text-white hover:border-slate-700 whitespace-nowrap">
         <i class="fa-solid fa-hand-holding-dollar text-teal-400 text-xs"></i> Payroll (CAPayroll)
       </button>
 
       <!-- 6. Today Income (Inactive: border-slate-800) -->
-      <button onclick="switchCashierSubTab('todayIncome')" id="ca-tab-todayIncome" 
-              class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-800 bg-[#0f172a] text-slate-400 hover:text-white hover:border-slate-700 whitespace-nowrap">
+      <button onclick="switchCashierSubTab('todayIncome')" id="ca-tab-todayIncome"
+        class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-800 bg-[#0f172a] text-slate-400 hover:text-white hover:border-slate-700 whitespace-nowrap">
         <i class="fa-solid fa-receipt text-sky-400 text-xs"></i> Today Income (Invoice)
       </button>
 
@@ -135,16 +153,19 @@
   </div>
 
   <!-- 💡 ၅။ Pagination Controller Tray -->
-  <div class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
+  <div
+    class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
     <div id="ca-pagination-info" class="text-xs font-semibold text-slate-400 tracking-wide">
       Showing entries...
     </div>
-    
+
     <div class="flex items-center gap-2">
-      <button onclick="changePageCashier(-1)" id="ca-btn-prev" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+      <button onclick="changePageCashier(-1)" id="ca-btn-prev"
+        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
         <i class="fa-solid fa-chevron-left text-[10px]"></i> Previous
       </button>
-      <button onclick="changePageCashier(1)" id="ca-btn-next" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+      <button onclick="changePageCashier(1)" id="ca-btn-next"
+        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
         Next <i class="fa-solid fa-chevron-right text-[10px]"></i>
       </button>
     </div>
@@ -153,9 +174,11 @@
 </div>
 
 <!-- 💡 ၆။ ADD / EDIT CASHIER ENTRY MODAL POPUP -->
-<div id="cashier-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-  <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
-    
+<div id="cashier-modal"
+  class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div
+    class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+
     <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
       <h3 id="ca-form-title" class="text-sm font-black text-white uppercase tracking-wider">Add Cashier Entry</h3>
       <button onclick="closeCashierModal()" class="text-slate-500 hover:text-white transition">
@@ -165,16 +188,18 @@
 
     <form id="cashier-form" onsubmit="saveCashierForm(event)" class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
       <input type="hidden" id="ca-uniqueId">
-      
+
       <!-- Row 1: DATE & RESPONSIBILITY PERSON -->
       <div class="grid grid-cols-2 gap-4">
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Date</label>
-          <input type="date" id="ca-date" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+          <input type="date" id="ca-date" required
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
         </div>
         <div class="flex flex-col gap-1">
           <label class="font-bold text-amber-300 uppercase tracking-wide">Responsibility Person (တာဝန်ရှိသူ)</label>
-          <input type="text" id="ca-resp-person" required placeholder="တာဝန်ရှိသူ အမည် ရိုက်ထည့်ပါ..." class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 font-bold rounded-lg p-2.5 outline-none focus:border-amber-500">
+          <input type="text" id="ca-resp-person" required placeholder="တာဝန်ရှိသူ အမည် ရိုက်ထည့်ပါ..."
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 font-bold rounded-lg p-2.5 outline-none focus:border-amber-500">
         </div>
       </div>
 
@@ -182,41 +207,50 @@
       <div class="grid grid-cols-2 gap-4">
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Category</label>
-          <select id="ca-category" onchange="onCategoryChangeCashier()" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500"></select>
+          <select id="ca-category" onchange="onCategoryChangeCashier()" required
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500"></select>
         </div>
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Method</label>
-          <select id="ca-method" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500"></select>
+          <select id="ca-method" required
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500"></select>
         </div>
       </div>
 
       <!-- Row 3: TRANSFER TO & DEBIT/CREDIT -->
       <div class="flex flex-col gap-1">
         <label class="font-bold text-slate-400 uppercase tracking-wide">Transfer To (ငွေလွှဲပြောင်းမည့် စာအုပ်)</label>
-        <select id="ca-transfer" onchange="onTransferTargetChangeCashier()" class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500"></select>
+        <select id="ca-transfer" onchange="onTransferTargetChangeCashier()"
+          class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500"></select>
       </div>
 
       <div class="grid grid-cols-2 gap-4">
         <div class="flex flex-col gap-1">
           <label class="font-bold text-emerald-400 uppercase tracking-wide">Debit (Income / ဝင်ငွေ)</label>
-          <input type="number" step="0.01" id="ca-debit" value="0" class="w-full text-right text-emerald-400 font-bold font-mono bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-emerald-500">
+          <input type="number" step="0.01" id="ca-debit" value="0"
+            class="w-full text-right text-emerald-400 font-bold font-mono bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-emerald-500">
         </div>
         <div class="flex flex-col gap-1">
           <label class="font-bold text-rose-400 uppercase tracking-wide">Credit (Expense / ထွက်ငွေ)</label>
-          <input type="number" step="0.01" id="ca-credit" value="0" class="w-full text-right text-rose-400 font-bold font-mono bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-rose-500">
+          <input type="number" step="0.01" id="ca-credit" value="0"
+            class="w-full text-right text-rose-400 font-bold font-mono bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-rose-500">
         </div>
       </div>
 
       <!-- Row 4: DESCRIPTION -->
       <div class="flex flex-col gap-1">
         <label class="font-bold text-slate-400 uppercase tracking-wide">Description</label>
-        <textarea id="ca-description" rows="3" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 placeholder-slate-500 rounded-lg p-2.5 outline-none focus:border-indigo-500" placeholder="အသေးစိတ် စာရင်းရှင်းလင်းချက် ရေးသွင်းရန်..."></textarea>
+        <textarea id="ca-description" rows="3" required
+          class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 placeholder-slate-500 rounded-lg p-2.5 outline-none focus:border-indigo-500"
+          placeholder="အသေးစိတ် စာရင်းရှင်းလင်းချက် ရေးသွင်းရန်..."></textarea>
       </div>
 
       <!-- Actions Footer -->
       <div class="flex justify-end items-center gap-3 pt-4 border-t border-slate-800">
-        <button type="button" onclick="closeCashierModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">Cancel</button>
-        <button type="submit" class="px-5 py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20 transition-all">Confirm</button>
+        <button type="button" onclick="closeCashierModal()"
+          class="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">Cancel</button>
+        <button type="submit"
+          class="px-5 py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20 transition-all">Confirm</button>
       </div>
     </form>
   </div>
