@@ -95,7 +95,7 @@
       <!-- Add Cashier Entry Button -->
       <button onclick="openAddModalCashier()" id="ca-btn-add"
         class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 active:translate-y-0.5 transition-all whitespace-nowrap">
-        <i class="fa-solid fa-plus text-xs"></i> Add Cashier Entry
+        <i class="fa-solid fa-plus text-xs"></i> Add New Entry
       </button>
     </div>
   </div>
@@ -105,38 +105,38 @@
     <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px;"
       class="w-full min-w-[780px] xl:min-w-0">
 
-      <!-- 1. CABank (Active: အပြာရောင် Border ဖြင့်) -->
-      <button onclick="switchCashierSubTab('CABank')" id="ca-tab-CABank"
-        class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-sky-400 bg-sky-500/10 text-white shadow-sm whitespace-nowrap">
+      <!-- 1. CABank (Active: ဒုတိယပုံစံအတိုင်း အပြာရောင် Border စစ်စစ်ဖြင့်) -->
+      <button onclick="switchCashierSubTab('CABank')" id="ca-tab-CABank" style="border: 1.5px solid #38bdf8;"
+        class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 bg-sky-500/10 text-white shadow-sm whitespace-nowrap">
         <i class="fa-solid fa-building-columns text-sky-400 text-xs"></i> Bank (CABank)
       </button>
 
       <!-- 2. CACash (Inactive: Border လုံးဝ မပါ) -->
-      <button onclick="switchCashierSubTab('CACash')" id="ca-tab-CACash"
+      <button onclick="switchCashierSubTab('CACash')" id="ca-tab-CACash" style="border: none;"
         class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap">
         <i class="fa-solid fa-money-bill-wave text-emerald-400 text-xs"></i> Cash (CACash)
       </button>
 
       <!-- 3. CAOffice (Inactive: Border လုံးဝ မပါ) -->
-      <button onclick="switchCashierSubTab('CAOffice')" id="ca-tab-CAOffice"
+      <button onclick="switchCashierSubTab('CAOffice')" id="ca-tab-CAOffice" style="border: none;"
         class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap">
         <i class="fa-solid fa-briefcase text-cyan-400 text-xs"></i> Office (CAOffice)
       </button>
 
       <!-- 4. CAKitchen (Inactive: Border လုံးဝ မပါ) -->
-      <button onclick="switchCashierSubTab('CAKitchen')" id="ca-tab-CAKitchen"
+      <button onclick="switchCashierSubTab('CAKitchen')" id="ca-tab-CAKitchen" style="border: none;"
         class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap">
         <i class="fa-solid fa-utensils text-rose-400 text-xs"></i> Kitchen (CAKitchen)
       </button>
 
       <!-- 5. CAPayroll (Inactive: Border လုံးဝ မပါ) -->
-      <button onclick="switchCashierSubTab('CAPayroll')" id="ca-tab-CAPayroll"
+      <button onclick="switchCashierSubTab('CAPayroll')" id="ca-tab-CAPayroll" style="border: none;"
         class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap">
         <i class="fa-solid fa-hand-holding-dollar text-teal-400 text-xs"></i> Payroll (CAPayroll)
       </button>
 
       <!-- 6. Today Income (Inactive: Border လုံးဝ မပါ) -->
-      <button onclick="switchCashierSubTab('todayIncome')" id="ca-tab-todayIncome"
+      <button onclick="switchCashierSubTab('todayIncome')" id="ca-tab-todayIncome" style="border: none;"
         class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap">
         <i class="fa-solid fa-receipt text-sky-400 text-xs"></i> Today Income (Invoice)
       </button>

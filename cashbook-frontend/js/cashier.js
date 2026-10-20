@@ -135,7 +135,7 @@ function switchCashierSubTab(subTab, useCache) {
   currentCashierPage = 1;
   useCache = useCache !== undefined ? useCache : true;
 
-  const activeClass = "border border-sky-400 bg-sky-500/10 text-white shadow-sm";
+  const activeClass = "bg-sky-500/10 text-white shadow-sm";
   const inactiveClass = "text-slate-400 hover:text-white hover:bg-slate-800/30";
 
   ['CABank', 'CACash', 'CAOffice', 'CAKitchen', 'CAPayroll', 'todayIncome'].forEach(key => {
@@ -143,6 +143,8 @@ function switchCashierSubTab(subTab, useCache) {
     if (btn) {
       const isActive = (subTab === key);
       btn.className = `ca-sub-tab-btn w-full justify-center whitespace-nowrap px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${isActive ? activeClass : inactiveClass}`;
+      // 🎯 Direct Inline Style Override: CSS ချို့ယွင်းချက်ကြောင့် အဖြူရောင် မဖြစ်စေဘဲ အပြာရောင် အတိအကျ ပေါ်စေသည်
+      btn.style.border = isActive ? "1.5px solid #38bdf8" : "none";
     }
   });
 
