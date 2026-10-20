@@ -36,19 +36,32 @@ function filterUniformData(list = [], searchVal = '') {
 }
 
 /**
- * 💡 Load Uniform Inventory Data from Cloudflare D1 Backend
+ * 💡 Load Uniform Inventory Data with D1 Quota-Shield & 0ms Instant Memory Render
  */
-async function loadUniformData(isSilent = false) {
-  if (!isSilent && typeof toggleLoading === 'function') toggleLoading(true);
-
+async function loadUniformData(forceRefresh = false, isSilent = false) {
   const state = window.UniformState;
+  const hasDataInMemory = Array.isArray(state.activeData) && state.activeData.length > 0;
+
+  // ⚡ 1. D1 QUOTA-SHIELD (0ms INSTANT RENDER):
+  // စာရင်းများ Memory ထဲတွင် ရှိပြီးသားဖြစ်ပြီး forceRefresh မဟုတ်ပါက Loading လုံးဝ မပြဘဲ Memory မှ တိုက်ရိုက် ချက်ချင်း ဆွဲထုတ်ပြမည်
+  if (!forceRefresh && hasDataInMemory) {
+    updateStatsUniform();
+    renderUniformTable();
+    updatePaginationUniform();
+    return;
+  }
+
+  // ⚡ ဒေတာ အသစ်ဆွဲယူရန် လိုအပ်မှသာ Loading Spinner ကို ဖွင့်မည်
+  if (!isSilent && !hasDataInMemory && typeof toggleLoading === 'function') {
+    toggleLoading(true);
+  }
 
   try {
     const response = await callApi('getUniformData', {
       page: state.page,
       limit: state.limit,
       searchVal: state.searchVal,
-      forceRefresh: true
+      forceRefresh: Boolean(forceRefresh)
     }, 'GET');
 
     if (response && response.data) {
@@ -82,7 +95,7 @@ async function loadUniformData(isSilent = false) {
       showToast("ERROR", "ယူနီဖောင်း စာရင်းများ ရယူ၍ မရပါ: " + err.message);
     }
   } finally {
-    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(false);
+    if (typeof toggleLoading === 'function') toggleLoading(false);
   }
 }
 
@@ -178,10 +191,10 @@ function changePageUniform(dir) {
   const state = window.UniformState;
   if (dir === -1 && state.page > 1) {
     state.page--;
-    loadUniformData(false);
+    loadUniformData(true, false);
   } else if (dir === 1 && (state.page * state.limit) < state.totalRows) {
     state.page++;
-    loadUniformData(false);
+    loadUniformData(true, false);
   }
 }
 

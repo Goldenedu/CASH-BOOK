@@ -77,13 +77,13 @@ function updateHrKpiLabels() {
     'hr-pay-total-expense': 'TOTAL EXPENSE (MMK)',
     'hr-pay-balance': 'TOTAL BALANCES (MMK)'
   };
-  
+
   for (const [id, text] of Object.entries(labels)) {
     const valueEl = document.getElementById(id);
     if (valueEl) {
       const parent = valueEl.parentElement;
       if (parent) {
-        const labelEl = parent.querySelector('p'); 
+        const labelEl = parent.querySelector('p');
         if (labelEl) labelEl.textContent = text;
       }
     }
@@ -99,9 +99,9 @@ function adjustHrKpiFontSizes() {
     const el = document.getElementById(id);
     if (!el) return;
 
-    el.style.fontSize = '24px'; 
+    el.style.fontSize = '24px';
     el.style.whiteSpace = 'nowrap';
-    
+
     let currentSize = 24;
     while (el.scrollWidth > el.clientWidth && currentSize > 12) {
       currentSize--;
@@ -113,8 +113,19 @@ function adjustHrKpiFontSizes() {
 window.addEventListener('resize', adjustHrKpiFontSizes);
 
 async function loadHrPayrollData(useCache = true) {
+  const hasDataInMemory = Array.isArray(gHrPayrollData) && gHrPayrollData.length > 0;
+
+  // ⚡ 1. D1 QUOTA-SHIELD (0ms INSTANT RENDER):
+  // စာရင်းများ Memory ထဲတွင် ရှိပြီးသားဖြစ်ပြီး useCache ဖြစ်ပါက Loading မပြဘဲ ချက်ချင်း Render လုပ်မည်
+  if (useCache && hasDataInMemory) {
+    applyHrPayrollSearchAndRender();
+    return;
+  }
+
   try {
-    if (typeof toggleLoading === 'function') toggleLoading(true);
+    if (!hasDataInMemory && typeof toggleLoading === 'function') {
+      toggleLoading(true);
+    }
 
     const response = await callApi('getExpenseData', {
       bookName: 'HR Payroll Exp Book',
@@ -126,7 +137,7 @@ async function loadHrPayrollData(useCache = true) {
     if (response && response.success) {
       gHrPayrollData = response.data || [];
       gHrPayrollTotalRows = response.totalRows || gHrPayrollData.length || 0;
-      
+
       let totInc = 0;
       let totExp = 0;
       gHrPayrollData.forEach(r => {
@@ -158,9 +169,14 @@ async function loadHrPayrollData(useCache = true) {
 }
 
 async function preloadStaffCacheForPayroll() {
+  // ⚡ D1 Quota-Shield: ဝန်ထမ်း Cache ရှိပြီးပါက D1 သို့ ထပ်မံ Request မပို့စေရ
+  if (Array.isArray(gHrStaffFT) && gHrStaffFT.length > 0 && Array.isArray(gHrStaffPT) && gHrStaffPT.length > 0) {
+    return;
+  }
+
   try {
-    const resFT = await callApi('getStaffData', { category: 'Full Time', page: 1, limit: 500, forceRefresh: true }, 'GET');
-    const resPT = await callApi('getStaffData', { category: 'Part Time', page: 1, limit: 500, forceRefresh: true }, 'GET');
+    const resFT = await callApi('getStaffData', { category: 'Full Time', page: 1, limit: 500, forceRefresh: false }, 'GET');
+    const resPT = await callApi('getStaffData', { category: 'Part Time', page: 1, limit: 500, forceRefresh: false }, 'GET');
 
     gHrStaffFT = (resFT && resFT.success && Array.isArray(resFT.data)) ? resFT.data : [];
     gHrStaffPT = (resPT && resPT.success && Array.isArray(resPT.data)) ? resPT.data : [];
@@ -623,9 +639,9 @@ function printPayslip(uniqueId) {
   document.body.classList.remove('print-mode-invoice');
   document.body.classList.add('print-mode-payslip');
 
-  setTimeout(function() {
+  setTimeout(function () {
     window.print();
-    setTimeout(function() {
+    setTimeout(function () {
       document.body.classList.remove('print-mode-payslip');
     }, 500);
   }, 100);
@@ -644,18 +660,18 @@ function exportToCSVHrPayroll() {
     let vrNo = r.vr_no || r.vrNo || '';
 
     csv += `${r.no || (idx + 1)},` +
-           `${safeCsvCell(r.date || '')},` +
-           `${safeCsvCell(r.category || '')},` +
-           `${safeCsvCell(r.description || '')},` +
-           `${safeCsvCell(r.method || '')},` +
-           `${r.debit || 0},` +
-           `${r.credit || 0},` +
-           `${r.balances || 0},` +
-           `${unpaidBonus},` +
-           `${unpaidFund},` +
-           `${safeCsvCell(vrNo)},` +
-           `${safeCsvCell(r.my || '')},` +
-           `${safeCsvCell(r.fy || '')}\n`;
+      `${safeCsvCell(r.date || '')},` +
+      `${safeCsvCell(r.category || '')},` +
+      `${safeCsvCell(r.description || '')},` +
+      `${safeCsvCell(r.method || '')},` +
+      `${r.debit || 0},` +
+      `${r.credit || 0},` +
+      `${r.balances || 0},` +
+      `${unpaidBonus},` +
+      `${unpaidFund},` +
+      `${safeCsvCell(vrNo)},` +
+      `${safeCsvCell(r.my || '')},` +
+      `${safeCsvCell(r.fy || '')}\n`;
   });
 
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });

@@ -285,7 +285,7 @@ async function triggerModuleInit(tabId) {
 
       case 'hr':
         if (typeof loadHrPayrollData === 'function') {
-          await loadHrPayrollData(false);
+          await loadHrPayrollData(true);
         }
         break;
 
