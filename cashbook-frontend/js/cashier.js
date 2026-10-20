@@ -135,14 +135,14 @@ function switchCashierSubTab(subTab, useCache) {
   currentCashierPage = 1;
   useCache = useCache !== undefined ? useCache : true;
 
-  const activeClass = "border-sky-400 bg-sky-500/10 text-white shadow-sm";
-  const inactiveClass = "border-transparent text-slate-400 hover:text-white hover:bg-slate-800/30";
+  const activeClass = "border border-sky-400 bg-sky-500/10 text-white shadow-sm";
+  const inactiveClass = "border border-transparent text-slate-400 hover:text-white hover:bg-slate-800/30";
 
   ['CABank', 'CACash', 'CAOffice', 'CAKitchen', 'CAPayroll', 'todayIncome'].forEach(key => {
     const btn = document.getElementById(`ca-tab-${key}`);
     if (btn) {
       const isActive = (subTab === key);
-      btn.className = `ca-sub-tab-btn w-full justify-center whitespace-nowrap px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${isActive ? activeClass : inactiveClass}`;
+      btn.className = `ca-sub-tab-btn w-full justify-center whitespace-nowrap px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${isActive ? activeClass : inactiveClass}`;
     }
   });
 
