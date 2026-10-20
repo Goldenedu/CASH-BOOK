@@ -2,10 +2,60 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - HR PAYROLL EXP BOOK CONTROLLER (D1 DATABASE EDITION)
  * File: js/hr.js (Location: cashbook-frontend/js/hr.js)
- * 💡 Features: Refactored with Global api.js for DRY Principle
- *              🎯 Auto-scaling Font Size & Header Labels update (MMK) exactly like Dashboard
+ * 💡 Features: Refactored with Global api.js for DRY Principle,
+ *              Crash-Proof Pure Helpers (Prevents Table Render Crash),
+ *              Auto-scaling Font Size & Header Labels update (MMK),
+ *              Double-Submit Protection Lock & Precision Payslip Print Isolation
  * ==============================================================================
  */
+
+// ==============================================================================
+// 💡 SAFE PURE LOGIC HELPERS (Crash-Proof Fallbacks)
+// ==============================================================================
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  if (typeof window.escapeHtml === 'function' && window.escapeHtml !== escapeHtml) {
+    return window.escapeHtml(str);
+  }
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function escapeJsAttr(str) {
+  if (str === null || str === undefined) return '';
+  if (typeof window.escapeJsAttr === 'function' && window.escapeJsAttr !== escapeJsAttr) {
+    return window.escapeJsAttr(str);
+  }
+  const jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return escapeHtml(jsEscaped);
+}
+
+function safeCsvCell(val) {
+  if (typeof window.safeCsvCell === 'function') return window.safeCsvCell(val);
+  if (val === null || val === undefined) return '""';
+  if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
+
+  let str = String(val).trim();
+  if (str === '') return '""';
+
+  const cleanNumStr = str.replace(/,/g, '');
+  if (!isNaN(Number(cleanNumStr)) && cleanNumStr !== '') {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
+// ==============================================================================
+// 💡 GLOBAL VARIABLES & STATE
+// ==============================================================================
 
 var gHrPayrollData = [];
 var gHrPayrollFilteredData = [];
@@ -60,14 +110,12 @@ function adjustHrKpiFontSizes() {
   });
 }
 
-// Ensure resizing works on window resize
 window.addEventListener('resize', adjustHrKpiFontSizes);
 
 async function loadHrPayrollData(useCache = true) {
   try {
     if (typeof toggleLoading === 'function') toggleLoading(true);
 
-    // 💡 Fetch up to 1000 rows so all records load completely
     const response = await callApi('getExpenseData', {
       bookName: 'HR Payroll Exp Book',
       page: 1,
@@ -147,20 +195,18 @@ async function ensureStaffCacheForCategory(isPartTime) {
 }
 
 function renderHrPayrollStats(stats) {
-  updateHrKpiLabels(); // Add (MMK) to titles
+  updateHrKpiLabels();
 
   const elInc = document.getElementById('hr-pay-total-income');
   const elExp = document.getElementById('hr-pay-total-expense');
   const elBal = document.getElementById('hr-pay-balance');
   const elCount = document.getElementById('hr-pay-entries-count');
 
-  // Removed trailing MMK from values
   if (elInc) elInc.textContent = `${Number(stats.totalIncome || 0).toLocaleString('en-US')}`;
   if (elExp) elExp.textContent = `${Number(stats.totalExpense || 0).toLocaleString('en-US')}`;
   if (elBal) elBal.textContent = `${Number(stats.balance || 0).toLocaleString('en-US')}`;
   if (elCount) elCount.textContent = (gHrPayrollTotalRows || gHrPayrollData.length || 0).toLocaleString('en-US');
 
-  // Trigger Auto Scale
   setTimeout(adjustHrKpiFontSizes, 50);
 }
 
@@ -202,6 +248,9 @@ function clearDateFilterHrPayroll() {
   applyHrPayrollSearchAndRender();
 }
 
+/**
+ * 💡 Render Table Grid Rows (px-2 ဖြင့် Header နှင့် အတိအကျ ညီအောင် ညှိထားသည်)
+ */
 function renderHrPayrollTable() {
   const tbody = document.getElementById('hr-payroll-table-body');
   if (!tbody) return;
@@ -226,30 +275,30 @@ function renderHrPayrollTable() {
     const tr = document.createElement('tr');
     tr.className = 'hover:bg-slate-800/30 transition-all border-b border-slate-800/40 text-xs text-slate-300';
     const displayNo = Math.floor(parseFloat(item.no || (startIndex + index + 1)));
-    const uid = item.uniqueid || item.uniqueId || '';
-    const vrNo = item.vr_no || item.vrNo || '-';
+    const uid = String(item.uniqueid || item.uniqueId || '');
+    const vrNo = String(item.vr_no || item.vrNo || '-');
     const unpaidBonus = Number(item.unpaid_bonus ?? item.unpaidBonus ?? 0);
     const unpaidFund = Number(item.unpaid_fund ?? item.unpaidFund ?? 0);
 
     tr.innerHTML = `
-      <td class="text-center font-mono font-semibold text-slate-400 py-3 px-3">${displayNo}</td>
-      <td class="font-mono py-3 px-3">${window.escapeHtml(item.date) || '-'}</td>
-      <td class="py-3 px-3">${typeof window.formatCategoryBadgeHtml === 'function' ? window.formatCategoryBadgeHtml(item.category) : window.escapeHtml(item.category)}</td>
-      <td class="font-bold text-slate-100 max-w-xs truncate py-3 px-3" title="${window.escapeHtml(item.description)}">${window.escapeHtml(item.description) || '-'}</td>
-      <td class="font-semibold py-3 px-3">${window.escapeHtml(item.method) || '-'}</td>
-      <td class="text-right font-mono font-bold text-emerald-400 py-3 px-3">${item.debit > 0 ? Number(item.debit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
-      <td class="text-right font-mono font-bold text-rose-400 py-3 px-3">${item.credit > 0 ? Number(item.credit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
-      <td class="text-right font-mono font-bold text-indigo-400 py-3 px-3">${Number(item.balances || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-      <td class="text-right font-mono font-bold text-emerald-400 py-3 px-3">${unpaidBonus > 0 ? Number(unpaidBonus).toLocaleString('en-US') : '-'}</td>
-      <td class="text-right font-mono font-bold text-teal-400 py-3 px-3">${unpaidFund > 0 ? Number(unpaidFund).toLocaleString('en-US') : '-'}</td>
-      <td class="font-mono text-slate-400 py-3 px-3">${window.escapeHtml(vrNo)}</td>
-      <td class="font-mono py-3 px-3">${window.escapeHtml(item.my) || '-'}</td>
-      <td class="font-mono font-bold text-indigo-300 py-3 px-3">${window.escapeHtml(item.fy) || '-'}</td>
-      <td class="text-center right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg py-3 px-3">
+      <td class="text-center font-mono font-semibold text-slate-400 py-3 px-2">${displayNo}</td>
+      <td class="font-mono py-3 px-2">${escapeHtml(item.date) || '-'}</td>
+      <td class="py-3 px-2">${typeof window.formatCategoryBadgeHtml === 'function' ? window.formatCategoryBadgeHtml(item.category) : escapeHtml(item.category)}</td>
+      <td class="font-bold text-slate-100 max-w-xs truncate py-3 px-2" title="${escapeHtml(item.description)}">${escapeHtml(item.description) || '-'}</td>
+      <td class="font-semibold py-3 px-2">${escapeHtml(item.method) || '-'}</td>
+      <td class="text-right font-mono font-bold text-emerald-400 py-3 px-2">${item.debit > 0 ? Number(item.debit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
+      <td class="text-right font-mono font-bold text-rose-400 py-3 px-2">${item.credit > 0 ? Number(item.credit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
+      <td class="text-right font-mono font-bold text-slate-400 py-3 px-2">${Number(item.balances || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+      <td class="text-right font-mono font-bold text-emerald-400 py-3 px-2">${unpaidBonus > 0 ? Number(unpaidBonus).toLocaleString('en-US') : '-'}</td>
+      <td class="text-right font-mono font-bold text-teal-400 py-3 px-2">${unpaidFund > 0 ? Number(unpaidFund).toLocaleString('en-US') : '-'}</td>
+      <td class="font-mono text-slate-400 py-3 px-2">${escapeHtml(vrNo)}</td>
+      <td class="font-mono py-3 px-2">${escapeHtml(item.my) || '-'}</td>
+      <td class="font-mono font-bold text-indigo-300 py-3 px-2">${escapeHtml(item.fy) || '-'}</td>
+      <td class="text-center right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg py-3 px-2">
         <div class="flex items-center justify-center gap-2">
-          <button onclick="printPayslip('${window.escapeJsAttr(uid)}')" class="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition" title="Print Payslip"><i class="fa-solid fa-print"></i></button>
-          <button onclick="editHrPayrollEntry('${window.escapeJsAttr(uid)}')" class="p-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-lg transition" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>
-          <button onclick="deleteHrPayrollEntry('${window.escapeJsAttr(uid)}')" class="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg transition btn-delete" title="Delete"><i class="fa-solid fa-trash"></i></button>
+          <button onclick="printPayslip('${escapeJsAttr(uid)}')" class="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition" title="Print Payslip"><i class="fa-solid fa-print"></i></button>
+          <button onclick="editHrPayrollEntry('${escapeJsAttr(uid)}')" class="p-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-lg transition" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>
+          <button onclick="deleteHrPayrollEntry('${escapeJsAttr(uid)}')" class="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg transition btn-delete" title="Delete"><i class="fa-solid fa-trash"></i></button>
         </div>
       </td>
     `;
@@ -403,12 +452,12 @@ function closeHrPayrollModal() {
 }
 
 /**
- * 💡 Save HR Payroll Form (With Double-Submit Protection Lock & Dynamic FY)
+ * 💡 Save HR Payroll Form (Double-Submit Protection & window.clearAllApiCache Guard)
  */
 async function saveHrPayrollForm(e) {
   if (e && e.preventDefault) e.preventDefault();
 
-  if (isHrPayrollSubmitting) return; // 👈 🛡️ Double Submit Protection Lock
+  if (isHrPayrollSubmitting) return;
   isHrPayrollSubmitting = true;
 
   const staffIdVal = document.getElementById('hr-pay-staff-id')?.value.trim();
@@ -417,12 +466,13 @@ async function saveHrPayrollForm(e) {
 
   if (!staffIdVal) {
     isHrPayrollSubmitting = false;
-    if (typeof showToast === 'function') showToast("ERROR", "ကျောင်းသား/ဝန်ထမ်း ID ဖြည့်သွင်းပါ");
+    if (typeof showToast === 'function') showToast("ERROR", "ဝန်ထမ်း ID ဖြည့်သွင်းပါ");
     return;
   }
 
   const entryDate = document.getElementById('hr-pay-date')?.value || new Date().toISOString().slice(0, 10);
-  const dynamicFy = `FY ${window.getCurrentAcademicYear(entryDate)}`;
+  const currentAcademic = typeof window.getCurrentAcademicYear === 'function' ? window.getCurrentAcademicYear(entryDate) : '2026-2027';
+  const dynamicFy = `FY ${currentAcademic}`;
 
   const payload = {
     bookName: 'HR Payroll Exp Book',
@@ -448,7 +498,7 @@ async function saveHrPayrollForm(e) {
 
     if (response && response.success) {
       if (typeof showToast === 'function') showToast('SUCCESS', 'HR Payroll စာရင်း အချက်အလက်များ အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။');
-      if (typeof clearAllApiCache === 'function') clearAllApiCache();
+      if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
       loadHrPayrollData(false);
     } else {
       if (typeof showToast === 'function') showToast("ERROR", (response ? response.message : "") || "သိမ်းဆည်းမှု မအောင်မြင်ပါ။");
@@ -456,7 +506,7 @@ async function saveHrPayrollForm(e) {
   } catch (error) {
     if (typeof showToast === 'function') showToast('ERROR', `အမှားအယွင်း ဖြစ်ပေါ်ခဲ့သည်: ${error.message}`);
   } finally {
-    isHrPayrollSubmitting = false; // 👈 🛡️ Release Double Submit Lock
+    isHrPayrollSubmitting = false;
     if (typeof toggleLoading === 'function') toggleLoading(false);
   }
 }
@@ -516,7 +566,7 @@ async function deleteHrPayrollEntry(uniqueId) {
 
     if (response && response.success) {
       if (typeof showToast === 'function') showToast('SUCCESS', 'HR Payroll စာရင်းအား အောင်မြင်စွာ ဖျက်သိမ်းပြီးပါပြီ။');
-      if (typeof clearAllApiCache === 'function') clearAllApiCache();
+      if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
       loadHrPayrollData(false);
     } else {
       if (typeof showToast === 'function') showToast("ERROR", (response ? response.message : "") || "ဖျက်သိမ်းမှု မအောင်မြင်ပါ။");
@@ -529,7 +579,7 @@ async function deleteHrPayrollEntry(uniqueId) {
 }
 
 /**
- * 💡 Precision Payslip Printer (With Strict Print Mode Isolation)
+ * 💡 Precision Payslip Printer
  */
 function printPayslip(uniqueId) {
   const row = gHrPayrollData.find(item => (item.uniqueid === uniqueId || item.uniqueId === uniqueId));
@@ -570,7 +620,6 @@ function printPayslip(uniqueId) {
   setTxt('print-pay-bonus-bot', unpaidBonus.toLocaleString() + ' MMK');
   setTxt('print-pay-fund-bot', unpaidFund.toLocaleString() + ' MMK');
 
-  // 💡 FIX: Activate Payslip Print Mode & Hide Invoice Print Area
   document.body.classList.remove('print-mode-invoice');
   document.body.classList.add('print-mode-payslip');
 
@@ -595,18 +644,18 @@ function exportToCSVHrPayroll() {
     let vrNo = r.vr_no || r.vrNo || '';
 
     csv += `${r.no || (idx + 1)},` +
-           `${window.safeCsvCell(r.date || '')},` +
-           `${window.safeCsvCell(r.category || '')},` +
-           `${window.safeCsvCell(r.description || '')},` +
-           `${window.safeCsvCell(r.method || '')},` +
+           `${safeCsvCell(r.date || '')},` +
+           `${safeCsvCell(r.category || '')},` +
+           `${safeCsvCell(r.description || '')},` +
+           `${safeCsvCell(r.method || '')},` +
            `${r.debit || 0},` +
            `${r.credit || 0},` +
            `${r.balances || 0},` +
            `${unpaidBonus},` +
            `${unpaidFund},` +
-           `${window.safeCsvCell(vrNo)},` +
-           `${window.safeCsvCell(r.my || '')},` +
-           `${window.safeCsvCell(r.fy || '')}\n`;
+           `${safeCsvCell(vrNo)},` +
+           `${safeCsvCell(r.my || '')},` +
+           `${safeCsvCell(r.fy || '')}\n`;
   });
 
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });

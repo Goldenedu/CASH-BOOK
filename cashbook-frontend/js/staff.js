@@ -2,10 +2,77 @@
  * ==============================================================================
  * GOLDEN ERP SYSTEM - STAFF DIRECTORY & MATRIX MODULE (D1 DATABASE COMPATIBLE)
  * File: js/staff.js (Location: cashbook-frontend/js/staff.js)
- * 💡 Features: Refactored with Global api.js for DRY Principle,
- *              🎯 Phase 4: Added Date Range Filter support for API requests
+ * 💡 Features: Safe Standalone Pure Escapers, 1-Row 4-KPI Grid Enforcer,
+ *              Precision Gender Counting (Daw/ဒေါ် -> Female),
+ *              🎯 2-Line TOTAL NET AMT Table Head (Main Bank Book Style),
+ *              🎯 Uniform Add New Entry & Toolbar Buttons Integration
  * ==============================================================================
  */
+
+// ==============================================================================
+// 💡 SAFE PURE HELPERS
+// ==============================================================================
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function escapeJsAttr(str) {
+  if (str === null || str === undefined) return '';
+  const jsEscaped = String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return escapeHtml(jsEscaped);
+}
+
+function safeCsvCell(val) {
+  if (val === null || val === undefined) return '""';
+  if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
+
+  let str = String(val).trim();
+  if (str === '') return '""';
+
+  const cleanNumStr = str.replace(/,/g, '');
+  if (!isNaN(Number(cleanNumStr)) && cleanNumStr !== '') {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
+function autoDetectGender(nameStr) {
+  if (!nameStr) return 'Male';
+  const clean = String(nameStr).trim();
+
+  // ၁။ မိန်းကလေး ရှေ့စာလုံးများနှင့် တိုင်းရင်းသူအမည်များ (Daw, မေ, ဒေါ်, နန်း, နော်)
+  if (clean.startsWith('မေ') || clean.startsWith('ဒေါ်') || clean.startsWith('နန်း') || clean.startsWith('နော်') ||
+      /^(May|Daw|Nang|Naw)\b/i.test(clean) || clean.includes('Daw ') || clean.includes('ဒေါ်')) {
+    return 'Female';
+  }
+
+  // ၂။ ယောကျ်ားလေး ရှေ့စာလုံးများ
+  if (clean.startsWith('မောင်') || clean.startsWith('ကို') || clean.startsWith('ဦး') ||
+      clean.startsWith('မင်း') || /^(Mg|Ko|U|Min)\b/i.test(clean) || /^(မောင်|ကို|ဦး|မင်း)/.test(clean)) {
+    return 'Male';
+  }
+
+  // ၃။ 'မ' ဖြင့် စပြီး 'မောင်' သို့မဟုတ် 'မင်း' မဟုတ်ပါက Female
+  if ((clean.startsWith('မ') && !clean.startsWith('မောင်') && !clean.startsWith('မင်း')) || /^(Ma)\b/i.test(clean)) {
+    return 'Female';
+  }
+
+  return 'Male';
+}
+
+// ==============================================================================
+// 💡 GLOBAL VARIABLES & STATE
+// ==============================================================================
 
 var gStaffCategory = 'Full Time'; // 'Full Time' or 'Part Time'
 var gStaffPage = 1;
@@ -66,6 +133,9 @@ function filterStaffData(list = [], searchVal = '') {
   });
 }
 
+/**
+ * 💡 Switch Staff Category (Full Time Staff vs Part Time Staff)
+ */
 async function switchStaffCategory(category) {
   gStaffCategory = category;
   gStaffPage = 1;
@@ -74,13 +144,16 @@ async function switchStaffCategory(category) {
   const btnPT = document.getElementById('staff-tab-pt');
   const btnEditGrade = document.getElementById('btn-edit-grade');
 
+  const activeTabClass = "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-600/20 flex items-center gap-1.5 whitespace-nowrap";
+  const inactiveTabClass = "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white flex items-center gap-1.5 whitespace-nowrap";
+
   if (category === 'Full Time') {
-    if (btnFT) btnFT.className = "px-4 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-lg shadow-indigo-600/10 flex items-center gap-2";
-    if (btnPT) btnPT.className = "px-4 py-2 rounded-lg text-xs font-bold transition-all bg-slate-800 text-slate-400 hover:text-white flex items-center gap-2";
+    if (btnFT) btnFT.className = activeTabClass;
+    if (btnPT) btnPT.className = inactiveTabClass;
     if (btnEditGrade) btnEditGrade.classList.remove('hidden');
   } else {
-    if (btnFT) btnFT.className = "px-4 py-2 rounded-lg text-xs font-bold transition-all bg-slate-800 text-slate-400 hover:text-white flex items-center gap-2";
-    if (btnPT) btnPT.className = "px-4 py-2 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-lg shadow-indigo-600/10 flex items-center gap-2";
+    if (btnFT) btnFT.className = inactiveTabClass;
+    if (btnPT) btnPT.className = activeTabClass;
     if (btnEditGrade) btnEditGrade.classList.add('hidden');
   }
 
@@ -88,54 +161,59 @@ async function switchStaffCategory(category) {
   await loadStaffData(false);
 }
 
+/**
+ * 💡 Main Bank Book စတိုင်အတိုင်း ညှိထားသော Table Head (TOTAL NET AMT ၂ ကြောင်း အတိအကျ)
+ */
 function renderStaffTableHead() {
   const thead = document.getElementById('staff-table-head');
   if (!thead) return;
 
   if (gStaffCategory === 'Full Time') {
     thead.innerHTML = `
-      <tr class="bg-[#0e172a]">
-        <th scope="col" class="w-12 text-center text-slate-400 text-xs py-3">NO</th>
-        <th scope="col" class="w-28 text-slate-400 text-xs py-3">JOIN DATE</th>
-        <th scope="col" class="min-w-[200px] text-slate-400 text-xs py-3">STAFF IDNAME</th>
-        <th scope="col" class="w-28 text-slate-400 text-xs py-3">EDUCATION</th>
-        <th scope="col" class="w-36 text-slate-400 text-xs py-3">POSITION</th>
-        <th scope="col" class="w-28 text-slate-400 text-xs py-3">SALARY GRADE</th>
-        <th scope="col" class="w-28 text-right text-slate-400 text-xs py-3">WORKING DAYS</th>
-        <th scope="col" class="w-32 text-right text-slate-400 text-xs py-3">BASIC AMT</th>
-        <th scope="col" class="w-32 text-right text-slate-400 text-xs py-3">EXTRA AMT</th>
-        <th scope="col" class="w-32 text-right text-slate-400 text-xs py-3">TOTAL SALARY</th>
-        <th scope="col" class="w-28 text-right text-emerald-400 text-xs py-3">BONUS</th>
-        <th scope="col" class="w-28 text-right text-teal-400 text-xs py-3">FUND</th>
-        <th scope="col" class="w-36 text-right text-indigo-400 text-xs py-3">TOTAL NET AMT</th>
-        <th scope="col" class="w-24 text-center text-slate-400 text-xs py-3">STATUS</th>
-        <th scope="col" class="w-24 text-slate-400 text-xs py-3">GENDER</th>
-        <th scope="col" class="w-36 text-slate-400 text-xs py-3">NRC NO</th>
-        <th scope="col" class="w-36 text-slate-400 text-xs py-3">BANK ACCOUNT</th>
-        <th scope="col" class="w-36 text-slate-400 text-xs py-3">PHONE NO</th>
-        <th scope="col" class="w-44 text-slate-400 text-xs py-3">EMAIL</th>
-        <th scope="col" class="w-28 text-slate-400 text-xs py-3">FUND DATE</th>
-        <th scope="col" class="w-32 text-right text-emerald-400 text-xs py-3">UNPAID BONUS</th>
-        <th scope="col" class="w-32 text-right text-teal-400 text-xs py-3">UNPAID FUND</th>
-        <th scope="col" class="w-24 text-center text-slate-400 text-xs py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">ACTION</th>
+      <tr class="bg-[#0e172a] text-slate-400 text-xs font-bold uppercase border-b border-slate-800">
+        <th scope="col" class="w-12 text-center text-slate-500 py-3 px-2">NO</th>
+        <th scope="col" class="w-28 py-3 px-2">JOIN DATE</th>
+        <th scope="col" class="min-w-[200px] py-3 px-2 text-slate-200">STAFF IDNAME</th>
+        <th scope="col" class="w-28 py-3 px-2">EDUCATION</th>
+        <th scope="col" class="w-36 py-3 px-2">POSITION</th>
+        <th scope="col" class="w-28 py-3 px-2 text-amber-400">SALARY GRADE</th>
+        <th scope="col" class="w-24 text-right py-3 px-2">WORKING DAYS</th>
+        <th scope="col" class="w-28 text-right py-3 px-2">BASIC AMT</th>
+        <th scope="col" class="w-28 text-right py-3 px-2">EXTRA AMT</th>
+        <th scope="col" class="w-32 text-right py-3 px-2">TOTAL SALARY</th>
+        <th scope="col" class="w-24 text-right text-emerald-400 py-3 px-2">BONUS</th>
+        <th scope="col" class="w-24 text-right text-teal-400 py-3 px-2">FUND</th>
+        <!-- 🎯 TOTAL NET AMT အား ၂ ကြောင်း အတိအကျ သတ်မှတ်ထားသည် -->
+        <th scope="col" class="w-32 text-right text-indigo-400 py-3 px-2 leading-tight min-w-[120px]">TOTAL<br>NET AMT</th>
+        <th scope="col" class="w-24 text-center py-3 px-2">STATUS</th>
+        <th scope="col" class="w-24 py-3 px-2">GENDER</th>
+        <th scope="col" class="w-36 py-3 px-2">NRC NO</th>
+        <th scope="col" class="w-36 py-3 px-2">BANK ACCOUNT</th>
+        <th scope="col" class="w-36 py-3 px-2">PHONE NO</th>
+        <th scope="col" class="w-44 py-3 px-2">EMAIL</th>
+        <th scope="col" class="w-28 py-3 px-2">FUND DATE</th>
+        <th scope="col" class="w-32 text-right text-emerald-400 py-3 px-2">UNPAID BONUS</th>
+        <th scope="col" class="w-32 text-right text-teal-400 py-3 px-2">UNPAID FUND</th>
+        <th scope="col" class="w-24 text-center py-3 px-2 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg text-slate-400">ACTION</th>
       </tr>`;
   } else {
     thead.innerHTML = `
-      <tr class="bg-[#0e172a]">
-        <th scope="col" class="w-12 text-center text-slate-400 text-xs py-3">NO</th>
-        <th scope="col" class="w-28 text-slate-400 text-xs py-3">JOIN DATE</th>
-        <th scope="col" class="min-w-[200px] text-slate-400 text-xs py-3">STAFF IDNAME</th>
-        <th scope="col" class="w-28 text-slate-400 text-xs py-3">EDUCATION</th>
-        <th scope="col" class="w-36 text-slate-400 text-xs py-3">POSITION</th>
-        <th scope="col" class="w-32 text-right text-indigo-400 text-xs py-3">TOTAL SALARY</th>
-        <th scope="col" class="w-36 text-right text-indigo-400 text-xs py-3">TOTAL NET AMT</th>
-        <th scope="col" class="w-24 text-center text-slate-400 text-xs py-3">STATUS</th>
-        <th scope="col" class="w-24 text-slate-400 text-xs py-3">GENDER</th>
-        <th scope="col" class="w-36 text-slate-400 text-xs py-3">NRC NO</th>
-        <th scope="col" class="w-36 text-slate-400 text-xs py-3">BANK ACCOUNT</th>
-        <th scope="col" class="w-36 text-slate-400 text-xs py-3">PHONE NO</th>
-        <th scope="col" class="w-44 text-slate-400 text-xs py-3">EMAIL</th>
-        <th scope="col" class="w-24 text-center text-slate-400 text-xs py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">ACTION</th>
+      <tr class="bg-[#0e172a] text-slate-400 text-xs font-bold uppercase border-b border-slate-800">
+        <th scope="col" class="w-12 text-center text-slate-500 py-3 px-2">NO</th>
+        <th scope="col" class="w-28 py-3 px-2">JOIN DATE</th>
+        <th scope="col" class="min-w-[200px] py-3 px-2 text-slate-200">STAFF IDNAME</th>
+        <th scope="col" class="w-28 py-3 px-2">EDUCATION</th>
+        <th scope="col" class="w-36 py-3 px-2">POSITION</th>
+        <th scope="col" class="w-32 text-right text-indigo-400 py-3 px-2">TOTAL SALARY</th>
+        <!-- 🎯 TOTAL NET AMT အား ၂ ကြောင်း အတိအကျ သတ်မှတ်ထားသည် -->
+        <th scope="col" class="w-36 text-right text-indigo-400 py-3 px-2 leading-tight min-w-[120px]">TOTAL<br>NET AMT</th>
+        <th scope="col" class="w-24 text-center py-3 px-2">STATUS</th>
+        <th scope="col" class="w-24 py-3 px-2">GENDER</th>
+        <th scope="col" class="w-36 py-3 px-2">NRC NO</th>
+        <th scope="col" class="w-36 py-3 px-2">BANK ACCOUNT</th>
+        <th scope="col" class="w-36 py-3 px-2">PHONE NO</th>
+        <th scope="col" class="w-44 py-3 px-2">EMAIL</th>
+        <th scope="col" class="w-24 text-center py-3 px-2 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg text-slate-400">ACTION</th>
       </tr>`;
   }
 }
@@ -145,7 +223,6 @@ async function loadStaffData(useCache = false) {
     if (typeof toggleLoading === 'function') toggleLoading(true);
     renderStaffTableHead();
 
-    // 💡 Phase 4: Retrieve Data with API
     const res = await callApi('getStaffData', {
       category: gStaffCategory,
       page: 1,
@@ -161,22 +238,23 @@ async function loadStaffData(useCache = false) {
       let femaleCount = 0;
       let netPayroll = 0;
 
-      // 💡 Resigned Staff များကို ဖယ်ထုတ်ပြီး တိကျသော Gender Auto-Detect စနစ်ဖြင့် ရေတွက်ခြင်း
+      // 💡 Gender Precision: Daw/ဒေါ် ပါဝင်သော အမည်များကို Female အဖြစ် တိကျစွာ ရေတွက်ခြင်း
       gStaffData.forEach(item => {
         const isResigned = Boolean(item.resigned_date || item.resignedDate);
-        const isInactive = (item.status || '').toLowerCase() === 'inactive' || isResigned;
+        const isInactive = String(item.status || '').toLowerCase() === 'inactive' || isResigned;
 
         if (!isInactive) {
           actCount++;
           
+          const rawName = String(item.name || item.staffIdName || item.staff_idname || '');
+          const detectedG = autoDetectGender(rawName);
           let g = String(item.gender || '').toLowerCase().trim();
-          if (!g || g === 'non' || g === 'undefined') {
-            g = window.autoDetectGender(item.name || item.staffIdName || item.staff_idname).toLowerCase();
+
+          if (!g || g === 'non' || g === 'undefined' || (g === 'male' && detectedG === 'Female')) {
+            g = detectedG.toLowerCase();
           }
 
-          if (g === 'male' || g === 'm' || g === 'ကျား' || g.startsWith('mal')) {
-            maleCount++;
-          } else if (g === 'female' || g === 'f' || g === 'မ' || g.startsWith('fem')) {
+          if (g === 'female' || g === 'f' || g === 'မ' || g.startsWith('fem')) {
             femaleCount++;
           } else {
             maleCount++;
@@ -204,44 +282,49 @@ async function loadStaffData(useCache = false) {
   }
 }
 
+/**
+ * 💡 Top KPI Cards Grid (၁ တန်းတည်း ၄ ကွက် ပေါ်စေရန် grid-template-columns ဖြင့် အသေ သတ်မှတ်သည်)
+ */
 function renderStaffKpis(stats) {
   const grid = document.getElementById('staff-kpi-grid');
   if (!grid) return;
 
+  grid.style.cssText = "display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;";
+
   grid.innerHTML = `
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-indigo-500/10 text-indigo-400"><i class="fa-solid fa-users text-xl"></i></div>
-      <div>
-        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Active Force</p>
-        <h3 class="text-base font-extrabold text-white mt-1">${stats.activeCount || 0}</h3>
+    <div class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+      <div class="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-400 shrink-0"><i class="fa-solid fa-users text-base"></i></div>
+      <div class="min-w-0">
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Active Force</p>
+        <h3 class="text-sm sm:text-base font-extrabold text-white mt-0.5">${stats.activeCount || 0}</h3>
       </div>
     </div>
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400"><i class="fa-solid fa-money-bill-wave text-xl"></i></div>
-      <div>
-        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Total Net Payroll</p>
-        <h3 class="text-base font-extrabold text-white mt-1">${Number(stats.totalNetAmt || 0).toLocaleString('en-US')} MMK</h3>
+    <div class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+      <div class="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0"><i class="fa-solid fa-money-bill-wave text-base"></i></div>
+      <div class="min-w-0">
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Total Net Payroll</p>
+        <h3 class="text-sm sm:text-base font-extrabold text-white mt-0.5 truncate">${Number(stats.totalNetAmt || 0).toLocaleString('en-US')} MMK</h3>
       </div>
     </div>
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-sky-500/10 text-sky-400"><i class="fa-solid fa-mars text-xl"></i></div>
-      <div>
-        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Male Staff</p>
-        <h3 class="text-base font-extrabold text-white mt-1">${stats.maleCount || 0}</h3>
+    <div class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+      <div class="p-2.5 rounded-lg bg-sky-500/10 text-sky-400 shrink-0"><i class="fa-solid fa-mars text-base"></i></div>
+      <div class="min-w-0">
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Male Staff</p>
+        <h3 class="text-sm sm:text-base font-extrabold text-white mt-0.5">${stats.maleCount || 0}</h3>
       </div>
     </div>
-    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-      <div class="p-3.5 rounded-lg bg-rose-500/10 text-rose-400"><i class="fa-solid fa-venus text-xl"></i></div>
-      <div>
-        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Female Staff</p>
-        <h3 class="text-base font-extrabold text-white mt-1">${stats.femaleCount || 0}</h3>
+    <div class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+      <div class="p-2.5 rounded-lg bg-rose-500/10 text-rose-400 shrink-0"><i class="fa-solid fa-venus text-base"></i></div>
+      <div class="min-w-0">
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Female Staff</p>
+        <h3 class="text-sm sm:text-base font-extrabold text-white mt-0.5">${stats.femaleCount || 0}</h3>
       </div>
     </div>
   `;
 }
 
 /**
- * 💡 Render Table Grid Rows with True Pagination Slicing
+ * 💡 Render Table Grid Rows (Crash-Proof Data Mapping)
  */
 function renderStaffTable(rawData) {
   const tbody = document.getElementById('staff-table-body');
@@ -258,7 +341,6 @@ function renderStaffTable(rawData) {
     return;
   }
 
-  // ⚡ FIX: True Client-Side Pagination Slicing (20 per page)
   const totalPages = Math.ceil(totalEntries / gStaffLimit) || 1;
   if (gStaffPage > totalPages) gStaffPage = totalPages;
   const startIndex = (gStaffPage - 1) * gStaffLimit;
@@ -267,17 +349,17 @@ function renderStaffTable(rawData) {
 
   if (gStaffCategory === 'Full Time') {
     tbody.innerHTML = pageItems.map((item, idx) => {
-      const uid = item.uniqueid || item.uniqueId || '';
-      const joinDate = item.join_date || item.joinDate || '';
+      const uid = String(item.uniqueid || item.uniqueId || '');
+      const joinDate = String(item.join_date || item.joinDate || '');
       
-      let staffIdName = item.staff_idname || item.staffIdName || '';
-      if (!staffIdName) {
+      let staffIdName = String(item.staff_idname || item.staffIdName || '');
+      if (!staffIdName || staffIdName === 'undefined') {
         const pId = String(item.staff_id || item.id || (startIndex + idx + 1)).padStart(3, '0');
         staffIdName = `[FID ${pId}] ${item.name || ''}`;
       }
       staffIdName = staffIdName.replace(/\.0/g, '');
 
-      const salaryGrade = item.salary_grade || item.salaryGrade || 'Non';
+      const salaryGrade = String(item.salary_grade || item.salaryGrade || 'Non');
       const displayNo = parseInt(item.no, 10) || (startIndex + idx + 1);
       const workingDays = parseInt(item.working_days ?? item.workingDays ?? 26, 10);
       
@@ -287,29 +369,29 @@ function renderStaffTable(rawData) {
       const bonus = Number(item.bonus ?? 0);
       const fund = Number(item.fund ?? 0);
       const totalNetAmt = Number(item.total_net_amt ?? item.totalNetAmt ?? 0);
-      const nrcNo = item.nrc_no || item.nrcNo || '';
-      const bankAccount = item.bank_account || item.bankAccount || '';
-      const phoneNo = item.phone_no || item.phoneNo || '';
-      const fundDate = item.fund_date || item.fundDate || '';
+      const nrcNo = String(item.nrc_no || item.nrcNo || '');
+      const bankAccount = String(item.bank_account || item.bankAccount || '');
+      const phoneNo = String(item.phone_no || item.phoneNo || '');
+      const fundDate = String(item.fund_date || item.fundDate || '');
       const unpaidBonus = Number(item.unpaid_bonus ?? item.unpaidBonus ?? 0);
       const unpaidFund = Number(item.unpaid_fund ?? item.unpaidFund ?? 0);
 
       const isResigned = Boolean(item.resigned_date || item.resignedDate);
-      const isInactive = (item.status || '').toLowerCase() === 'inactive' || isResigned;
+      const isInactive = String(item.status || '').toLowerCase() === 'inactive' || isResigned;
       const statusBadge = isInactive
         ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Inactive</span>'
         : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Active</span>';
 
-      const detectedGender = item.gender || window.autoDetectGender(item.name || staffIdName);
+      const detectedGender = String(item.gender || autoDetectGender(item.name || staffIdName));
 
       return `
       <tr class="hover:bg-slate-800/40 transition">
         <td class="text-center text-slate-400 py-3">${displayNo}</td>
-        <td class="font-mono text-slate-300 py-3">${window.escapeHtml(joinDate)}</td>
-        <td class="font-bold text-white py-3">${window.escapeHtml(staffIdName)}</td>
-        <td class="text-slate-300 py-3">${window.escapeHtml(item.education || '')}</td>
-        <td class="text-indigo-300 font-semibold py-3">${window.escapeHtml(item.position || '')}</td>
-        <td class="font-bold text-amber-400 py-3">${window.escapeHtml(salaryGrade)}</td>
+        <td class="font-mono text-slate-300 py-3">${escapeHtml(joinDate)}</td>
+        <td class="font-bold text-white py-3">${escapeHtml(staffIdName)}</td>
+        <td class="text-slate-300 py-3">${escapeHtml(item.education || '')}</td>
+        <td class="text-indigo-300 font-semibold py-3">${escapeHtml(item.position || '')}</td>
+        <td class="font-bold text-amber-400 py-3">${escapeHtml(salaryGrade)}</td>
         <td class="text-right font-bold text-slate-200 py-3">${workingDays}</td>
         <td class="text-right font-bold text-emerald-400 py-3">${basicAmt.toLocaleString('en-US')}</td>
         <td class="text-right font-bold text-rose-400 py-3">${extraAmt.toLocaleString('en-US')}</td>
@@ -318,29 +400,29 @@ function renderStaffTable(rawData) {
         <td class="text-right font-bold text-teal-400 py-3">${fund.toLocaleString('en-US')}</td>
         <td class="text-right font-extrabold text-indigo-400 py-3">${totalNetAmt.toLocaleString('en-US')}</td>
         <td class="text-center py-3">${statusBadge}</td>
-        <td class="text-slate-300 py-3">${window.escapeHtml(detectedGender)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(nrcNo)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(bankAccount)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(phoneNo)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(item.email || '')}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(fundDate)}</td>
+        <td class="text-slate-300 py-3">${escapeHtml(detectedGender)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(nrcNo)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(bankAccount)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(phoneNo)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(item.email || '')}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(fundDate)}</td>
         <td class="text-right font-bold text-emerald-400 py-3">${unpaidBonus.toLocaleString('en-US')}</td>
         <td class="text-right font-bold text-teal-400 py-3">${unpaidFund.toLocaleString('en-US')}</td>
         <td class="text-center py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">
           <div class="flex items-center justify-center gap-2">
-            <button onclick="editStaffEntry('${window.escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded transition" title="Edit Profile"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
-            <button onclick="deleteStaffEntry('${window.escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded transition btn-delete" title="Delete Profile"><i class="fa-solid fa-trash-can text-xs"></i></button>
+            <button onclick="editStaffEntry('${escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded transition" title="Edit Profile"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
+            <button onclick="deleteStaffEntry('${escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded transition btn-delete" title="Delete Profile"><i class="fa-solid fa-trash-can text-xs"></i></button>
           </div>
         </td>
       </tr>`;
     }).join('');
   } else {
     tbody.innerHTML = pageItems.map((item, idx) => {
-      const uid = item.uniqueid || item.uniqueId || '';
-      const joinDate = item.join_date || item.joinDate || '';
+      const uid = String(item.uniqueid || item.uniqueId || '');
+      const joinDate = String(item.join_date || item.joinDate || '');
       
-      let staffIdName = item.staff_idname || item.staffIdName || '';
-      if (!staffIdName) {
+      let staffIdName = String(item.staff_idname || item.staffIdName || '');
+      if (!staffIdName || staffIdName === 'undefined') {
         const pId = String(item.staff_id || item.id || (startIndex + idx + 1)).padStart(3, '0');
         staffIdName = `[PID ${pId}] ${item.name || ''}`;
       }
@@ -348,38 +430,38 @@ function renderStaffTable(rawData) {
 
       const totalSalary = Number(item.total_salary ?? item.totalSalary ?? 0);
       const totalNetAmt = Number(item.total_net_amt ?? item.totalNetAmt ?? 0);
-      const nrcNo = item.nrc_no || item.nrcNo || '';
-      const bankAccount = item.bank_account || item.bankAccount || '';
-      const phoneNo = item.phone_no || item.phoneNo || '';
+      const nrcNo = String(item.nrc_no || item.nrcNo || '');
+      const bankAccount = String(item.bank_account || item.bankAccount || '');
+      const phoneNo = String(item.phone_no || item.phoneNo || '');
       const displayNo = parseInt(item.no, 10) || (startIndex + idx + 1);
 
       const isResigned = Boolean(item.resigned_date || item.resignedDate);
-      const isInactive = (item.status || '').toLowerCase() === 'inactive' || isResigned;
+      const isInactive = String(item.status || '').toLowerCase() === 'inactive' || isResigned;
       const statusBadge = isInactive
         ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Inactive</span>'
         : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Active</span>';
 
-      const detectedGender = item.gender || window.autoDetectGender(item.name || staffIdName);
+      const detectedGender = String(item.gender || autoDetectGender(item.name || staffIdName));
 
       return `
       <tr class="hover:bg-slate-800/40 transition">
         <td class="text-center text-slate-400 py-3">${displayNo}</td>
-        <td class="font-mono text-slate-300 py-3">${window.escapeHtml(joinDate)}</td>
-        <td class="font-bold text-white py-3">${window.escapeHtml(staffIdName)}</td>
-        <td class="text-slate-300 py-3">${window.escapeHtml(item.education || '')}</td>
-        <td class="text-indigo-300 font-semibold py-3">${window.escapeHtml(item.position || '')}</td>
+        <td class="font-mono text-slate-300 py-3">${escapeHtml(joinDate)}</td>
+        <td class="font-bold text-white py-3">${escapeHtml(staffIdName)}</td>
+        <td class="text-slate-300 py-3">${escapeHtml(item.education || '')}</td>
+        <td class="text-indigo-300 font-semibold py-3">${escapeHtml(item.position || '')}</td>
         <td class="text-right font-bold text-indigo-400 py-3">${totalSalary.toLocaleString('en-US')}</td>
         <td class="text-right font-extrabold text-indigo-400 py-3">${totalNetAmt.toLocaleString('en-US')}</td>
         <td class="text-center py-3">${statusBadge}</td>
-        <td class="text-slate-300 py-3">${window.escapeHtml(detectedGender)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(nrcNo)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(bankAccount)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(phoneNo)}</td>
-        <td class="font-mono text-xs text-slate-300 py-3">${window.escapeHtml(item.email || '')}</td>
+        <td class="text-slate-300 py-3">${escapeHtml(detectedGender)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(nrcNo)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(bankAccount)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(phoneNo)}</td>
+        <td class="font-mono text-xs text-slate-300 py-3">${escapeHtml(item.email || '')}</td>
         <td class="text-center py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">
           <div class="flex items-center justify-center gap-2">
-            <button onclick="editStaffEntry('${window.escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded transition" title="Edit Profile"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
-            <button onclick="deleteStaffEntry('${window.escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded transition btn-delete" title="Delete Profile"><i class="fa-solid fa-trash-can text-xs"></i></button>
+            <button onclick="editStaffEntry('${escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded transition" title="Edit Profile"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
+            <button onclick="deleteStaffEntry('${escapeJsAttr(uid)}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded transition btn-delete" title="Delete Profile"><i class="fa-solid fa-trash-can text-xs"></i></button>
           </div>
         </td>
       </tr>`;
@@ -514,6 +596,9 @@ function calculateLiveStaffSalary() {
   if (pNet) pNet.textContent = `${totalNet.toLocaleString('en-US')} MMK`;
 }
 
+/**
+ * 🎯 Modal Form Title ကို "Add New Entry" ဟု စနစ်တကျ သတ်မှတ်ခြင်း
+ */
 async function openAddModalStaff() {
   const modal = document.getElementById('staff-modal');
   const form = document.getElementById('staff-form');
@@ -527,7 +612,7 @@ async function openAddModalStaff() {
   if (joinDate) joinDate.value = new Date().toISOString().slice(0, 10);
 
   const title = document.getElementById('staff-form-title');
-  if (title) title.textContent = `Add ${gStaffCategory} Record`;
+  if (title) title.textContent = "Add New Entry";
 
   const ftFields = document.getElementById('staff-fulltime-fields');
   const ptFields = document.getElementById('staff-parttime-fields');
@@ -551,6 +636,23 @@ function closeStaffModal() {
   if (modal) modal.classList.add('hidden');
 }
 
+async function openGradeModal() {
+  const modal = document.getElementById('grade-modal') || document.getElementById('salary-grade-modal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    await fetchPayrollSettings();
+    return;
+  }
+  if (typeof showToast === 'function') {
+    showToast("INFO", "Salary Grade Matrix နှုန်းထားများကို 'System Settings & Controls' တွင် ပြင်ဆင်နိုင်ပါသည်။");
+  }
+}
+
+function closeGradeModal() {
+  const modal = document.getElementById('grade-modal') || document.getElementById('salary-grade-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
 async function editStaffEntry(uniqueId) {
   const item = gStaffData.find(s => (s.uniqueid === uniqueId || s.uniqueId === uniqueId));
   if (!item) return;
@@ -558,7 +660,7 @@ async function editStaffEntry(uniqueId) {
   await openAddModalStaff();
 
   const title = document.getElementById('staff-form-title');
-  if (title) title.textContent = `Edit ${gStaffCategory} Record`;
+  if (title) title.textContent = `Edit Entry (${gStaffCategory})`;
 
   if (document.getElementById('staff-uniqueId')) document.getElementById('staff-uniqueId').value = item.uniqueid || item.uniqueId || '';
   if (document.getElementById('staff-joindate')) document.getElementById('staff-joindate').value = item.join_date || item.joinDate || '';
@@ -586,9 +688,6 @@ async function editStaffEntry(uniqueId) {
   calculateLiveStaffSalary();
 }
 
-/**
- * 💡 SAVE STAFF FORM (With Auto Status: Inactive on Resigned Date & Double-Submit Protection)
- */
 async function saveStaffForm(event) {
   if (event && event.preventDefault) event.preventDefault();
 
@@ -661,6 +760,7 @@ async function saveStaffForm(event) {
     if (res && res.success) {
       if (typeof showToast === 'function') showToast("SUCCESS", "ဝန်ထမ်း အချက်အလက်များ အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။");
       closeStaffModal();
+      if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
       loadStaffData(false);
     } else {
       if (typeof showToast === 'function') showToast("ERROR", res?.message || "သိမ်းဆည်းမှု မအောင်မြင်ပါ။");
@@ -685,6 +785,7 @@ async function deleteStaffEntry(uniqueId) {
 
     if (res && res.success) {
       if (typeof showToast === 'function') showToast("SUCCESS", "ဝန်ထမ်း မှတ်တမ်းအား အောင်မြင်စွာ ဖျက်သိမ်းပြီးပါပြီ။");
+      if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
       loadStaffData(false);
     } else {
       if (typeof showToast === 'function') showToast("ERROR", res?.message || "ဖျက်သိမ်းမှု မအောင်မြင်ပါ။");
@@ -696,9 +797,6 @@ async function deleteStaffEntry(uniqueId) {
   }
 }
 
-/**
- * 💡 FULL 26-COLUMN CSV EXPORTER
- */
 function exportToCSVStaff() {
   if (!gStaffData || gStaffData.length === 0) {
     if (typeof showToast === 'function') showToast("ERROR", "ထုတ်ယူရန် မည်သည့် အချက်အလက်မျှ မရှိပါ။");
@@ -716,14 +814,14 @@ function exportToCSVStaff() {
       const cleanStaffIdName = rawStaffIdName.replace(/\.0/g, '');
 
       csv += `${displayNo},` +
-             `${window.safeCsvCell(r.join_date || r.joinDate || '')},` +
+             `${safeCsvCell(r.join_date || r.joinDate || '')},` +
              `"Full Time",` +
-             `${window.safeCsvCell(r.staff_id || r.staffId || '')},` +
-             `${window.safeCsvCell(r.name || '')},` +
-             `${window.safeCsvCell(cleanStaffIdName)},` +
-             `${window.safeCsvCell(r.education || '')},` +
-             `${window.safeCsvCell(r.position || '')},` +
-             `${window.safeCsvCell(r.salary_grade || r.salaryGrade || '')},` +
+             `${safeCsvCell(r.staff_id || r.staffId || '')},` +
+             `${safeCsvCell(r.name || '')},` +
+             `${safeCsvCell(cleanStaffIdName)},` +
+             `${safeCsvCell(r.education || '')},` +
+             `${safeCsvCell(r.position || '')},` +
+             `${safeCsvCell(r.salary_grade || r.salaryGrade || '')},` +
              `${r.working_days || r.workingDays || 26},` +
              `${r.basic_amt || r.basicAmt || 0},` +
              `${r.extra_amt || r.extraAmt || 0},` +
@@ -731,14 +829,14 @@ function exportToCSVStaff() {
              `${r.bonus || 0},` +
              `${r.fund || 0},` +
              `${r.total_net_amt || r.totalNetAmt || 0},` +
-             `${window.safeCsvCell(r.resigned_date || r.resignedDate || '')},` +
-             `${window.safeCsvCell(r.status || 'Active')},` +
-             `${window.safeCsvCell(r.gender || 'Male')},` +
-             `${window.safeCsvCell(r.nrc_no || r.nrcNo || '')},` +
-             `${window.safeCsvCell(r.bank_account || r.bankAccount || '')},` +
-             `${window.safeCsvCell(r.phone_no || r.phoneNo || '')},` +
-             `${window.safeCsvCell(r.email || '')},` +
-             `${window.safeCsvCell(r.fund_date || r.fundDate || '')},` +
+             `${safeCsvCell(r.resigned_date || r.resignedDate || '')},` +
+             `${safeCsvCell(r.status || 'Active')},` +
+             `${safeCsvCell(r.gender || 'Male')},` +
+             `${safeCsvCell(r.nrc_no || r.nrcNo || '')},` +
+             `${safeCsvCell(r.bank_account || r.bankAccount || '')},` +
+             `${safeCsvCell(r.phone_no || r.phoneNo || '')},` +
+             `${safeCsvCell(r.email || '')},` +
+             `${safeCsvCell(r.fund_date || r.fundDate || '')},` +
              `${r.unpaid_bonus || r.unpaidBonus || 0},` +
              `${r.unpaid_fund || r.unpaidFund || 0}\n`;
     });
@@ -750,22 +848,22 @@ function exportToCSVStaff() {
       const cleanStaffIdName = rawStaffIdName.replace(/\.0/g, '');
 
       csv += `${displayNo},` +
-             `${window.safeCsvCell(r.join_date || r.joinDate || '')},` +
+             `${safeCsvCell(r.join_date || r.joinDate || '')},` +
              `"Part Time",` +
-             `${window.safeCsvCell(r.staff_id || r.staffId || '')},` +
-             `${window.safeCsvCell(r.name || '')},` +
-             `${window.safeCsvCell(cleanStaffIdName)},` +
-             `${window.safeCsvCell(r.education || '')},` +
-             `${window.safeCsvCell(r.position || '')},` +
+             `${safeCsvCell(r.staff_id || r.staffId || '')},` +
+             `${safeCsvCell(r.name || '')},` +
+             `${safeCsvCell(cleanStaffIdName)},` +
+             `${safeCsvCell(r.education || '')},` +
+             `${safeCsvCell(r.position || '')},` +
              `${r.total_salary || r.totalSalary || 0},` +
              `${r.total_net_amt || r.totalNetAmt || 0},` +
-             `${window.safeCsvCell(r.resigned_date || r.resignedDate || '')},` +
-             `${window.safeCsvCell(r.status || 'Active')},` +
-             `${window.safeCsvCell(r.gender || 'Male')},` +
-             `${window.safeCsvCell(r.nrc_no || r.nrcNo || '')},` +
-             `${window.safeCsvCell(r.bank_account || r.bankAccount || '')},` +
-             `${window.safeCsvCell(r.phone_no || r.phoneNo || '')},` +
-             `${window.safeCsvCell(r.email || '')}\n`;
+             `${safeCsvCell(r.resigned_date || r.resignedDate || '')},` +
+             `${safeCsvCell(r.status || 'Active')},` +
+             `${safeCsvCell(r.gender || 'Male')},` +
+             `${safeCsvCell(r.nrc_no || r.nrcNo || '')},` +
+             `${safeCsvCell(r.bank_account || r.bankAccount || '')},` +
+             `${safeCsvCell(r.phone_no || r.phoneNo || '')},` +
+             `${safeCsvCell(r.email || '')}\n`;
     });
   }
 
@@ -786,6 +884,8 @@ window.onSearchInputStaff = onSearchInputStaff;
 window.changePageStaff = changePageStaff;
 window.openAddModalStaff = openAddModalStaff;
 window.closeStaffModal = closeStaffModal;
+window.openGradeModal = openGradeModal;
+window.closeGradeModal = closeGradeModal;
 window.editStaffEntry = editStaffEntry;
 window.saveStaffForm = saveStaffForm;
 window.deleteStaffEntry = deleteStaffEntry;
@@ -794,3 +894,4 @@ window.fetchPayrollSettings = fetchPayrollSettings;
 window.renderGradeDropdownOptions = renderGradeDropdownOptions;
 window.onSalaryGradeChangeStaff = onSalaryGradeChangeStaff;
 window.calculateLiveStaffSalary = calculateLiveStaffSalary;
+window.autoDetectGender = autoDetectGender;
