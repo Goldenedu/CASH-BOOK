@@ -115,9 +115,9 @@ function renderPromotionKpis(stats) {
   const elBal = document.getElementById('promo-balance');
   const elAct = document.getElementById('promo-total-active-students');
 
-  if (elInc) elInc.textContent = `${Number(stats.totalIncome || 0).toLocaleString('en-US')} MMK`;
-  if (elRef) elRef.textContent = `${Number(stats.totalRefund || 0).toLocaleString('en-US')} MMK`;
-  if (elBal) elBal.textContent = `${Number(stats.balance || 0).toLocaleString('en-US')} MMK`;
+  if (elInc) elInc.textContent = `${Number(stats.totalIncome || 0).toLocaleString('en-US')}`;
+  if (elRef) elRef.textContent = `${Number(stats.totalRefund || 0).toLocaleString('en-US')}`;
+  if (elBal) elBal.textContent = `${Number(stats.balance || 0).toLocaleString('en-US')}`;
   if (elAct) elAct.textContent = Number(stats.totalActiveStudents || 0).toLocaleString('en-US');
 }
 

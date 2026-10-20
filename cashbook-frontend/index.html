@@ -242,13 +242,24 @@
       <header
         class="bg-[#0c1322] border-b border-slate-800 h-[64px] px-6 flex justify-between items-center z-10 shrink-0">
         <h1 id="page-title" class="text-base md:text-lg font-extrabold text-slate-100 tracking-wide">Home Dashboard</h1>
-        <div id="live-metadata"
-          class="text-xs font-bold text-emerald-400 bg-[#111c44] border border-emerald-500/20 px-3.5 py-1.5 rounded-lg">
-          FY 2026-2027 | Sat | --:-- | User: Admin
-        </div>
+
+        <!-- 💡 Symmetrical Capsule Header -->
+        <div
+          class="inline-flex items-center text-xs font-bold bg-[#111c44] border border-slate-800 px-3.5 py-1.5 rounded-full shadow-inner gap-2.5">
+          <!-- Left: Real-Time Wifi Status -->
+          <span id="network-status"
+            class="flex items-center justify-center text-emerald-400 transition-colors duration-300 cursor-pointer"
+            title="Internet Connected (Online)">
+            <i id="network-icon" class="fa-solid fa-wifi text-[11px]"></i>
+          </span>
+
+          <div id="live-metadata"
+            class="text-xs font-bold text-emerald-400 bg-[#111c44] border border-emerald-500/20 px-3.5 py-1.5 rounded-lg">
+            FY 2026-2027 | Sat | --:-- | Admin
+          </div>
       </header>
 
-      <main id="main-content" class="p-6 overflow-y-auto flex-1 bg-[#090d16] relative">
+      <main id="main-content" style="padding-top: 10px;" class="px-6 pb-6 overflow-y-auto flex-1 bg-[#090d16] relative">
         <div id="view-container"></div>
       </main>
     </div>
