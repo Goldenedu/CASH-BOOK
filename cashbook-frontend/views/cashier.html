@@ -100,44 +100,44 @@
     </div>
   </div>
 
-  <!-- 💡 ၃။ Cashier Sub-Tabs Bar (အဖြူရောင်ဘောင် မပါဘဲ Search Box ကဲ့သို့ မသိသာသော Dark Border ဖြင့် ၁ တန်းတည်း ၆ ကွက် ပေါ်စေသည်) -->
-  <div class="bg-[#0c1322] border border-slate-800 p-2 rounded-xl shadow-lg overflow-x-auto">
-    <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px;"
+  <!-- 💡 ၃။ Cashier Sub-Tabs Bar (Inactive Tab များ Border ဖြုတ်ပြီး Active Tab တွင် အပြာရောင် Border သတ်မှတ်ထားသည်) -->
+  <div class="bg-[#0c1322] border border-slate-800 p-1.5 rounded-xl shadow-lg overflow-x-auto">
+    <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px;"
       class="w-full min-w-[780px] xl:min-w-0">
 
-      <!-- 1. CABank (Active: မသိသာသော Amber Dark Border) -->
+      <!-- 1. CABank (Active: ဒုတိယပုံစံအတိုင်း သပ်ရပ်သော အပြာရောင် Border ဖြင့်) -->
       <button onclick="switchCashierSubTab('CABank')" id="ca-tab-CABank"
-        class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-amber-500/50 bg-amber-500/15 text-amber-300 whitespace-nowrap">
-        <i class="fa-solid fa-building-columns text-amber-400 text-xs"></i> Bank (CABank)
+        class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-sky-400 bg-sky-500/10 text-white shadow-sm whitespace-nowrap">
+        <i class="fa-solid fa-building-columns text-sky-400 text-xs"></i> Bank (CABank)
       </button>
 
-      <!-- 2. CACash (Inactive: Search Box အတိုင်း border-slate-800) -->
+      <!-- 2. CACash (Inactive: Border မပါ) -->
       <button onclick="switchCashierSubTab('CACash')" id="ca-tab-CACash"
-        class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-800 bg-[#0f172a] text-slate-400 hover:text-white hover:border-slate-700 whitespace-nowrap">
+        class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-transparent text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap">
         <i class="fa-solid fa-money-bill-wave text-emerald-400 text-xs"></i> Cash (CACash)
       </button>
 
-      <!-- 3. CAOffice (Inactive: border-slate-800) -->
+      <!-- 3. CAOffice (Inactive: Border မပါ) -->
       <button onclick="switchCashierSubTab('CAOffice')" id="ca-tab-CAOffice"
-        class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-800 bg-[#0f172a] text-slate-400 hover:text-white hover:border-slate-700 whitespace-nowrap">
+        class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-transparent text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap">
         <i class="fa-solid fa-briefcase text-cyan-400 text-xs"></i> Office (CAOffice)
       </button>
 
-      <!-- 4. CAKitchen (Inactive: border-slate-800) -->
+      <!-- 4. CAKitchen (Inactive: Border မပါ) -->
       <button onclick="switchCashierSubTab('CAKitchen')" id="ca-tab-CAKitchen"
-        class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-800 bg-[#0f172a] text-slate-400 hover:text-white hover:border-slate-700 whitespace-nowrap">
+        class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-transparent text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap">
         <i class="fa-solid fa-utensils text-rose-400 text-xs"></i> Kitchen (CAKitchen)
       </button>
 
-      <!-- 5. CAPayroll (Inactive: border-slate-800) -->
+      <!-- 5. CAPayroll (Inactive: Border မပါ) -->
       <button onclick="switchCashierSubTab('CAPayroll')" id="ca-tab-CAPayroll"
-        class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-800 bg-[#0f172a] text-slate-400 hover:text-white hover:border-slate-700 whitespace-nowrap">
+        class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-transparent text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap">
         <i class="fa-solid fa-hand-holding-dollar text-teal-400 text-xs"></i> Payroll (CAPayroll)
       </button>
 
-      <!-- 6. Today Income (Inactive: border-slate-800) -->
+      <!-- 6. Today Income (Inactive: Border မပါ) -->
       <button onclick="switchCashierSubTab('todayIncome')" id="ca-tab-todayIncome"
-        class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-800 bg-[#0f172a] text-slate-400 hover:text-white hover:border-slate-700 whitespace-nowrap">
+        class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-transparent text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap">
         <i class="fa-solid fa-receipt text-sky-400 text-xs"></i> Today Income (Invoice)
       </button>
 

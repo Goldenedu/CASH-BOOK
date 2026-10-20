@@ -71,7 +71,7 @@ var currentCashierSubBook = 'CABank'; // 'CABank' | 'CACash' | 'CAOffice' | 'CAK
 var allCashierData = [];
 var filteredCashierData = [];
 var currentCashierPage = 1;
-var CASHIER_PAGE_SIZE = 20; 
+var CASHIER_PAGE_SIZE = 20;
 var searchTimeoutCashier = null;
 var isCashierSubmitting = false;
 var currentCashierTotalRows = 0;
@@ -85,13 +85,13 @@ function updateCaKpiLabels() {
     'ca-total-expense': 'TOTAL EXPENSE (MMK)',
     'ca-balance': 'TOTAL BALANCES (MMK)'
   };
-  
+
   for (const [id, text] of Object.entries(labels)) {
     const valueEl = document.getElementById(id);
     if (valueEl) {
       const parent = valueEl.parentElement;
       if (parent) {
-        const labelEl = parent.querySelector('p'); 
+        const labelEl = parent.querySelector('p');
         if (labelEl) labelEl.textContent = text;
       }
     }
@@ -107,9 +107,9 @@ function adjustCaKpiFontSizes() {
     const el = document.getElementById(id);
     if (!el) return;
 
-    el.style.fontSize = '24px'; 
+    el.style.fontSize = '24px';
     el.style.whiteSpace = 'nowrap';
-    
+
     let currentSize = 24;
     while (el.scrollWidth > el.clientWidth && currentSize > 12) {
       currentSize--;
@@ -128,29 +128,21 @@ function initCashierView(bookName, useCache) {
 }
 
 /**
- * 💡 Switch Cashier Sub-Tabs
- * 🎯 Full-Width Grid Sync: w-full justify-center whitespace-nowrap ဖြင့် ၆ ကွက် ညီညာစွာ ထိန်းသိမ်းသည်
+ * 💡 Switch Cashier Sub-Tabs (Borderless Inactive & Sky-Blue Border Active)
  */
 function switchCashierSubTab(subTab, useCache) {
   currentCashierSubBook = subTab || 'CABank';
   currentCashierPage = 1;
   useCache = useCache !== undefined ? useCache : true;
 
-  const tabThemes = {
-    'CABank':      { active: 'bg-amber-500/25 text-amber-300 border-amber-400/60 ring-2 ring-amber-500/30 opacity-100 shadow-amber-950/40', inactive: 'bg-amber-950/30 border-amber-500/30 text-amber-300/70 hover:bg-amber-900/40 hover:text-amber-200' },
-    'CACash':      { active: 'bg-emerald-500/25 text-emerald-300 border-emerald-400/60 ring-2 ring-emerald-500/30 opacity-100 shadow-emerald-950/40', inactive: 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300/70 hover:bg-emerald-900/40 hover:text-emerald-200' },
-    'CAOffice':    { active: 'bg-cyan-500/25 text-cyan-300 border-cyan-400/60 ring-2 ring-cyan-500/30 opacity-100 shadow-cyan-950/40', inactive: 'bg-cyan-950/30 border-cyan-500/30 text-cyan-300/70 hover:bg-cyan-900/40 hover:text-cyan-200' },
-    'CAKitchen':   { active: 'bg-rose-500/25 text-rose-300 border-rose-400/60 ring-2 ring-rose-500/30 opacity-100 shadow-rose-950/40', inactive: 'bg-rose-950/30 border-rose-500/30 text-rose-300/70 hover:bg-rose-900/40 hover:text-rose-200' },
-    'CAPayroll':   { active: 'bg-teal-500/25 text-teal-300 border-teal-400/60 ring-2 ring-teal-500/30 opacity-100 shadow-teal-950/40', inactive: 'bg-teal-950/30 border-teal-500/30 text-teal-300/70 hover:bg-teal-900/40 hover:text-teal-200' },
-    'todayIncome': { active: 'bg-sky-500/25 text-sky-300 border-sky-400/60 ring-2 ring-sky-500/30 opacity-100 shadow-sky-950/40', inactive: 'bg-sky-950/30 border-sky-500/30 text-sky-300/70 hover:bg-sky-900/40 hover:text-sky-200' }
-  };
+  const activeClass = "border-sky-400 bg-sky-500/10 text-white shadow-sm";
+  const inactiveClass = "border-transparent text-slate-400 hover:text-white hover:bg-slate-800/30";
 
-  Object.keys(tabThemes).forEach(key => {
+  ['CABank', 'CACash', 'CAOffice', 'CAKitchen', 'CAPayroll', 'todayIncome'].forEach(key => {
     const btn = document.getElementById(`ca-tab-${key}`);
     if (btn) {
-      const theme = tabThemes[key];
-      // 🎯 w-full justify-center whitespace-nowrap ထည့်သွင်းထားသဖြင့် ၆ ကွက် ညီညာစွာ အပြည့်ဖြစ်နေမည်
-      btn.className = `ca-sub-tab-btn w-full justify-center whitespace-nowrap px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 border ${subTab === key ? theme.active : theme.inactive}`;
+      const isActive = (subTab === key);
+      btn.className = `ca-sub-tab-btn w-full justify-center whitespace-nowrap px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${isActive ? activeClass : inactiveClass}`;
     }
   });
 
@@ -225,7 +217,7 @@ async function loadTodayIncomeForCashier(useCache) {
       allCashierData = response.data || [];
       window.allCashierData = allCashierData;
       currentCashierTotalRows = response.totalRows || allCashierData.length || 0;
-      
+
       let totalInc = 0, totalExp = 0;
       allCashierData.forEach(r => {
         totalInc += Number(r.credit || 0);
@@ -257,7 +249,7 @@ function renderStatsCashier(stats, totalRowsCount) {
   if (elInc) elInc.textContent = `${Number(stats.totalIncome || 0).toLocaleString('en-US')}`;
   if (elExp) elExp.textContent = `${Number(stats.totalExpense || 0).toLocaleString('en-US')}`;
   if (elBal) elBal.textContent = `${Number(stats.balance || 0).toLocaleString('en-US')}`;
-  
+
   if (elCount) elCount.textContent = (totalRowsCount || currentCashierTotalRows || allCashierData.length).toLocaleString('en-US');
 
   setTimeout(adjustCaKpiFontSizes, 50);
@@ -268,7 +260,7 @@ function renderStatsCashier(stats, totalRowsCount) {
  */
 function filterCashierData(list, searchVal, fromDate, toDate) {
   var safeList = Array.isArray(list) ? list : [];
-  return safeList.filter(function(row) {
+  return safeList.filter(function (row) {
     if (typeof window.isDateInRange === 'function') {
       if (!window.isDateInRange(row.date || row.effDate, fromDate, toDate)) return false;
     }
@@ -464,7 +456,7 @@ function renderCashierTable() {
         <td class="font-mono font-bold text-indigo-300 py-3 px-2">${escapeHtml(item.fy) || '-'}</td>
         <td class="py-3 px-2">${escapeHtml(item.bookName) || '-'}</td>
         <td class="py-3 px-2">${escapeHtml(item.createdBy) || 'System'}</td>
-        <td class="font-mono text-slate-500 py-3 px-2">${item.createdAt ? item.createdAt.slice(0,10) : '-'}</td>
+        <td class="font-mono text-slate-500 py-3 px-2">${item.createdAt ? item.createdAt.slice(0, 10) : '-'}</td>
         <td class="text-center right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg py-3 px-2">
           <div class="flex items-center justify-center gap-2">
             <button onclick="editCashierEntry('${escapeJsAttr(item.uniqueId)}')" class="p-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-lg transition ${lockClass}" title="Edit ${lockTitle}" ${disabledAttr}><i class="fa-solid fa-pen-to-square"></i></button>
@@ -715,44 +707,44 @@ function exportToCSVCashier() {
     csv = "NO,EFFECT DATE,DATE,FY,ID,FYID,FYID NAME,CLASS,CATEGORY,ACCOUNT NAME,METHOD,DEBIT,CREDIT,AUT AMOUNT,PROMO,MY,VR NO,REMARK\n";
     allCashierData.forEach((r, idx) => {
       csv += `${r.no || (idx + 1)},` +
-             `${safeCsvCell(r.effDate || r.date || '')},` +
-             `${safeCsvCell(r.date || '')},` +
-             `${safeCsvCell(r.fy || '')},` +
-             `${safeCsvCell(r.id || '')},` +
-             `${safeCsvCell(r.fyid || '')},` +
-             `${safeCsvCell(r.fyidName || '')},` +
-             `${safeCsvCell(r.class || '')},` +
-             `${safeCsvCell(r.category || '')},` +
-             `${safeCsvCell(r.accountName || '')},` +
-             `${safeCsvCell(r.method || '')},` +
-             `${r.debit || 0},` +
-             `${r.credit || 0},` +
-             `${r.autAmount || 0},` +
-             `${safeCsvCell(r.promo || '')},` +
-             `${safeCsvCell(r.my || '')},` +
-             `${safeCsvCell(r.vrNo || '')},` +
-             `${safeCsvCell(r.remark || '')}\n`;
+        `${safeCsvCell(r.effDate || r.date || '')},` +
+        `${safeCsvCell(r.date || '')},` +
+        `${safeCsvCell(r.fy || '')},` +
+        `${safeCsvCell(r.id || '')},` +
+        `${safeCsvCell(r.fyid || '')},` +
+        `${safeCsvCell(r.fyidName || '')},` +
+        `${safeCsvCell(r.class || '')},` +
+        `${safeCsvCell(r.category || '')},` +
+        `${safeCsvCell(r.accountName || '')},` +
+        `${safeCsvCell(r.method || '')},` +
+        `${r.debit || 0},` +
+        `${r.credit || 0},` +
+        `${r.autAmount || 0},` +
+        `${safeCsvCell(r.promo || '')},` +
+        `${safeCsvCell(r.my || '')},` +
+        `${safeCsvCell(r.vrNo || '')},` +
+        `${safeCsvCell(r.remark || '')}\n`;
     });
   } else {
     csv = "NO,DATE,RESPONSIBILITY PERSON,CATEGORY,DESCRIPTION,METHOD,DEBIT,CREDIT,BALANCES,TRANSFER,VR NO,MY,FY,BOOK NAME,CREATED BY,CREATED AT,UNIQUEID\n";
     allCashierData.forEach((r, idx) => {
       csv += `${r.no || (idx + 1)},` +
-             `${safeCsvCell(r.date || '')},` +
-             `${safeCsvCell(r.respPerson || '')},` +
-             `${safeCsvCell(r.category || '')},` +
-             `${safeCsvCell(r.description || '')},` +
-             `${safeCsvCell(r.method || '')},` +
-             `${r.debit || 0},` +
-             `${r.credit || 0},` +
-             `${r.balances || 0},` +
-             `${safeCsvCell(r.transfer || '')},` +
-             `${safeCsvCell(r.vrNo || '')},` +
-             `${safeCsvCell(r.my || '')},` +
-             `${safeCsvCell(r.fy || '')},` +
-             `${safeCsvCell(r.bookName || '')},` +
-             `${safeCsvCell(r.createdBy || '')},` +
-             `${safeCsvCell(r.createdAt || '')},` +
-             `${safeCsvCell(r.uniqueId || '')}\n`;
+        `${safeCsvCell(r.date || '')},` +
+        `${safeCsvCell(r.respPerson || '')},` +
+        `${safeCsvCell(r.category || '')},` +
+        `${safeCsvCell(r.description || '')},` +
+        `${safeCsvCell(r.method || '')},` +
+        `${r.debit || 0},` +
+        `${r.credit || 0},` +
+        `${r.balances || 0},` +
+        `${safeCsvCell(r.transfer || '')},` +
+        `${safeCsvCell(r.vrNo || '')},` +
+        `${safeCsvCell(r.my || '')},` +
+        `${safeCsvCell(r.fy || '')},` +
+        `${safeCsvCell(r.bookName || '')},` +
+        `${safeCsvCell(r.createdBy || '')},` +
+        `${safeCsvCell(r.createdAt || '')},` +
+        `${safeCsvCell(r.uniqueId || '')}\n`;
     });
   }
 
