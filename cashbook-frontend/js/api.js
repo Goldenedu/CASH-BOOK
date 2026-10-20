@@ -20,7 +20,7 @@ function getApiWorkerUrl() {
     if (window.CONFIG?.API_BASE_URL) return window.CONFIG.API_BASE_URL;
     if (window.API_BASE_URL) return window.API_BASE_URL;
   }
-  return "https://cashbook-app-api-dev.thantoeaung734.workers.dev";
+  return "https://cashbook-app-api.goldeneduprivateschool.workers.dev/";
 }
 
 const API_WORKER_URL = getApiWorkerUrl();
@@ -44,7 +44,7 @@ window.gDataCache = window.gDataCache || {};
 /**
  * 💡 Central Safe Native DOM HTML Escaper
  */
-window.escapeHtml = function(str) {
+window.escapeHtml = function (str) {
   if (str === null || str === undefined) return "";
   return String(str)
     .replace(/&/g, "&amp;")
@@ -58,7 +58,7 @@ window.escapeHtml = function(str) {
  * 💡 Safe escaper for values injected into inline onclick="...('VALUE')" handlers.
  * Prevents quote breaking, bracket collision and XSS vulnerabilities in DOM tables.
  */
-window.escapeJsAttr = function(str) {
+window.escapeJsAttr = function (str) {
   if (str === null || str === undefined) return "";
   const jsEscaped = String(str)
     .replace(/\\/g, '\\\\')
@@ -70,7 +70,7 @@ window.escapeJsAttr = function(str) {
 /**
  * 🛡️ UNIVERSAL SAFE CSV CELL GENERATOR (Prevents Excel/Sheets Formula Injection)
  */
-window.safeCsvCell = function(val) {
+window.safeCsvCell = function (val) {
   if (val === null || val === undefined) return '""';
   if (typeof val === 'number') return isNaN(val) ? '0' : String(val);
 
@@ -98,7 +98,7 @@ window.safeCsvCell = function(val) {
 // 💡 2. GLOBAL FORMATTERS, PARSERS & BUSINESS LOGIC
 // ==============================================================================
 
-window.parseCleanNum = function(val) {
+window.parseCleanNum = function (val) {
   if (val === undefined || val === null || val === '') return 0;
   if (typeof val === 'number') return isNaN(val) ? 0 : val;
   var str = String(val).replace(/,/g, '').trim();
@@ -106,22 +106,22 @@ window.parseCleanNum = function(val) {
   return isNaN(num) ? 0 : num;
 };
 
-window.parseCleanIntId = function(val) {
+window.parseCleanIntId = function (val) {
   if (val === undefined || val === null || val === '') return 0;
   if (typeof val === 'number') return isNaN(val) ? 0 : Math.trunc(val);
   var n = parseInt(String(val).trim(), 10);
   return isNaN(n) ? 0 : n;
 };
 
-window.getCurrentAcademicYear = function(dateInput) {
+window.getCurrentAcademicYear = function (dateInput) {
   var d = dateInput ? new Date(dateInput) : new Date(Date.now() + (6.5 * 3600 * 1000));
   var validDate = isNaN(d.getTime()) ? new Date() : d;
   var y = validDate.getFullYear();
-  if (validDate.getMonth() < 2) y -= 1; 
+  if (validDate.getMonth() < 2) y -= 1;
   return `${y}-${y + 1}`;
 };
 
-window.getFyShortCode = function(fyStr) {
+window.getFyShortCode = function (fyStr) {
   if (fyStr) {
     var clean = String(fyStr).replace(/^FY\s*/i, '').trim();
     var parts = clean.split(/[-/]/);
@@ -135,7 +135,7 @@ window.getFyShortCode = function(fyStr) {
   return p[0].slice(-2) + p[1].slice(-2);
 };
 
-window.sanitizeFyidStr = function(fyidStr) {
+window.sanitizeFyidStr = function (fyidStr) {
   var s = String(fyidStr || '').trim();
   if (!s) return s;
   if (s.indexOf('.0') === -1) return s;
@@ -148,7 +148,7 @@ window.sanitizeFyidStr = function(fyidStr) {
   return cleaned;
 };
 
-window.autoDetectGender = function(nameStr) {
+window.autoDetectGender = function (nameStr) {
   if (!nameStr) return 'Male';
   const clean = String(nameStr).trim();
   if (
@@ -168,11 +168,11 @@ window.autoDetectGender = function(nameStr) {
 // 💡 3. QUOTA-SAFE CACHE ENGINE (Zero QuotaExceededError Crash)
 // ==============================================================================
 
-window.getApiCache = function(cacheKey) {
+window.getApiCache = function (cacheKey) {
   if (window.gDataCache[cacheKey]) {
     return window.gDataCache[cacheKey];
   }
-  
+
   try {
     const persistedCache = localStorage.getItem('api_cache_' + cacheKey);
     if (persistedCache) {
@@ -188,11 +188,11 @@ window.getApiCache = function(cacheKey) {
   } catch (e) {
     console.warn('[Cache] Failed to read localStorage cache:', e);
   }
-  
+
   return null;
 };
 
-window.setApiCache = function(cacheKey, data) {
+window.setApiCache = function (cacheKey, data) {
   if (data && data.success) {
     window.gDataCache[cacheKey] = data;
 
@@ -207,7 +207,7 @@ window.setApiCache = function(cacheKey, data) {
   }
 };
 
-window.clearAllApiCache = function() {
+window.clearAllApiCache = function () {
   window.gDataCache = {};
   try {
     const keys = Object.keys(localStorage);
@@ -221,19 +221,19 @@ window.clearAllApiCache = function() {
   }
 };
 
-window.invalidateApiCache = function(actionPrefix = '') {
+window.invalidateApiCache = function (actionPrefix = '') {
   if (!actionPrefix) {
     window.clearAllApiCache();
     return;
   }
-  
+
   const prefixLower = actionPrefix.toLowerCase();
   Object.keys(window.gDataCache).forEach(key => {
     if (key.toLowerCase().includes(prefixLower)) {
       delete window.gDataCache[key];
     }
   });
-  
+
   try {
     const keys = Object.keys(localStorage);
     keys.forEach(key => {
@@ -252,8 +252,8 @@ window.invalidateApiCache = function(actionPrefix = '') {
 
 window.ErrorLogger = {
   maxLogs: 20,
-  
-  logError: function(context, error, additionalInfo = {}) {
+
+  logError: function (context, error, additionalInfo = {}) {
     const errorEntry = {
       timestamp: new Date().toISOString(),
       context: context,
@@ -262,7 +262,7 @@ window.ErrorLogger = {
       additionalInfo: additionalInfo,
       url: window.location.href
     };
-    
+
     let logs = [];
     try {
       const storedLogs = localStorage.getItem('error_logs');
@@ -270,22 +270,22 @@ window.ErrorLogger = {
     } catch (e) {
       logs = [];
     }
-    
+
     logs.unshift(errorEntry);
     if (logs.length > this.maxLogs) {
       logs = logs.slice(0, this.maxLogs);
     }
-    
+
     try {
       localStorage.setItem('error_logs', JSON.stringify(logs));
     } catch (e) {
       localStorage.removeItem('error_logs');
     }
-    
+
     console.error(`[ErrorLogger] ${context}:`, error, additionalInfo);
   },
-  
-  getLogs: function() {
+
+  getLogs: function () {
     try {
       const storedLogs = localStorage.getItem('error_logs');
       return storedLogs ? JSON.parse(storedLogs) : [];
@@ -293,8 +293,8 @@ window.ErrorLogger = {
       return [];
     }
   },
-  
-  clearLogs: function() {
+
+  clearLogs: function () {
     localStorage.removeItem('error_logs');
   }
 };
@@ -305,7 +305,7 @@ function getFreshAuthToken() {
   return token;
 }
 
-window.toggleLoading = function(show) {
+window.toggleLoading = function (show) {
   const overlay = document.getElementById('loading-overlay');
   if (overlay) {
     if (show) overlay.classList.remove('hidden');
@@ -317,17 +317,17 @@ window.toggleLoading = function(show) {
 // 💡 5. CENTRAL D1 API FETCH ENGINE WITH STANDALONE POS AUTO-LOGOUT & OFFLINE QUEUE
 // ==============================================================================
 
-window.callApi = async function(action, payload = {}, method = 'POST') {
+window.callApi = async function (action, payload = {}, method = 'POST') {
   let serverPayload = {};
   let baseUrl = getApiWorkerUrl();
   let url = String(baseUrl).trim().replace(/\/+$/, '');
 
   const isReadAction = action.startsWith('get') || action.startsWith('check') || action.startsWith('lookup');
-  
-  const isActualMutation = action.startsWith('save') || 
-                           action.startsWith('update') || 
-                           action.startsWith('delete') || 
-                           action.startsWith('recalculate');
+
+  const isActualMutation = action.startsWith('save') ||
+    action.startsWith('update') ||
+    action.startsWith('delete') ||
+    action.startsWith('recalculate');
 
   const forceRefresh = payload.forceRefresh === true;
   const { forceRefresh: _, ...extractedPayload } = payload;
@@ -368,8 +368,8 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
     }
 
     // 🛡️ Socket Hygiene: cache 'no-store' avoids stale connection pool deadlocks
-    const options = { 
-      method: method, 
+    const options = {
+      method: method,
       headers: headers,
       cache: 'no-store'
     };
@@ -454,7 +454,7 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
       try {
         const errData = await response.clone().json();
         serverMessage = errData && (errData.detail || errData.message) ? (errData.detail || errData.message) : '';
-      } catch (parseErr) {}
+      } catch (parseErr) { }
       throw new Error(`HTTP Error: ${response.status}${serverMessage ? ` - ${serverMessage}` : ''}`);
     }
 
@@ -471,20 +471,20 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
     return result;
 
   } catch (err) {
-    const isNetworkErr = !navigator.onLine || 
-                         err.name === 'TypeError' ||
-                         (err.message && (
-                           err.message.includes('Failed to fetch') ||
-                           err.message.includes('NetworkError') ||
-                           err.message.includes('Load failed') ||
-                           err.message.includes('network')
-                         ));
+    const isNetworkErr = !navigator.onLine ||
+      err.name === 'TypeError' ||
+      (err.message && (
+        err.message.includes('Failed to fetch') ||
+        err.message.includes('NetworkError') ||
+        err.message.includes('Load failed') ||
+        err.message.includes('network')
+      ));
 
     if (isActualMutation && isNetworkErr && window.OfflineSync) {
       console.warn(`[OfflineSync Interceptor] Network error during ${action}. Diverting to IndexedDB Outbox...`);
       await window.OfflineSync.enqueue(action, serverPayload, method);
       window.clearAllApiCache();
-      
+
       window.showToast("SUCCESS", "📶 အင်တာနက်လိုင်း နှေးကွေး/ပြတ်တောက်နေသဖြင့် စက်ထဲတွင် ယာယီသိမ်းထားပါသည် (Offline Mode)။ လိုင်းရသည်နှင့် အလိုအလျောက် ပို့ပေးပါမည်။");
 
       return {
@@ -523,9 +523,9 @@ window.callApi = async function(action, payload = {}, method = 'POST') {
 // 💡 6. BACKGROUND PREFETCHING ENGINE & UNIVERSAL TOAST NOTIFIER
 // ==============================================================================
 
-window.prefetchCoreModules = function() {
+window.prefetchCoreModules = function () {
   window.viewCache = window.viewCache || {};
-  
+
   const views = [
     'dashboard', 'bank-cash', 'income', 'office-kit', 'hr', 'staff',
     'cashier', 'student', 'student-money', 'uniform', 'promotion', 'reports',
@@ -537,20 +537,20 @@ window.prefetchCoreModules = function() {
       fetch(`views/${v}.html`)
         .then(r => r.ok ? r.text() : '')
         .then(html => { if (html) window.viewCache[v] = html; })
-        .catch(() => {});
+        .catch(() => { });
     }
   });
 };
 
-window.showToast = function(type, message) {
+window.showToast = function (type, message) {
   if (document.documentElement.classList.contains('not-authed') && type === 'ERROR') {
     return;
   }
 
   // 🎯 Target Resolver: Supports Main ERP (#toast-container), POS (#pos-toast-box), and PM Cashier (#pm-toast-box)
-  let toastContainer = document.getElementById('toast-container') || 
-                       document.getElementById('pos-toast-box') || 
-                       document.getElementById('pm-toast-box');
+  let toastContainer = document.getElementById('toast-container') ||
+    document.getElementById('pos-toast-box') ||
+    document.getElementById('pm-toast-box');
   if (!toastContainer) return;
 
   let msg = String(message || "").trim();
@@ -559,9 +559,8 @@ window.showToast = function(type, message) {
   }
 
   const toast = document.createElement('div');
-  toast.className = `p-4 rounded-xl shadow-2xl flex items-center gap-3 text-xs font-bold transition-all transform translate-y-5 opacity-0 duration-300 pointer-events-auto bg-slate-900 border ${
-    type === 'SUCCESS' ? 'border-emerald-500 text-emerald-400' : 'border-rose-500 text-rose-400'
-  }`;
+  toast.className = `p-4 rounded-xl shadow-2xl flex items-center gap-3 text-xs font-bold transition-all transform translate-y-5 opacity-0 duration-300 pointer-events-auto bg-slate-900 border ${type === 'SUCCESS' ? 'border-emerald-500 text-emerald-400' : 'border-rose-500 text-rose-400'
+    }`;
 
   const icon = type === 'SUCCESS' ? '<i class="fa-solid fa-circle-check text-base"></i>' : '<i class="fa-solid fa-circle-exclamation text-base"></i>';
   toast.innerHTML = `${icon} <span>${window.escapeHtml(msg)}</span>`;
@@ -574,7 +573,7 @@ window.showToast = function(type, message) {
   }, 4000);
 };
 
-window.cleanNumber = function(val) {
+window.cleanNumber = function (val) {
   if (val === undefined || val === null || val === "") return 0;
   var strVal = String(val).trim();
   var isNegative = (strVal.includes("(") && strVal.includes(")")) || strVal.indexOf("-") === 0;
@@ -584,7 +583,7 @@ window.cleanNumber = function(val) {
   return isNegative ? -num : num;
 };
 
-window.parseIsoDate = function(dStr) {
+window.parseIsoDate = function (dStr) {
   if (!dStr) return null;
   var str = String(dStr).split('T')[0].trim();
   if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(str)) {
@@ -599,7 +598,7 @@ window.parseIsoDate = function(dStr) {
   return isNaN(d.getTime()) ? null : d;
 };
 
-window.isDateInRange = function(rowDateStr, fromDateStr, toDateStr) {
+window.isDateInRange = function (rowDateStr, fromDateStr, toDateStr) {
   if (!fromDateStr && !toDateStr) return true;
   if (!rowDateStr) return false;
 
