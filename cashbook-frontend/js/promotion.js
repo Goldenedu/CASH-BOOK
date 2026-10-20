@@ -39,7 +39,7 @@ function getDynamicFiscalYears() {
  */
 function populatePromotionDropdowns() {
   const fys = getDynamicFiscalYears();
-  
+
   const fySelect = document.getElementById('promo-fy');
   if (fySelect) {
     fySelect.innerHTML = fys.map(f => `<option value="${f.value}" ${f.selected ? 'selected' : ''}>${f.label}</option>`).join('');
@@ -76,17 +76,25 @@ function populatePromotionDropdowns() {
 }
 
 /**
- * 💡 Load Promotion Rates Matrix Data
+ * 💡 Load Promotion Rates Matrix Data & Synchronize Scoped KPI Cards
  */
 async function loadPromotionData(useCache) {
   try {
     if (typeof toggleLoading === 'function') toggleLoading(true);
     populatePromotionDropdowns();
 
-    const res = await callApi('getPromotionData', {});
+    const fyFilterEl = document.getElementById('promo-filter-fy');
+    const selectedFy = fyFilterEl ? fyFilterEl.value : '';
+
+    // 🚀 D1 Quota-Shield: Scoped active FY sent to backend to prevent full scans
+    const res = await callApi('getPromotionData', { fy: selectedFy });
 
     if (res && res.success) {
       gPromotionData = res.data || [];
+
+      // 💡 Render 4-KPI Stats returned from D1 Backend
+      renderPromotionKpis(res.stats || { totalIncome: 0, totalRefund: 0, balance: 0, totalActiveStudents: 0 });
+
       applyPromotionFilters();
     } else {
       if (typeof showToast === 'function') showToast("ERROR", res?.message || "Promotion Rate အချက်အလက်များ ရယူ၍ မရပါ။");
@@ -99,21 +107,45 @@ async function loadPromotionData(useCache) {
 }
 
 /**
+ * 💡 Render 4-KPI Stats Cards with Auto Number Formatting
+ */
+function renderPromotionKpis(stats) {
+  const elInc = document.getElementById('promo-total-income');
+  const elRef = document.getElementById('promo-total-refund');
+  const elBal = document.getElementById('promo-balance');
+  const elAct = document.getElementById('promo-total-active-students');
+
+  if (elInc) elInc.textContent = `${Number(stats.totalIncome || 0).toLocaleString('en-US')} MMK`;
+  if (elRef) elRef.textContent = `${Number(stats.totalRefund || 0).toLocaleString('en-US')} MMK`;
+  if (elBal) elBal.textContent = `${Number(stats.balance || 0).toLocaleString('en-US')} MMK`;
+  if (elAct) elAct.textContent = Number(stats.totalActiveStudents || 0).toLocaleString('en-US');
+}
+
+/**
  * 💡 Apply Search Input & Category/FY Dropdown Filters
  */
-function applyPromotionFilters() {
+function applyPromotionFilters(isFyTriggered = false) {
   const searchInput = document.getElementById('promo-search');
   const fyFilter = document.getElementById('promo-filter-fy');
   const catFilter = document.getElementById('promo-filter-cat');
 
+  const newFyVal = fyFilter ? fyFilter.value : '';
+
+  // ⚡ FY အပြောင်းအလဲဖြစ်ပါက KPI များကို Backend မှ Scoped Reset ချရန် loadPromotionData ခေါ်ယူမည်
+  if (isFyTriggered && newFyVal !== gPromotionFyFilter) {
+    gPromotionFyFilter = newFyVal;
+    loadPromotionData(false);
+    return;
+  }
+
   gPromotionSearch = searchInput ? searchInput.value.toLowerCase().trim() : '';
-  gPromotionFyFilter = fyFilter ? fyFilter.value : '';
+  gPromotionFyFilter = newFyVal;
   gPromotionCatFilter = catFilter ? catFilter.value : '';
 
   let filtered = gPromotionData;
 
   if (gPromotionSearch) {
-    filtered = filtered.filter(item => 
+    filtered = filtered.filter(item =>
       (item.class || '').toLowerCase().includes(gPromotionSearch) ||
       (item.category || '').toLowerCase().includes(gPromotionSearch) ||
       (item.fy || '').toLowerCase().includes(gPromotionSearch) ||
@@ -165,15 +197,15 @@ function renderPromotionTable() {
     const isFyChanged = (idx > 0 && item.fy !== previousFy && item.fy && previousFy);
     previousFy = item.fy || '';
 
-    const rowBorderClass = isFyChanged 
-      ? 'border-t-2 border-indigo-500/60 bg-indigo-500/5' 
+    const rowBorderClass = isFyChanged
+      ? 'border-t-2 border-indigo-500/60 bg-indigo-500/5'
       : 'border-b border-slate-800/40';
 
-    let fyBadgeStyle = 'bg-slate-800 text-slate-300 border-slate-700';
+    let fyBadgeStyle = 'bg-slate-800 text-slate-300';
     if (item.fy === '2026-2027') {
-      fyBadgeStyle = 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 font-black';
+      fyBadgeStyle = 'bg-indigo-500/20 text-indigo-300 font-black';
     } else if (item.fy === '2027-2028') {
-      fyBadgeStyle = 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold';
+      fyBadgeStyle = 'bg-amber-500/20 text-amber-300 font-bold';
     }
 
     const displayNo = Math.floor(parseFloat(item.no || (startIndex + idx + 1)));
@@ -181,7 +213,7 @@ function renderPromotionTable() {
     return `
       <tr class="hover:bg-slate-800/40 transition ${rowBorderClass}">
         <td class="text-center text-slate-400 py-3">${displayNo}</td>
-        <td class="py-3"><span class="inline-block px-2 py-0.5 rounded text-[10px] border ${fyBadgeStyle}">${window.escapeHtml(item.fy || 'N/A')}</span></td>
+        <td class="py-3"><span class="inline-block px-2 py-0.5 rounded text-[10px] ${fyBadgeStyle}">${window.escapeHtml(item.fy || 'N/A')}</span></td>
         <td class="font-bold text-white py-3">${window.escapeHtml(item.class || '')}</td>
         <td class="text-slate-300 py-3">${window.escapeHtml(item.category || '')}</td>
         <td class="text-right font-bold text-indigo-400 font-mono py-3">${(item.registration || 0).toLocaleString()}</td>
@@ -365,7 +397,7 @@ function exportToCSVPromotion() {
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `Promotion_Matrix_Export_${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = `Promotion_Matrix_Export_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
 }
 

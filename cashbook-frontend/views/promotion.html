@@ -1,6 +1,53 @@
 <!-- views/promotion.html -->
 <div class="space-y-5">
 
+  <!-- 💡 ၁။ Top KPI Stats Cards Grid (Consolidated D1 Scoped Metrics) -->
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <!-- 1. Total Income -->
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400">
+        <i class="fa-solid fa-arrow-trend-up text-xl"></i>
+      </div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Total Income (MMK)</p>
+        <h3 id="promo-total-income" class="text-base font-extrabold text-white mt-1">0 MMK</h3>
+      </div>
+    </div>
+
+    <!-- 2. Total Refund -->
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-rose-500/10 text-rose-400">
+        <i class="fa-solid fa-arrow-trend-down text-xl"></i>
+      </div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Total Refund (MMK)</p>
+        <h3 id="promo-total-refund" class="text-base font-extrabold text-white mt-1">0 MMK</h3>
+      </div>
+    </div>
+
+    <!-- 3. Balance -->
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-indigo-500/10 text-indigo-400">
+        <i class="fa-solid fa-scale-balanced text-xl"></i>
+      </div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Balance (MMK)</p>
+        <h3 id="promo-balance" class="text-base font-extrabold text-white mt-1">0 MMK</h3>
+      </div>
+    </div>
+
+    <!-- 4. Total Active Student -->
+    <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+      <div class="p-3.5 rounded-lg bg-sky-500/10 text-sky-400">
+        <i class="fa-solid fa-user-check text-xl"></i>
+      </div>
+      <div>
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Total Active Student</p>
+        <h3 id="promo-total-active-students" class="text-base font-extrabold text-white mt-1">0</h3>
+      </div>
+    </div>
+  </div>
+
   <!-- ၁။ Control Action Bar & Filters -->
   <div
     class="flex flex-col md:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
@@ -17,7 +64,7 @@
 
       <!-- FY Filter -->
       <div class="w-full sm:w-44">
-        <select id="promo-filter-fy" onchange="applyPromotionFilters()"
+        <select id="promo-filter-fy" onchange="applyPromotionFilters(true)"
           class="w-full text-xs bg-[#0f172a] border border-slate-800 text-white rounded-lg px-3 py-2 outline-none focus:border-indigo-500 transition-all font-bold">
           <option value="">-- All FY --</option>
         </select>

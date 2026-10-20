@@ -8,7 +8,7 @@
  * ==============================================================================
  */
 
-import { normalizeFyClean, generateUniqueId } from './utils.js';
+import { normalizeFyClean, generateUniqueId, getCurrentAcademicYear } from './utils.js';
 
 /**
  * 💡 Fetch Promotion Fee Rates Matrix Data
@@ -16,7 +16,31 @@ import { normalizeFyClean, generateUniqueId } from './utils.js';
 export async function getPromotionData(db, body) {
   try {
     const search = String(body.searchVal || "").trim();
+    // 🚀 Active FY Resolution (Calendar-Aligned Fallback & Auto-Reset per Year)
+    const activeFy = normalizeFyClean(body.fy || getCurrentAcademicYear());
     const fyFilter = body.fy ? normalizeFyClean(body.fy) : "";
+
+    // ⚡ D1 QUOTA-SHIELD: Parallel Scoped Index Seeks (Zero Full-Table Scan)
+    const [incStatsRes, stuStatsRes] = await Promise.all([
+      db.prepare(`
+        SELECT 
+          COALESCE(SUM(credit), 0) as totalIncome,
+          COALESCE(SUM(debit), 0) as totalRefund
+        FROM income 
+        WHERE fy IN (?, ?)
+      `).bind(activeFy, `FY ${activeFy}`).first(),
+
+      db.prepare(`
+        SELECT COUNT(id) as totalActiveStudents 
+        FROM student 
+        WHERE fy IN (?, ?) AND status = 'Active' AND COALESCE(transfer_date, '') = ''
+      `).bind(activeFy, `FY ${activeFy}`).first()
+    ]);
+
+    const totalIncome = parseFloat(incStatsRes?.totalIncome || 0);
+    const totalRefund = parseFloat(incStatsRes?.totalRefund || 0);
+    const balance = totalIncome - totalRefund;
+    const totalActiveStudents = parseInt(stuStatsRes?.totalActiveStudents || 0, 10);
 
     let whereClauses = [];
     let params = [];
@@ -35,7 +59,7 @@ export async function getPromotionData(db, body) {
     }
 
     const whereSql = whereClauses.length > 0 ? ` WHERE ${whereClauses.join(' AND ')}` : '';
-    
+
     // 🚀 OPTIMIZATION: Avoid SELECT *, fetch only necessary columns
     const query = `
       SELECT id, no, fy, class, category, registration, original_price, pro_a, pro_b, pro_c, pro_d, pro_e, half_scholar, full_scholar, remark, uniqueid 
@@ -70,7 +94,13 @@ export async function getPromotionData(db, body) {
     return {
       success: true,
       data: list,
-      totalRows: list.length
+      totalRows: list.length,
+      stats: {
+        totalIncome,
+        totalRefund,
+        balance,
+        totalActiveStudents
+      }
     };
   } catch (err) {
     console.error("Error in getPromotionData handler:", err);
@@ -96,7 +126,7 @@ export async function savePromotionEntry(db, userSession, body) {
     // 💡 Duplicate Check: Prevent identical FY + Class + Category rate rows
     // 🚀 ULTRA-OPTIMIZATION: Replace OR with IN() to leverage Index Seek
     if (className && category) {
-      
+
       // 🚀 Index-Friendly Case-Insensitive Seek (Uses idx_promotion_fy_class_cat)
       const existing = await db.prepare(
         `SELECT id FROM promotion WHERE fy IN (?, ?) AND class = ? COLLATE NOCASE AND category = ? COLLATE NOCASE`
