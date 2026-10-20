@@ -62,6 +62,7 @@ var gHrPayrollFilteredData = [];
 var gHrPayrollPage = 1;
 var gHrPayrollLimit = 20;
 var gHrPayrollTotalRows = 0;
+var gHrPayrollStats = { totalIncome: 0, totalExpense: 0, balance: 0 }; // 💡 Memory-backed KPI Cache
 
 var gHrStaffFT = []; // Full-Time Staff Cache
 var gHrStaffPT = []; // Part-Time Staff Cache
@@ -112,12 +113,33 @@ function adjustHrKpiFontSizes() {
 
 window.addEventListener('resize', adjustHrKpiFontSizes);
 
+/**
+ * 💡 Render KPI Stats from Memory or Calculate on-the-fly (0 D1 Quota Cost)
+ */
+function updateAndRenderHrStats() {
+  if (!gHrPayrollStats || (gHrPayrollStats.totalIncome === 0 && gHrPayrollStats.totalExpense === 0 && gHrPayrollData.length > 0)) {
+    let totInc = 0;
+    let totExp = 0;
+    gHrPayrollData.forEach(r => {
+      totInc += Number(r.debit || 0);
+      totExp += Number(r.credit || 0);
+    });
+    gHrPayrollStats = {
+      totalIncome: totInc,
+      totalExpense: totExp,
+      balance: totInc - totExp
+    };
+  }
+  renderHrPayrollStats(gHrPayrollStats);
+}
+
 async function loadHrPayrollData(useCache = true) {
   const hasDataInMemory = Array.isArray(gHrPayrollData) && gHrPayrollData.length > 0;
 
   // ⚡ 1. D1 QUOTA-SHIELD (0ms INSTANT RENDER):
-  // စာရင်းများ Memory ထဲတွင် ရှိပြီးသားဖြစ်ပြီး useCache ဖြစ်ပါက Loading မပြဘဲ ချက်ချင်း Render လုပ်မည်
+  // စာရင်းများ Memory ထဲတွင် ရှိပြီးသားဖြစ်ပါက KPI Stats ရော Table ပါ Loading မပြဘဲ Memory မှ ချက်ချင်း Render လုပ်မည် (D1 Quota = 0)
   if (useCache && hasDataInMemory) {
+    updateAndRenderHrStats();
     applyHrPayrollSearchAndRender();
     return;
   }
@@ -149,12 +171,14 @@ async function loadHrPayrollData(useCache = true) {
       const finalIncome = serverStats.totalIncome !== undefined && serverStats.totalIncome > 0 ? serverStats.totalIncome : totInc;
       const finalExpense = serverStats.totalExpense !== undefined && serverStats.totalExpense > 0 ? serverStats.totalExpense : totExp;
 
-      renderHrPayrollStats({
+      // 💡 Stats တန်ဖိုးများကို Cache ထဲတွင် မှတ်သားထားမည်
+      gHrPayrollStats = {
         totalIncome: finalIncome,
         totalExpense: finalExpense,
         balance: finalIncome - finalExpense
-      });
+      };
 
+      renderHrPayrollStats(gHrPayrollStats);
       applyHrPayrollSearchAndRender();
     }
 
