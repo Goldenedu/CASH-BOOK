@@ -52,11 +52,11 @@ function autoDetectGender(nameStr) {
   const clean = String(nameStr).trim();
 
   if (clean.startsWith('မေ') || clean.startsWith('ဒေါ်') || clean.startsWith('နန်း') || clean.startsWith('နော်') ||
-      /^(May|Daw|Nang|Naw)\b/i.test(clean) || clean.includes('Daw ') || clean.includes('ဒေါ်')) {
+    /^(May|Daw|Nang|Naw)\b/i.test(clean) || clean.includes('Daw ') || clean.includes('ဒေါ်')) {
     return 'Female';
   }
   if (clean.startsWith('မောင်') || clean.startsWith('ကို') || clean.startsWith('ဦး') ||
-      clean.startsWith('မင်း') || /^(Mg|Ko|U|Min)\b/i.test(clean) || /^(မောင်|ကို|ဦး|မင်း)/.test(clean)) {
+    clean.startsWith('မင်း') || /^(Mg|Ko|U|Min)\b/i.test(clean) || /^(မောင်|ကို|ဦး|မင်း)/.test(clean)) {
     return 'Male';
   }
   if ((clean.startsWith('မ') && !clean.startsWith('မောင်') && !clean.startsWith('မင်း')) || /^(Ma)\b/i.test(clean)) {
@@ -366,7 +366,7 @@ function renderStudentTable() {
     return `
       <tr class="hover:bg-slate-800/20 text-slate-300">
         <td class="text-center font-mono font-bold text-slate-400 py-3 px-2">${displayNo}</td>
-        <td class="py-3 px-2"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">${escapeHtml(stuStatusVal)}</span></td>
+        <td class="py-3 px-2"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/10 text-indigo-300">${escapeHtml(stuStatusVal)}</span></td>
         <td class="font-mono text-xs py-3 px-2">${escapeHtml(displayDate || '-')}</td>
         <td class="font-mono font-bold text-indigo-300 py-3 px-2">${escapeHtml(row.fy || '-')}</td>
         <td class="font-bold text-slate-200 font-mono py-3 px-2">${escapeHtml(displayFyid)}</td>
@@ -375,7 +375,7 @@ function renderStudentTable() {
         <td class="py-3 px-2"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400">${escapeHtml(row.category || '-')}</span></td>
         <td class="py-3 px-2">${escapeHtml(row.promo || '-')}</td>
         <td class="py-3 px-2">
-          <span class="px-2 py-0.5 rounded text-[10px] font-bold ${!isInactive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}">
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold ${!isInactive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}">
             ${escapeHtml(finalStatus)}
           </span>
         </td>
@@ -419,7 +419,7 @@ function updatePaginationStudent(currentCount) {
 function changePageStudent(dir) {
   const state = window.StudentState;
   const totalFiltered = filterStudentData(state.activeData, state.searchVal, state.fyFilter, state.gradeFilter).length;
-  
+
   if (dir === -1 && state.page > 1) {
     state.page--;
     renderStudentTable();
@@ -488,7 +488,7 @@ function onOldStudentIdLookup() {
     const lookupId = idInput.value.trim();
     if (!lookupId) return;
 
-    let match = (window.StudentState.activeData || []).find(r => 
+    let match = (window.StudentState.activeData || []).find(r =>
       String(r.student_id || r.studentId || r.id || '') === lookupId ||
       String(r.fyid || '').toLowerCase().endsWith(`-stu-${lookupId.padStart(4, '0')}`)
     );
@@ -593,7 +593,7 @@ async function saveStudentForm(e) {
       if (typeof showToast === 'function') {
         showToast("SUCCESS", isAdd ? "ကျောင်းသားသစ် မှတ်တမ်း အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။" : "ကျောင်းသား မှတ်တမ်း ပြင်ဆင်ခြင်း အောင်မြင်ပါသည်။");
       }
-      
+
       if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
       window.studentsByFyCache = {};
       window.gStudentCacheForMoney = {};
@@ -749,29 +749,29 @@ function exportToCSVStudent() {
     const fyidClean = sanitizeFyidStr(row.fyid || '');
 
     csv += `${displayNo},` +
-           `${safeCsvCell(row.stu_status || row.stuStatus || '')},` +
-           `${safeCsvCell(row.date || '')},` +
-           `${safeCsvCell(row.fy || '')},` +
-           `${safeCsvCell(row.student_id || row.id || '')},` +
-           `${safeCsvCell(fyidClean)},` +
-           `${safeCsvCell(row.name || '')},` +
-           `${safeCsvCell(row.class || '')},` +
-           `${safeCsvCell(row.category || '')},` +
-           `${safeCsvCell(row.promo || '')},` +
-           `${safeCsvCell(stat)},` +
-           `${safeCsvCell(genderVal)},` +
-           `${safeCsvCell(transDate)},` +
-           `${safeCsvCell(row.parents_name || row.parentsName || '')},` +
-           `${safeCsvCell(row.phone_no || row.phoneNo || '')},` +
-           `${safeCsvCell(row.address || '')},` +
-           `${safeCsvCell(row.uniqueid || row.uniqueId || '')}\n`;
+      `${safeCsvCell(row.stu_status || row.stuStatus || '')},` +
+      `${safeCsvCell(row.date || '')},` +
+      `${safeCsvCell(row.fy || '')},` +
+      `${safeCsvCell(row.student_id || row.id || '')},` +
+      `${safeCsvCell(fyidClean)},` +
+      `${safeCsvCell(row.name || '')},` +
+      `${safeCsvCell(row.class || '')},` +
+      `${safeCsvCell(row.category || '')},` +
+      `${safeCsvCell(row.promo || '')},` +
+      `${safeCsvCell(stat)},` +
+      `${safeCsvCell(genderVal)},` +
+      `${safeCsvCell(transDate)},` +
+      `${safeCsvCell(row.parents_name || row.parentsName || '')},` +
+      `${safeCsvCell(row.phone_no || row.phoneNo || '')},` +
+      `${safeCsvCell(row.address || '')},` +
+      `${safeCsvCell(row.uniqueid || row.uniqueId || '')}\n`;
   });
 
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement("a");
   const url = URL.createObjectURL(blob);
   link.setAttribute("href", url);
-  link.setAttribute("download", `student_list_${new Date().toISOString().slice(0,10)}.csv`);
+  link.setAttribute("download", `student_list_${new Date().toISOString().slice(0, 10)}.csv`);
   link.style.visibility = 'hidden';
   document.body.appendChild(link);
   link.click();

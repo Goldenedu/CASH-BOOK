@@ -52,13 +52,13 @@ function autoDetectGender(nameStr) {
 
   // ၁။ မိန်းကလေး ရှေ့စာလုံးများနှင့် တိုင်းရင်းသူအမည်များ (Daw, မေ, ဒေါ်, နန်း, နော်)
   if (clean.startsWith('မေ') || clean.startsWith('ဒေါ်') || clean.startsWith('နန်း') || clean.startsWith('နော်') ||
-      /^(May|Daw|Nang|Naw)\b/i.test(clean) || clean.includes('Daw ') || clean.includes('ဒေါ်')) {
+    /^(May|Daw|Nang|Naw)\b/i.test(clean) || clean.includes('Daw ') || clean.includes('ဒေါ်')) {
     return 'Female';
   }
 
   // ၂။ ယောကျ်ားလေး ရှေ့စာလုံးများ
   if (clean.startsWith('မောင်') || clean.startsWith('ကို') || clean.startsWith('ဦး') ||
-      clean.startsWith('မင်း') || /^(Mg|Ko|U|Min)\b/i.test(clean) || /^(မောင်|ကို|ဦး|မင်း)/.test(clean)) {
+    clean.startsWith('မင်း') || /^(Mg|Ko|U|Min)\b/i.test(clean) || /^(မောင်|ကို|ဦး|မင်း)/.test(clean)) {
     return 'Male';
   }
 
@@ -232,7 +232,7 @@ async function loadStaffData(useCache = false) {
 
     if (res && res.success) {
       gStaffData = res.data || [];
-      
+
       let actCount = 0;
       let maleCount = 0;
       let femaleCount = 0;
@@ -245,7 +245,7 @@ async function loadStaffData(useCache = false) {
 
         if (!isInactive) {
           actCount++;
-          
+
           const rawName = String(item.name || item.staffIdName || item.staff_idname || '');
           const detectedG = autoDetectGender(rawName);
           let g = String(item.gender || '').toLowerCase().trim();
@@ -351,7 +351,7 @@ function renderStaffTable(rawData) {
     tbody.innerHTML = pageItems.map((item, idx) => {
       const uid = String(item.uniqueid || item.uniqueId || '');
       const joinDate = String(item.join_date || item.joinDate || '');
-      
+
       let staffIdName = String(item.staff_idname || item.staffIdName || '');
       if (!staffIdName || staffIdName === 'undefined') {
         const pId = String(item.staff_id || item.id || (startIndex + idx + 1)).padStart(3, '0');
@@ -362,7 +362,7 @@ function renderStaffTable(rawData) {
       const salaryGrade = String(item.salary_grade || item.salaryGrade || 'Non');
       const displayNo = parseInt(item.no, 10) || (startIndex + idx + 1);
       const workingDays = parseInt(item.working_days ?? item.workingDays ?? 26, 10);
-      
+
       const basicAmt = Number(item.basic_amt ?? item.basicAmt ?? 0);
       const extraAmt = Number(item.extra_amt ?? item.extraAmt ?? 0);
       const totalSalary = Number(item.total_salary ?? item.totalSalary ?? 0);
@@ -379,8 +379,8 @@ function renderStaffTable(rawData) {
       const isResigned = Boolean(item.resigned_date || item.resignedDate);
       const isInactive = String(item.status || '').toLowerCase() === 'inactive' || isResigned;
       const statusBadge = isInactive
-        ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Inactive</span>'
-        : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Active</span>';
+        ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400">Inactive</span>'
+        : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400">Active</span>';
 
       const detectedGender = String(item.gender || autoDetectGender(item.name || staffIdName));
 
@@ -420,7 +420,7 @@ function renderStaffTable(rawData) {
     tbody.innerHTML = pageItems.map((item, idx) => {
       const uid = String(item.uniqueid || item.uniqueId || '');
       const joinDate = String(item.join_date || item.joinDate || '');
-      
+
       let staffIdName = String(item.staff_idname || item.staffIdName || '');
       if (!staffIdName || staffIdName === 'undefined') {
         const pId = String(item.staff_id || item.id || (startIndex + idx + 1)).padStart(3, '0');
@@ -438,8 +438,8 @@ function renderStaffTable(rawData) {
       const isResigned = Boolean(item.resigned_date || item.resignedDate);
       const isInactive = String(item.status || '').toLowerCase() === 'inactive' || isResigned;
       const statusBadge = isInactive
-        ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">Inactive</span>'
-        : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Active</span>';
+        ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400">Inactive</span>'
+        : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400">Active</span>';
 
       const detectedGender = String(item.gender || autoDetectGender(item.name || staffIdName));
 
@@ -708,7 +708,7 @@ async function saveStaffForm(event) {
   const extra = parseFloat(document.getElementById('staff-extra')?.value || 0);
   const daysVal = parseFloat(document.getElementById('staff-working-days')?.value);
   const days = isNaN(daysVal) ? 26 : Math.max(0, daysVal);
-  
+
   const resignedDate = document.getElementById('staff-resigned')?.value?.trim() || '';
   const isResigned = Boolean(resignedDate);
   const calculatedStatus = isResigned ? 'Inactive' : 'Active';
@@ -814,31 +814,31 @@ function exportToCSVStaff() {
       const cleanStaffIdName = rawStaffIdName.replace(/\.0/g, '');
 
       csv += `${displayNo},` +
-             `${safeCsvCell(r.join_date || r.joinDate || '')},` +
-             `"Full Time",` +
-             `${safeCsvCell(r.staff_id || r.staffId || '')},` +
-             `${safeCsvCell(r.name || '')},` +
-             `${safeCsvCell(cleanStaffIdName)},` +
-             `${safeCsvCell(r.education || '')},` +
-             `${safeCsvCell(r.position || '')},` +
-             `${safeCsvCell(r.salary_grade || r.salaryGrade || '')},` +
-             `${r.working_days || r.workingDays || 26},` +
-             `${r.basic_amt || r.basicAmt || 0},` +
-             `${r.extra_amt || r.extraAmt || 0},` +
-             `${r.total_salary || r.totalSalary || 0},` +
-             `${r.bonus || 0},` +
-             `${r.fund || 0},` +
-             `${r.total_net_amt || r.totalNetAmt || 0},` +
-             `${safeCsvCell(r.resigned_date || r.resignedDate || '')},` +
-             `${safeCsvCell(r.status || 'Active')},` +
-             `${safeCsvCell(r.gender || 'Male')},` +
-             `${safeCsvCell(r.nrc_no || r.nrcNo || '')},` +
-             `${safeCsvCell(r.bank_account || r.bankAccount || '')},` +
-             `${safeCsvCell(r.phone_no || r.phoneNo || '')},` +
-             `${safeCsvCell(r.email || '')},` +
-             `${safeCsvCell(r.fund_date || r.fundDate || '')},` +
-             `${r.unpaid_bonus || r.unpaidBonus || 0},` +
-             `${r.unpaid_fund || r.unpaidFund || 0}\n`;
+        `${safeCsvCell(r.join_date || r.joinDate || '')},` +
+        `"Full Time",` +
+        `${safeCsvCell(r.staff_id || r.staffId || '')},` +
+        `${safeCsvCell(r.name || '')},` +
+        `${safeCsvCell(cleanStaffIdName)},` +
+        `${safeCsvCell(r.education || '')},` +
+        `${safeCsvCell(r.position || '')},` +
+        `${safeCsvCell(r.salary_grade || r.salaryGrade || '')},` +
+        `${r.working_days || r.workingDays || 26},` +
+        `${r.basic_amt || r.basicAmt || 0},` +
+        `${r.extra_amt || r.extraAmt || 0},` +
+        `${r.total_salary || r.totalSalary || 0},` +
+        `${r.bonus || 0},` +
+        `${r.fund || 0},` +
+        `${r.total_net_amt || r.totalNetAmt || 0},` +
+        `${safeCsvCell(r.resigned_date || r.resignedDate || '')},` +
+        `${safeCsvCell(r.status || 'Active')},` +
+        `${safeCsvCell(r.gender || 'Male')},` +
+        `${safeCsvCell(r.nrc_no || r.nrcNo || '')},` +
+        `${safeCsvCell(r.bank_account || r.bankAccount || '')},` +
+        `${safeCsvCell(r.phone_no || r.phoneNo || '')},` +
+        `${safeCsvCell(r.email || '')},` +
+        `${safeCsvCell(r.fund_date || r.fundDate || '')},` +
+        `${r.unpaid_bonus || r.unpaidBonus || 0},` +
+        `${r.unpaid_fund || r.unpaidFund || 0}\n`;
     });
   } else {
     csv = "NO,JOIN DATE,CATEGORY,STAFF ID,NAME,STAFF IDNAME,EDUCATION,POSITION,TOTAL SALARY,TOTAL NET AMT,RESIGNED DATE,STATUS,GENDER,NRC NO,BANK ACCOUNT,PHONE NO,EMAIL\n";
@@ -848,22 +848,22 @@ function exportToCSVStaff() {
       const cleanStaffIdName = rawStaffIdName.replace(/\.0/g, '');
 
       csv += `${displayNo},` +
-             `${safeCsvCell(r.join_date || r.joinDate || '')},` +
-             `"Part Time",` +
-             `${safeCsvCell(r.staff_id || r.staffId || '')},` +
-             `${safeCsvCell(r.name || '')},` +
-             `${safeCsvCell(cleanStaffIdName)},` +
-             `${safeCsvCell(r.education || '')},` +
-             `${safeCsvCell(r.position || '')},` +
-             `${r.total_salary || r.totalSalary || 0},` +
-             `${r.total_net_amt || r.totalNetAmt || 0},` +
-             `${safeCsvCell(r.resigned_date || r.resignedDate || '')},` +
-             `${safeCsvCell(r.status || 'Active')},` +
-             `${safeCsvCell(r.gender || 'Male')},` +
-             `${safeCsvCell(r.nrc_no || r.nrcNo || '')},` +
-             `${safeCsvCell(r.bank_account || r.bankAccount || '')},` +
-             `${safeCsvCell(r.phone_no || r.phoneNo || '')},` +
-             `${safeCsvCell(r.email || '')}\n`;
+        `${safeCsvCell(r.join_date || r.joinDate || '')},` +
+        `"Part Time",` +
+        `${safeCsvCell(r.staff_id || r.staffId || '')},` +
+        `${safeCsvCell(r.name || '')},` +
+        `${safeCsvCell(cleanStaffIdName)},` +
+        `${safeCsvCell(r.education || '')},` +
+        `${safeCsvCell(r.position || '')},` +
+        `${r.total_salary || r.totalSalary || 0},` +
+        `${r.total_net_amt || r.totalNetAmt || 0},` +
+        `${safeCsvCell(r.resigned_date || r.resignedDate || '')},` +
+        `${safeCsvCell(r.status || 'Active')},` +
+        `${safeCsvCell(r.gender || 'Male')},` +
+        `${safeCsvCell(r.nrc_no || r.nrcNo || '')},` +
+        `${safeCsvCell(r.bank_account || r.bankAccount || '')},` +
+        `${safeCsvCell(r.phone_no || r.phoneNo || '')},` +
+        `${safeCsvCell(r.email || '')}\n`;
     });
   }
 
@@ -871,7 +871,7 @@ function exportToCSVStaff() {
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `Staff_${gStaffCategory.replace(/\s+/g, '_')}_Export_${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = `Staff_${gStaffCategory.replace(/\s+/g, '_')}_Export_${new Date().toISOString().slice(0, 10)}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

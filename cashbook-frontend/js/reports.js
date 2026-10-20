@@ -236,7 +236,7 @@ function exportToCSVReportFinancial() {
 // ==========================================
 
 var gIncomeDetailPage = 1;
-var gIncomeDetailLimit = 50; 
+var gIncomeDetailLimit = 50;
 var searchTimeoutReportIncome = null;
 
 async function loadReportIncomeData(forceRefresh = false, isPageChange = false) {
@@ -244,7 +244,7 @@ async function loadReportIncomeData(forceRefresh = false, isPageChange = false) 
     const fyVal = document.getElementById('report-income-fy')?.value || '2026-2027';
     const searchVal = document.getElementById('report-income-search')?.value || '';
     const unpaidFilterEl = document.getElementById('report-income-unpaid-filter');
-    
+
     let unpaidMonthLabel = '';
     // Unpaid Filter ရွေးထားပါက၊ လအမည်အတိအကျ (e.g., "Sep-26") ကို Backend သို့ လှမ်းပို့ပေးပါမည်
     if (unpaidFilterEl && unpaidFilterEl.value) {
@@ -252,26 +252,26 @@ async function loadReportIncomeData(forceRefresh = false, isPageChange = false) 
     }
 
     if (!isPageChange) {
-      gIncomeDetailPage = 1; 
+      gIncomeDetailPage = 1;
     }
 
     safeShowLoading(true);
 
-    const res = await callApi('getIncomeDetailReportData', { 
+    const res = await callApi('getIncomeDetailReportData', {
       fy: fyVal,
       page: gIncomeDetailPage,
       limit: gIncomeDetailLimit,
       searchVal: searchVal,
       unpaidMonthLabel: unpaidMonthLabel,
-      forceRefresh: forceRefresh 
+      forceRefresh: forceRefresh
     });
 
     if (res && res.success) {
       const currentUnpaidVal = unpaidFilterEl ? unpaidFilterEl.value : "";
       gIncomeDetailRawData = res;
-      
+
       if (!currentUnpaidVal) {
-         populateIncomeUnpaidFilter();
+        populateIncomeUnpaidFilter();
       }
       renderIncomeDetailMatrixTable();
     }
@@ -291,21 +291,21 @@ function populateIncomeUnpaidFilter() {
 
   const headers = gIncomeDetailRawData.headers;
   const currentVal = filterEl.value;
-  
+
   let html = '<option value="">-- Show All Students --</option>';
-  
+
   // Headers index 14 မှစ၍ (လများ) ကို ရွေးချယ်နိုင်ရန် ပြသခြင်း
   for (let i = 14; i < headers.length - 1; i++) {
     html += `<option value="${headers[i]}" ${headers[i] === currentVal ? 'selected' : ''}>Unpaid up to ${headers[i]}</option>`;
   }
-  
+
   filterEl.innerHTML = html;
 }
 
 function onSearchInputReportIncome() {
   clearTimeout(searchTimeoutReportIncome);
   searchTimeoutReportIncome = setTimeout(() => {
-    loadReportIncomeData(true, false); 
+    loadReportIncomeData(true, false);
   }, 500);
 }
 
@@ -317,11 +317,11 @@ function changePageReportIncome(delta) {
   if (!gIncomeDetailRawData) return;
   const totalRows = gIncomeDetailRawData.totalRows || 0;
   const totalPages = Math.ceil(totalRows / gIncomeDetailLimit) || 1;
-  
+
   const newPage = gIncomeDetailPage + delta;
   if (newPage >= 1 && newPage <= totalPages) {
     gIncomeDetailPage = newPage;
-    loadReportIncomeData(true, true); 
+    loadReportIncomeData(true, true);
   }
 }
 
@@ -332,17 +332,17 @@ function renderIncomeDetailMatrixTable() {
   const headers = gIncomeDetailRawData.headers || [];
   const rawData = gIncomeDetailRawData.data || [];
   const grandTotalRow = gIncomeDetailRawData.grandTotalRow || [];
-  
+
   const totalRows = gIncomeDetailRawData.totalRows || 0;
-  
+
   const startIndex = (gIncomeDetailPage - 1) * gIncomeDetailLimit;
-  const endIndex = Math.min(startIndex + rawData.length, totalRows); 
-  
+  const endIndex = Math.min(startIndex + rawData.length, totalRows);
+
   const infoEl = document.getElementById('report-income-pagination-info');
   if (infoEl) {
     infoEl.innerHTML = `Showing <span class="text-sky-400 font-extrabold">${totalRows === 0 ? 0 : startIndex + 1}</span> to <span class="text-sky-400 font-extrabold">${endIndex}</span> of <span class="text-sky-400 font-extrabold">${totalRows.toLocaleString()}</span> entries`;
   }
-  
+
   const btnPrev = document.getElementById('report-income-btn-prev');
   if (btnPrev) btnPrev.disabled = (gIncomeDetailPage <= 1);
   const btnNext = document.getElementById('report-income-btn-next');
@@ -374,8 +374,8 @@ function renderIncomeDetailMatrixTable() {
           bodyHtml += `<td class="px-3 py-2 border border-slate-800/60"><span class="px-2 py-0.5 rounded text-[10px] border ${promoBadge}">${window.escapeHtml(cell || '-')}</span></td>`;
         } else if (i === 8) {
           const isAct = String(cell || '').toLowerCase() === 'active';
-          const statBadge = isAct ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 font-bold' : 'bg-rose-500/10 text-rose-400 border-rose-500/20 font-bold';
-          bodyHtml += `<td class="px-3 py-2 border border-slate-800/60"><span class="px-2 py-0.5 rounded text-[10px] border ${statBadge}">${window.escapeHtml(cell || 'Active')}</span></td>`;
+          const statBadge = isAct ? 'bg-emerald-500/10 text-emerald-400 font-bold' : 'bg-rose-500/10 text-rose-400 font-bold';
+          bodyHtml += `<td class="px-3 py-2 border border-slate-800/60"><span class="px-2 py-0.5 rounded text-[10px] ${statBadge}">${window.escapeHtml(cell || 'Active')}</span></td>`;
         } else if (i >= 10) {
           const numVal = parseFloat(cell) || 0;
           bodyHtml += `<td class="px-3 py-2 border border-slate-800/60 text-right font-mono font-bold ${i === row.length - 1 ? 'text-emerald-300 bg-emerald-500/5' : 'text-slate-300'}">${numVal !== 0 ? formatNumWithCommas(numVal) : '-'}</td>`;
@@ -595,7 +595,7 @@ function renderStudentReportTables() {
                 <td class="py-2.5 px-3 text-right font-mono font-bold text-teal-300">${formatNumWithCommas(r[4])}</td>
                 <td class="py-2.5 px-3 text-right font-mono font-bold text-teal-300">${formatNumWithCommas(r[5])}</td>
                 <td class="py-2.5 px-3 text-right font-mono font-black text-emerald-300">${formatNumWithCommas(r[6])}</td>
-                <td class="py-2.5 px-3 text-right font-mono font-bold text-rose-400"><span class="px-2 py-0.5 rounded text-[10px] bg-rose-500/10 border border-rose-500/20">${formatNumWithCommas(r[7])}</span></td>
+                <td class="py-2.5 px-3 text-right font-mono font-bold text-rose-400"><span class="px-2 py-0.5 rounded text-[10px] bg-rose-500/10">${formatNumWithCommas(r[7])}</span></td>
                 <td class="py-2.5 px-3 text-right font-mono text-slate-300">${formatNumWithCommas(r[8])}</td>
                 <td class="py-2.5 px-3 text-right font-mono text-slate-300">${formatNumWithCommas(r[9])}</td>
               </tr>
@@ -741,13 +741,13 @@ function exportToCSVReportStaffFund() {
   let csv = "NO,FUND DATE,STAFF ID,STAFF NAME,BONUS BALANCE,FUND BALANCE,TOTAL BALANCES,STATUS\n";
   list.forEach((r, i) => {
     csv += `${r.no || i + 1},` +
-           `${window.safeCsvCell(r.fundDate || '')},` +
-           `${window.safeCsvCell(cleanIntegerStr(r.staffId))},` +
-           `${window.safeCsvCell(r.name || '')},` +
-           `${r.bonusBalance || 0},` +
-           `${r.fundBalance || 0},` +
-           `${r.totalBalances || 0},` +
-           `${window.safeCsvCell(r.status || 'Active')}\n`;
+      `${window.safeCsvCell(r.fundDate || '')},` +
+      `${window.safeCsvCell(cleanIntegerStr(r.staffId))},` +
+      `${window.safeCsvCell(r.name || '')},` +
+      `${r.bonusBalance || 0},` +
+      `${r.fundBalance || 0},` +
+      `${r.totalBalances || 0},` +
+      `${window.safeCsvCell(r.status || 'Active')}\n`;
   });
 
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
