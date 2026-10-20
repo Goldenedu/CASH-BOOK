@@ -123,7 +123,7 @@ function updateHeaderMetadata(username) {
   const formattedHours = String(hours).padStart(2, '0');
   const formattedTime = `${formattedHours}:${minutes} ${ampm}`;
 
-  metaEl.textContent = `${currentFyStr} | ${dayName} | ${formattedTime} | User: ${activeUser}`;
+  metaEl.textContent = `${currentFyStr} | ${dayName} | ${formattedTime} | ${activeUser}`;
 }
 
 if (!window.headerClockInterval) {
@@ -524,8 +524,8 @@ if (typeof window.showToast !== 'function') {
     const isError = String(type).toUpperCase() === 'ERROR';
     const toast = document.createElement('div');
     toast.className = `pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl text-xs font-bold shadow-2xl transition-all duration-300 animate-in fade-in slide-in-from-top-4 ${isError
-        ? 'bg-[#1e1017] text-rose-300 border border-rose-500/30'
-        : 'bg-[#0c1e18] text-emerald-300 border border-emerald-500/30'
+      ? 'bg-[#1e1017] text-rose-300 border border-rose-500/30'
+      : 'bg-[#0c1e18] text-emerald-300 border border-emerald-500/30'
       }`;
     toast.innerHTML = `<i class="fa-solid ${isError ? 'fa-circle-xmark text-rose-400 text-sm' : 'fa-circle-check text-emerald-400 text-sm'}"></i> <span>${typeof window.escapeHtml === 'function' ? window.escapeHtml(message) : message}</span>`;
     container.appendChild(toast);
