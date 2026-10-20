@@ -241,33 +241,34 @@
     <!-- Main Workspace View Container -->
     <div class="flex-1 flex flex-col overflow-hidden">
       <header
-        class="bg-[#0c1322] border-b border-slate-800 h-[64px] px-6 flex justify-between items-center z-10 shrink-0 relative">
+        class="bg-[#0c1322] border-b border-slate-800 h-[64px] px-6 flex items-center justify-between z-10 shrink-0 gap-4">
+        <!-- 1. Left: Dynamic Page Title -->
         <h1 id="page-title" class="text-base md:text-lg font-extrabold text-slate-100 tracking-wide shrink-0">Home
           Dashboard</h1>
 
-        <!-- 💡 CENTER SYSTEM MESSAGE NOTIFICATION BAR (Borderless & Single-Line) -->
+        <!-- 2. Center: All System & Action Messages (Border လုံးဝ မပါ၊ ဘယ်/ညာ စာများနှင့် လုံးဝ မထပ်စေရ) -->
         <div id="header-system-message-container"
-          class="absolute left-1/2 -translate-x-1/2 flex items-center justify-center pointer-events-none z-20">
+          class="flex-1 flex items-center justify-center min-w-0 px-2 overflow-hidden pointer-events-none">
           <div id="header-system-message"
-            class="hidden pointer-events-auto items-center gap-2 px-3.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap shadow-sm transition-all duration-300"
-            style="border: none;">
-            <!-- Dynamic Center System Message -->
+            class="hidden pointer-events-auto items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap truncate shadow-sm transition-all duration-300"
+            style="border: none !important;">
+            <!-- Single-line borderless unified message -->
           </div>
         </div>
 
-        <!-- 💡 Symmetrical Capsule Header (Online/Offline Dynamic Border & Colors) -->
+        <!-- 3. Right: Symmetrical Status Capsule -->
         <div id="header-status-capsule"
           class="inline-flex items-center text-xs font-bold px-3.5 py-1.5 rounded-full gap-2.5 transition-colors duration-300 shrink-0"
           style="background-color: transparent; border: 1px solid rgba(16, 185, 129, 0.3);">
 
-          <!-- Left: Real-Time Wifi Status -->
+          <!-- Real-Time Wifi Status Indicator -->
           <span id="network-status"
             class="flex items-center justify-center transition-colors duration-300 cursor-pointer"
             style="color: #34d399;" title="Internet Connected (Online)">
             <i id="network-icon" class="fa-solid fa-wifi text-[11px]"></i>
           </span>
 
-          <!-- WiFi နှင့် Metadata ကြား အစိမ်းရောင် ရေးရေးတုတ်ချောင်း (|) -->
+          <!-- Capsule Divider (|) -->
           <span id="capsule-divider" style="color: rgba(16, 185, 129, 0.4);">|</span>
 
           <!-- Metadata -->

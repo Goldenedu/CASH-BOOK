@@ -545,24 +545,20 @@ function updateNetworkStatusIndicator(isOnline) {
   if (isOnline) {
     statusSpan.style.color = '#34d399';
     statusSpan.title = 'Internet Connected (Online)';
+    // 🎯 Online ဖြစ်နေချိန်: အစိမ်းရောင် WiFi Icon
     statusSpan.innerHTML = '<i id="network-icon" class="fa-solid fa-wifi text-[11px]"></i>';
 
     if (capsule) capsule.style.borderColor = 'rgba(16, 185, 129, 0.3)';
     if (divider) divider.style.color = 'rgba(16, 185, 129, 0.4)';
   } else {
     statusSpan.style.color = '#f87171';
-    statusSpan.title = 'Offline Mode (Working from Local Cache)';
-    // 🎯 Crisp Modern SVG Wifi-Off Icon
+    statusSpan.title = 'Offline Mode (Disconnected)';
+    // 🎯 Offline ဖြစ်ချိန်: WiFi Icon အား ကန့်လန့်ဖြတ် မျဉ်းနီလေးဖြင့် Cross လုပ်ထားသော ပုံစံ
     statusSpan.innerHTML = `
-      <svg id="network-icon" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="2" y1="2" x2="22" y2="22"></line>
-        <path d="M8.5 16.5a5 5 0 0 1 7 0"></path>
-        <path d="M2 8.82a15 15 0 0 1 4.17-2.65"></path>
-        <path d="M10.66 5c4.01-.36 8.14.9 11.34 3.76"></path>
-        <path d="M16.85 11.25a10 10 0 0 1 2.22 1.68"></path>
-        <path d="M5 13a10 10 0 0 1 5.24-2.76"></path>
-        <line x1="12" y1="20" x2="12.01" y2="20"></line>
-      </svg>
+      <span class="relative inline-flex items-center justify-center" style="width: 14px; height: 14px;">
+        <i id="network-icon" class="fa-solid fa-wifi text-[11px] text-rose-400 opacity-60"></i>
+        <span style="position: absolute; width: 14px; height: 1.8px; background-color: #f43f5e; transform: rotate(45deg); border-radius: 1px;"></span>
+      </span>
     `;
 
     if (capsule) capsule.style.borderColor = 'rgba(244, 63, 94, 0.35)';
@@ -573,7 +569,7 @@ function updateNetworkStatusIndicator(isOnline) {
 var centerMessageTimeout = null;
 
 /**
- * 💡 Center Header System Message Controller (Borderless & Single-Line)
+ * 💡 Unified Dead-Center Header Message Controller (100% Borderless & Single-Line)
  */
 function showCenterSystemMessage(type, message, duration = 3500) {
   const el = document.getElementById('header-system-message');
@@ -608,10 +604,10 @@ function showCenterSystemMessage(type, message, duration = 3500) {
     };
   }
 
-  // 🎯 Border မပါဘဲ လိုက်ဖက်သော အရောင်များဖြင့် Single-line ပုံစံ သတ်မှတ်ခြင်း
+  // 🎯 Border လုံးဝ မပါဝင်ဘဲ လိုက်ဖက်သော အရောင်ဖြင့် Single-line သတ်မှတ်ခြင်း
   el.style.border = 'none';
-  el.className = `inline-flex pointer-events-auto items-center gap-2 px-3.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap shadow-sm transition-all duration-300 animate-in fade-in zoom-in-95 ${theme.bg} ${theme.text}`;
-  el.innerHTML = `${theme.icon} <span class="truncate max-w-[320px] sm:max-w-[450px] md:max-w-[600px]">${safeMsg}</span>`;
+  el.className = `inline-flex pointer-events-auto items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap shadow-sm transition-all duration-300 animate-in fade-in zoom-in-95 ${theme.bg} ${theme.text}`;
+  el.innerHTML = `${theme.icon} <span class="truncate max-w-[320px] sm:max-w-[480px] md:max-w-[650px]">${safeMsg}</span>`;
 
   if (centerMessageTimeout) clearTimeout(centerMessageTimeout);
   centerMessageTimeout = setTimeout(() => {
@@ -625,31 +621,13 @@ function showCenterSystemMessage(type, message, duration = 3500) {
 }
 
 /**
- * 💡 Universal Toast Notification Engine (Right-Top Corner Alignment)
+ * 💡 Universal Message Router (Redirects ALL System & Action Toasts to Dead-Center Bar)
  */
-if (typeof window.showToast !== 'function') {
-  window.showToast = function (type, message) {
-    // 🎯 Center Header System Message Bar သို့ပါ တစ်ပြိုင်နက် ပို့ဆောင်ပြသသည်
-    if (typeof showCenterSystemMessage === 'function') {
-      showCenterSystemMessage(type, message);
-    }
-
-    const container = document.getElementById('toast-container');
-    if (!container) return;
-    const isError = String(type).toUpperCase() === 'ERROR';
-    const toast = document.createElement('div');
-    toast.className = `pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl text-xs font-bold shadow-2xl transition-all duration-300 animate-in fade-in slide-in-from-top-4 ${isError
-      ? 'bg-[#1e1017] text-rose-300 border border-rose-500/30'
-      : 'bg-[#0c1e18] text-emerald-300 border border-emerald-500/30'
-      }`;
-    toast.innerHTML = `<i class="fa-solid ${isError ? 'fa-circle-xmark text-rose-400 text-sm' : 'fa-circle-check text-emerald-400 text-sm'}"></i> <span>${typeof window.escapeHtml === 'function' ? window.escapeHtml(message) : message}</span>`;
-    container.appendChild(toast);
-    setTimeout(() => {
-      toast.classList.add('opacity-0', 'translate-x-3');
-      setTimeout(() => toast.remove(), 300);
-    }, 3500);
-  };
-}
+window.showToast = function (type, message) {
+  if (typeof showCenterSystemMessage === 'function') {
+    showCenterSystemMessage(type, message);
+  }
+};
 
 // 💡 EXPOSE GLOBALLY TO WINDOW
 window.initApp = initApp;
