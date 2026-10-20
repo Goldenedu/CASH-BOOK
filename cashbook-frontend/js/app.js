@@ -73,6 +73,10 @@ function initApp() {
   document.documentElement.className = 'dark is-authed';
   updateHeaderMetadata(user);
 
+  document.documentElement.className = 'dark is-authed';
+  updateHeaderMetadata(user);
+  initNetworkStatusWatcher(); // ⚡ Real-Time Online/Offline Status Initializer
+
   if (typeof window.prefetchCoreModules === 'function') {
     window.prefetchCoreModules();
   }
@@ -515,10 +519,121 @@ document.addEventListener('click', function (e) {
 });
 
 /**
+ * 💡 Real-Time Network & WiFi Status Watcher (0 D1 Quota Cost)
+ */
+function initNetworkStatusWatcher() {
+  updateNetworkStatusIndicator(navigator.onLine);
+
+  window.addEventListener('online', () => {
+    updateNetworkStatusIndicator(true);
+    showCenterSystemMessage('SUCCESS', 'အင်တာနက်လိုင်း ပြန်လည်ချိတ်ဆက်မိပါပြီ (Online)');
+  });
+
+  window.addEventListener('offline', () => {
+    updateNetworkStatusIndicator(false);
+    showCenterSystemMessage('ERROR', 'အင်တာနက်လိုင်း ပြတ်တောက်နေပါသည် (Offline Mode)');
+  });
+}
+
+function updateNetworkStatusIndicator(isOnline) {
+  const statusSpan = document.getElementById('network-status');
+  const capsule = document.getElementById('header-status-capsule');
+  const divider = document.getElementById('capsule-divider');
+
+  if (!statusSpan) return;
+
+  if (isOnline) {
+    statusSpan.style.color = '#34d399';
+    statusSpan.title = 'Internet Connected (Online)';
+    statusSpan.innerHTML = '<i id="network-icon" class="fa-solid fa-wifi text-[11px]"></i>';
+
+    if (capsule) capsule.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+    if (divider) divider.style.color = 'rgba(16, 185, 129, 0.4)';
+  } else {
+    statusSpan.style.color = '#f87171';
+    statusSpan.title = 'Offline Mode (Working from Local Cache)';
+    // 🎯 Crisp Modern SVG Wifi-Off Icon
+    statusSpan.innerHTML = `
+      <svg id="network-icon" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="2" y1="2" x2="22" y2="22"></line>
+        <path d="M8.5 16.5a5 5 0 0 1 7 0"></path>
+        <path d="M2 8.82a15 15 0 0 1 4.17-2.65"></path>
+        <path d="M10.66 5c4.01-.36 8.14.9 11.34 3.76"></path>
+        <path d="M16.85 11.25a10 10 0 0 1 2.22 1.68"></path>
+        <path d="M5 13a10 10 0 0 1 5.24-2.76"></path>
+        <line x1="12" y1="20" x2="12.01" y2="20"></line>
+      </svg>
+    `;
+
+    if (capsule) capsule.style.borderColor = 'rgba(244, 63, 94, 0.35)';
+    if (divider) divider.style.color = 'rgba(244, 63, 94, 0.4)';
+  }
+}
+
+var centerMessageTimeout = null;
+
+/**
+ * 💡 Center Header System Message Controller (Borderless & Single-Line)
+ */
+function showCenterSystemMessage(type, message, duration = 3500) {
+  const el = document.getElementById('header-system-message');
+  if (!el) return;
+
+  const t = String(type || 'INFO').toUpperCase();
+  const safeMsg = (typeof window.escapeHtml === 'function') ? window.escapeHtml(message) : message;
+
+  let theme = {
+    bg: 'bg-emerald-500/10',
+    text: 'text-emerald-300',
+    icon: '<i class="fa-solid fa-circle-check text-emerald-400 text-xs"></i>'
+  };
+
+  if (t === 'ERROR' || t === 'DANGER') {
+    theme = {
+      bg: 'bg-rose-500/10',
+      text: 'text-rose-300',
+      icon: '<i class="fa-solid fa-circle-xmark text-rose-400 text-xs"></i>'
+    };
+  } else if (t === 'WARNING' || t === 'WARN') {
+    theme = {
+      bg: 'bg-amber-500/10',
+      text: 'text-amber-300',
+      icon: '<i class="fa-solid fa-triangle-exclamation text-amber-400 text-xs"></i>'
+    };
+  } else if (t === 'INFO') {
+    theme = {
+      bg: 'bg-sky-500/10',
+      text: 'text-sky-300',
+      icon: '<i class="fa-solid fa-circle-info text-sky-400 text-xs"></i>'
+    };
+  }
+
+  // 🎯 Border မပါဘဲ လိုက်ဖက်သော အရောင်များဖြင့် Single-line ပုံစံ သတ်မှတ်ခြင်း
+  el.style.border = 'none';
+  el.className = `inline-flex pointer-events-auto items-center gap-2 px-3.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap shadow-sm transition-all duration-300 animate-in fade-in zoom-in-95 ${theme.bg} ${theme.text}`;
+  el.innerHTML = `${theme.icon} <span class="truncate max-w-[320px] sm:max-w-[450px] md:max-w-[600px]">${safeMsg}</span>`;
+
+  if (centerMessageTimeout) clearTimeout(centerMessageTimeout);
+  centerMessageTimeout = setTimeout(() => {
+    el.classList.add('opacity-0', 'scale-95');
+    setTimeout(() => {
+      el.className = 'hidden';
+      el.innerHTML = '';
+      el.classList.remove('opacity-0', 'scale-95');
+    }, 300);
+  }, duration);
+}
+
+/**
  * 💡 Universal Toast Notification Engine (Right-Top Corner Alignment)
  */
 if (typeof window.showToast !== 'function') {
   window.showToast = function (type, message) {
+    // 🎯 Center Header System Message Bar သို့ပါ တစ်ပြိုင်နက် ပို့ဆောင်ပြသသည်
+    if (typeof showCenterSystemMessage === 'function') {
+      showCenterSystemMessage(type, message);
+    }
+
     const container = document.getElementById('toast-container');
     if (!container) return;
     const isError = String(type).toUpperCase() === 'ERROR';
@@ -545,3 +660,5 @@ window.switchTab = switchTab;
 window.triggerModuleInit = triggerModuleInit;
 window.updateSidebarHighlight = updateSidebarHighlight;
 window.updateHeaderMetadata = updateHeaderMetadata;
+window.initNetworkStatusWatcher = initNetworkStatusWatcher;
+window.showCenterSystemMessage = showCenterSystemMessage;
