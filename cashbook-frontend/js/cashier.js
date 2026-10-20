@@ -136,7 +136,7 @@ function switchCashierSubTab(subTab, useCache) {
   useCache = useCache !== undefined ? useCache : true;
 
   const activeClass = "border border-sky-400 bg-sky-500/10 text-white shadow-sm";
-  const inactiveClass = "border border-transparent text-slate-400 hover:text-white hover:bg-slate-800/30";
+  const inactiveClass = "text-slate-400 hover:text-white hover:bg-slate-800/30";
 
   ['CABank', 'CACash', 'CAOffice', 'CAKitchen', 'CAPayroll', 'todayIncome'].forEach(key => {
     const btn = document.getElementById(`ca-tab-${key}`);
