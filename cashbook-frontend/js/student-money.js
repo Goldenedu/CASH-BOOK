@@ -81,15 +81,14 @@ function switchStudentMoneySubTab(tabName) {
 
   // 1. Tab Buttons Styling & Border Synchronization
   tabs.forEach(t => {
-    // 🎯 Fix: အခြား မော်ဂျူးများ (Cashier Book စသည်ဖြင့်) နှင့် Selector မတိုက်မိစေရန် .stm-tab-${t} နှင့် #stm-tab-${t} ကိုသာ တိကျစွာ သုံးသည်
-    const selector = `.stm-tab-${t}, #stm-tab-${t}`;
+    // 🎯 Fix: Class, ID နှင့် onclick attribute တို့ကို အပြည့်အစုံ လွှမ်းခြုံရှာဖွေစေခြင်းဖြင့် Tab ၄ ခုစလုံး Active 100% မှန်ကန်စေသည်
+    const selector = `.stm-tab-${t}, #stm-tab-${t}, [onclick*="switchStudentMoneySubTab('${t}')"], [onclick*='switchStudentMoneySubTab("${t}")']`;
     document.querySelectorAll(selector).forEach(btn => {
       const isActive = (t === gCurrentStudentMoneyTab);
       btn.className = isActive ? activeClass : inactiveClass;
       btn.style.border = isActive ? "1.5px solid #38bdf8" : "none";
     });
 
-    // 2. View Toggle (Visible / Hidden)
     const view = document.getElementById(`stm-${t}-view`);
     if (view) view.classList.toggle('hidden', t !== gCurrentStudentMoneyTab);
   });
