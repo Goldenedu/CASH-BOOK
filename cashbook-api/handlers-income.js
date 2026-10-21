@@ -69,7 +69,7 @@ function getMonthYearLabel(entryDate) {
 function buildStudentDetailedDesc(body, prefix) {
   const studentId = parseCleanIntId(body.id || body.studentId);
   let name = String(body.fyidName || body.name || '').trim();
-  
+
   if (name.includes(']')) {
     const parts = name.split(']');
     name = parts.length > 1 ? parts[1].trim() : name;
@@ -126,7 +126,7 @@ async function cleanLinkedIncomeEntries(db, uniqueid) {
   ];
 
   const placeholders = uids.map(() => '?').join(', ');
-  
+
   await db.batch([
     db.prepare(`DELETE FROM income WHERE uniqueid IN (${placeholders})`).bind(...uids),
     db.prepare(`DELETE FROM cash WHERE uniqueid IN (${placeholders})`).bind(...uids),
@@ -376,7 +376,7 @@ export async function getIncomeData(db, body) {
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-    
+
     // 🚀 OPTIMIZATION: COUNT(id) for faster scan
     const countRow = await db.prepare(`SELECT COUNT(id) as count FROM income ${whereSql}`).bind(...params).first();
     const totalRows = countRow ? countRow.count : 0;
@@ -396,9 +396,9 @@ export async function getIncomeData(db, body) {
     const formattedRows = rawRows.map(row => {
       const uid = String(row.uniqueid || '');
       const isAutoLocked = Boolean(
-        row.is_locked || 
-        uid.startsWith('INCMAIN_') || 
-        uid.startsWith('INCCASHIER_') || 
+        row.is_locked ||
+        uid.startsWith('INCMAIN_') ||
+        uid.startsWith('INCCASHIER_') ||
         uid.startsWith('DAILY_INC_')
       );
 
@@ -450,7 +450,7 @@ export async function getIncomeData(db, body) {
 export async function saveIncomeEntry(db, session, body) {
   const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(session?.role || '');
   const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport || body.skipAutoPost);
-  
+
   const uniqueid = (isMigration && body.uniqueId)
     ? String(body.uniqueId).trim()
     : generateUniqueId('INC');
@@ -458,7 +458,7 @@ export async function saveIncomeEntry(db, session, body) {
   // 🚀 Initialize Recalc Queue
   const recalcQueue = makeRecalcQueue();
   const res = await _saveIncomeEntryCore(db, session, body, uniqueid, isMigration, recalcQueue);
-  
+
   // 🚀 Flush Recalc Queue ONCE at the end
   await recalcQueue.flush(db);
 
@@ -470,6 +470,16 @@ export async function saveIncomeEntry(db, session, body) {
  */
 async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration, recalcQueue) {
   try {
+    // 🛡️ IDEMPOTENCY GUARD: Offline မှ ပို့လာသော uniqueid သည် D1 တွင် ရှိပြီးသားဖြစ်ပါက Duplicate မဖြစ်စေရန် ချက်ချင်း Return ပေးသည်
+    const existingCheck = await db.prepare(`SELECT id FROM income WHERE uniqueid = ?`).bind(uniqueid).first();
+    if (existingCheck && !body.isUpdate && !isMigration) {
+      return {
+        success: true,
+        message: "ဤစာရင်းသည် D1 Database ထဲတွင် ရှိနှင့်ပြီးသား ဖြစ်ပါသည်။ (Idempotent Sync)",
+        uniqueId: uniqueid
+      };
+    }
+
     const createdBy = session?.name || body.createdBy || "Admin";
 
     const entryDate = getMyanmarDateString(body.date);
@@ -604,9 +614,9 @@ export async function updateIncomeEntry(db, session, body) {
 
     const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(session?.role || '');
     if (isAutoLocked && !isPrivilegedAdmin) {
-      return { 
-        success: false, 
-        message: "ဤစာရင်းသည် စနစ်မှ အလိုအလျောက် သို့မဟုတ် ချိတ်ဆက်ထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ပြင်ဆင်နိုင်ပါသည်။" 
+      return {
+        success: false,
+        message: "ဤစာရင်းသည် စနစ်မှ အလိုအလျောက် သို့မဟုတ် ချိတ်ဆက်ထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ပြင်ဆင်နိုင်ပါသည်။"
       };
     }
 
@@ -672,9 +682,9 @@ export async function deleteIncomeEntry(db, session, body) {
 
     const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(session?.role || '');
     if (isAutoLocked && !isPrivilegedAdmin) {
-      return { 
-        success: false, 
-        message: "ဤစာရင်းသည် စနစ်မှ အလိုအလျောက် သို့မဟုတ် ချိတ်ဆက်ထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ဖျက်သိမ်းနိုင်ပါသည်။" 
+      return {
+        success: false,
+        message: "ဤစာရင်းသည် စနစ်မှ အလိုအလျောက် သို့မဟုတ် ချိတ်ဆက်ထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ဖျက်သိမ်းနိုင်ပါသည်။"
       };
     }
 

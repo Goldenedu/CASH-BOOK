@@ -55,9 +55,10 @@ export async function getStudentMoneyData(db, body) {
     let whereClauses = [`(fy IN (?, ?))`];
     let params = [fy, `FY ${fy}`];
 
+    // 🎯 FIX 1: ကျောင်းသားတစ်ဦးချင်း စစ်ဆေးရာတွင် Primary Key (id) နှင့် မရောထွေးစေဘဲ student_id သီးသန့်သာ စစ်သည်
     if (studentIdFilter > 0) {
-      whereClauses.push(`(student_id = ? OR id = ?)`);
-      params.push(studentIdFilter, studentIdFilter);
+      whereClauses.push(`student_id = ?`);
+      params.push(studentIdFilter);
     }
 
     if (dateFrom) {
@@ -69,10 +70,19 @@ export async function getStudentMoneyData(db, body) {
       params.push(dateTo);
     }
 
+    // 🎯 FIX 2: ရှာဖွေရာတွင် ဂဏန်းဖြစ်ပါက တိတိကျကျ 4-Digit (ID#### ဥပမာ - 0076) ဖြင့်သာ စစ်ဆေးသည် (ID 1176 နှင့် လုံးဝ မရောတော့ပါ)
     if (searchVal) {
-      whereClauses.push(`(fyid_name LIKE ? OR fyid LIKE ? OR remark LIKE ?)`);
-      const p = `%${searchVal}%`;
-      params.push(p, p, p);
+      const numMatch = searchVal.match(/^\s*(?:ID\s*[-:\s]*)?(\d+)\s*$/i);
+      if (numMatch) {
+        const studentIdNum = parseInt(numMatch[1], 10);
+        const padded4Digit = String(studentIdNum).padStart(4, '0'); // 76 -> 0076
+        whereClauses.push(`(student_id = ? OR fyid LIKE ? OR fyid_name LIKE ?)`);
+        params.push(studentIdNum, `%${padded4Digit}%`, `%${padded4Digit}%`);
+      } else {
+        whereClauses.push(`(fyid_name LIKE ? OR fyid LIKE ? OR remark LIKE ?)`);
+        const p = `%${searchVal}%`;
+        params.push(p, p, p);
+      }
     }
 
     // 🎯 FEATURE: ငွေလက်ကျန်ရှိသော ကျောင်းသားများအား သီးသန့် စစ်ထုတ်ခြင်း
@@ -114,15 +124,15 @@ export async function getStudentMoneyData(db, body) {
     ];
 
     if (studentIdFilter > 0) {
-      // 🎯 ကျောင်းသားတစ်ဦးချင်း Statement အတွက် အဆိုပါကျောင်းသား၏ All-Time Balance သီးသန့်ဆွဲယူခြင်း
+      // 🎯 FIX: student_id တစ်ခုတည်းကိုသာ စစ်ဆေးပြီး မသက်ဆိုင်သော အခြား Transaction ID များကို လုံးဝ ပေါင်းမထည့်စေရ
       batchQueries.push(
         db.prepare(`
           SELECT 
             COALESCE(SUM(debit), 0) as cum_d,
             COALESCE(SUM(credit), 0) as cum_c
           FROM student_money 
-          WHERE (student_id = ? OR id = ?) AND fy IN (?, ?)
-        `).bind(studentIdFilter, studentIdFilter, fy, `FY ${fy}`)
+          WHERE student_id = ? AND fy IN (?, ?)
+        `).bind(studentIdFilter, fy, `FY ${fy}`)
       );
     } else {
       // 🎯 ပင်မ Finance စာအုပ်ကြီးအတွက် တစ်ကျောင်းလုံး၏ Trust Balance နှင့် PM Cashier လက်ကျန် ဆွဲယူခြင်း

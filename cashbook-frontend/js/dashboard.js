@@ -32,14 +32,14 @@ function updateKpiLabels() {
     'db-total-expense': 'TOTAL EXPENSE (MMK)',
     'db-net-profit': 'NET PROFIT (MMK)'
   };
-  
+
   for (const [id, text] of Object.entries(labels)) {
     const valueEl = document.getElementById(id);
     if (valueEl) {
       const parent = valueEl.parentElement;
       if (parent) {
         // Typically the title is inside a <p> tag above the <h3>
-        const labelEl = parent.querySelector('p'); 
+        const labelEl = parent.querySelector('p');
         if (labelEl) labelEl.textContent = text;
       }
     }
@@ -56,9 +56,9 @@ function adjustKpiFontSizes() {
     if (!el) return;
 
     // Reset to default large size & prevent wrapping
-    el.style.fontSize = '24px'; 
+    el.style.fontSize = '24px';
     el.style.whiteSpace = 'nowrap';
-    
+
     let currentSize = 24;
     // Reduce font size until scrollWidth fits within clientWidth (max drop to 12px)
     while (el.scrollWidth > el.clientWidth && currentSize > 12) {
@@ -115,8 +115,13 @@ async function loadDashboardData(isSilent = false, forceRefresh = false) {
     setElementText('db-lia-bank', formatMoney(liab.bankLoan));
     setElementText('db-lia-cash', formatMoney(liab.cashLoan));
     setElementText('db-lia-office', formatMoney(liab.officeLiabilities));
-    setElementText('db-lia-bonus', formatMoney(liab.hrBonus));
-    setElementText('db-lia-fund', formatMoney(liab.hrFund));
+
+    // 🎯 Unpaid Bonus နှင့် Fund ကို တစ်ကြောင်းတည်း ပြသသည်
+    setElementText('db-lia-hr-unpaid', formatMoney(liab.hrUnpaidTotal));
+
+    // 🎯 Bank Interest နှင့် Other ကို ပြသသည်
+    setElementText('db-lia-hr-interest', formatMoney(liab.hrBankInterestAndOther));
+
     setElementText('db-lia-total', formatMoney(liab.total));
 
     // 5. Receivables (Removed " MMK" from the end)

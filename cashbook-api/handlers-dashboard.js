@@ -73,7 +73,7 @@ function parseGenderCount(rows = []) {
   rows.forEach(r => {
     const g = String(r.gender || '').toLowerCase().trim();
     const rawName = String(r.name || r.fyid_name || r.staff_idname || '').trim();
-    
+
     // 💡 နာမည်ရှေ့က [2627-STU-0001] သို့မဟုတ် [FID 001] ကို ရှင်းထုတ်ခြင်း
     const cleanName = rawName.replace(/^\[.*?\]\s*/, '').trim();
 
@@ -110,10 +110,7 @@ export async function getDashboardData(db, body) {
     // ----------------------------------------------------
     const [
       // 1. Financials (4 Queries)
-      totalIncome,
-      offExp,
-      kitExp,
-      payExp,
+      totalIncome, offExp, kitExp, payExp,
 
       // 2. 17-Table System Entry Counts (17 Queries)
       incCnt, cashCnt, bankCnt, offCnt, kitCnt, payCnt, stmCnt,
@@ -123,8 +120,8 @@ export async function getDashboardData(db, body) {
       // 3. Current Daily Balances (5 Queries)
       bankBal, cashBal, officeBal, kitchenBal, payrollBal,
 
-      // 4. Liabilities (5 Queries)
-      bankLoan, cashLoan, officeLiabilities, hrUnpaidBonus, hrUnpaidFund,
+      // 4. Liabilities (5 Queries) - 🎯 Variable နာမည်အသစ်များ ချိန်းထားသည်
+      bankLoan, cashLoan, officeLiabilities, hrUnpaidTotal, hrBankInterestAndOther,
 
       // 5. Receivables (Single-Pass 1 Query Object)
       advStats,
@@ -176,8 +173,12 @@ export async function getDashboardData(db, body) {
       safeFirstNum(db, "SELECT COALESCE(SUM(debit - credit), 0) as total FROM bank WHERE category LIKE '%loan%'"),
       safeFirstNum(db, "SELECT COALESCE(SUM(debit - credit), 0) as total FROM cash WHERE category LIKE '%loan%'"),
       safeFirstNum(db, "SELECT COALESCE(SUM(liabilities), 0) as total FROM office"),
-      safeFirstNum(db, "SELECT COALESCE(SUM(unpaid_bonus), 0) as total FROM payroll"),
-      safeFirstNum(db, "SELECT COALESCE(SUM(unpaid_fund), 0) as total FROM payroll"),
+
+      // 🎯 နံပါတ် ၄: Unpaid Bonus နှင့် Fund ကို SQLite Safe ဖြစ်အောင် COALESCE ဖြင့် ပေါင်းစပ်ထားသည်
+      safeFirstNum(db, "SELECT COALESCE(SUM(COALESCE(unpaid_bonus, 0) + COALESCE(unpaid_fund, 0)), 0) as total FROM payroll"),
+
+      // 🎯 နံပါတ် ၅: Bank Interest ၏ Debit နှင့် Other ၏ (Debit - Credit) တို့ကို Full Table Scan လုံးဝမဖြစ်စေဘဲ တစ်ကြောင်းတည်းဖြင့် Index-Safe ဖြစ်အောင် ရေးဆွဲထားသည်
+      safeFirstNum(db, "SELECT COALESCE(SUM(CASE WHEN category = 'Bank Interest' THEN debit WHEN category = 'Other' THEN (debit - credit) ELSE 0 END), 0) as total FROM payroll"),
 
       // 💡 5. Receivables (Single-Pass Single Table Scan)
       db.prepare(`
@@ -204,11 +205,11 @@ export async function getDashboardData(db, body) {
 
     // Grand Total Records across all 17 tables
     const totalEntries = incCnt + cashCnt + bankCnt + offCnt + kitCnt + payCnt + stmCnt +
-                         caBankCnt + caCashCnt + caOffCnt + caKitCnt + caPayCnt +
-                         stuCnt + promoCnt + uniCnt + ftStaffCnt + ptStaffCnt;
-    
-    const advSnack = advStats.advSnack; 
-    const advUniform = advStats.advUniform; 
+      caBankCnt + caCashCnt + caOffCnt + caKitCnt + caPayCnt +
+      stuCnt + promoCnt + uniCnt + ftStaffCnt + ptStaffCnt;
+
+    const advSnack = advStats.advSnack;
+    const advUniform = advStats.advUniform;
     const othersAdv = advStats.othersAdv;
 
     // Demographic Counters
@@ -238,9 +239,9 @@ export async function getDashboardData(db, body) {
           bankLoan,
           cashLoan,
           officeLiabilities,
-          hrBonus: hrUnpaidBonus,
-          hrFund: hrUnpaidFund,
-          total: bankLoan + cashLoan + officeLiabilities + hrUnpaidBonus + hrUnpaidFund
+          hrUnpaidTotal: hrUnpaidTotal,
+          hrBankInterestAndOther: hrBankInterestAndOther,
+          total: bankLoan + cashLoan + officeLiabilities + hrUnpaidTotal + hrBankInterestAndOther
         },
         receivables: {
           advanceSnack: advSnack,

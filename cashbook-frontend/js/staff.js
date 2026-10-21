@@ -303,7 +303,7 @@ function renderStaffKpis(stats) {
       <div class="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0"><i class="fa-solid fa-money-bill-wave text-base"></i></div>
       <div class="min-w-0">
         <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Total Net Payroll</p>
-        <h3 class="text-sm sm:text-base font-extrabold text-white mt-0.5 truncate">${Number(stats.totalNetAmt || 0).toLocaleString('en-US')} MMK</h3>
+        <h3 class="text-sm sm:text-base font-extrabold text-white mt-0.5 truncate">${Number(stats.totalNetAmt || 0).toLocaleString('en-US')}</h3>
       </div>
     </div>
     <div class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
@@ -701,6 +701,16 @@ async function saveStaffForm(event) {
     return;
   }
 
+  // 💡 အသစ်ထပ်ထည့်ထားသော Salary Grade Validation (Full Time အတွက်သာ)
+  if (gStaffCategory === 'Full Time') {
+    const gradeVal = document.getElementById('staff-grade')?.value || 'Non';
+    if (gradeVal === 'Non') {
+      isStaffSubmitting = false; // Submit လုပ်ခြင်းကို ရပ်တန့်မည်
+      if (typeof showToast === 'function') showToast("ERROR", "Salary Grade (လစာအဆင့်) ရွေးချယ်ရန် လိုအပ်ပါသည်။");
+      return;
+    }
+  }
+
   const uid = document.getElementById('staff-uniqueId')?.value || '';
   const actionName = uid ? 'updateStaffEntry' : 'saveStaffEntry';
 
@@ -736,6 +746,7 @@ async function saveStaffForm(event) {
     uniqueId: uid,
     joinDate: document.getElementById('staff-joindate')?.value || '',
     name: staffName,
+    gender: autoDetectGender(staffName), // 👈 ယခင် gender ပြဿနာအတွက် ပြင်ဆင်ချက်
     education: document.getElementById('staff-education')?.value || '',
     position: document.getElementById('staff-position')?.value || '',
     salaryGrade: (gStaffCategory === 'Full Time') ? (document.getElementById('staff-grade')?.value || 'Non') : 'Non',

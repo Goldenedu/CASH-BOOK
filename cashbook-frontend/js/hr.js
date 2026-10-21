@@ -374,10 +374,80 @@ async function onStaffIdChangePayroll() {
   const category = categorySelect ? categorySelect.value : 'Full Time Salary';
   const dateVal = dateInput ? dateInput.value : new Date().toISOString().slice(0, 10);
 
+  const elDeb = document.getElementById('hr-pay-debit');
   const elCredit = document.getElementById('hr-pay-credit');
   const elBonus = document.getElementById('hr-pay-unpaid-bonus');
   const elFund = document.getElementById('hr-pay-unpaid-fund');
   const elDesc = document.getElementById('hr-pay-description');
+
+  // 🎯 Bank Interest, Other, Opening, Closing, Transfer စသည့် Category များအတွက် Staff ID မလိုအပ်ပါ
+  const isNonStaffCategory = ['Bank Interest', 'Other', 'Opening', 'Closing', 'Transfer'].includes(category);
+
+  // Input Field များကို Category အလိုက် Lock/Unlock ပြုလုပ်ပေးခြင်း
+  if (isNonStaffCategory) {
+    if (staffIdInput) {
+      staffIdInput.disabled = true;
+      staffIdInput.value = '';
+      staffIdInput.classList.add('opacity-40', 'cursor-not-allowed', 'bg-slate-900/80');
+      staffIdInput.required = false;
+    }
+
+    // Bank Interest သည် Debit (ရရှိငွေ) သာ ခွင့်ပြုမည်
+    if (category === 'Bank Interest') {
+      if (elDeb) {
+        elDeb.readOnly = false;
+        elDeb.classList.remove('cursor-not-allowed');
+      }
+      if (elCredit) {
+        elCredit.value = 0;
+        elCredit.readOnly = true;
+        elCredit.classList.add('cursor-not-allowed');
+      }
+    }
+    // Other, Opening, Closing, Transfer တို့သည် Debit နှင့် Credit နှစ်မျိုးလုံးကို ကိုယ်တိုင်ရိုက်သွင်းခွင့်ပြုမည်
+    else {
+      if (elDeb) {
+        elDeb.readOnly = false;
+        elDeb.classList.remove('cursor-not-allowed');
+      }
+      if (elCredit) {
+        elCredit.readOnly = false;
+        elCredit.classList.remove('cursor-not-allowed');
+      }
+    }
+
+    if (elBonus) elBonus.value = 0;
+    if (elFund) elFund.value = 0;
+    if (elDesc) {
+      elDesc.readOnly = false;
+      elDesc.classList.remove('cursor-not-allowed');
+      // အသစ်ဝင်လာပါက Description အဟောင်းရှိနေလျှင် မဖျက်ဘဲထားမည်၊ မရှိမှသာ Category အမည်ကို Default ပေးမည်
+      if (!elDesc.value || elDesc.value.includes('FID') || elDesc.value.includes('PID')) {
+        elDesc.value = category;
+      }
+    }
+    return; // Staff Validation အပိုင်းကို ကျော်သွားမည်
+  }
+
+  // 🎯 Salary, Bonus, Fund များဖြစ်ပါက မူလအတိုင်း Staff ID တောင်းခံပြီး Credit ကို Lock ချကာ Auto တွက်ပေးမည်
+  if (staffIdInput) {
+    staffIdInput.disabled = false;
+    staffIdInput.classList.remove('opacity-40', 'cursor-not-allowed', 'bg-slate-900/80');
+    staffIdInput.required = true;
+  }
+
+  if (elDeb) {
+    elDeb.value = 0;
+    elDeb.readOnly = false; // Salary မှလွဲ၍ အခြား Exception ဝင်ငွေများ ထည့်လိုပါက ထည့်ခွင့်ပြုထားဆဲဖြစ်သည်
+  }
+  if (elCredit) {
+    elCredit.readOnly = true;
+    elCredit.classList.add('cursor-not-allowed');
+  }
+  if (elDesc) {
+    elDesc.readOnly = true;
+    elDesc.classList.add('cursor-not-allowed');
+  }
 
   if (!rawStaffId) {
     if (elCredit) elCredit.value = 0;
@@ -503,10 +573,21 @@ async function saveHrPayrollForm(e) {
   const staffIdVal = document.getElementById('hr-pay-staff-id')?.value.trim();
   const categoryVal = document.getElementById('hr-pay-category')?.value || 'Full Time Salary';
   const creditVal = parseFloat(document.getElementById('hr-pay-credit')?.value || 0);
+  const debitVal = parseFloat(document.getElementById('hr-pay-debit')?.value || 0);
 
-  if (!staffIdVal) {
+  const isNonStaffCategory = ['Bank Interest', 'Other', 'Opening', 'Closing', 'Transfer'].includes(categoryVal);
+
+  // ဝန်ထမ်းလစာ ဖြစ်ပါက Staff ID ကို မဖြစ်မနေ တောင်းခံမည်၊ Category အသစ်များအတွက် မလိုပါ
+  if (!isNonStaffCategory && !staffIdVal) {
     isHrPayrollSubmitting = false;
     if (typeof showToast === 'function') showToast("ERROR", "ဝန်ထမ်း ID ဖြည့်သွင်းပါ");
+    return;
+  }
+
+  // Bank Interest ဖြစ်ပါက Credit (ထုတ်ပေးငွေ) လုံးဝ မရှိစေရဘဲ Debit သာ ခွင့်ပြုမည်
+  if (categoryVal === 'Bank Interest' && creditVal > 0) {
+    isHrPayrollSubmitting = false;
+    if (typeof showToast === 'function') showToast("ERROR", "Bank Interest အတွက် Debit (ရရှိငွေ) သာ ထည့်သွင်းခွင့်ပြုပါသည်။");
     return;
   }
 
@@ -519,9 +600,9 @@ async function saveHrPayrollForm(e) {
     uniqueId: document.getElementById('hr-pay-uniqueId')?.value || '',
     date: entryDate,
     category: categoryVal,
-    staffId: staffIdVal,
+    staffId: isNonStaffCategory ? null : staffIdVal, // Non-staff category များအတွက် ID ကို null ပို့မည်
     method: document.getElementById('hr-pay-method')?.value || 'Cash',
-    debit: parseFloat(document.getElementById('hr-pay-debit')?.value || 0),
+    debit: debitVal,
     credit: creditVal,
     unpaidBonus: parseFloat(document.getElementById('hr-pay-unpaid-bonus')?.value || 0),
     unpaidFund: parseFloat(document.getElementById('hr-pay-unpaid-fund')?.value || 0),

@@ -38,6 +38,62 @@ window.AppState = window.AppState || {
 window.gDataCache = window.gDataCache || {};
 
 // ==============================================================================
+// 💡 OFFLINE SYNC ENGINE & LOCAL QUEUE MANAGER (0 D1 Quota Cost)
+// ==============================================================================
+window.OfflineSync = {
+  QUEUE_KEY: 'golden_pending_queue',
+
+  getQueue: function () {
+    try {
+      const q = localStorage.getItem(this.QUEUE_KEY);
+      return q ? JSON.parse(q) : [];
+    } catch (e) {
+      return [];
+    }
+  },
+
+  enqueue: async function (action, payload, method = 'POST') {
+    const queue = this.getQueue();
+    const tempId = payload.uniqueId || `INC_OFF_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const tempVr = `OFF-${Date.now().toString().slice(-6)}`;
+
+    const entry = {
+      id: tempId,
+      action: action,
+      method: method,
+      payload: { ...payload, uniqueId: tempId, vrNo: payload.vrNo || tempVr },
+      timestamp: new Date().toISOString(),
+      studentName: payload.name || payload.fyidName || payload.studentName || 'Student',
+      studentId: payload.studentId || payload.id || '-',
+      amount: payload.credit || payload.debit || payload.amount || 0,
+      date: payload.date || new Date().toISOString().slice(0, 10),
+      vrNo: payload.vrNo || tempVr
+    };
+
+    queue.push(entry);
+    localStorage.setItem(this.QUEUE_KEY, JSON.stringify(queue));
+
+    // Header ရှိ Pending Button Badge ကို ချက်ချင်း Update ပြုလုပ်သည်
+    if (typeof window.updatePendingUI === 'function') {
+      window.updatePendingUI();
+    }
+    return entry;
+  },
+
+  remove: function (id) {
+    let queue = this.getQueue();
+    queue = queue.filter(item => item.id !== id);
+    localStorage.setItem(this.QUEUE_KEY, JSON.stringify(queue));
+    if (typeof window.updatePendingUI === 'function') window.updatePendingUI();
+  },
+
+  clearAll: function () {
+    localStorage.removeItem(this.QUEUE_KEY);
+    if (typeof window.updatePendingUI === 'function') window.updatePendingUI();
+  }
+};
+
+// ==============================================================================
 // 💡 1. GLOBAL ESCAPERS & SANITIZATION UTILITIES
 // ==============================================================================
 

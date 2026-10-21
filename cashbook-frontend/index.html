@@ -201,7 +201,7 @@
         </button>
         <button onclick="switchTab('staff')" id="btn-staff"
           class="nav-btn w-full text-left px-3.5 py-2 rounded-lg text-slate-300 hover:text-white flex items-center gap-2.5 text-xs font-semibold">
-          <i class="fa-solid fa-user-tie text-purple-400 w-4 text-center"></i> Staff Directory
+          <i class="fa-solid fa-user-tie text-purple-400 w-4 text-center"></i> Staff List
         </button>
 
         <button onclick="switchTab('uniform')" id="btn-uniform"
@@ -256,24 +256,36 @@
           </div>
         </div>
 
-        <!-- 3. Right: Symmetrical Status Capsule -->
-        <div id="header-status-capsule"
-          class="inline-flex items-center text-xs font-bold px-3.5 py-1.5 rounded-full gap-2.5 transition-colors duration-300 shrink-0"
-          style="background-color: transparent; border: 1px solid rgba(16, 185, 129, 0.3);">
+        <!-- 3. Right: Symmetrical Status Capsule & Pending Queue Action Button -->
+        <div class="flex items-center gap-2.5 shrink-0">
+          <!-- 💡 PENDING SYNC QUEUE BUTTON (Status Capsule နှင့် Design အတိအကျတူညီသည်) -->
+          <button id="header-pending-btn" onclick="openPendingSyncModal()" type="button"
+            class="inline-flex items-center text-xs font-bold px-3.5 py-1.5 rounded-full gap-2 transition-all duration-300 shadow-sm cursor-pointer select-none active:scale-95"
+            style="background-color: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399;"
+            title="Click to view pending offline records">
+            <i id="pending-sync-icon" class="fa-solid fa-cloud-arrow-up text-[11px]"></i>
+            <span id="pending-count-label">Pending: 0</span>
+          </button>
 
-          <!-- Real-Time Wifi Status Indicator -->
-          <span id="network-status"
-            class="flex items-center justify-center transition-colors duration-300 cursor-pointer"
-            style="color: #34d399;" title="Internet Connected (Online)">
-            <i id="network-icon" class="fa-solid fa-wifi text-[11px]"></i>
-          </span>
+          <!-- Symmetrical Status Capsule -->
+          <div id="header-status-capsule"
+            class="inline-flex items-center text-xs font-bold px-3.5 py-1.5 rounded-full gap-2.5 transition-colors duration-300 shrink-0"
+            style="background-color: transparent; border: 1px solid rgba(16, 185, 129, 0.3);">
 
-          <!-- Capsule Divider (|) -->
-          <span id="capsule-divider" style="color: rgba(16, 185, 129, 0.4);">|</span>
+            <!-- Real-Time Wifi Status Indicator -->
+            <span id="network-status"
+              class="flex items-center justify-center transition-colors duration-300 cursor-pointer"
+              style="color: #34d399;" title="Internet Connected (Online)">
+              <i id="network-icon" class="fa-solid fa-wifi text-[11px]"></i>
+            </span>
 
-          <!-- Metadata -->
-          <div id="live-metadata" class="text-xs font-bold" style="color: #34d399;">
-            FY 2026-2027 | Tue | 09:53 PM | Admin
+            <!-- Capsule Divider (|) -->
+            <span id="capsule-divider" style="color: rgba(16, 185, 129, 0.4);">|</span>
+
+            <!-- Metadata -->
+            <div id="live-metadata" class="text-xs font-bold" style="color: #34d399;">
+              FY 2026-2027 | Tue | 09:53 PM | Admin
+            </div>
           </div>
         </div>
       </header>
@@ -292,6 +304,88 @@
   </div>
 
   <div id="toast-container" class="fixed top-5 right-5 z-[200] flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- ==================== 3.5. PENDING OFFLINE TRANSACTIONS MODAL ==================== -->
+  <div id="pending-sync-modal"
+    class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <!-- 🎯 နိုင်ငံတကာစံနှုန်းနှင့် ကိုက်ညီစေရန် max-w-4xl ဖြင့် ကျယ်ဝန်းလှပစွာ ပြင်ဆင်ထားသည် -->
+    <div
+      class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+
+      <!-- Modal Header -->
+      <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
+        <div class="flex items-center gap-2.5">
+          <div class="p-2 bg-amber-500/10 text-amber-400 rounded-lg">
+            <i class="fa-solid fa-cloud-arrow-up text-sm"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-black text-white uppercase tracking-wider">Pending Offline Transactions</h3>
+            <p class="text-[11px] text-slate-400 mt-0.5">D1 Database သို့ မရောက်ရှိသေးသော အော့ဖ်လိုင်း စာရင်းများ</p>
+          </div>
+        </div>
+        <button onclick="closePendingSyncModal()" class="text-slate-500 hover:text-white transition p-1">
+          <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body (List & Status) -->
+      <div class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+        <div class="flex items-center justify-between p-3.5 bg-[#0f172a] border border-slate-800 rounded-xl">
+          <div class="flex items-center gap-3">
+            <span class="text-slate-400 font-bold uppercase text-[10px]">Queue Status:</span>
+            <span id="pending-modal-status-badge"
+              class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">All
+              Synced</span>
+          </div>
+          <div class="text-slate-400 text-[11px]">
+            စုစုပေါင်း စာရင်း: <strong id="pending-modal-total-count"
+              class="text-white font-mono font-bold text-sm">0</strong> ခု
+          </div>
+        </div>
+
+        <!-- Table Container (Column Ratio ညှိထားသည်) -->
+        <div class="table-container bg-[#0f172a] border border-slate-800 rounded-xl overflow-x-auto relative">
+          <table class="w-full text-left border-collapse min-w-[800px]">
+            <thead>
+              <tr class="bg-[#0e172a] text-slate-400 text-[11px] border-b border-slate-800" style="height: 44px;">
+                <th class="w-12 text-center py-2 px-3">NO</th>
+                <th class="w-24 py-2 px-3">DATE</th>
+                <th class="w-24 py-2 px-3">STUDENT ID</th>
+                <th class="min-w-[200px] py-2 px-3">STUDENT NAME</th>
+                <th class="w-32 text-right py-2 px-3 text-emerald-400">AMOUNT</th>
+                <th class="w-32 text-center py-2 px-3 text-amber-400">TEMP VOUCHER</th>
+                <th class="w-20 text-center py-2 px-3 right-0 sticky bg-[#0e172a]">ACTION</th>
+              </tr>
+            </thead>
+            <tbody id="pending-table-body" class="divide-y divide-slate-800/40 text-slate-300">
+              <tr>
+                <td colspan="7" class="text-center py-8 text-slate-500 font-bold">Pending စာရင်း မရှိပါ။ အားလုံး D1 သို့
+                  ရောက်ရှိပြီးဖြစ်ပါသည်။</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-6 py-3.5 border-t border-slate-800 bg-[#0e172a] flex justify-between items-center shrink-0">
+        <button type="button" onclick="clearAllPendingQueue()" id="btn-pending-clear-all"
+          class="px-3.5 py-2 rounded-lg text-xs font-bold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition flex items-center gap-1.5 disabled:opacity-30 disabled:pointer-events-none">
+          <i class="fa-solid fa-trash-can text-xs"></i> Clear Queue
+        </button>
+
+        <div class="flex items-center gap-2.5">
+          <button type="button" onclick="closePendingSyncModal()"
+            class="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">Close</button>
+          <button type="button" onclick="syncAllPendingNow()" id="btn-pending-sync-now"
+            class="px-5 py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20 active:translate-y-0.5 transition flex items-center gap-2 disabled:opacity-40 disabled:pointer-events-none">
+            <i class="fa-solid fa-cloud-arrow-up text-xs"></i> <span>Sync All to D1 Now</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
 
   <!-- ==================== 4. GLOBAL SALARY GRADE MATRIX MODAL ==================== -->
   <div id="grade-modal"
