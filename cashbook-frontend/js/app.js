@@ -82,6 +82,18 @@ function initApp() {
     window.prefetchCoreModules();
   }
 
+  // 🎯 ZERO-QUOTA OFFLINE MASTER CACHE:
+  // Login ဝင်ချိန်တွင် ကျောင်းသားစာရင်းနှင့် Promotion နှုန်းထားများကို Offline အသုံးပြုနိုင်ရန် Pre-fetch လုပ်သည်
+  // Cache သက်တမ်း ၂၄ နာရီ ရှိပြီးသားဖြစ်ပါက D1 သို့ လုံးဝ မခေါ်ပါ (D1 Quota = 0)
+  if (navigator.onLine && typeof window.prefetchOfflineMasterData === 'function') {
+    window.prefetchOfflineMasterData();
+  }
+
+  // Header ရှိ Pending Button အရေအတွက်ကို စတင်တွက်ချက်ပြသသည်
+  if (typeof window.updatePendingUI === 'function') {
+    window.updatePendingUI();
+  }
+
   let currentTab = window.AppState ? window.AppState.currentModule : null;
 
   if (!currentTab) {
@@ -639,6 +651,176 @@ function showCenterSystemMessage(type, message, duration = 3500) {
 window.showToast = function (type, message) {
   if (typeof showCenterSystemMessage === 'function') {
     showCenterSystemMessage(type, message);
+  }
+};
+
+/**
+ * 💡 Real-Time Header Pending Button UI Synchronizer (Status Capsule နှင့် Design တူညီသည်)
+ */
+window.updatePendingUI = function () {
+  const btn = document.getElementById('header-pending-btn');
+  const label = document.getElementById('pending-count-label');
+  const modalBadge = document.getElementById('pending-modal-status-badge');
+  const modalTotal = document.getElementById('pending-modal-total-count');
+
+  const queue = window.OfflineSync ? window.OfflineSync.getQueue() : [];
+  const count = queue.length;
+
+  if (modalTotal) modalTotal.textContent = count;
+
+  if (count === 0) {
+    // 🎯 Pending = 0: အစိမ်းရောင် ငြိမ်သက်သော ဒီဇိုင်း
+    if (btn) {
+      btn.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+      btn.style.backgroundColor = 'rgba(16, 185, 129, 0.05)';
+      btn.style.color = '#34d399';
+      btn.classList.remove('animate-pulse');
+    }
+    if (label) label.textContent = 'Synced (0)';
+    if (modalBadge) {
+      modalBadge.className = "px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+      modalBadge.textContent = "All Synced";
+    }
+  } else {
+    // 🎯 Pending > 0: ရွှေဝါရောင် Pulse မီးစက်လေးဖြင့် အသိပေးသော ဒီဇိုင်း
+    if (btn) {
+      btn.style.borderColor = 'rgba(245, 158, 11, 0.5)';
+      btn.style.backgroundColor = 'rgba(245, 158, 11, 0.12)';
+      btn.style.color = '#fbbf24';
+      btn.classList.add('animate-pulse');
+    }
+    if (label) label.textContent = `Pending (${count})`;
+    if (modalBadge) {
+      modalBadge.className = "px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500/15 text-amber-400 border border-amber-500/30 animate-pulse";
+      modalBadge.textContent = `${count} Records Waiting`;
+    }
+  }
+};
+
+/**
+ * 💡 Open / Close Pending Sync Modal
+ */
+window.openPendingSyncModal = function () {
+  const modal = document.getElementById('pending-sync-modal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  renderPendingTable();
+};
+
+window.closePendingSyncModal = function () {
+  const modal = document.getElementById('pending-sync-modal');
+  if (modal) modal.classList.add('hidden');
+};
+
+function renderPendingTable() {
+  const tbody = document.getElementById('pending-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const queue = window.OfflineSync ? window.OfflineSync.getQueue() : [];
+  if (queue.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-slate-500 font-bold">Pending စာရင်း မရှိပါ။ အားလုံး D1 သို့ ရောက်ရှိပြီးဖြစ်ပါသည်။</td></tr>`;
+    return;
+  }
+
+  queue.forEach((item, idx) => {
+    tbody.innerHTML += `
+      <tr class="hover:bg-slate-800/30 text-xs border-b border-slate-800/40">
+        <td class="text-center font-mono py-2.5 px-2 text-slate-400">${idx + 1}</td>
+        <td class="font-mono py-2.5 px-2 text-slate-300">${item.date}</td>
+        <td class="font-mono font-bold text-indigo-400 py-2.5 px-2">${item.studentId}</td>
+        <td class="font-bold text-slate-100 py-2.5 px-2 truncate max-w-[150px]">${item.studentName}</td>
+        <td class="text-right font-mono font-bold text-emerald-400 py-2.5 px-2">${Number(item.amount).toLocaleString('en-US')} MMK</td>
+        <td class="text-center font-mono text-amber-400 text-[11px] py-2.5 px-2 font-bold">${item.vrNo}</td>
+        <td class="text-center py-2.5 px-2">
+          <button onclick="window.OfflineSync.remove('${item.id}'); renderPendingTable();" class="p-1 text-rose-400 hover:text-rose-300 transition" title="Delete">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        </td>
+      </tr>
+    `;
+  });
+}
+
+/**
+ * 💡 Sync All Pending Transactions to Cloudflare D1 (Zero Full-Table Scan)
+ */
+window.syncAllPendingNow = async function () {
+  if (!navigator.onLine) {
+    return showToast("ERROR", "အင်တာနက်လိုင်း ချိတ်ဆက်ထားခြင်း မရှိသေးသဖြင့် Sync မလုပ်နိုင်သေးပါ။");
+  }
+
+  const queue = window.OfflineSync ? window.OfflineSync.getQueue() : [];
+  if (queue.length === 0) return showToast("INFO", "Sync လုပ်ရန် Pending စာရင်း မရှိပါ။");
+
+  const btnSync = document.getElementById('btn-pending-sync-now');
+  if (btnSync) {
+    btnSync.disabled = true;
+    btnSync.innerHTML = '<i class="fa-solid fa-arrows-rotate fa-spin text-xs"></i> <span>Syncing to D1...</span>';
+  }
+
+  let successCount = 0;
+  for (const item of queue) {
+    try {
+      // D1 API Call (Existing callApi logic: forceRefresh = true to bypass cache)
+      const res = await callApi(item.action, { ...item.payload, forceRefresh: true }, item.method);
+      if (res && res.success) {
+        window.OfflineSync.remove(item.id);
+        successCount++;
+      }
+    } catch (err) {
+      console.warn("Failed to sync item:", item.id, err);
+    }
+  }
+
+  if (btnSync) {
+    btnSync.disabled = false;
+    btnSync.innerHTML = '<i class="fa-solid fa-cloud-arrow-up text-xs"></i> <span>Sync All to D1 Now</span>';
+  }
+
+  renderPendingTable();
+  window.updatePendingUI();
+
+  if (successCount > 0) {
+    showToast("SUCCESS", `Pending စာရင်း (${successCount}) ခုကို Cloudflare D1 သို့ အောင်မြင်စွာ ပို့ဆောင်ပြီးပါပြီ။`);
+    if (typeof loadIncomeData === 'function') loadIncomeData(false);
+  }
+};
+
+window.clearAllPendingQueue = function () {
+  if (!confirm("Pending ဖြစ်နေသော စာရင်းများအားလုံးကို အပြီးတိုင် ဖျက်ပစ်မည်မှာ သေချာပါသလား?")) return;
+  if (window.OfflineSync) window.OfflineSync.clearAll();
+  renderPendingTable();
+  showToast("SUCCESS", "Pending Queue အား ရှင်းလင်းပြီးပါပြီ။");
+};
+
+/**
+ * 💡 Pre-fetch Student Master Data (0 D1 Quota Cost when cached)
+ */
+window.prefetchOfflineMasterData = async function () {
+  const currentFy = typeof window.getCurrentAcademicYear === 'function' ? window.getCurrentAcademicYear() : '2026-2027';
+  const cacheKey = `golden_master_students_${currentFy}`;
+
+  // LocalStorage တွင် ရှိပြီးသားဖြစ်ပါက D1 သို့ လုံးဝ မခေါ်ပါ
+  const existing = localStorage.getItem(cacheKey);
+  if (existing) return;
+
+  try {
+    const res = await callApi('getStudentData', { fy: currentFy, limit: 5000 }, 'GET');
+    if (res && res.success && res.data) {
+      // Memory ချွေတာရန် လိုအပ်သော Field များကိုသာ ညှိယူသိမ်းဆည်းသည်
+      const compactList = res.data.map(s => ({
+        id: s.student_id || s.studentId || s.id,
+        fyid: s.fyid,
+        name: s.name,
+        class: s.class,
+        category: s.category,
+        promo: s.promo
+      }));
+      localStorage.setItem(cacheKey, JSON.stringify(compactList));
+    }
+  } catch (e) {
+    console.warn("Offline prefetch skipped:", e.message);
   }
 };
 

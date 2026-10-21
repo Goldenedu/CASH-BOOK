@@ -25,13 +25,13 @@ function updateIncKpiLabels() {
     'inc-total-expense': 'TOTAL EXPENSE (MMK)',
     'inc-balance': 'TOTAL BALANCES (MMK)'
   };
-  
+
   for (const [id, text] of Object.entries(labels)) {
     const valueEl = document.getElementById(id);
     if (valueEl) {
       const parent = valueEl.parentElement;
       if (parent) {
-        const labelEl = parent.querySelector('p'); 
+        const labelEl = parent.querySelector('p');
         if (labelEl) labelEl.textContent = text;
       }
     }
@@ -47,9 +47,9 @@ function adjustIncKpiFontSizes() {
     const el = document.getElementById(id);
     if (!el) return;
 
-    el.style.fontSize = '24px'; 
+    el.style.fontSize = '24px';
     el.style.whiteSpace = 'nowrap';
-    
+
     let currentSize = 24;
     while (el.scrollWidth > el.clientWidth && currentSize > 12) {
       currentSize--;
@@ -66,7 +66,7 @@ window.addEventListener('resize', adjustIncKpiFontSizes);
  */
 function filterIncomeData(list, searchVal, fromDate, toDate) {
   var safeList = Array.isArray(list) ? list : [];
-  return safeList.filter(function(row) {
+  return safeList.filter(function (row) {
     if (typeof window.isDateInRange === 'function') {
       if (!window.isDateInRange(row.effDate || row.date, fromDate, toDate)) return false;
     }
@@ -93,7 +93,7 @@ function clearDateFilterIncome() {
 
 function onSearchInputIncome() {
   if (searchTimeoutIncome) clearTimeout(searchTimeoutIncome);
-  searchTimeoutIncome = setTimeout(function() {
+  searchTimeoutIncome = setTimeout(function () {
     incomePage = 1;
     loadIncomeData(true, true);
   }, 300);
@@ -191,7 +191,11 @@ function renderTableIncome() {
   var fromDate = fromEl ? fromEl.value : '';
   var toDate = toEl ? toEl.value : '';
 
-  var filteredRows = filterIncomeData(incomeActiveData, searchVal, fromDate, toDate);
+  // 📶 Merge D1 Active Data with Local Offline Pending Queue
+  var pendingQueue = window.OfflineSync ? window.OfflineSync.getQueue() : [];
+  var combinedData = [...pendingQueue.map(item => ({ ...item.payload, isOfflinePending: true })), ...incomeActiveData];
+
+  var filteredRows = filterIncomeData(combinedData, searchVal, fromDate, toDate);
 
   if (!filteredRows || filteredRows.length === 0) {
     tbody.innerHTML = '<tr><td colspan="19" class="text-center py-8 text-slate-500 font-bold">ရှာဖွေမှုနှင့် ကိုက်ညီသော ဝင်ငွေစာရင်း မရှိပါ။</td></tr>';
@@ -200,51 +204,61 @@ function renderTableIncome() {
 
   var isViewer = (localStorage.getItem('golden_user_role') === "Viewer");
 
-  tbody.innerHTML = filteredRows.map(function(row) {
-    var isLocked = Boolean(row.isLocked || isViewer);
+  tbody.innerHTML = filteredRows.map(function (row) {
+    var isPending = Boolean(row.isOfflinePending);
+    var isLocked = Boolean(row.isLocked || isViewer || isPending);
     var lockClass = isLocked ? "opacity-30 cursor-not-allowed pointer-events-none" : "hover:text-white";
-    var lockTitle = row.isLocked ? "Older than 7 days (Locked)" : "";
+    var lockTitle = isPending ? "Pending Offline Sync" : (row.isLocked ? "Older than 7 days (Locked)" : "");
     var disabledAttr = isLocked ? 'disabled' : '';
 
-    var catBadge = typeof window.formatCategoryBadgeHtml === 'function' ? window.formatCategoryBadgeHtml(row.category) : window.escapeHtml(row.category);
-    var debitStr = row.debit > 0 ? Number(row.debit).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-';
-    var creditStr = row.credit > 0 ? Number(row.credit).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-';
-    var autStr = row.autAmount > 0 ? Number(row.autAmount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-';
+    // 🎯 Offline ပုံမှန်မဟုတ်ဘဲ Pending ဖြစ်နေပါက ရွှေဝါရောင် PENDING Badge ဖြင့် ပြသမည်
+    var catBadge = isPending
+      ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse">⏳ PENDING</span>'
+      : (typeof window.formatCategoryBadgeHtml === 'function' ? window.formatCategoryBadgeHtml(row.category) : window.escapeHtml(row.category));
+
+    var debitStr = row.debit > 0 ? Number(row.debit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-';
+    var creditStr = row.credit > 0 ? Number(row.credit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-';
+    var autStr = row.autAmount > 0 ? Number(row.autAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-';
 
     var displayNo = Math.floor(window.parseCleanNum(row.no || row.id)) || 1;
 
-    return '<tr class="hover:bg-slate-800/30 text-slate-300">' +
-        '<td class="text-center font-mono font-semibold text-slate-500 py-3 px-2">' + displayNo + '</td>' +
-        '<td class="font-mono text-xs py-3 px-2">' + (window.escapeHtml(row.effDate) || '-') + '</td>' +
-        '<td class="font-mono text-xs py-3 px-2">' + (window.escapeHtml(row.date) || '-') + '</td>' +
-        '<td class="font-mono font-bold text-indigo-300 py-3 px-2">' + (window.escapeHtml(row.fy) || '-') + '</td>' +
-        '<td class="font-mono font-bold py-3 px-2">' + (window.escapeHtml(row.id) || '-') + '</td>' +
-        '<td class="font-mono font-bold text-indigo-400 py-3 px-2">' + (window.escapeHtml(row.fyid) || '-') + '</td>' +
-        '<td class="font-bold text-slate-100 py-3 px-2">' + (window.escapeHtml(row.fyidName) || '-') + '</td>' +
-        '<td class="py-3 px-2">' + (window.escapeHtml(row.class) || '-') + '</td>' +
-        '<td class="py-3 px-2">' + catBadge + '</td>' +
-        '<td class="font-semibold text-slate-200 py-3 px-2">' + (window.escapeHtml(row.accountName) || '-') + '</td>' +
-        '<td class="font-bold text-slate-400 py-3 px-2">' + (window.escapeHtml(row.method) || '-') + '</td>' +
-        '<td class="text-right text-rose-400 font-mono font-bold py-3 px-2">' + debitStr + '</td>' +
-        '<td class="text-right text-emerald-400 font-mono font-bold py-3 px-2">' + creditStr + '</td>' +
-        '<td class="text-right text-indigo-400 font-mono font-bold py-3 px-2">' + autStr + '</td>' +
-        '<td class="text-xs py-3 px-2">' + (window.escapeHtml(row.promo) || '-') + '</td>' +
-        '<td class="font-mono text-xs py-3 px-2">' + (window.escapeHtml(row.my) || '-') + '</td>' +
-        '<td class="font-mono text-xs text-slate-400 py-3 px-2">' + (window.escapeHtml(row.vrNo) || '-') + '</td>' +
-        '<td class="max-w-xs truncate text-xs text-slate-400 py-3 px-2" title="' + window.escapeHtml(row.remark) + '">' + (window.escapeHtml(row.remark) || '-') + '</td>' +
-        '<td class="right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg text-center py-3 px-2">' +
-          '<div class="flex items-center justify-center gap-2">' +
-            '<button onclick="printInvoice(\'' + window.escapeJsAttr(row.uniqueId) + '\')" class="p-1 text-emerald-400 hover:text-emerald-300 transition" title="Print Receipt"><i class="fa-solid fa-print"></i></button>' +
-            '<button onclick="editIncomeEntry(\'' + window.escapeJsAttr(row.uniqueId) + '\')" class="p-1 text-indigo-400 hover:text-indigo-300 transition ' + lockClass + '" title="Edit ' + lockTitle + '" ' + disabledAttr + '><i class="fa-solid fa-pen-to-square"></i></button>' +
-            '<button onclick="deleteIncomeEntry(\'' + window.escapeJsAttr(row.uniqueId) + '\')" class="p-1 text-rose-400 hover:text-rose-300 transition ' + lockClass + '" title="Delete ' + lockTitle + '" ' + disabledAttr + '><i class="fa-solid fa-trash"></i></button>' +
-          '</div>' +
-        '</td>' +
+    return '<tr class="hover:bg-slate-800/30 text-slate-300 ' + (isPending ? 'bg-amber-500/5' : '') + '">' +
+      '<td class="text-center font-mono font-semibold text-slate-500 py-3 px-2">' + (isPending ? '<i class="fa-solid fa-clock text-amber-400"></i>' : displayNo) + '</td>' +
+      '<td class="font-mono text-xs py-3 px-2">' + (window.escapeHtml(row.effDate) || '-') + '</td>' +
+      '<td class="font-mono text-xs py-3 px-2">' + (window.escapeHtml(row.date) || '-') + '</td>' +
+      '<td class="font-mono font-bold text-indigo-300 py-3 px-2">' + (window.escapeHtml(row.fy) || '-') + '</td>' +
+      '<td class="font-mono font-bold py-3 px-2">' + (window.escapeHtml(row.id) || '-') + '</td>' +
+      '<td class="font-mono font-bold text-indigo-400 py-3 px-2">' + (window.escapeHtml(row.fyid) || '-') + '</td>' +
+      '<td class="font-bold text-slate-100 py-3 px-2">' + (window.escapeHtml(row.fyidName) || '-') + '</td>' +
+      '<td class="py-3 px-2">' + (window.escapeHtml(row.class) || '-') + '</td>' +
+      '<td class="py-3 px-2">' + catBadge + '</td>' +
+      '<td class="font-semibold text-slate-200 py-3 px-2">' + (window.escapeHtml(row.accountName) || '-') + '</td>' +
+      '<td class="font-bold text-slate-400 py-3 px-2">' + (window.escapeHtml(row.method) || '-') + '</td>' +
+      '<td class="text-right text-rose-400 font-mono font-bold py-3 px-2">' + debitStr + '</td>' +
+      '<td class="text-right text-emerald-400 font-mono font-bold py-3 px-2">' + creditStr + '</td>' +
+      '<td class="text-right text-indigo-400 font-mono font-bold py-3 px-2">' + autStr + '</td>' +
+      '<td class="text-xs py-3 px-2">' + (window.escapeHtml(row.promo) || '-') + '</td>' +
+      '<td class="font-mono text-xs py-3 px-2">' + (window.escapeHtml(row.my) || '-') + '</td>' +
+      '<td class="font-mono text-xs text-slate-400 py-3 px-2">' + (window.escapeHtml(row.vrNo) || '-') + '</td>' +
+      '<td class="max-w-xs truncate text-xs text-slate-400 py-3 px-2" title="' + window.escapeHtml(row.remark) + '">' + (window.escapeHtml(row.remark) || '-') + '</td>' +
+      '<td class="right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg text-center py-3 px-2">' +
+      '<div class="flex items-center justify-center gap-2">' +
+      '<button onclick="printInvoice(\'' + window.escapeJsAttr(row.uniqueId) + '\')" class="p-1 text-emerald-400 hover:text-emerald-300 transition" title="Print Receipt"><i class="fa-solid fa-print"></i></button>' +
+      (isPending
+        ? '<span class="text-[10px] text-amber-400 font-bold italic">Waiting</span>'
+        : '<button onclick="editIncomeEntry(\'' + window.escapeJsAttr(row.uniqueId) + '\')" class="p-1 text-indigo-400 hover:text-indigo-300 transition ' + lockClass + '" title="Edit ' + lockTitle + '" ' + disabledAttr + '><i class="fa-solid fa-pen-to-square"></i></button>' +
+        '<button onclick="deleteIncomeEntry(\'' + window.escapeJsAttr(row.uniqueId) + '\')" class="p-1 text-rose-400 hover:text-rose-300 transition ' + lockClass + '" title="Delete ' + lockTitle + '" ' + disabledAttr + '><i class="fa-solid fa-trash"></i></button>') +
+      '</div>' +
+      '</td>' +
       '</tr>';
   }).join('');
 }
 
 /**
  * 💡 FY-Scoped Student Lookup & Live Rate Calculation
+ */
+/**
+ * 💡 FY-Scoped Student Lookup & Live Rate Calculation (Offline-First Supported)
  */
 async function onStudentIdOrFYChangeIncome() {
   var fyVal = document.getElementById('inc-fy')?.value || window.getCurrentAcademicYear();
@@ -264,7 +278,18 @@ async function onStudentIdOrFYChangeIncome() {
   var paddedId = String(idVal).padStart(4, '0');
   var targetFyid = `${fyShort}-STU-${paddedId}`;
 
+  // 📶 Offline-First: ပထမဦးစွာ localStorage ရှိ pre-fetched offline master cache မှ 0ms ဖြင့် ရှာသည် (D1 Quota = 0)
   if (!studentsByFyCache[fyVal]) {
+    try {
+      const cacheKey = `golden_master_students_${fyVal}`;
+      const localCached = localStorage.getItem(cacheKey);
+      if (localCached) {
+        studentsByFyCache[fyVal] = JSON.parse(localCached);
+      }
+    } catch (e) { }
+  }
+
+  if (!studentsByFyCache[fyVal] && navigator.onLine) {
     if (fyidNameShow) fyidNameShow.value = "ကျောင်းသား စာရင်း ရှာဖွေနေပါသည်...";
     try {
       var res = await callApi('getStudentData', { fy: fyVal, limit: 5000 }, 'GET');
@@ -279,8 +304,8 @@ async function onStudentIdOrFYChangeIncome() {
   var list = studentsByFyCache[fyVal] || [];
   var idValNum = window.parseCleanIntId(idVal);
 
-  var student = list.find(function(s) {
-    var sFyid = window.sanitizeFyidStr(s.fyid).toLowerCase();
+  var student = list.find(function (s) {
+    var sFyid = window.sanitizeFyidStr(s.fyid || '').toLowerCase();
     var sStudentIdNum = window.parseCleanIntId(s.student_id ?? s.studentId ?? s.id);
 
     var fyidMatches = (sFyid === targetFyid.toLowerCase());
@@ -307,11 +332,11 @@ async function onStudentIdOrFYChangeIncome() {
     await onAccountNameOrCategoryChangeIncome();
   } else {
     if (fyidShow) fyidShow.value = targetFyid;
-    if (fyidNameShow) fyidNameShow.value = "ကျောင်းသား စာရင်း ရှာမတွေ့ပါ။";
-    
+    if (fyidNameShow) fyidNameShow.value = "ကျောင်းသား စာရင်း ရှာမတွေ့ပါ။ (Offline Mode)";
+
     if (document.getElementById('inc-class')) document.getElementById('inc-class').value = "";
     if (document.getElementById('inc-promo')) document.getElementById('inc-promo').value = "";
-    
+
     resetIncomeAmounts(0);
   }
 }
@@ -369,7 +394,7 @@ async function onAccountNameOrCategoryChangeIncome() {
     var cleanClass = classVal.toLowerCase().replace(/\s+/g, '');
     var cleanCat = categoryVal.toLowerCase().replace(/\s+/g, '');
 
-    var match = promoMatrixCache.find(function(r) {
+    var match = promoMatrixCache.find(function (r) {
       var rFy = String(r.fy || '').trim().replace(/^FY\s*/i, '');
       var rClass = String(r.class || '').trim().toLowerCase().replace(/\s+/g, '');
       var rCat = String(r.category || '').trim().toLowerCase().replace(/\s+/g, '');
@@ -382,7 +407,7 @@ async function onAccountNameOrCategoryChangeIncome() {
     });
 
     if (!match) {
-      match = promoMatrixCache.find(function(r) {
+      match = promoMatrixCache.find(function (r) {
         var rClass = String(r.class || '').trim().toLowerCase().replace(/\s+/g, '');
         var rCat = String(r.category || '').trim().toLowerCase().replace(/\s+/g, '');
         return (rClass === cleanClass) && (rCat === cleanCat);
@@ -390,7 +415,7 @@ async function onAccountNameOrCategoryChangeIncome() {
     }
 
     if (!match) {
-      match = promoMatrixCache.find(function(r) {
+      match = promoMatrixCache.find(function (r) {
         var rClass = String(r.class || '').trim().toLowerCase().replace(/\s+/g, '');
         return (rClass === cleanClass);
       });
@@ -497,10 +522,10 @@ function bindIncomeModalLiveEvents() {
 async function openAddModalIncome() {
   var form = document.getElementById('income-form');
   if (form) form.reset();
-  
+
   var uidEl = document.getElementById('inc-uniqueId');
   if (uidEl) uidEl.value = "";
-  
+
   var today = new Date().toISOString().slice(0, 10);
   var dateEl = document.getElementById('inc-date');
   if (dateEl) dateEl.value = today;
@@ -538,12 +563,15 @@ function populateFYDropdownIncome() {
     `${currentYear + 1}-${currentYear + 2}`
   ];
 
-  fySelect.innerHTML = options.map(function(fy) { return '<option value="' + fy + '">' + fy + '</option>'; }).join('');
+  fySelect.innerHTML = options.map(function (fy) { return '<option value="' + fy + '">' + fy + '</option>'; }).join('');
   fySelect.value = window.getCurrentAcademicYear();
 }
 
 /**
  * 💡 Save / Submit Income Entry with Double Submit Lock
+ */
+/**
+ * 💡 Save / Submit Income Entry with Offline Interceptor Support
  */
 async function saveIncomeForm(e) {
   if (e && e.preventDefault) e.preventDefault();
@@ -591,6 +619,18 @@ async function saveIncomeForm(e) {
 
   try {
     closeIncomeModal();
+
+    // 📶 OFFLINE INTERCEPTOR: အင်တာနက်လိုင်း မရှိပါက D1 သို့ မပို့ဘဲ Offline Queue သို့ ချက်ချင်းသိမ်းဆည်းသည်
+    if (!navigator.onLine && window.OfflineSync) {
+      await window.OfflineSync.enqueue('saveIncomeEntry', payload, 'POST');
+      if (typeof showToast === 'function') {
+        showToast("SUCCESS", "📶 အင်တာနက်လိုင်း မရှိသေးသဖြင့် စက်ထဲတွင် ယာယီသိမ်းဆည်းထားပါသည် (Offline Queue)။");
+      }
+      renderTableIncome();
+      isIncomeSubmitting = false;
+      return;
+    }
+
     if (typeof toggleLoading === 'function') toggleLoading(true);
 
     var actionName = payload.uniqueId ? 'updateIncomeEntry' : 'saveIncomeEntry';
@@ -603,7 +643,16 @@ async function saveIncomeForm(e) {
       throw new Error(res?.message || "သိမ်းဆည်းမှု မအောင်မြင်ပါ။");
     }
   } catch (err) {
-    if (typeof showToast === 'function') showToast("ERROR", "မအောင်မြင်ပါ: " + err.message);
+    // Network Error ကြောင့် ကျရှုံးပါကလည်း Offline Queue သို့ အလိုအလျောက် ပို့ဆောင်ပေးမည်
+    if (window.OfflineSync) {
+      await window.OfflineSync.enqueue('saveIncomeEntry', payload, 'POST');
+      if (typeof showToast === 'function') {
+        showToast("SUCCESS", "📶 ဆာဗာချိတ်ဆက်၍ မရသဖြင့် စက်ထဲတွင် ယာယီသိမ်းဆည်းထားပါသည် (Offline Mode)။");
+      }
+      renderTableIncome();
+    } else if (typeof showToast === 'function') {
+      showToast("ERROR", "မအောင်မြင်ပါ: " + err.message);
+    }
   } finally {
     isIncomeSubmitting = false;
     if (typeof toggleLoading === 'function') toggleLoading(false);
@@ -614,7 +663,7 @@ async function saveIncomeForm(e) {
  * 💡 Edit Entry
  */
 function editIncomeEntry(uniqueId) {
-  var row = incomeActiveData.find(function(item) { return item.uniqueId === uniqueId; });
+  var row = incomeActiveData.find(function (item) { return item.uniqueId === uniqueId; });
   if (!row) {
     if (typeof showToast === 'function') showToast("ERROR", "မူရင်း အချက်အလက် ရှာမတွေ့ပါ။");
     return;
@@ -721,26 +770,26 @@ function exportToCSVIncome() {
   }
 
   var csv = "NO,EFFECT DATE,DATE,FY,ID,FYID,FYID NAME,CLASS,CATEGORY,ACCOUNT NAME,METHOD,DEBIT,CREDIT,AUT AMOUNT,PROMO,MY,VR NO,REMARK,UNIQUEID\n";
-  incomeActiveData.forEach(function(r) {
+  incomeActiveData.forEach(function (r) {
     csv += (r.no || '') + ',' +
-           window.safeCsvCell(r.effDate || '') + ',' +
-           window.safeCsvCell(r.date || '') + ',' +
-           window.safeCsvCell(r.fy || '') + ',' +
-           window.safeCsvCell(r.id || '') + ',' +
-           window.safeCsvCell(r.fyid || '') + ',' +
-           window.safeCsvCell(r.fyidName || '') + ',' +
-           window.safeCsvCell(r.class || '') + ',' +
-           window.safeCsvCell(r.category || '') + ',' +
-           window.safeCsvCell(r.accountName || '') + ',' +
-           window.safeCsvCell(r.method || '') + ',' +
-           (r.debit || 0) + ',' +
-           (r.credit || 0) + ',' +
-           (r.autAmount || 0) + ',' +
-           window.safeCsvCell(r.promo || '') + ',' +
-           window.safeCsvCell(r.my || '') + ',' +
-           window.safeCsvCell(r.vrNo || '') + ',' +
-           window.safeCsvCell(r.remark || '') + ',' +
-           window.safeCsvCell(r.uniqueId || '') + '\n';
+      window.safeCsvCell(r.effDate || '') + ',' +
+      window.safeCsvCell(r.date || '') + ',' +
+      window.safeCsvCell(r.fy || '') + ',' +
+      window.safeCsvCell(r.id || '') + ',' +
+      window.safeCsvCell(r.fyid || '') + ',' +
+      window.safeCsvCell(r.fyidName || '') + ',' +
+      window.safeCsvCell(r.class || '') + ',' +
+      window.safeCsvCell(r.category || '') + ',' +
+      window.safeCsvCell(r.accountName || '') + ',' +
+      window.safeCsvCell(r.method || '') + ',' +
+      (r.debit || 0) + ',' +
+      (r.credit || 0) + ',' +
+      (r.autAmount || 0) + ',' +
+      window.safeCsvCell(r.promo || '') + ',' +
+      window.safeCsvCell(r.my || '') + ',' +
+      window.safeCsvCell(r.vrNo || '') + ',' +
+      window.safeCsvCell(r.remark || '') + ',' +
+      window.safeCsvCell(r.uniqueId || '') + '\n';
   });
 
   var blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
@@ -757,10 +806,10 @@ function exportToCSVIncome() {
  * 💡 Universal Invoice Printer (With Strict Print Mode Isolation)
  */
 function printInvoice(uniqueId) {
-  var row = incomeActiveData.find(function(item) { return (item.uniqueId === uniqueId || item.uniqueid === uniqueId); });
+  var row = incomeActiveData.find(function (item) { return (item.uniqueId === uniqueId || item.uniqueid === uniqueId); });
 
   if (!row && window.allCashierData && Array.isArray(window.allCashierData)) {
-    row = window.allCashierData.find(function(item) { return (item.uniqueId === uniqueId || item.uniqueid === uniqueId); });
+    row = window.allCashierData.find(function (item) { return (item.uniqueId === uniqueId || item.uniqueid === uniqueId); });
   }
 
   if (!row) {
@@ -780,7 +829,7 @@ function printInvoice(uniqueId) {
   }
 
   var copies = ['customer', 'received'];
-  copies.forEach(function(copy) {
+  copies.forEach(function (copy) {
     var nameEl = document.getElementById(`print-${copy}-name`);
     if (nameEl) nameEl.textContent = studentName;
 
@@ -805,13 +854,13 @@ function printInvoice(uniqueId) {
 
     var bodyEl = document.getElementById(`print-${copy}-table-body`);
     if (bodyEl) {
-      bodyEl.innerHTML = 
+      bodyEl.innerHTML =
         '<tr class="border-b border-black">' +
-          '<td class="border border-black p-1 text-center font-bold text-[10px]">1</td>' +
-          '<td class="border border-black p-1 font-semibold text-[10px]">' + window.escapeHtml(displayDesc) + '</td>' +
-          '<td class="border border-black p-1 text-center text-[10px]">' + window.escapeHtml(row.my || '-') + '</td>' +
-          '<td class="border border-black p-1 text-center font-bold text-[10px]">' + window.escapeHtml(row.method || '-') + '</td>' +
-          '<td class="border border-black p-1 text-right font-bold text-[10px]">' + Number(displayAmount).toLocaleString('en-US') + ' MMK</td>' +
+        '<td class="border border-black p-1 text-center font-bold text-[10px]">1</td>' +
+        '<td class="border border-black p-1 font-semibold text-[10px]">' + window.escapeHtml(displayDesc) + '</td>' +
+        '<td class="border border-black p-1 text-center text-[10px]">' + window.escapeHtml(row.my || '-') + '</td>' +
+        '<td class="border border-black p-1 text-center font-bold text-[10px]">' + window.escapeHtml(row.method || '-') + '</td>' +
+        '<td class="border border-black p-1 text-right font-bold text-[10px]">' + Number(displayAmount).toLocaleString('en-US') + ' MMK</td>' +
         '</tr>';
     }
 
@@ -822,9 +871,9 @@ function printInvoice(uniqueId) {
   document.body.classList.remove('print-mode-payslip');
   document.body.classList.add('print-mode-invoice');
 
-  setTimeout(function() {
+  setTimeout(function () {
     window.print();
-    setTimeout(function() {
+    setTimeout(function () {
       document.body.classList.remove('print-mode-invoice');
     }, 500);
   }, 100);
