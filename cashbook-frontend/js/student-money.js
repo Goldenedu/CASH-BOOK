@@ -108,11 +108,14 @@ function syncStudentMoneyTabUI(activeTab) {
  * 💡 UNIFIED STUDENT MONEY SUB-TAB SWITCHER (Zero-Loading Instant Switcher)
  * ==============================================================================
  */
-function switchStudentMoneySubTab(tabName, forceReload = false) {
+/**
+ * 💡 Switch Student Money Sub-Tabs (Strictly Conflict-Free & Instant Toggle)
+ */
+async function switchStudentMoneySubTab(tabName, forceReload = false) {
   gCurrentStudentMoneyTab = tabName || 'main';
   const tabs = ['main', 'settlement', 'cashier', 'reconcile'];
 
-  // 1. View Toggle (Visible / Hidden) - DOM ထဲရှိပြီးသား View ကို ချက်ချင်း ပေါ်စေသည်
+  // 1. View Toggle (Visible / Hidden) - DOM ပေါ်ရှိပြီးသား View ကို ချက်ချင်း ပေါ်စေသည်
   tabs.forEach(t => {
     const view = document.getElementById(`stm-${t}-view`);
     if (view) view.classList.toggle('hidden', t !== gCurrentStudentMoneyTab);
@@ -131,21 +134,33 @@ function switchStudentMoneySubTab(tabName, forceReload = false) {
     }
   }
 
-  // 4. 🎯 ZERO-LOADING ENGINE: ပထမတစ်ကြိမ်သာ Data ခေါ်ယူမည်၊ ဒုတိယအကြိမ်မှစ၍ Loading လုံးဝ မပြတော့ပါ
-  const isLoaded = gLoadedTabs[gCurrentStudentMoneyTab];
-  if (!isLoaded || forceReload) {
-    if (gCurrentStudentMoneyTab === 'main') {
-      loadStudentMoneyData(isLoaded, forceReload);
-    } else if (gCurrentStudentMoneyTab === 'settlement') {
-      const todayStr = getMMTDateString();
-      const dateInput = document.getElementById('adm-settle-date')?.value || todayStr;
-      loadAdminSettlementDailyStats(dateInput);
-      loadAdminSettlementHistory(isLoaded, forceReload);
-    } else if (gCurrentStudentMoneyTab === 'cashier') {
-      loadPmCashierBookData(isLoaded, forceReload);
-    } else if (gCurrentStudentMoneyTab === 'reconcile') {
-      loadSpmmsReconciliationData(isLoaded, forceReload);
+  // 4. 🎯 ZERO-FREEZE & ZERO-RELOAD ENGINE:
+  // ဒေတာ ရှိနှင့်ပြီးသားဖြစ်ပါက D1 သို့ မခေါ်ဘဲ Memory မှ HTML ပေါ်သို့ ချက်ချင်း ရေးဆွဲပေးသည် (0ms)
+  if (gCurrentStudentMoneyTab === 'main') {
+    if (!forceReload && gStudentMoneyHistoryData && gStudentMoneyHistoryData.length > 0) {
+      renderTopKPIs(gStudentMoneyStats.totalIncome, gStudentMoneyStats.totalExpense, gStudentMoneyStats.balance, gStudentMoneyStats.activeDepositors || 0);
+      renderStudentMoneyTable();
+    } else {
+      await loadStudentMoneyData(gLoadedTabs.main && !forceReload, forceReload);
     }
+  } else if (gCurrentStudentMoneyTab === 'settlement') {
+    const todayStr = getMMTDateString();
+    const dateInput = document.getElementById('adm-settle-date')?.value || todayStr;
+    loadAdminSettlementDailyStats(dateInput);
+
+    if (!forceReload && gSettleHistoryData && gSettleHistoryData.length > 0) {
+      renderAdminSettlementHistoryTable();
+    } else {
+      await loadAdminSettlementHistory(gLoadedTabs.settlement && !forceReload, forceReload);
+    }
+  } else if (gCurrentStudentMoneyTab === 'cashier') {
+    if (!forceReload && gPmCashierBookData && gPmCashierBookData.length > 0) {
+      applyPmCashierBookSearchAndRender();
+    } else {
+      await loadPmCashierBookData(gLoadedTabs.cashier && !forceReload, forceReload);
+    }
+  } else if (gCurrentStudentMoneyTab === 'reconcile') {
+    await loadSpmmsReconciliationData(gLoadedTabs.reconcile && !forceReload, forceReload);
   }
 }
 
@@ -933,6 +948,53 @@ async function loadAdminSettlementHistory(isSilent = false, forceRefresh = false
   } finally {
     if (!isSilent && typeof toggleLoading === 'function') toggleLoading(false);
   }
+}
+
+/**
+ * 💡 Render Admin Settlement Table from Memory Data (0 D1 Quota)
+ */
+function renderAdminSettlementHistoryTable() {
+  const tbody = document.getElementById('adm-settle-history-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  if (!gSettleHistoryData || gSettleHistoryData.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" class="text-center py-6 text-slate-500 font-bold">ရှင်းလင်းပြီး မှတ်တမ်း မရှိသေးပါ။</td></tr>`;
+    const info = document.getElementById('settle-pagination-info');
+    if (info) info.textContent = "Showing 0 entries";
+    return;
+  }
+
+  gSettleHistoryData.forEach((r, idx) => {
+    const displayNo = gSettleTotalRows - ((gSettlePage - 1) * gSettleLimit + idx);
+    tbody.innerHTML += `
+      <tr class="hover:bg-slate-800/30 text-xs border-b border-slate-800/40">
+        <td class="text-center font-mono py-2.5 px-3 text-slate-400">${displayNo}</td>
+        <td class="font-mono py-2.5 px-3 text-slate-300">${esc(r.date)}</td>
+        <td class="font-mono font-bold text-sky-400 py-2.5 px-3">${esc(r.settlementNo)}</td>
+        <td class="text-right font-mono text-slate-300 py-2.5 px-3">${Number(r.totalSalesAmount || 0).toLocaleString('en-US')} MMK</td>
+        <td class="text-right font-mono text-emerald-400 py-2.5 px-3">${Number(r.cashSalesShare || 0).toLocaleString('en-US')} MMK</td>
+        <td class="text-right font-mono font-bold text-amber-400 py-2.5 px-3">${Number(r.pocketMoneyShare || 0).toLocaleString('en-US')} MMK</td>
+        <td class="py-2.5 px-3 text-slate-400 truncate max-w-xs">${esc(r.handedOverBy || '-')}</td>
+        <td class="py-2.5 px-3 text-slate-300 font-bold truncate max-w-xs">${esc(r.receivedBy || '-')}</td>
+        <td class="text-center py-2.5 px-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">
+          <button onclick="printCanteenSettlementVoucher('${escAttr(r.settlementNo)}')" class="p-1.5 text-sky-400 hover:text-sky-300 transition" title="ပြေစာထုတ်မည်">
+            <i class="fa-solid fa-print"></i>
+          </button>
+        </td>
+      </tr>
+    `;
+  });
+
+  const start = (gSettlePage - 1) * gSettleLimit + 1;
+  const end = Math.min(start + gSettleLimit - 1, gSettleTotalRows);
+  const info = document.getElementById('settle-pagination-info');
+  if (info) info.textContent = gSettleTotalRows === 0 ? "Showing 0 entries" : `Showing ${start} to ${end} of ${gSettleTotalRows} entries`;
+
+  const prevBtn = document.getElementById('settle-btn-prev');
+  const nextBtn = document.getElementById('settle-btn-next');
+  if (prevBtn) prevBtn.disabled = (gSettlePage <= 1);
+  if (nextBtn) nextBtn.disabled = (end >= gSettleTotalRows);
 }
 
 function onSearchInputSettlement() {
