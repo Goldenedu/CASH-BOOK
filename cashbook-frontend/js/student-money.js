@@ -105,17 +105,14 @@ function syncStudentMoneyTabUI(activeTab) {
 
 /**
  * ==============================================================================
- * 💡 UNIFIED STUDENT MONEY SUB-TAB SWITCHER (Zero-Loading Instant Switcher)
+ * 💡 UNIFIED STUDENT MONEY SUB-TAB SWITCHER (Zero-Freeze & Instant 0ms Memory Hydration)
  * ==============================================================================
- */
-/**
- * 💡 Switch Student Money Sub-Tabs (Strictly Conflict-Free & Instant Toggle)
  */
 async function switchStudentMoneySubTab(tabName, forceReload = false) {
   gCurrentStudentMoneyTab = tabName || 'main';
   const tabs = ['main', 'settlement', 'cashier', 'reconcile'];
 
-  // 1. View Toggle (Visible / Hidden) - DOM ပေါ်ရှိပြီးသား View ကို ချက်ချင်း ပေါ်စေသည်
+  // 1. View Toggle (Visible / Hidden)
   tabs.forEach(t => {
     const view = document.getElementById(`stm-${t}-view`);
     if (view) view.classList.toggle('hidden', t !== gCurrentStudentMoneyTab);
@@ -134,33 +131,48 @@ async function switchStudentMoneySubTab(tabName, forceReload = false) {
     }
   }
 
-  // 4. 🎯 ZERO-FREEZE & ZERO-RELOAD ENGINE:
-  // ဒေတာ ရှိနှင့်ပြီးသားဖြစ်ပါက D1 သို့ မခေါ်ဘဲ Memory မှ HTML ပေါ်သို့ ချက်ချင်း ရေးဆွဲပေးသည် (0ms)
+  // 4. 🎯 DOM-AWARE INSTANT HYDRATION (ဒုတိယအကြိမ် ဝင်ချိန်တွင် Freeze မဖြစ်စေရန် 0ms Render ပြုလုပ်ခြင်း)
   if (gCurrentStudentMoneyTab === 'main') {
+    const tableBody = document.getElementById('stm-table-body');
+    const isDomEmpty = !tableBody || tableBody.children.length === 0;
+
     if (!forceReload && gStudentMoneyHistoryData && gStudentMoneyHistoryData.length > 0) {
-      renderTopKPIs(gStudentMoneyStats.totalIncome, gStudentMoneyStats.totalExpense, gStudentMoneyStats.balance, gStudentMoneyStats.activeDepositors || 0);
-      renderStudentMoneyTable();
+      // Memory ထဲတွင် ရှိပြီးသားဖြစ်ပါက DOM ပေါ်သို့ ချက်ချင်း ရေးဆွဲသည် (0ms, 0 D1 Quota)
+      if (isDomEmpty) {
+        renderTopKPIs(gStudentMoneyStats.totalIncome, gStudentMoneyStats.totalExpense, gStudentMoneyStats.balance, gStudentMoneyStats.activeDepositors || 0);
+        renderStudentMoneyTable();
+      }
     } else {
-      await loadStudentMoneyData(gLoadedTabs.main && !forceReload, forceReload);
+      await loadStudentMoneyData(false, forceReload);
     }
   } else if (gCurrentStudentMoneyTab === 'settlement') {
     const todayStr = getMMTDateString();
     const dateInput = document.getElementById('adm-settle-date')?.value || todayStr;
-    loadAdminSettlementDailyStats(dateInput);
+    const settleBody = document.getElementById('adm-settle-history-body');
+    const isDomEmpty = !settleBody || settleBody.children.length === 0;
 
     if (!forceReload && gSettleHistoryData && gSettleHistoryData.length > 0) {
-      renderAdminSettlementHistoryTable();
+      if (isDomEmpty) renderAdminSettlementHistoryTable();
     } else {
-      await loadAdminSettlementHistory(gLoadedTabs.settlement && !forceReload, forceReload);
+      loadAdminSettlementDailyStats(dateInput);
+      await loadAdminSettlementHistory(false, forceReload);
     }
   } else if (gCurrentStudentMoneyTab === 'cashier') {
+    const cashierBody = document.getElementById('pm-cashier-table-body');
+    const isDomEmpty = !cashierBody || cashierBody.children.length === 0;
+
     if (!forceReload && gPmCashierBookData && gPmCashierBookData.length > 0) {
-      applyPmCashierBookSearchAndRender();
+      if (isDomEmpty) applyPmCashierBookSearchAndRender();
     } else {
-      await loadPmCashierBookData(gLoadedTabs.cashier && !forceReload, forceReload);
+      await loadPmCashierBookData(false, forceReload);
     }
   } else if (gCurrentStudentMoneyTab === 'reconcile') {
-    await loadSpmmsReconciliationData(gLoadedTabs.reconcile && !forceReload, forceReload);
+    const recVirtual = document.getElementById('rec-total-virtual');
+    const isDomEmpty = !recVirtual || recVirtual.textContent.trim() === '0 MMK';
+
+    if (isDomEmpty || forceReload) {
+      await loadSpmmsReconciliationData(false, forceReload);
+    }
   }
 }
 
@@ -951,7 +963,7 @@ async function loadAdminSettlementHistory(isSilent = false, forceRefresh = false
 }
 
 /**
- * 💡 Render Admin Settlement Table from Memory Data (0 D1 Quota)
+ * 💡 Render Admin Settlement Table from Memory Data (0 D1 Quota, 0ms)
  */
 function renderAdminSettlementHistoryTable() {
   const tbody = document.getElementById('adm-settle-history-body');

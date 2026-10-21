@@ -155,7 +155,7 @@ async function switchTab(tabId) {
     return;
   }
 
-  // 🎯 PREVENT UNNECESSARY RELOAD: လက်ရှိ Module ပေါ် ရောက်နေပြီးသားဖြစ်ပါက DOM ကို ဖျက်ချပြီး Loading မလုပ်စေရ
+  // 🎯 လက်ရှိ Module ပေါ် ရောက်နေပြီးသားဖြစ်ပါက DOM ကို ဖျက်ချပြီး ပြန်မထည့်စေရ
   if (window.AppState && window.AppState.currentModule === tabId && document.getElementById('view-container')?.firstElementChild) {
     updateSidebarHighlight(tabId);
     return;
