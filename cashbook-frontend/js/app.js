@@ -396,10 +396,10 @@ function updateSidebarHighlight(activeTabId) {
 
   // 🎯 Fix: Student Money မော်ဂျူး၏ Sub-Tabs များကို သီးသန့် ခွဲခြားစစ်ဆေးခြင်း 
   // (Cashier Cash Book ၏ 'cashier' နှင့် မရောထွေးစေရန် student-money ၏ tab ဖြစ်ကြောင်း အတိအကျ စစ်သည်)
-  const studentMoneySubTabs = ['main', 'settlement', 'cashier', 'reconcile'];
+  const studentMoneySubTabs = ['settlement', 'reconcile', 'student-money'];
 
   // အကယ်၍ Student Money ၏ PM Cashier tab ဖြစ်ပါက 'stm-cashier' သို့မဟုတ် 'student-money' ဟု သတ်မှတ်နိုင်သည်
-  if (studentMoneySubTabs.includes(activeTabId)) {
+  if (studentMoneySubTabs.includes(activeTabId) || activeTabId === 'student-money') {
     highlightTarget = 'student-money';
   }
 

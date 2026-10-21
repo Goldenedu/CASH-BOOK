@@ -81,8 +81,8 @@ function switchStudentMoneySubTab(tabName) {
 
   // 1. Tab Buttons Styling & Border Synchronization
   tabs.forEach(t => {
-    // View တိုင်းတွင် ရှိနေသော သက်ဆိုင်ရာ Tab ခလုတ်များ အားလုံးကို ညီညာစွာ Update လုပ်သည်
-    const selector = `.stm-tab-${t}, #stm-tab-${t}, button[onclick*="'${t}'"]`;
+    // 🎯 Fix: အခြား မော်ဂျူးများ (Cashier Book စသည်ဖြင့်) နှင့် Selector မတိုက်မိစေရန် .stm-tab-${t} နှင့် #stm-tab-${t} ကိုသာ တိကျစွာ သုံးသည်
+    const selector = `.stm-tab-${t}, #stm-tab-${t}`;
     document.querySelectorAll(selector).forEach(btn => {
       const isActive = (t === gCurrentStudentMoneyTab);
       btn.className = isActive ? activeClass : inactiveClass;
