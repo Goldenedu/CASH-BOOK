@@ -62,6 +62,14 @@ var searchTimeout = null;
 const esc = window.escapeHtml || (s => s ? String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])) : '');
 const escAttr = window.escapeJsAttr || (s => s ? String(s).replace(/'/g, "\\'") : '');
 
+// 💡 Tab များ ဒေတာခေါ်ယူပြီးခြင်း ရှိ/မရှိ မှတ်သားထားမည့် State (0 D1 Quota)
+var gLoadedTabs = {
+  main: false,
+  settlement: false,
+  cashier: false,
+  reconcile: false
+};
+
 // ==============================================================================
 // 💡 1. MAIN TAB SWITCHER (5 CORE UNIFIED TABS)
 // ==============================================================================
@@ -95,17 +103,22 @@ function syncStudentMoneyTabUI(activeTab) {
   });
 }
 
-function switchStudentMoneySubTab(tabName) {
+/**
+ * ==============================================================================
+ * 💡 UNIFIED STUDENT MONEY SUB-TAB SWITCHER (Zero-Loading Instant Switcher)
+ * ==============================================================================
+ */
+function switchStudentMoneySubTab(tabName, forceReload = false) {
   gCurrentStudentMoneyTab = tabName || 'main';
   const tabs = ['main', 'settlement', 'cashier', 'reconcile'];
 
-  // 1. View Toggle (Visible / Hidden)
+  // 1. View Toggle (Visible / Hidden) - အရင် render ပြီးသား view ကို ချက်ချင်း ဖော်ပြသည်
   tabs.forEach(t => {
     const view = document.getElementById(`stm-${t}-view`);
     if (view) view.classList.toggle('hidden', t !== gCurrentStudentMoneyTab);
   });
 
-  // 2. Tab Buttons Styling & Border Synchronization (Scoped inside #view-container)
+  // 2. Tab Buttons Styling & Border Synchronization
   syncStudentMoneyTabUI(gCurrentStudentMoneyTab);
 
   // 3. Dynamic Add Button Visibility Control
@@ -118,18 +131,21 @@ function switchStudentMoneySubTab(tabName) {
     }
   }
 
-  // 4. Trigger Module Data Loaders (🎯 Use Cache = true ဖြင့် ခေါ်ယူသဖြင့် နောက်တစ်ခေါက် နှိပ်တိုင်း Loading မပေါ်တော့ပါ)
-  if (gCurrentStudentMoneyTab === 'main') {
-    loadStudentMoneyData(true);
-  } else if (gCurrentStudentMoneyTab === 'settlement') {
-    const todayStr = getMMTDateString();
-    const dateInput = document.getElementById('adm-settle-date')?.value || todayStr;
-    loadAdminSettlementDailyStats(dateInput);
-    loadAdminSettlementHistory(true);
-  } else if (gCurrentStudentMoneyTab === 'cashier') {
-    loadPmCashierBookData(true);
-  } else if (gCurrentStudentMoneyTab === 'reconcile') {
-    loadSpmmsReconciliationData(true);
+  // 4. 🎯 ZERO-LOADING ENGINE: ပထမတစ်ကြိမ် ဖွင့်ပြီးသား Tab ဖြစ်ပါက Loading မပြဘဲ ချက်ချင်း အလုပ်လုပ်စေသည်
+  const isAlreadyLoaded = gLoadedTabs[gCurrentStudentMoneyTab];
+  if (!isAlreadyLoaded || forceReload) {
+    if (gCurrentStudentMoneyTab === 'main') {
+      loadStudentMoneyData(!isAlreadyLoaded ? false : true, forceReload);
+    } else if (gCurrentStudentMoneyTab === 'settlement') {
+      const todayStr = getMMTDateString();
+      const dateInput = document.getElementById('adm-settle-date')?.value || todayStr;
+      loadAdminSettlementDailyStats(dateInput);
+      loadAdminSettlementHistory(!isAlreadyLoaded ? false : true, forceReload);
+    } else if (gCurrentStudentMoneyTab === 'cashier') {
+      loadPmCashierBookData(!isAlreadyLoaded ? false : true, forceReload);
+    } else if (gCurrentStudentMoneyTab === 'reconcile') {
+      loadSpmmsReconciliationData(forceReload);
+    }
   }
 }
 
@@ -148,35 +164,34 @@ function renderTopKPIs(deposit, withdraw, bal, activeDepositors) {
   if (elDepositors) elDepositors.textContent = Number(activeDepositors || 0).toLocaleString('en-US');
 }
 
-async function loadStudentMoneyData(useCache = true) {
+/**
+ * 💡 Load Main Student Money Data
+ */
+async function loadStudentMoneyData(isSilent = false, forceRefresh = false) {
   syncStudentMoneyTabUI(gCurrentStudentMoneyTab || 'main');
 
   try {
+    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(true);
+
     const searchVal = (document.getElementById('stm-search')?.value || '').trim();
     const dateFrom = document.getElementById('stm-date-from')?.value || '';
     const dateTo = document.getElementById('stm-date-to')?.value || '';
 
-    // 🎯 D1 Quota-Shield: Payload ပေါ်မူတည်၍ Cache ရှိ/မရှိ စစ်ဆေးသည်
-    const payload = {
+    // 🎯 forceRefresh ကို dynamic ပြောင်းထားသဖြင့် Cache ရှိပါက D1 သို့ မခေါ်ပါ
+    const res = await callApi('getStudentMoneyData', {
       page: gStudentMoneyPage,
       limit: gStudentMoneyLimit,
       searchVal,
       dateFrom,
-      dateTo
-    };
-
-    const cacheKey = `getStudentMoneyData_${JSON.stringify(payload)}`;
-    const hasCache = useCache && !!window.getApiCache(cacheKey);
-
-    // Cache မရှိမှသာ Loading လည်မည်
-    if (!hasCache && typeof toggleLoading === 'function') toggleLoading(true);
-
-    const res = await callApi('getStudentMoneyData', { ...payload, forceRefresh: !useCache }, 'GET');
+      dateTo,
+      forceRefresh: forceRefresh
+    }, 'GET');
 
     if (res && res.success) {
       gStudentMoneyHistoryData = res.data || [];
       gStudentMoneyTotalRows = res.totalRows || 0;
       gStudentMoneyStats = res.stats || {};
+      gLoadedTabs.main = true; // Tab Loaded အဖြစ် မှတ်သားသည်
 
       renderTopKPIs(gStudentMoneyStats.totalIncome, gStudentMoneyStats.totalExpense, gStudentMoneyStats.balance, gStudentMoneyStats.activeDepositors || 0);
       renderStudentMoneyTable();
@@ -184,7 +199,7 @@ async function loadStudentMoneyData(useCache = true) {
   } catch (err) {
     console.error("Student Money Load Error:", err);
   } finally {
-    if (typeof toggleLoading === 'function') toggleLoading(false);
+    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(false);
   }
 }
 
