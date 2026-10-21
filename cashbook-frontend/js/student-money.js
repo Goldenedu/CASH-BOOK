@@ -65,6 +65,9 @@ const escAttr = window.escapeJsAttr || (s => s ? String(s).replace(/'/g, "\\'") 
 // ==============================================================================
 // 💡 1. MAIN TAB SWITCHER (5 CORE UNIFIED TABS)
 // ==============================================================================
+/**
+ * 💡 Switch Student Money Sub-Tabs (100% Robust Multi-View Sync with data-tab)
+ */
 function switchStudentMoneySubTab(tabName) {
   gCurrentStudentMoneyTab = tabName || 'main';
   const tabs = ['main', 'settlement', 'cashier', 'reconcile'];
@@ -72,13 +75,16 @@ function switchStudentMoneySubTab(tabName) {
   const activeClass = "ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-sky-400 bg-sky-500/10 text-white shadow-sm whitespace-nowrap";
   const inactiveClass = "ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-transparent text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap";
 
+  // 🎯 Fix 1: View အားလုံးရှိ data-tab ခလုတ်များကို တစ်ပြိုင်နက် Active / Inactive အတိအကျ ပြောင်းပေးသည်
+  document.querySelectorAll('.ca-sub-tab-btn[data-tab]').forEach(btn => {
+    const targetTab = btn.getAttribute('data-tab');
+    const isActive = (targetTab === gCurrentStudentMoneyTab);
+    btn.className = isActive ? activeClass : inactiveClass;
+    btn.style.border = isActive ? "1.5px solid #38bdf8" : "none";
+  });
+
+  // 🎯 Fix 2: သက်ဆိုင်ရာ View ကိုသာ ပြသပြီး ကျန် View များကို ပုန်းအောင်းသည်
   tabs.forEach(t => {
-    // 🎯 View တိုင်းရှိ သက်ဆိုင်ရာ Tab ခလုတ်များ အားလုံးကို တစ်ပြိုင်နက် Active / Inactive ပြောင်းပေးသည်
-    document.querySelectorAll(`.stm-tab-${t}, #stm-tab-${t}`).forEach(btn => {
-      const isActive = (t === gCurrentStudentMoneyTab);
-      btn.className = isActive ? activeClass : inactiveClass;
-      btn.style.border = isActive ? "1.5px solid #38bdf8" : "none";
-    });
     const view = document.getElementById(`stm-${t}-view`);
     if (view) view.classList.toggle('hidden', t !== gCurrentStudentMoneyTab);
   });
@@ -110,6 +116,12 @@ function renderTopKPIs(deposit, withdraw, bal, activeDepositors) {
 }
 
 async function loadStudentMoneyData(isSilent) {
+  // 🎯 Fix 3: စာမျက်နှာ စဖွင့်ချိန်တွင် Student Money Tab ကို Active Border အလိုအလျောက် သေချာဆွဲပေးသည်
+  document.querySelectorAll('.ca-sub-tab-btn[data-tab]').forEach(btn => {
+    const isActive = (btn.getAttribute('data-tab') === gCurrentStudentMoneyTab);
+    btn.style.border = isActive ? "1.5px solid #38bdf8" : "none";
+  });
+
   try {
     if (!isSilent && typeof toggleLoading === 'function') toggleLoading(true);
 
@@ -117,7 +129,6 @@ async function loadStudentMoneyData(isSilent) {
     const dateFrom = document.getElementById('stm-date-from')?.value || '';
     const dateTo = document.getElementById('stm-date-to')?.value || '';
 
-    // ⚡ All Records Filter ကို ဖယ်ရှားပြီး Zero Full-Table Scan ဖြင့် ခေါ်ယူသည်
     const res = await callApi('getStudentMoneyData', {
       page: gStudentMoneyPage,
       limit: gStudentMoneyLimit,
@@ -130,7 +141,7 @@ async function loadStudentMoneyData(isSilent) {
     if (res && res.success) {
       gStudentMoneyHistoryData = res.data || [];
       gStudentMoneyTotalRows = res.totalRows || 0;
-      gStudentMoneyStats = res.stats || {}; // 💡 Cache stats
+      gStudentMoneyStats = res.stats || {};
 
       renderTopKPIs(gStudentMoneyStats.totalIncome, gStudentMoneyStats.totalExpense, gStudentMoneyStats.balance, gStudentMoneyStats.activeDepositors || 0);
       renderStudentMoneyTable();

@@ -114,26 +114,31 @@
       </div>
     </div>
 
-    <!-- 🎯 3. Sub-Tabs Bar (Search Bar နှင့် Table ကြားတွင် Cashier Book စတိုင်အတိုင်း ထားရှိသည်) -->
+    <!-- 💡 Sub-Tabs Bar (Search Bar နှင့် Table ကြားတွင် 100% Dynamic Sync စနစ်) -->
     <div class="bg-[#0c1322] border border-slate-800 p-1.5 rounded-xl shadow-lg overflow-x-auto">
       <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;"
         class="w-full min-w-[700px] xl:min-w-0">
-        <button onclick="switchStudentMoneySubTab('main')" id="stm-tab-main"
-          class="stm-tab-main ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap">
+
+        <button onclick="switchStudentMoneySubTab('main')" data-tab="main"
+          class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap text-slate-400 hover:text-white hover:bg-slate-800/30">
           <i class="fa-solid fa-wallet text-sky-400 text-xs"></i> Student Money
         </button>
-        <button onclick="switchStudentMoneySubTab('settlement')" id="stm-tab-settlement"
-          class="stm-tab-settlement ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap">
+
+        <button onclick="switchStudentMoneySubTab('settlement')" data-tab="settlement"
+          class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap text-slate-400 hover:text-white hover:bg-slate-800/30">
           <i class="fa-solid fa-coins text-amber-400 text-xs"></i> Evening Settlement
         </button>
-        <button onclick="switchStudentMoneySubTab('cashier')" id="stm-tab-cashier"
-          class="stm-tab-cashier ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap">
+
+        <button onclick="switchStudentMoneySubTab('cashier')" data-tab="cashier"
+          class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap text-slate-400 hover:text-white hover:bg-slate-800/30">
           <i class="fa-solid fa-cash-register text-emerald-400 text-xs"></i> PM Cashier
         </button>
-        <button onclick="switchStudentMoneySubTab('reconcile')" id="stm-tab-reconcile"
-          class="stm-tab-reconcile ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap">
+
+        <button onclick="switchStudentMoneySubTab('reconcile')" data-tab="reconcile"
+          class="ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap text-slate-400 hover:text-white hover:bg-slate-800/30">
           <i class="fa-solid fa-scale-balanced text-teal-400 text-xs"></i> Audit & Reconcile
         </button>
+
       </div>
     </div>
 
