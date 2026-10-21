@@ -181,23 +181,37 @@ function filterStudentData(list = [], searchVal = '', fyFilter = '', gradeFilter
 }
 
 /**
- * 💡 Load Student Data & Sync Page Title to "Student Lists"
+ * 💡 Load Student Data with D1 Quota-Shield & 0ms Instant Memory Render
  */
-async function loadStudentData(isSilent = false) {
-  if (!isSilent && typeof toggleLoading === 'function') toggleLoading(true);
+async function loadStudentData(forceRefresh = false, isSilent = false) {
+  const state = window.StudentState;
+  const hasDataInMemory = Array.isArray(state.activeData) && state.activeData.length > 0;
 
   const pageTitle = document.getElementById('page-title');
   if (pageTitle) {
     pageTitle.textContent = "Student Lists";
   }
 
-  const state = window.StudentState;
+  // ⚡ 1. D1 QUOTA-SHIELD (0ms INSTANT MEMORY RENDER):
+  // စာရင်းများ Memory ထဲတွင် ရှိပြီးသားဖြစ်ပြီး forceRefresh မဟုတ်ပါက D1 သို့ Request မပို့ဘဲ ချက်ချင်းဆွဲတင်ပြသမည် (D1 Quota = 0)
+  if (!forceRefresh && hasDataInMemory) {
+    populateMainFYFilterStudent();
+    updateStatsStudent();
+    renderStudentTable();
+    return;
+  }
+
+  // ဒေတာအသစ်ဆွဲယူရန် လိုအပ်မှသာ Loading Spinner ကို ပြသမည်
+  if (!isSilent && !hasDataInMemory && typeof toggleLoading === 'function') {
+    toggleLoading(true);
+  }
 
   try {
     const response = await callApi('getStudentData', {
       page: 1,
       limit: 5000,
-      searchVal: state.searchVal
+      searchVal: state.searchVal,
+      forceRefresh: Boolean(forceRefresh)
     }, 'GET');
 
     if (response && response.data) {
@@ -214,7 +228,7 @@ async function loadStudentData(isSilent = false) {
       showToast("ERROR", "ကျောင်းသားစာရင်းများ ရယူ၍ မရပါ: " + err.message);
     }
   } finally {
-    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(false);
+    if (typeof toggleLoading === 'function') toggleLoading(false);
   }
 }
 

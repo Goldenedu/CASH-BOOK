@@ -67,20 +67,19 @@ const escAttr = window.escapeJsAttr || (s => s ? String(s).replace(/'/g, "\\'") 
 // ==============================================================================
 function switchStudentMoneySubTab(tabName) {
   gCurrentStudentMoneyTab = tabName || 'main';
-  // 🎯 Canteen Book ဖယ်ရှားပြီး Core 4 Tabs သာ သတ်မှတ်သည်
   const tabs = ['main', 'settlement', 'cashier', 'reconcile'];
 
-  // 🎯 Cashier Book စံနှုန်းအတိုင်း Inactive Borderless နှင့် Active Sky-Blue Border
   const activeClass = "ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-sky-400 bg-sky-500/10 text-white shadow-sm whitespace-nowrap";
   const inactiveClass = "ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-transparent text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap";
 
   tabs.forEach(t => {
-    const btn = document.getElementById(`stm-tab-${t}`);
+    // 🎯 View တိုင်းရှိ သက်ဆိုင်ရာ Tab ခလုတ်များ အားလုံးကို တစ်ပြိုင်နက် Active / Inactive ပြောင်းပေးသည်
+    document.querySelectorAll(`.stm-tab-${t}, #stm-tab-${t}`).forEach(btn => {
+      const isActive = (t === gCurrentStudentMoneyTab);
+      btn.className = isActive ? activeClass : inactiveClass;
+      btn.style.border = isActive ? "1.5px solid #38bdf8" : "none";
+    });
     const view = document.getElementById(`stm-${t}-view`);
-    if (btn) {
-      btn.className = (t === gCurrentStudentMoneyTab) ? activeClass : inactiveClass;
-      btn.style.border = (t === gCurrentStudentMoneyTab) ? "1.5px solid #38bdf8" : "none";
-    }
     if (view) view.classList.toggle('hidden', t !== gCurrentStudentMoneyTab);
   });
 
@@ -160,6 +159,10 @@ function renderStudentMoneyTable() {
     const isTransfer = row.studentId === null || row.studentId === 0 || row.fyid === 'TRANSFER' || row.fyid === 'RETURN';
     const cleanFyid = typeof window.sanitizeFyidStr === 'function' ? window.sanitizeFyidStr(row.fyid) : (row.fyid || '');
 
+    // 🎯 Case-Insensitive Color Validation: Transfer (Red) / Return (Green)
+    const isReturn = String(row.fyid || '').toUpperCase() === 'RETURN' || String(row.remark || '').includes('Return') || String(row.class || '').includes('Return');
+    const isXferOut = String(row.fyid || '').toUpperCase() === 'TRANSFER' || String(row.remark || '').includes('Transfer') || String(row.class || '').includes('Transfer');
+
     const balStr = isTransfer
       ? '<span class="text-slate-500 font-mono">-</span>'
       : Number(row.balances || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
@@ -171,11 +174,11 @@ function renderStudentMoneyTable() {
         <td class="font-mono font-bold text-indigo-300 py-3 px-2">${esc(row.fy)}</td>
         <td class="font-mono font-bold py-3 px-2">
           ${isTransfer
-        ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">XFER</span>'
+        ? '<span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-purple-500/15 text-purple-300" style="border:none;">XFER</span>'
         : (row.studentId || '-')}
         </td>
-        <td class="font-mono font-bold ${isTransfer ? 'text-amber-400' : 'text-indigo-400'} py-3 px-2">${esc(cleanFyid)}</td>
-        <td class="font-bold ${isTransfer ? 'text-amber-300' : 'text-slate-100'} py-3 px-2">${esc(row.fyidName)}</td>
+        <td class="font-mono font-bold py-3 px-2 ${isReturn ? 'text-emerald-400' : (isXferOut ? 'text-rose-400' : 'text-indigo-400')}">${esc(cleanFyid)}</td>
+        <td class="font-bold py-3 px-2 ${isReturn ? 'text-emerald-400' : (isXferOut ? 'text-rose-400' : 'text-slate-100')}">${esc(row.fyidName)}</td>
         <td class="py-3 px-2">${esc(row.class)}</td>
         <td class="font-semibold py-3 px-2">${esc(row.method)}</td>
         <td class="text-right text-emerald-400 font-mono font-bold py-3 px-2">${row.debit > 0 ? Number(row.debit).toLocaleString('en-US') : '-'}</td>
@@ -746,36 +749,39 @@ async function loadAdminSettlementDailyStats(dateOverride) {
       const badge = document.getElementById('adm-set-status-badge');
       const btnConfirm = document.getElementById('btn-adm-confirm-settle');
 
-      // 🔒 CLOSURE & SETTLEMENT INTERLOCK[cite: 15]
+      // 🔒 CLOSURE & SETTLEMENT INTERLOCK (Border မပါဘဲ လှပစွာ ပြသသည်)
       if (dt.isSettled) {
         if (badge) {
-          badge.className = "px-2.5 py-1 rounded text-[10px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+          badge.style.border = "none";
+          badge.className = "px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 whitespace-nowrap";
           badge.textContent = `SETTLED (${dt.settlement?.settlement_no || dt.settlement?.settlementNo || 'DONE'})`;
         }
         if (btnConfirm) {
           btnConfirm.disabled = true;
           btnConfirm.classList.add('opacity-40', 'cursor-not-allowed');
-          btnConfirm.textContent = `${dateVal} အတွက် ငွေရှင်းလင်းပြီးဖြစ်ပါသည်`;
+          btnConfirm.innerHTML = '<i class="fa-solid fa-check text-xs"></i> <span>Settled</span>';
         }
       } else if (!dt.isClosed) {
         if (badge) {
-          badge.className = "px-2.5 py-1 rounded text-[10px] font-black bg-rose-500/10 text-rose-400 border border-rose-500/20 animate-pulse";
-          badge.textContent = `REGISTER NOT CLOSED (${dateVal} ဆိုင်မပိတ်ရသေးပါ)`;
+          badge.style.border = "none";
+          badge.className = "px-3 py-1 rounded-full text-xs font-bold bg-rose-500/15 text-rose-400 whitespace-nowrap animate-pulse";
+          badge.textContent = "REGISTER NOT CLOSED";
         }
         if (btnConfirm) {
           btnConfirm.disabled = true;
           btnConfirm.classList.add('opacity-40', 'cursor-not-allowed');
-          btnConfirm.textContent = `သတိပြုရန်: ${dateVal} အတွက် ဆိုင်မပိတ်သေးသဖြင့် ငွေရှင်း၍ မရပါ`;
+          btnConfirm.innerHTML = '<i class="fa-solid fa-lock text-xs"></i> <span>Confirm</span>';
         }
       } else {
         if (badge) {
-          badge.className = "px-2.5 py-1 rounded text-[10px] font-black bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse";
+          badge.style.border = "none";
+          badge.className = "px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-400 whitespace-nowrap";
           badge.textContent = `REGISTER CLOSED (${dt.closure?.closedBy || 'Ready'})`;
         }
         if (btnConfirm) {
           btnConfirm.disabled = (dt.pocketMoneyShare <= 0 && dt.totalSales <= 0);
           btnConfirm.classList.remove('opacity-40', 'cursor-not-allowed');
-          btnConfirm.textContent = `Finance မှ ${dateVal} အတွက် ငွေထုတ်ပေးရှင်းလင်းမှု အတည်ပြုမည်`;
+          btnConfirm.innerHTML = '<i class="fa-solid fa-circle-check text-xs"></i> <span>Confirm</span>';
         }
       }
     }
@@ -970,10 +976,10 @@ async function submitAdminSettlement() {
     const res = await callApi('saveCanteenSettlement', payload);
     if (res && res.success) {
       showToast("SUCCESS", `ရက်စွဲ (${dateVal}) အတွက် Canteen ငွေရှင်းလင်းမှု မှတ်တမ်းတင်ပြီးပါပြီ (${res.settlementNo})`);
+      closeSettlementActionModal(); // 🎯 အတည်ပြုပြီးပါက Modal အား ချက်ချင်း အလိုအလျောက် ပိတ်ပေးသည်
       await loadAdminSettlementDailyStats(dateVal);
       gSettlePage = 1;
       await loadAdminSettlementHistory(false);
-      if (typeof loadCanteenBookData === 'function') loadCanteenBookData(true);
       printCanteenSettlementVoucher(res.settlementNo);
     } else {
       showToast("ERROR", res?.message || "မအောင်မြင်ပါ။");
@@ -1882,3 +1888,6 @@ window.clearDateFilterSettlement = clearDateFilterSettlement;
 window.changePageSettlement = changePageSettlement;
 window.exportToCSVSettlements = exportToCSVSettlements;
 window.getMMTDateString = getMMTDateString;
+
+window.openSettlementActionModal = openSettlementActionModal;
+window.closeSettlementActionModal = closeSettlementActionModal;
