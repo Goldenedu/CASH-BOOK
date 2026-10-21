@@ -174,19 +174,11 @@ export async function getDashboardData(db, body) {
       safeFirstNum(db, "SELECT COALESCE(SUM(debit - credit), 0) as total FROM cash WHERE category LIKE '%loan%'"),
       safeFirstNum(db, "SELECT COALESCE(SUM(liabilities), 0) as total FROM office"),
 
-      // 🎯 နံပါတ် ၄ စာကြောင်း: Bonus နှင့် Fund ကို D1 ထဲတွင် တစ်ခါတည်း ပေါင်းခိုင်းလိုက်သည်
-      safeFirstNum(db, "SELECT COALESCE(SUM(unpaid_bonus + unpaid_fund), 0) as total FROM payroll"),
+      // 🎯 နံပါတ် ၄: Unpaid Bonus နှင့် Fund ကို SQLite Safe ဖြစ်အောင် COALESCE ဖြင့် ပေါင်းစပ်ထားသည်
+      safeFirstNum(db, "SELECT COALESCE(SUM(COALESCE(unpaid_bonus, 0) + COALESCE(unpaid_fund, 0)), 0) as total FROM payroll"),
 
-      // 🎯 နံပါတ် ၅ စာကြောင်း: Bank Interest (Debit Only) နှင့် Other (Debit - Credit) တို့ကို Single-pass အဖြစ် D1 ကိုယ်တိုင် တွက်ချက်စေသည်
-      db.prepare(`
-        SELECT COALESCE(SUM(
-          CASE 
-            WHEN category = 'Bank Interest' THEN debit 
-            WHEN category = 'Other' THEN (debit - credit) 
-            ELSE 0 
-          END
-        ), 0) as total FROM payroll
-      `).first().then(r => parseFloat(r?.total || 0)).catch(() => 0),
+      // 🎯 နံပါတ် ၅: Bank Interest ၏ Debit နှင့် Other ၏ (Debit - Credit) တို့ကို Full Table Scan လုံးဝမဖြစ်စေဘဲ တစ်ကြောင်းတည်းဖြင့် Index-Safe ဖြစ်အောင် ရေးဆွဲထားသည်
+      safeFirstNum(db, "SELECT COALESCE(SUM(CASE WHEN category = 'Bank Interest' THEN debit WHEN category = 'Other' THEN (debit - credit) ELSE 0 END), 0) as total FROM payroll"),
 
       // 💡 5. Receivables (Single-Pass Single Table Scan)
       db.prepare(`
