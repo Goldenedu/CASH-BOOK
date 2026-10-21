@@ -28,11 +28,12 @@ function getMMTDateString(dInput) {
 }
 window.getMMTDateString = getMMTDateString;
 
-var gCurrentStudentMoneyTab = 'main'; // 'main', 'canteen', 'settlement', 'cashier', 'reconcile'
+var gCurrentStudentMoneyTab = 'main'; // 'main', 'settlement', 'cashier', 'reconcile'
 
 // Main Student Money State
 var gStudentMoneyHistoryData = [];
 var gStudentMoneyPage = 1, gStudentMoneyLimit = 20, gStudentMoneyTotalRows = 0;
+var gStudentMoneyStats = {}; // 💡 Memory-backed Stats Cache
 
 // Canteen Book State
 var gCanteenBookData = [];
@@ -58,83 +59,110 @@ var isSubmitting = false;
 var searchTimeout = null;
 
 // Safe Escape Helpers
-const esc = window.escapeHtml || (s => s ? String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : '');
+const esc = window.escapeHtml || (s => s ? String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])) : '');
 const escAttr = window.escapeJsAttr || (s => s ? String(s).replace(/'/g, "\\'") : '');
 
 // ==============================================================================
 // 💡 1. MAIN TAB SWITCHER (5 CORE UNIFIED TABS)
 // ==============================================================================
+
+/**
+ * ==============================================================================
+ * 💡 UNIFIED STUDENT MONEY SUB-TAB SWITCHER (Cashier Book Design Standard)
+ * ==============================================================================
+ */
 function switchStudentMoneySubTab(tabName) {
   gCurrentStudentMoneyTab = tabName || 'main';
-  const tabs = ['main', 'canteen', 'settlement', 'cashier', 'reconcile'];
-  
-  const activeClass = 'px-3.5 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 bg-indigo-600 text-white shadow-lg shadow-indigo-600/20';
-  const inactiveClass = 'px-3.5 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 bg-slate-800 text-slate-400 hover:text-white border border-slate-700/50';
+  const tabs = ['main', 'settlement', 'cashier', 'reconcile'];
 
+  // 🎯 Cashier Book စံနှုန်းအတိုင်း Active (အပြာရောင် Border) နှင့် Inactive (Borderless)
+  const activeClass = "ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 bg-sky-500/10 text-white shadow-sm whitespace-nowrap";
+  const inactiveClass = "ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap";
+
+  // 1. Tab Buttons Styling & Border Synchronization
   tabs.forEach(t => {
-    const btn = document.getElementById(`stm-tab-${t}`);
+    // 🎯 Fix: Class, ID နှင့် onclick attribute တို့ကို အပြည့်အစုံ လွှမ်းခြုံရှာဖွေစေခြင်းဖြင့် Tab ၄ ခုစလုံး Active 100% မှန်ကန်စေသည်
+    const selector = `.stm-tab-${t}, #stm-tab-${t}, [onclick*="switchStudentMoneySubTab('${t}')"], [onclick*='switchStudentMoneySubTab("${t}")']`;
+    document.querySelectorAll(selector).forEach(btn => {
+      const isActive = (t === gCurrentStudentMoneyTab);
+      btn.className = isActive ? activeClass : inactiveClass;
+      btn.style.border = isActive ? "1.5px solid #38bdf8" : "none";
+    });
+
     const view = document.getElementById(`stm-${t}-view`);
-    if (btn) btn.className = (t === gCurrentStudentMoneyTab) ? activeClass : inactiveClass;
     if (view) view.classList.toggle('hidden', t !== gCurrentStudentMoneyTab);
   });
 
-  if (gCurrentStudentMoneyTab === 'main') loadStudentMoneyData(false);
-  else if (gCurrentStudentMoneyTab === 'canteen') loadCanteenBookData(false);
-  else if (gCurrentStudentMoneyTab === 'settlement') {
+  // 3. Dynamic Add Button Visibility Control (Cashier Book စံနှုန်းအတိုင်း)
+  const btnAdd = document.getElementById('stm-btn-add');
+  if (btnAdd) {
+    // Reconcile Tab တွင် Add New Entry ခလုတ်ကို ဖုံးကွယ်မည်၊ ကျန် Tab များတွင် ပေါ်စေမည်
+    if (gCurrentStudentMoneyTab === 'reconcile') {
+      btnAdd.classList.add('hidden');
+    } else {
+      btnAdd.classList.remove('hidden');
+    }
+  }
+
+  // 4. Trigger Module Data Loaders
+  if (gCurrentStudentMoneyTab === 'main') {
+    loadStudentMoneyData(false);
+  } else if (gCurrentStudentMoneyTab === 'settlement') {
     const todayStr = getMMTDateString();
     const dateInput = document.getElementById('adm-settle-date')?.value || todayStr;
     loadAdminSettlementDailyStats(dateInput);
     loadAdminSettlementHistory(false);
+  } else if (gCurrentStudentMoneyTab === 'cashier') {
+    loadPmCashierBookData(false);
+  } else if (gCurrentStudentMoneyTab === 'reconcile') {
+    loadSpmmsReconciliationData();
   }
-  else if (gCurrentStudentMoneyTab === 'cashier') loadPmCashierBookData(false);
-  else if (gCurrentStudentMoneyTab === 'reconcile') loadSpmmsReconciliationData();
 }
 
-function renderTopKPIs(inc, exp, bal, count, vaultCash, pmCash) {
-  const elInc = document.getElementById('stm-total-income');
-  const elExp = document.getElementById('stm-total-expense');
+/**
+ * 💡 Render Aligned 4-KPI Stats for Student Money (Main Finance)
+ */
+function renderTopKPIs(deposit, withdraw, bal, activeDepositors) {
+  const elDep = document.getElementById('stm-total-deposit') || document.getElementById('stm-total-income');
+  const elWith = document.getElementById('stm-total-withdraw') || document.getElementById('stm-total-expense');
   const elBal = document.getElementById('stm-balance');
-  const elVault = document.getElementById('stm-vault-cash');
-  const elPmCash = document.getElementById('stm-pm-cashier-cash');
-  const elCount = document.getElementById('stm-entries-count');
+  const elDepositors = document.getElementById('stm-active-depositors') || document.getElementById('stm-entries-count');
 
-  if (elInc) elInc.textContent = `${Number(inc || 0).toLocaleString('en-US')} MMK`;
-  if (elExp) elExp.textContent = `${Number(exp || 0).toLocaleString('en-US')} MMK`;
+  if (elDep) elDep.textContent = `${Number(deposit || 0).toLocaleString('en-US')} MMK`;
+  if (elWith) elWith.textContent = `${Number(withdraw || 0).toLocaleString('en-US')} MMK`;
   if (elBal) elBal.textContent = `${Number(bal || 0).toLocaleString('en-US')} MMK`;
-  if (elVault) elVault.textContent = `${Number(vaultCash || 0).toLocaleString('en-US')} MMK`;
-  if (elPmCash) elPmCash.textContent = `${Number(pmCash || 0).toLocaleString('en-US')} MMK`;
-  if (elCount) elCount.textContent = Number(count || 0).toLocaleString('en-US');
+  if (elDepositors) elDepositors.textContent = Number(activeDepositors || 0).toLocaleString('en-US');
 }
 
-// ==============================================================================
-// 💡 2. STUDENT MONEY BOOK (SERVER-SIDE PAGINATION - 20 ROWS PER READ)
-// ==============================================================================
 async function loadStudentMoneyData(isSilent) {
+  // 🎯 Fix 3: စာမျက်နှာ စဖွင့်ချိန်တွင် Student Money Tab ကို Active Border အလိုအလျောက် သေချာဆွဲပေးသည်
+  document.querySelectorAll('.ca-sub-tab-btn[data-tab]').forEach(btn => {
+    const isActive = (btn.getAttribute('data-tab') === gCurrentStudentMoneyTab);
+    btn.style.border = isActive ? "1.5px solid #38bdf8" : "none";
+  });
+
   try {
     if (!isSilent && typeof toggleLoading === 'function') toggleLoading(true);
 
     const searchVal = (document.getElementById('stm-search')?.value || '').trim();
-    // 🎯 Wallet Balance Filter ('has_balance' | 'zero_balance' | '')
-    const balanceFilter = (document.getElementById('stm-balance-filter')?.value || '').trim();
     const dateFrom = document.getElementById('stm-date-from')?.value || '';
     const dateTo = document.getElementById('stm-date-to')?.value || '';
 
-    const res = await callApi('getStudentMoneyData', { 
-      page: gStudentMoneyPage, 
-      limit: gStudentMoneyLimit, 
+    const res = await callApi('getStudentMoneyData', {
+      page: gStudentMoneyPage,
+      limit: gStudentMoneyLimit,
       searchVal,
-      balanceFilter,
       dateFrom,
       dateTo,
-      forceRefresh: true 
+      forceRefresh: true
     }, 'GET');
 
     if (res && res.success) {
       gStudentMoneyHistoryData = res.data || [];
       gStudentMoneyTotalRows = res.totalRows || 0;
-      const st = res.stats || {};
-      
-      renderTopKPIs(st.totalIncome, st.totalExpense, st.balance, gStudentMoneyTotalRows, st.financeVaultCash, st.pmCashierCash);
+      gStudentMoneyStats = res.stats || {};
+
+      renderTopKPIs(gStudentMoneyStats.totalIncome, gStudentMoneyStats.totalExpense, gStudentMoneyStats.balance, gStudentMoneyStats.activeDepositors || 0);
       renderStudentMoneyTable();
     }
   } catch (err) {
@@ -161,22 +189,26 @@ function renderStudentMoneyTable() {
     const isTransfer = row.studentId === null || row.studentId === 0 || row.fyid === 'TRANSFER' || row.fyid === 'RETURN';
     const cleanFyid = typeof window.sanitizeFyidStr === 'function' ? window.sanitizeFyidStr(row.fyid) : (row.fyid || '');
 
-    const balStr = isTransfer 
-      ? '<span class="text-slate-500 font-mono">-</span>' 
-      : Number(row.balances || 0).toLocaleString('en-US', {minimumFractionDigits: 2});
-    
+    // 🎯 Case-Insensitive Color Validation: Transfer (Red) / Return (Green)
+    const isReturn = String(row.fyid || '').toUpperCase() === 'RETURN' || String(row.remark || '').includes('Return') || String(row.class || '').includes('Return');
+    const isXferOut = String(row.fyid || '').toUpperCase() === 'TRANSFER' || String(row.remark || '').includes('Transfer') || String(row.class || '').includes('Transfer');
+
+    const balStr = isTransfer
+      ? '<span class="text-slate-500 font-mono">-</span>'
+      : Number(row.balances || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
+
     tbody.innerHTML += `
       <tr class="hover:bg-slate-800/30 text-slate-300 text-xs border-b border-slate-800/40">
         <td class="text-center font-mono py-3 px-2 font-bold text-slate-400">${displayNo}</td>
         <td class="font-mono text-xs py-3 px-2">${esc(row.date)}</td>
         <td class="font-mono font-bold text-indigo-300 py-3 px-2">${esc(row.fy)}</td>
         <td class="font-mono font-bold py-3 px-2">
-          ${isTransfer 
-            ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">XFER</span>' 
-            : (row.studentId || '-')}
+          ${isTransfer
+        ? '<span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-purple-500/15 text-purple-300" style="border:none;">XFER</span>'
+        : (row.studentId || '-')}
         </td>
-        <td class="font-mono font-bold ${isTransfer ? 'text-amber-400' : 'text-indigo-400'} py-3 px-2">${esc(cleanFyid)}</td>
-        <td class="font-bold ${isTransfer ? 'text-amber-300' : 'text-slate-100'} py-3 px-2">${esc(row.fyidName)}</td>
+        <td class="font-mono font-bold py-3 px-2 ${isReturn ? 'text-emerald-400' : (isXferOut ? 'text-rose-400' : 'text-indigo-400')}">${esc(cleanFyid)}</td>
+        <td class="font-bold py-3 px-2 ${isReturn ? 'text-emerald-400' : (isXferOut ? 'text-rose-400' : 'text-slate-100')}">${esc(row.fyidName)}</td>
         <td class="py-3 px-2">${esc(row.class)}</td>
         <td class="font-semibold py-3 px-2">${esc(row.method)}</td>
         <td class="text-right text-emerald-400 font-mono font-bold py-3 px-2">${row.debit > 0 ? Number(row.debit).toLocaleString('en-US') : '-'}</td>
@@ -185,42 +217,42 @@ function renderStudentMoneyTable() {
         <td class="max-w-xs truncate text-[11px] text-slate-400 py-3 px-2" title="${esc(row.remark)}">${esc(row.remark || '-')}</td>
         <td class="right-0 sticky bg-[#0c1322] border-l border-slate-800 text-center py-3 px-2">
           <div class="flex justify-center items-center gap-2">
-            ${isTransfer 
-              ? `<button onclick="printRowTransferVoucher('${escAttr(row.uniqueId)}', 'main')" class="p-1 text-sky-400 hover:text-sky-300 transition" title="Print Transfer Slip"><i class="fa-solid fa-print"></i></button>`
-              : `<button onclick="openStudentStatementModal(${row.studentId})" class="p-1 text-amber-400 hover:text-amber-300 transition" title="Statement"><i class="fa-solid fa-file-invoice"></i></button>`}
+            ${isTransfer
+        ? `<button onclick="printRowTransferVoucher('${escAttr(row.uniqueId)}', 'main')" class="p-1 text-sky-400 hover:text-sky-300 transition" title="Print Transfer Slip"><i class="fa-solid fa-print"></i></button>`
+        : `<button onclick="openStudentStatementModal(${row.studentId})" class="p-1 text-amber-400 hover:text-amber-300 transition" title="Statement"><i class="fa-solid fa-file-invoice"></i></button>`}
             <button onclick="deleteStudentMoneyEntry('${escAttr(row.uniqueId)}')" class="p-1 text-rose-400 hover:text-rose-300 transition" title="Delete"><i class="fa-solid fa-trash"></i></button>
           </div>
         </td>
       </tr>
     `;
   });
-  
+
   const start = (gStudentMoneyPage - 1) * gStudentMoneyLimit + 1;
   const end = Math.min(start + gStudentMoneyLimit - 1, gStudentMoneyTotalRows);
   const info = document.getElementById('stm-pagination-info');
   if (info) info.textContent = gStudentMoneyTotalRows === 0 ? "Showing 0 entries" : `Showing ${start} to ${end} of ${gStudentMoneyTotalRows} entries`;
-  
+
   const prevBtn = document.getElementById('stm-btn-prev');
   const nextBtn = document.getElementById('stm-btn-next');
   if (prevBtn) prevBtn.disabled = (gStudentMoneyPage <= 1);
   if (nextBtn) nextBtn.disabled = (end >= gStudentMoneyTotalRows);
 }
 
-function onSearchInputStudentMoney() { 
-  clearTimeout(searchTimeout); 
-  searchTimeout = setTimeout(() => { gStudentMoneyPage = 1; loadStudentMoneyData(true); }, 250); 
+function onSearchInputStudentMoney() {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => { gStudentMoneyPage = 1; loadStudentMoneyData(true); }, 250);
 }
 
-function clearDateFilterStudentMoney() { 
-  document.getElementById('stm-date-from').value = ''; 
-  document.getElementById('stm-date-to').value = ''; 
+function clearDateFilterStudentMoney() {
+  document.getElementById('stm-date-from').value = '';
+  document.getElementById('stm-date-to').value = '';
   gStudentMoneyPage = 1;
-  loadStudentMoneyData(false); 
+  loadStudentMoneyData(false);
 }
 
-function changePageStudentMoney(delta) { 
-  gStudentMoneyPage += delta; 
-  loadStudentMoneyData(false); 
+function changePageStudentMoney(delta) {
+  gStudentMoneyPage += delta;
+  loadStudentMoneyData(false);
 }
 
 function populateFYDropdownMoney() {
@@ -263,8 +295,8 @@ function openAddModalStudentMoney() {
   document.getElementById('student-money-modal')?.classList.remove('hidden');
 }
 
-function closeStudentMoneyModal() { 
-  document.getElementById('student-money-modal')?.classList.add('hidden'); 
+function closeStudentMoneyModal() {
+  document.getElementById('student-money-modal')?.classList.add('hidden');
 }
 
 function onStudentMoneyEntryTypeChange() {
@@ -358,7 +390,7 @@ async function onStudentIdOrFYChangeMoney() {
     try {
       const res = await callApi('getStudentData', { fy: fyVal, limit: 5000 }, 'GET');
       if (res && res.success) gStudentCacheForMoney[fyVal] = res.data || [];
-    } catch (e) {}
+    } catch (e) { }
   }
 
   const list = gStudentCacheForMoney[fyVal] || [];
@@ -368,7 +400,7 @@ async function onStudentIdOrFYChangeMoney() {
     try {
       const singleRes = await callApi('lookupStudentById', { studentId: targetIdNum, fy: fyVal }, 'GET');
       if (singleRes && singleRes.success && singleRes.data) matched = singleRes.data;
-    } catch (e) {}
+    } catch (e) { }
   }
 
   if (matched) {
@@ -380,10 +412,10 @@ async function onStudentIdOrFYChangeMoney() {
     if (classEl) classEl.value = matched.class || '';
 
     try {
-      const sumRes = await callApi('getStudentMoneySummary', { 
-        fy: fyVal, 
-        studentId: targetIdNum, 
-        searchVal: actualFyid 
+      const sumRes = await callApi('getStudentMoneySummary', {
+        fy: fyVal,
+        studentId: targetIdNum,
+        searchVal: actualFyid
       }, 'GET');
 
       if (sumRes && sumRes.success && sumRes.data && sumRes.data.length > 0) {
@@ -398,7 +430,7 @@ async function onStudentIdOrFYChangeMoney() {
           liveBadge.classList.remove('hidden');
         }
       }
-    } catch (err) {}
+    } catch (err) { }
   } else {
     if (fyidShow) fyidShow.value = "Not Found";
     if (fyidNameShow) fyidNameShow.value = "ကျောင်းသား ရှာမတွေ့ပါ";
@@ -424,14 +456,11 @@ async function saveStudentMoneyForm(e) {
     debit = 0;
     if (credit <= 0) return showToast("ERROR", "PM Cashier သို့ လွှဲမည့် Credit ငွေပမာဏ ထည့်သွင်းပါ။");
 
-    const trustBalText = document.getElementById('stm-balance')?.textContent || '0';
-    const trustBal = parseFloat(trustBalText.replace(/[^0-9.-]+/g, "")) || 0;
-    const cashierCashText = document.getElementById('stm-pm-cashier-cash')?.textContent || '0';
-    const cashierCash = parseFloat(cashierCashText.replace(/[^0-9.-]+/g, "")) || 0;
-    const availableFinanceCash = trustBal - cashierCash;
+    // 🎯 Fix: HTML ကတ်ပျောက်သွားသော်လည်း Memory Cache ထဲမှ တိကျသော Vault Cash ကို ရယူစစ်ဆေးသည်
+    const availableFinanceCash = Number(gStudentMoneyStats.financeVaultCash || 0);
 
-    if (credit > availableFinanceCash) {
-      return showToast("ERROR", `Finance Vault တွင် လက်ကျန်ငွေသား (${availableFinanceCash.toLocaleString()} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString()} MMK) ပိုမိုလွှဲပြောင်း၍ မရပါ!`);
+    if (availableFinanceCash > 0 && credit > availableFinanceCash) {
+      return showToast("ERROR", `Finance Vault တွင် လက်ကျန်ငွေသား (${availableFinanceCash.toLocaleString('en-US')} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString('en-US')} MMK) ပိုမိုလွှဲပြောင်း၍ မရပါ!`);
     }
 
   } else {
@@ -479,14 +508,14 @@ async function saveStudentMoneyForm(e) {
       showToast('SUCCESS', isTransfer ? 'PM Cashier သို့ အရင်းငွေလွှဲပြောင်းပြီးပါပြီ။' : 'ကျောင်းသားငွေစာရင်း မှတ်တမ်းတင်ပြီးပါပြီ။');
       loadStudentMoneyData(false);
       loadPmCashierBookData(false);
-    } else { 
-      showToast('ERROR', res?.message || 'သိမ်းဆည်းမှု မအောင်မြင်ပါ။'); 
+    } else {
+      showToast('ERROR', res?.message || 'သိမ်းဆည်းမှု မအောင်မြင်ပါ။');
     }
-  } catch (err) { 
-    showToast('ERROR', err.message); 
-  } finally { 
-    isSubmitting = false; 
-    if (typeof toggleLoading === 'function') toggleLoading(false); 
+  } catch (err) {
+    showToast('ERROR', err.message);
+  } finally {
+    isSubmitting = false;
+    if (typeof toggleLoading === 'function') toggleLoading(false);
   }
 }
 
@@ -504,8 +533,8 @@ async function deleteStudentMoneyEntry(uniqueId) {
     }
   } catch (err) {
     showToast('ERROR', err.message);
-  } finally { 
-    if (typeof toggleLoading === 'function') toggleLoading(false); 
+  } finally {
+    if (typeof toggleLoading === 'function') toggleLoading(false);
   }
 }
 
@@ -518,14 +547,14 @@ async function exportToCSVStudentMoney() {
     const dateFrom = document.getElementById('stm-date-from')?.value || '';
     const dateTo = document.getElementById('stm-date-to')?.value || '';
 
-    const res = await callApi('getStudentMoneyData', { 
-      page: 1, 
-      limit: 10000, 
+    const res = await callApi('getStudentMoneyData', {
+      page: 1,
+      limit: 10000,
       searchVal,
       balanceFilter,
       dateFrom,
       dateTo,
-      forceRefresh: true 
+      forceRefresh: true
     }, 'GET');
 
     const records = res?.data || gStudentMoneyHistoryData;
@@ -562,8 +591,8 @@ async function loadCanteenBookData(isSilent) {
     }
   } catch (err) {
     console.error("Canteen Load Error:", err);
-  } finally { 
-    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(false); 
+  } finally {
+    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(false);
   }
 }
 
@@ -596,8 +625,8 @@ function applyCanteenBookSearchAndRender() {
   });
 
   let filteredSales = 0;
-  gCanteenBookFilteredData.forEach(r => { 
-    if (r.category === 'POS Sales') filteredSales += Number(r.debit || 0); 
+  gCanteenBookFilteredData.forEach(r => {
+    if (r.category === 'POS Sales') filteredSales += Number(r.debit || 0);
   });
 
   // 🎯 Update Aligned 4-KPIs Grid
@@ -628,7 +657,7 @@ function renderCanteenBookTable() {
   const tbody = document.getElementById('canteen-table-body');
   if (!tbody) return;
   tbody.innerHTML = '';
-  
+
   const total = gCanteenBookFilteredData.length;
   const start = (gCanteenPage - 1) * gCanteenLimit;
   const items = gCanteenBookFilteredData.slice(start, start + gCanteenLimit);
@@ -641,7 +670,7 @@ function renderCanteenBookTable() {
 
   items.forEach((row, idx) => {
     const displayNo = total - (start + idx);
-    const balStr = Number(row.balances || 0).toLocaleString('en-US', {minimumFractionDigits: 2});
+    const balStr = Number(row.balances || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
 
     tbody.innerHTML += `
       <tr class="hover:bg-slate-800/30 text-slate-300 text-xs border-b border-slate-800/40">
@@ -666,7 +695,7 @@ function renderCanteenBookTable() {
     `;
   });
   document.getElementById('canteen-pagination-info').textContent = `Showing ${start + 1} to ${Math.min(start + gCanteenLimit, total)} of ${total} entries`;
-  
+
   const prevBtn = document.getElementById('canteen-btn-prev');
   const nextBtn = document.getElementById('canteen-btn-next');
   if (prevBtn) prevBtn.disabled = (gCanteenPage <= 1);
@@ -683,7 +712,7 @@ async function deleteCanteenBookEntry(uniqueId) {
   try {
     const res = await callApi('deleteCanteenBookEntry', { uniqueId });
     if (res && res.success) loadCanteenBookData(false);
-  } catch (err) {} finally { if (typeof toggleLoading === 'function') toggleLoading(false); }
+  } catch (err) { } finally { if (typeof toggleLoading === 'function') toggleLoading(false); }
 }
 
 function exportToCSVCanteenBook() {
@@ -726,6 +755,14 @@ async function loadAdminSettlementDailyStats(dateOverride) {
       if (elPocket) elPocket.textContent = `${Number(dt.pocketMoneyShare || 0).toLocaleString('en-US')} MMK`;
       if (elPayout) elPayout.value = dt.pocketMoneyShare || 0;
 
+      // 🎯 Fix: HTML ပေါ်ရှိ KPI 4 နှင့် Modal Preview ကတ်များဆီသို့ တန်ဖိုးများ အပြည့်အစုံ ထည့်သွင်းပေးခြင်း
+      const elPayoutDisplay = document.getElementById('adm-set-payout-display');
+      const elPocketPrev = document.getElementById('adm-set-pocket-preview');
+      const elCashPrev = document.getElementById('adm-set-cash-preview');
+      if (elPayoutDisplay) elPayoutDisplay.textContent = `${Number(dt.pocketMoneyShare || 0).toLocaleString('en-US')} MMK`;
+      if (elPocketPrev) elPocketPrev.textContent = `${Number(dt.pocketMoneyShare || 0).toLocaleString('en-US')} MMK`;
+      if (elCashPrev) elCashPrev.textContent = `${Number(dt.cashSalesShare || 0).toLocaleString('en-US')} MMK`;
+
       // 🌙 Unsettled Past Shift Radar Banner[cite: 15]
       const banner = document.getElementById('adm-set-unsettled-banner');
       const label = document.getElementById('adm-set-unsettled-date-label');
@@ -742,36 +779,39 @@ async function loadAdminSettlementDailyStats(dateOverride) {
       const badge = document.getElementById('adm-set-status-badge');
       const btnConfirm = document.getElementById('btn-adm-confirm-settle');
 
-      // 🔒 CLOSURE & SETTLEMENT INTERLOCK[cite: 15]
+      // 🔒 CLOSURE & SETTLEMENT INTERLOCK (Border မပါဘဲ လှပစွာ ပြသသည်)
       if (dt.isSettled) {
         if (badge) {
-          badge.className = "px-2.5 py-1 rounded text-[10px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+          badge.style.border = "none";
+          badge.className = "px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 whitespace-nowrap";
           badge.textContent = `SETTLED (${dt.settlement?.settlement_no || dt.settlement?.settlementNo || 'DONE'})`;
         }
         if (btnConfirm) {
           btnConfirm.disabled = true;
           btnConfirm.classList.add('opacity-40', 'cursor-not-allowed');
-          btnConfirm.textContent = `${dateVal} အတွက် ငွေရှင်းလင်းပြီးဖြစ်ပါသည်`;
+          btnConfirm.innerHTML = '<i class="fa-solid fa-check text-xs"></i> <span>Settled</span>';
         }
       } else if (!dt.isClosed) {
         if (badge) {
-          badge.className = "px-2.5 py-1 rounded text-[10px] font-black bg-rose-500/10 text-rose-400 border border-rose-500/20 animate-pulse";
-          badge.textContent = `REGISTER NOT CLOSED (${dateVal} ဆိုင်မပိတ်ရသေးပါ)`;
+          badge.style.border = "none";
+          badge.className = "px-3 py-1 rounded-full text-xs font-bold bg-rose-500/15 text-rose-400 whitespace-nowrap animate-pulse";
+          badge.textContent = "REGISTER NOT CLOSED";
         }
         if (btnConfirm) {
           btnConfirm.disabled = true;
           btnConfirm.classList.add('opacity-40', 'cursor-not-allowed');
-          btnConfirm.textContent = `သတိပြုရန်: ${dateVal} အတွက် ဆိုင်မပိတ်သေးသဖြင့် ငွေရှင်း၍ မရပါ`;
+          btnConfirm.innerHTML = '<i class="fa-solid fa-lock text-xs"></i> <span>Confirm</span>';
         }
       } else {
         if (badge) {
-          badge.className = "px-2.5 py-1 rounded text-[10px] font-black bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse";
+          badge.style.border = "none";
+          badge.className = "px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-400 whitespace-nowrap";
           badge.textContent = `REGISTER CLOSED (${dt.closure?.closedBy || 'Ready'})`;
         }
         if (btnConfirm) {
           btnConfirm.disabled = (dt.pocketMoneyShare <= 0 && dt.totalSales <= 0);
           btnConfirm.classList.remove('opacity-40', 'cursor-not-allowed');
-          btnConfirm.textContent = `Finance မှ ${dateVal} အတွက် ငွေထုတ်ပေးရှင်းလင်းမှု အတည်ပြုမည်`;
+          btnConfirm.innerHTML = '<i class="fa-solid fa-circle-check text-xs"></i> <span>Confirm</span>';
         }
       }
     }
@@ -798,13 +838,13 @@ async function loadAdminSettlementHistory(isSilent = false) {
     const dateFrom = document.getElementById('settle-history-date-from')?.value || '';
     const dateTo = document.getElementById('settle-history-date-to')?.value || '';
 
-    const res = await callApi('getCanteenSettlements', { 
-      page: gSettlePage, 
-      limit: gSettleLimit, 
-      searchVal, 
-      dateFrom, 
+    const res = await callApi('getCanteenSettlements', {
+      page: gSettlePage,
+      limit: gSettleLimit,
+      searchVal,
+      dateFrom,
       dateTo,
-      forceRefresh: true 
+      forceRefresh: true
     }, 'GET');
 
     const tbody = document.getElementById('adm-settle-history-body');
@@ -891,13 +931,13 @@ async function exportToCSVSettlements() {
     const dateFrom = document.getElementById('settle-history-date-from')?.value || '';
     const dateTo = document.getElementById('settle-history-date-to')?.value || '';
 
-    const res = await callApi('getCanteenSettlements', { 
-      page: 1, 
-      limit: 10000, 
-      searchVal, 
-      dateFrom, 
+    const res = await callApi('getCanteenSettlements', {
+      page: 1,
+      limit: 10000,
+      searchVal,
+      dateFrom,
       dateTo,
-      forceRefresh: true 
+      forceRefresh: true
     }, 'GET');
 
     const records = res?.data || gSettleHistoryData;
@@ -918,6 +958,24 @@ async function exportToCSVSettlements() {
   } finally {
     if (typeof toggleLoading === 'function') toggleLoading(false);
   }
+}
+
+/**
+ * 💡 Open / Close Evening Settlement Execution Modal
+ */
+function openSettlementActionModal() {
+  const modal = document.getElementById('settlement-action-modal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    const todayStr = getMMTDateString();
+    const dateInput = document.getElementById('adm-settle-date')?.value || todayStr;
+    loadAdminSettlementDailyStats(dateInput);
+  }
+}
+
+function closeSettlementActionModal() {
+  const modal = document.getElementById('settlement-action-modal');
+  if (modal) modal.classList.add('hidden');
 }
 
 // 🎯 Finance မှ Canteen သို့ ငွေထုတ်ပေးရှင်းလင်းမှု အတည်ပြုခြင်း[cite: 12, 15]
@@ -948,10 +1006,10 @@ async function submitAdminSettlement() {
     const res = await callApi('saveCanteenSettlement', payload);
     if (res && res.success) {
       showToast("SUCCESS", `ရက်စွဲ (${dateVal}) အတွက် Canteen ငွေရှင်းလင်းမှု မှတ်တမ်းတင်ပြီးပါပြီ (${res.settlementNo})`);
+      closeSettlementActionModal(); // 🎯 အတည်ပြုပြီးပါက Modal အား ချက်ချင်း အလိုအလျောက် ပိတ်ပေးသည်
       await loadAdminSettlementDailyStats(dateVal);
       gSettlePage = 1;
       await loadAdminSettlementHistory(false);
-      if (typeof loadCanteenBookData === 'function') loadCanteenBookData(true);
       printCanteenSettlementVoucher(res.settlementNo);
     } else {
       showToast("ERROR", res?.message || "မအောင်မြင်ပါ။");
@@ -966,7 +1024,7 @@ async function submitAdminSettlement() {
 // 🖨️ A4 Dual-Copy Settlement Voucher Generator[cite: 12, 15]
 function printCanteenSettlementVoucher(settlementNo) {
   let record = gCanteenSettlementsData.find(r => r.settlementNo === settlementNo);
-  
+
   const todayStr = getMMTDateString();
   const dateStr = record ? record.date : (document.getElementById('adm-settle-date')?.value || todayStr);
   const totalSales = record ? record.totalSalesAmount : parseFloat(document.getElementById('adm-set-total')?.textContent.replace(/[^0-9.-]+/g, '') || 0);
@@ -1125,8 +1183,8 @@ async function loadPmCashierBookData(isSilent) {
     }
   } catch (err) {
     console.error("PM Cashier Load Error:", err);
-  } finally { 
-    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(false); 
+  } finally {
+    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(false);
   }
 }
 
@@ -1140,9 +1198,9 @@ function applyPmCashierBookSearchAndRender() {
     if (typeof window.isDateInRange === 'function' && !window.isDateInRange(row.date, fDate, tDate)) return false;
     if (respFilter && row.responsibility_person !== respFilter) return false;
     if (!query) return true;
-    return String(row.description || '').toLowerCase().includes(query) || 
-           String(row.vrNo || '').toLowerCase().includes(query) ||
-           String(row.responsibility_person || '').toLowerCase().includes(query);
+    return String(row.description || '').toLowerCase().includes(query) ||
+      String(row.vrNo || '').toLowerCase().includes(query) ||
+      String(row.responsibility_person || '').toLowerCase().includes(query);
   });
 
   gPmCashierPage = 1;
@@ -1153,7 +1211,7 @@ function renderPmCashierBookTable() {
   const tbody = document.getElementById('pm-cashier-table-body');
   if (!tbody) return;
   tbody.innerHTML = '';
-  
+
   const total = gPmCashierBookFilteredData.length;
   const start = (gPmCashierPage - 1) * gPmCashierLimit;
   const items = gPmCashierBookFilteredData.slice(start, start + gPmCashierLimit);
@@ -1167,7 +1225,7 @@ function renderPmCashierBookTable() {
 
   items.forEach((row, idx) => {
     const displayNo = total - (start + idx);
-    const balStr = Number(row.balances || 0).toLocaleString('en-US', {minimumFractionDigits: 2});
+    const balStr = Number(row.balances || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
     const isXfer = row.category === 'Float Receive' || row.category === 'Return to Finance';
 
     tbody.innerHTML += `
@@ -1185,19 +1243,19 @@ function renderPmCashierBookTable() {
         <td class="font-mono text-slate-500 py-3 px-2">${esc(row.fy)}</td>
         <td class="text-center right-0 sticky bg-[#0c1322] border-l border-slate-800 py-3 px-2">
           <div class="flex justify-center items-center gap-2">
-            ${isXfer 
-              ? `<button onclick="printRowTransferVoucher('${escAttr(row.uniqueId)}', 'cashier')" class="p-1 text-sky-400 hover:text-sky-300 transition" title="Print Voucher"><i class="fa-solid fa-print"></i></button>`
-              : ''}
+            ${isXfer
+        ? `<button onclick="printRowTransferVoucher('${escAttr(row.uniqueId)}', 'cashier')" class="p-1 text-sky-400 hover:text-sky-300 transition" title="Print Voucher"><i class="fa-solid fa-print"></i></button>`
+        : ''}
             <button onclick="deletePmCashierBookEntry('${escAttr(row.uniqueId)}')" class="p-1 text-rose-400 hover:text-rose-300 transition" title="Delete"><i class="fa-solid fa-trash"></i></button>
           </div>
         </td>
       </tr>
     `;
   });
-  
+
   const info = document.getElementById('pm-cashier-pagination-info');
   if (info) info.textContent = `Showing ${start + 1} to ${Math.min(start + gPmCashierLimit, total)} of ${total} entries`;
-  
+
   const prevBtn = document.getElementById('pm-cashier-btn-prev');
   const nextBtn = document.getElementById('pm-cashier-btn-next');
   if (prevBtn) prevBtn.disabled = (gPmCashierPage <= 1);
@@ -1226,8 +1284,8 @@ function openAddModalPmCashierBook() {
   document.getElementById('pm-cashier-modal')?.classList.remove('hidden');
 }
 
-function closePmCashierBookModal() { 
-  document.getElementById('pm-cashier-modal')?.classList.add('hidden'); 
+function closePmCashierBookModal() {
+  document.getElementById('pm-cashier-modal')?.classList.add('hidden');
 }
 
 function onPmCashierCategoryChange() {
@@ -1268,7 +1326,7 @@ async function onPmStudentLookup() {
     try {
       const res = await callApi('getStudentData', { fy: fyVal, limit: 5000 }, 'GET');
       if (res && res.success) gStudentCacheForMoney[fyVal] = res.data || [];
-    } catch (e) {}
+    } catch (e) { }
   }
 
   const list = gStudentCacheForMoney[fyVal] || [];
@@ -1278,7 +1336,7 @@ async function onPmStudentLookup() {
     try {
       const singleRes = await callApi('lookupStudentById', { studentId: targetId, fy: fyVal }, 'GET');
       if (singleRes && singleRes.success && singleRes.data) matched = singleRes.data;
-    } catch (e) {}
+    } catch (e) { }
   }
 
   if (matched) {
@@ -1304,7 +1362,7 @@ async function onPmStudentLookup() {
           badge.classList.remove('hidden');
         }
       }
-    } catch (e) {}
+    } catch (e) { }
   } else {
     if (fyidShow) fyidShow.value = "Not Found";
     if (nameShow) nameShow.value = "ကျောင်းသား ရှာမတွေ့ပါ";
@@ -1370,19 +1428,19 @@ async function savePmCashierBookForm(e) {
   try {
     const res = await callApi('savePmCashierBookEntry', payload);
     if (res && res.success) {
-      showToast('SUCCESS', category === 'Return to Finance' 
-        ? 'Finance သို့ လက်ကျန်ငွေ ပြန်လည်အပ်နှံပြီးပါပြီ။' 
+      showToast('SUCCESS', category === 'Return to Finance'
+        ? 'Finance သို့ လက်ကျန်ငွေ ပြန်လည်အပ်နှံပြီးပါပြီ။'
         : 'မုန့်ဖိုးထုတ်ပေးပြီးပါပြီ။');
       loadPmCashierBookData(false);
       loadStudentMoneyData(false);
-    } else { 
-      showToast('ERROR', res?.message || 'သိမ်းဆည်းမှု မအောင်မြင်ပါ။'); 
+    } else {
+      showToast('ERROR', res?.message || 'သိမ်းဆည်းမှု မအောင်မြင်ပါ။');
     }
-  } catch (err) { 
-    showToast('ERROR', err.message); 
-  } finally { 
-    isSubmitting = false; 
-    if (typeof toggleLoading === 'function') toggleLoading(false); 
+  } catch (err) {
+    showToast('ERROR', err.message);
+  } finally {
+    isSubmitting = false;
+    if (typeof toggleLoading === 'function') toggleLoading(false);
   }
 }
 
@@ -1400,8 +1458,8 @@ async function deletePmCashierBookEntry(uniqueId) {
     }
   } catch (err) {
     showToast('ERROR', err.message);
-  } finally { 
-    if (typeof toggleLoading === 'function') toggleLoading(false); 
+  } finally {
+    if (typeof toggleLoading === 'function') toggleLoading(false);
   }
 }
 
@@ -1428,13 +1486,13 @@ async function loadSpmmsReconciliationData() {
     const res = await callApi('getSpmmsReconciliation', { forceRefresh: true }, 'GET');
     if (res && res.success) {
       const data = res.data;
-      
-      document.getElementById('rec-total-virtual').textContent = `${Number(data.totalVirtual).toLocaleString('en-US', {minimumFractionDigits:2})} MMK`;
-      document.getElementById('rec-total-physical').textContent = `${Number(data.totalPhysicalCash).toLocaleString('en-US', {minimumFractionDigits:2})} MMK`;
+
+      document.getElementById('rec-total-virtual').textContent = `${Number(data.totalVirtual).toLocaleString('en-US', { minimumFractionDigits: 2 })} MMK`;
+      document.getElementById('rec-total-physical').textContent = `${Number(data.totalPhysicalCash).toLocaleString('en-US', { minimumFractionDigits: 2 })} MMK`;
       document.getElementById('rec-finance-cash').textContent = `${Number(data.totalFinance).toLocaleString('en-US')} MMK`;
       document.getElementById('rec-cashier-cash').textContent = `${Number(data.totalCashier).toLocaleString('en-US')} MMK`;
-      document.getElementById('rec-variance').textContent = `${Number(Math.abs(data.variance)).toLocaleString('en-US', {minimumFractionDigits:2})} MMK`;
-      
+      document.getElementById('rec-variance').textContent = `${Number(Math.abs(data.variance)).toLocaleString('en-US', { minimumFractionDigits: 2 })} MMK`;
+
       document.getElementById('rec-eq-virtual').textContent = `${Number(data.totalVirtual).toLocaleString('en-US')} MMK`;
       document.getElementById('rec-eq-finance').textContent = `${Number(data.totalFinance).toLocaleString('en-US')} MMK`;
       document.getElementById('rec-eq-cashier').textContent = `${Number(data.totalCashier).toLocaleString('en-US')} MMK`;
@@ -1461,8 +1519,8 @@ async function loadSpmmsReconciliationData() {
     }
   } catch (err) {
     console.error("Reconciliation Error:", err);
-  } finally { 
-    if (typeof toggleLoading === 'function') toggleLoading(false); 
+  } finally {
+    if (typeof toggleLoading === 'function') toggleLoading(false);
   }
 }
 
@@ -1552,7 +1610,7 @@ async function loadStudentStatementData() {
             </tr>
           `;
         } else {
-          const safeEsc = window.escapeHtml || (s => s ? String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : '');
+          const safeEsc = window.escapeHtml || (s => s ? String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])) : '');
 
           records.forEach((r, idx) => {
             const displayNo = gStmtTotalRows - ((gStmtPage - 1) * gStmtLimit + idx);
@@ -1721,7 +1779,7 @@ function printRowTransferVoucher(uniqueId, source) {
 
   const printWindow = window.open('', '_blank', 'width=850,height=950');
   if (!printWindow) return showToast("ERROR", "Browser မှ Pop-up ပိတ်ထားသဖြင့် Print Window မဖွင့်နိုင်ပါ။");
-  
+
   printWindow.document.write(fullPrintHtml);
   printWindow.document.close();
   setTimeout(() => { printWindow.focus(); printWindow.print(); printWindow.close(); }, 400);
@@ -1730,7 +1788,7 @@ function printRowTransferVoucher(uniqueId, source) {
 // ==============================================================================
 // 💡 9. HIGH-CONTRAST TOAST NOTIFICATION (SCREEN CENTER)
 // ==============================================================================
-window.showToast = function(type, message) {
+window.showToast = function (type, message) {
   const oldToast = document.getElementById('global-center-toast-wrapper');
   if (oldToast) oldToast.remove();
 
@@ -1740,11 +1798,10 @@ window.showToast = function(type, message) {
 
   const isSuccess = (String(type).toUpperCase() === 'SUCCESS');
   const toast = document.createElement('div');
-  toast.className = `pointer-events-auto flex items-center gap-4 px-6 py-4 rounded-2xl shadow-2xl border-2 backdrop-blur-xl transition-all duration-300 transform scale-90 opacity-0 ${
-    isSuccess
-      ? 'bg-[#061e18]/95 border-emerald-400 text-white shadow-[0_0_50px_rgba(16,185,129,0.4)] ring-4 ring-emerald-500/20'
-      : 'bg-[#2a080c]/95 border-rose-500 text-white shadow-[0_0_50px_rgba(244,63,94,0.4)] ring-4 ring-rose-500/20'
-  }`;
+  toast.className = `pointer-events-auto flex items-center gap-4 px-6 py-4 rounded-2xl shadow-2xl border-2 backdrop-blur-xl transition-all duration-300 transform scale-90 opacity-0 ${isSuccess
+    ? 'bg-[#061e18]/95 border-emerald-400 text-white shadow-[0_0_50px_rgba(16,185,129,0.4)] ring-4 ring-emerald-500/20'
+    : 'bg-[#2a080c]/95 border-rose-500 text-white shadow-[0_0_50px_rgba(244,63,94,0.4)] ring-4 ring-rose-500/20'
+    }`;
 
   const iconHtml = isSuccess
     ? '<div class="p-3 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-400/30 text-2xl shrink-0"><i class="fa-solid fa-circle-check"></i></div>'
@@ -1775,7 +1832,7 @@ window.showToast = function(type, message) {
   window.toastDismissTimer = setTimeout(dismissCenterToast, 3500);
 };
 
-window.dismissCenterToast = function() {
+window.dismissCenterToast = function () {
   clearTimeout(window.toastDismissTimer);
   const wrapper = document.getElementById('global-center-toast-wrapper');
   if (!wrapper) return;
@@ -1796,7 +1853,8 @@ function openAdminSettlementModal(dateInput) {
 }
 
 function closeAdminSettlementModal() {
-  switchStudentMoneySubTab('canteen');
+  closeSettlementActionModal();
+  switchStudentMoneySubTab('settlement');
 }
 
 // ==============================================================================
@@ -1860,3 +1918,6 @@ window.clearDateFilterSettlement = clearDateFilterSettlement;
 window.changePageSettlement = changePageSettlement;
 window.exportToCSVSettlements = exportToCSVSettlements;
 window.getMMTDateString = getMMTDateString;
+
+window.openSettlementActionModal = openSettlementActionModal;
+window.closeSettlementActionModal = closeSettlementActionModal;

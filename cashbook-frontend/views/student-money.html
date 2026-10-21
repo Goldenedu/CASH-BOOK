@@ -1,196 +1,198 @@
 <!-- ============================================================================== -->
 <!-- GOLDEN ERP SYSTEM - SPMMS & CANTEEN INTEGRATED FINANCE WORKSPACE               -->
-<!-- File: views/student-money.html (Enterprise V9.7 Full Production Edition)       -->
+<!-- File: views/student-money.html (Enterprise V9.9 Full Production Edition)       -->
 <!-- ============================================================================== -->
-<div class="space-y-5">
-
-  <!-- 💡 ၁။ Sub-Tab Navigation Bar (5 Core Unified Tabs) -->
-  <div class="flex items-center justify-between bg-[#0c1322] border border-slate-800 p-2 rounded-xl overflow-x-auto whitespace-nowrap scrollbar-hide">
-    <div class="flex items-center gap-2">
-      <!-- Tab 1: Student Money Book (Main Finance & Virtual Wallets)[cite: 31] -->
-      <button id="stm-tab-main" onclick="switchStudentMoneySubTab('main')" class="px-3.5 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 bg-indigo-600 text-white shadow-lg shadow-indigo-600/20">
-        <i class="fa-solid fa-wallet"></i> 1. Student Money (ပင်မငွေစာရင်း)
-      </button>
-
-      <!-- Tab 2: Canteen Sales Book (POS Sales Audit)[cite: 31] -->
-      <button id="stm-tab-canteen" onclick="switchStudentMoneySubTab('canteen')" class="px-3.5 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 bg-slate-800 text-slate-400 hover:text-white border border-slate-700/50">
-        <i class="fa-solid fa-utensils text-emerald-400"></i> 2. Canteen Book (ကန်တင်းအရောင်း)
-      </button>
-
-      <!-- Tab 3: Canteen Evening Settlement[cite: 31] -->
-      <button id="stm-tab-settlement" onclick="switchStudentMoneySubTab('settlement')" class="px-3.5 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 bg-slate-800 text-slate-400 hover:text-white border border-slate-700/50">
-        <i class="fa-solid fa-coins text-amber-400"></i> 3. Evening Settlement (ညနေငွေရှင်းတမ်း)
-      </button>
-
-      <!-- Tab 4: PM Cashier Book (Cash Counter with Responsibility Person)[cite: 31] -->
-      <button id="stm-tab-cashier" onclick="switchStudentMoneySubTab('cashier')" class="px-3.5 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 bg-slate-800 text-slate-400 hover:text-white border border-slate-700/50">
-        <i class="fa-solid fa-cash-register text-sky-400"></i> 4. PM Cashier (မုန့်ဖိုးငွေကိုင်)
-      </button>
-
-      <!-- Tab 5: Audit & Reconciliation (စာရင်းကိုက်စစ်ဆေးချက်)[cite: 31] -->
-      <button id="stm-tab-reconcile" onclick="switchStudentMoneySubTab('reconcile')" class="px-3.5 py-2 rounded-lg text-xs font-black transition-all flex items-center gap-2 bg-slate-800 text-slate-400 hover:text-white border border-slate-700/50">
-        <i class="fa-solid fa-scale-balanced text-teal-400"></i> 5. Audit & Reconcile (စာရင်းကိုက်)
-      </button>
-    </div>
-
-    <div class="hidden xl:flex items-center gap-2 px-3 text-[11px] font-mono font-bold text-slate-400">
-      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> SPMMS Enterprise Engine
-    </div>
-  </div>
+<div class="space-y-4 max-w-[1920px] mx-auto">
 
   <!-- ============================================================================== -->
-  <!-- 💡 TAB 1: STUDENT MONEY BOOK (MAIN FINANCE & VIRTUAL WALLETS)[cite: 31]                   -->
+  <!-- 💡 TAB 1: STUDENT MONEY BOOK (MAIN FINANCE & VIRTUAL WALLETS)                   -->
   <!-- ============================================================================== -->
   <div id="stm-main-view" class="space-y-4">
-    
-    <!-- 🎯 3-COLUMNS x 2-ROWS (6 UNIFIED KPI CARDS)[cite: 31] -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      
-      <!-- Card 1: Total Deposited[cite: 31] -->
-      <div class="stats-card p-5 rounded-xl flex items-center gap-4 bg-[#0c1322] border border-slate-800">
-        <div class="p-3.5 rounded-xl bg-emerald-500/10 text-emerald-400 shrink-0">
-          <i class="fa-solid fa-circle-arrow-down text-xl"></i>
+
+    <!-- 🎯 1. Top 4-KPI Stats Cards Grid (Cashier Book အတိုင်း ၁ တန်းတည်း ၄ ကွက်) -->
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;">
+
+      <!-- 1. Total Deposit -->
+      <div
+        class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+        <div class="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0">
+          <i class="fa-solid fa-arrow-trend-up text-base"></i>
         </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-400 truncate">TOTAL DEPOSITED (စုစုပေါင်း အပ်ငွေ)</p>
-          <h3 id="stm-total-income" class="text-lg font-black text-emerald-400 mt-0.5 font-mono">0 MMK</h3>
-          <p class="text-[11px] text-slate-500 mt-0.5 truncate">ကျောင်းသားများမှ အပ်နှံထားသောငွေ</p>
+        <div class="min-w-0">
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Total Deposit (MMK)</p>
+          <h3 id="stm-total-deposit" class="text-sm sm:text-base font-extrabold text-white mt-0.5 truncate">
+            <span id="stm-total-income">0 MMK</span>
+          </h3>
         </div>
       </div>
 
-      <!-- Card 2: Total Withdrawn[cite: 31] -->
-      <div class="stats-card p-5 rounded-xl flex items-center gap-4 bg-[#0c1322] border border-slate-800">
-        <div class="p-3.5 rounded-xl bg-rose-500/10 text-rose-400 shrink-0">
-          <i class="fa-solid fa-circle-arrow-up text-xl"></i>
+      <!-- 2. Total Withdraw -->
+      <div
+        class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+        <div class="p-2.5 rounded-lg bg-rose-500/10 text-rose-400 shrink-0">
+          <i class="fa-solid fa-arrow-trend-down text-base"></i>
         </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-400 truncate">TOTAL WITHDRAWN (စုစုပေါင်း ထုတ်ငွေ)</p>
-          <h3 id="stm-total-expense" class="text-lg font-black text-rose-400 mt-0.5 font-mono">0 MMK</h3>
-          <p class="text-[11px] text-slate-500 mt-0.5 truncate">ကျောင်းသားများ မုန့်ဖိုးထုတ်ယူငွေ</p>
-        </div>
-      </div>
-
-      <!-- Card 3: Total Trust Balance[cite: 31] -->
-      <div class="stats-card p-5 rounded-xl flex items-center gap-4 bg-[#0c1322] border border-slate-800">
-        <div class="p-3.5 rounded-xl bg-indigo-500/10 text-indigo-400 shrink-0">
-          <i class="fa-solid fa-wallet text-xl"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-400 truncate">TOTAL TRUST BALANCE (မုန့်ဖိုးလက်ကျန်ချုပ်)</p>
-          <h3 id="stm-balance" class="text-lg font-black text-indigo-400 mt-0.5 font-mono">0 MMK</h3>
-          <p class="text-[11px] text-slate-500 mt-0.5 truncate">Virtual ကျောင်းသားလက်ကျန် စုစုပေါင်း</p>
+        <div class="min-w-0">
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Total Withdraw (MMK)</p>
+          <h3 id="stm-total-withdraw" class="text-sm sm:text-base font-extrabold text-white mt-0.5 truncate">
+            <span id="stm-total-expense">0 MMK</span>
+          </h3>
         </div>
       </div>
 
-      <!-- Card 4: Finance Vault Cash[cite: 31] -->
-      <div class="stats-card p-5 rounded-xl flex items-center gap-4 bg-[#0c1322] border border-slate-800">
-        <div class="p-3.5 rounded-xl bg-sky-500/10 text-sky-400 shrink-0">
-          <i class="fa-solid fa-vault text-xl"></i>
+      <!-- 3. Balances -->
+      <div
+        class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+        <div class="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-400 shrink-0">
+          <i class="fa-solid fa-scale-balanced text-base"></i>
         </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-400 truncate">FINANCE VAULT CASH (ရုံးခန်း လက်ဝယ်ငွေသား)</p>
-          <h3 id="stm-vault-cash" class="text-lg font-black text-sky-300 mt-0.5 font-mono">0 MMK</h3>
-          <p class="text-[11px] text-slate-500 mt-0.5 truncate">ဗဟိုရုံးခန်းတွင် အမှန်တကယ် ကျန်ငွေသား</p>
-        </div>
-      </div>
-
-      <!-- Card 5: PM Cashier Hand Cash[cite: 31] -->
-      <div class="stats-card p-5 rounded-xl flex items-center gap-4 bg-[#0c1322] border border-slate-800">
-        <div class="p-3.5 rounded-xl bg-teal-500/10 text-teal-400 shrink-0">
-          <i class="fa-solid fa-cash-register text-xl"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-400 truncate">PM CASHIER HAND CASH (ငွေကိုင်လက်ကျန်ငွေ)</p>
-          <h3 id="stm-pm-cashier-cash" class="text-lg font-black text-teal-300 mt-0.5 font-mono">0 MMK</h3>
-          <p class="text-[11px] text-slate-500 mt-0.5 truncate">Cashier 1 + 2 လက်ဝယ်ရှိ ငွေသားစုစုပေါင်း</p>
+        <div class="min-w-0">
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Total Balances (MMK)</p>
+          <h3 id="stm-balance" class="text-sm sm:text-base font-extrabold text-white mt-0.5 truncate">0 MMK</h3>
         </div>
       </div>
 
-      <!-- Card 6: Total Entries[cite: 31] -->
-      <div class="stats-card p-5 rounded-xl flex items-center gap-4 bg-[#0c1322] border border-slate-800">
-        <div class="p-3.5 rounded-xl bg-amber-500/10 text-amber-400 shrink-0">
-          <i class="fa-solid fa-receipt text-xl"></i>
+      <!-- 4. Active Depositors -->
+      <div
+        class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+        <div class="p-2.5 rounded-lg bg-sky-500/10 text-sky-400 shrink-0">
+          <i class="fa-solid fa-users text-base"></i>
         </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-400 truncate">TOTAL ENTRIES (မှတ်တမ်းပေါင်း)</p>
-          <h3 id="stm-entries-count" class="text-lg font-black text-amber-400 mt-0.5 font-mono">0</h3>
-          <p class="text-[11px] text-slate-500 mt-0.5 truncate">အပ်ငွေ / ထုတ်ငွေ / လွှဲပြောင်းငွေ စုစုပေါင်း</p>
+        <div class="min-w-0">
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Active Depositors</p>
+          <h3 id="stm-active-depositors" class="text-sm sm:text-base font-extrabold text-white mt-0.5 truncate">
+            <span id="stm-entries-count">0</span>
+          </h3>
         </div>
       </div>
 
     </div>
 
-    <!-- Search & Action Toolbar (🎯 Includes New Balance Filter)[cite: 31] -->
-    <div class="flex flex-col lg:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
-      <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
-        <div class="relative w-full sm:w-60">
-          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
-          <input type="text" id="stm-search" oninput="onSearchInputStudentMoney()" placeholder="Search student name, FYID, ID..." class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white focus:outline-none focus:border-indigo-500 transition-all">
+    <!-- 🎯 2. Control Search & Action Bar -->
+    <div
+      class="flex items-center justify-between bg-[#0c1322] border border-slate-800 p-2.5 sm:p-3 rounded-xl gap-2.5 overflow-x-auto">
+      <div class="flex items-center gap-2.5 shrink-0">
+        <div class="relative w-full sm:w-64 shrink-0" style="min-width: 250px;">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500 pointer-events-none">
+            <i class="fa-solid fa-magnifying-glass text-xs"></i>
+          </span>
+          <input type="text" id="stm-search" oninput="onSearchInputStudentMoney()"
+            placeholder="Search student name, FYID, ID..."
+            class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all font-sans">
         </div>
 
-        <!-- 🎯 FEATURE: Wallet Balance Filter Dropdown -->
-        <select id="stm-balance-filter" onchange="onSearchInputStudentMoney()" class="w-full sm:w-52 bg-[#0f172a] border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-2 outline-none focus:border-indigo-500 font-bold cursor-pointer">
-          <option value="">All Records (စာရင်းအားလုံး)</option>
-          <option value="has_balance">လက်ကျန်ရှိသူများ (Balance &gt; 0)</option>
-          <option value="zero_balance">လက်ကျန်ကုန်သူများ (Balance = 0)</option>
-        </select>
-
-        <div class="flex items-center gap-1.5 w-full sm:w-auto bg-[#0f172a] border border-slate-800 p-1 rounded-lg text-xs">
-          <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">From:</span>
-          <input type="date" id="stm-date-from" onchange="onSearchInputStudentMoney()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
-          <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">To:</span>
-          <input type="date" id="stm-date-to" onchange="onSearchInputStudentMoney()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
-          <button onclick="clearDateFilterStudentMoney()" class="p-1 text-slate-400 hover:text-rose-400 transition" title="Clear Date Filter"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
+        <div
+          class="flex items-center gap-1.5 bg-[#0f172a] border border-slate-800 px-2 py-1.5 rounded-lg text-xs shrink-0">
+          <span class="text-[10px] text-slate-400 font-bold px-1 uppercase">From:</span>
+          <input type="date" id="stm-date-from" onchange="onSearchInputStudentMoney()"
+            class="bg-transparent text-white text-xs outline-none cursor-pointer">
+          <span class="text-[10px] text-slate-400 font-bold px-1 uppercase">To:</span>
+          <input type="date" id="stm-date-to" onchange="onSearchInputStudentMoney()"
+            class="bg-transparent text-white text-xs outline-none cursor-pointer">
+          <button onclick="clearDateFilterStudentMoney()" class="p-1 text-slate-400 hover:text-rose-400 transition"
+            title="Clear Date Filter"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
         </div>
       </div>
 
-      <div class="flex items-center gap-2.5 w-full lg:w-auto justify-end">
-        <button onclick="loadStudentMoneyData(false)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
+      <!-- Actions (3D Embossed Buttons & Standard Add New Entry) -->
+      <div class="flex items-center gap-2 shrink-0">
+        <button onclick="loadStudentMoneyData(false)"
+          class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md shadow-slate-950/60 active:translate-y-0.5 transition-all whitespace-nowrap"
+          title="Refresh Data">
           <i class="fa-solid fa-rotate text-xs"></i> Refresh
         </button>
 
-        <button onclick="exportToCSVStudentMoney()" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
+        <button onclick="exportToCSVStudentMoney()"
+          class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md shadow-slate-950/60 active:translate-y-0.5 transition-all whitespace-nowrap">
           <i class="fa-solid fa-file-export text-xs"></i> Export CSV
         </button>
 
-        <button onclick="openAddModalStudentMoney()" class="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/10 transition-all">
-          <i class="fa-solid fa-plus text-xs"></i> Add Entry / Transfer
+        <button onclick="openAddModalStudentMoney()" id="stm-btn-add"
+          class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 active:translate-y-0.5 transition-all whitespace-nowrap">
+          <i class="fa-solid fa-plus text-xs"></i> Add New Entry
         </button>
       </div>
     </div>
 
-    <!-- Student Money Table[cite: 31] -->
+    <!-- 💡 Sub-Tabs Bar (View တိုင်းတွင် ညီညာစွာ ချိတ်ဆက်ထားသော Tab Bar) -->
+    <div class="bg-[#0c1322] border border-slate-800 p-1.5 rounded-xl shadow-lg overflow-x-auto">
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;"
+        class="w-full min-w-[700px] xl:min-w-0">
+
+        <button onclick="switchStudentMoneySubTab('main')" id="stm-tab-main"
+          class="stm-tab-main ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap text-slate-400 hover:text-white hover:bg-slate-800/30">
+          <i class="fa-solid fa-wallet text-sky-400 text-xs"></i> Student Money
+        </button>
+
+        <button onclick="switchStudentMoneySubTab('settlement')" id="stm-tab-settlement"
+          class="stm-tab-settlement ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap text-slate-400 hover:text-white hover:bg-slate-800/30">
+          <i class="fa-solid fa-coins text-amber-400 text-xs"></i> Evening Settlement
+        </button>
+
+        <button onclick="switchStudentMoneySubTab('cashier')" id="stm-tab-cashier"
+          class="stm-tab-cashier ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap text-slate-400 hover:text-white hover:bg-slate-800/30">
+          <i class="fa-solid fa-cash-register text-emerald-400 text-xs"></i> PM Cashier
+        </button>
+
+        <button onclick="switchStudentMoneySubTab('reconcile')" id="stm-tab-reconcile"
+          class="stm-tab-reconcile ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap text-slate-400 hover:text-white hover:bg-slate-800/30">
+          <i class="fa-solid fa-scale-balanced text-teal-400 text-xs"></i> Audit & Reconcile
+        </button>
+
+      </div>
+    </div>
+
+    <!-- 🎯 4. Student Money Table Grid (Header အမြင့် 52px နှင့် ၂ ကြောင်းစနစ် ညှိထားသည်) -->
     <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
-      <table class="w-full text-left border-collapse min-w-[1400px]">
+      <table class="w-full text-left border-collapse min-w-[1450px]">
         <thead>
-          <tr class="bg-[#0e172a]">
-            <th scope="col" class="w-12 text-center text-slate-400 text-xs py-3">NO</th>
-            <th scope="col" class="w-28 text-slate-400 text-xs py-3">DATE</th>
-            <th scope="col" class="w-24 text-slate-400 text-xs py-3">FY</th>
-            <th scope="col" class="w-20 text-slate-400 text-xs py-3">ID</th>
-            <th scope="col" class="w-32 text-slate-400 text-xs py-3">FYID</th>
-            <th scope="col" class="min-w-[200px] text-slate-400 text-xs py-3">FYID NAME</th>
-            <th scope="col" class="w-24 text-slate-400 text-xs py-3">CLASS</th>
-            <th scope="col" class="w-24 text-slate-400 text-xs py-3">METHOD</th>
-            <th scope="col" class="w-32 text-right text-emerald-400 text-xs py-3">DEBIT (အပ်ငွေ)</th>
-            <th scope="col" class="w-32 text-right text-rose-400 text-xs py-3">CREDIT (ထုတ်ငွေ)</th>
-            <th scope="col" class="w-36 text-right text-indigo-400 text-xs py-3">BALANCES</th>
-            <th scope="col" class="min-w-[200px] text-slate-400 text-xs py-3">REMARK</th>
-            <th scope="col" class="w-24 text-center text-slate-400 text-xs py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">ACTION</th>
+          <tr class="bg-[#0e172a]" style="height: 52px;">
+            <th scope="col" class="w-12 text-center text-slate-400 text-xs px-2 align-middle whitespace-nowrap">NO</th>
+            <th scope="col" class="w-28 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">DATE</th>
+            <th scope="col" class="w-24 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">FY</th>
+            <th scope="col" class="w-20 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">ID</th>
+            <th scope="col" class="w-32 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">FYID</th>
+            <th scope="col" class="min-w-[200px] text-slate-400 text-xs px-2 align-middle whitespace-nowrap">FYID NAME
+            </th>
+            <th scope="col" class="w-24 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">CLASS</th>
+            <th scope="col" class="w-24 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">METHOD</th>
+            <th scope="col"
+              class="w-32 text-right text-emerald-400 text-xs px-2 align-middle leading-tight whitespace-nowrap">
+              <div>DEBIT</div>
+              <div class="text-[10px] text-emerald-400/90 font-semibold mt-0.5">(DEPOSIT)</div>
+            </th>
+            <th scope="col"
+              class="w-32 text-right text-rose-400 text-xs px-2 align-middle leading-tight whitespace-nowrap">
+              <div>CREDIT</div>
+              <div class="text-[10px] text-rose-400/90 font-semibold mt-0.5">(WITHDRAW)</div>
+            </th>
+            <th scope="col"
+              class="w-36 text-right text-indigo-400 text-xs px-2 align-middle leading-tight whitespace-nowrap">
+              <div>BALANCES</div>
+              <div class="text-[10px] text-indigo-400/90 font-semibold mt-0.5">(TRUST WALLET)</div>
+            </th>
+            <th scope="col" class="min-w-[200px] text-slate-400 text-xs px-2 align-middle whitespace-nowrap">REMARK</th>
+            <th scope="col"
+              class="w-24 text-center text-slate-400 text-xs px-2 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg align-middle whitespace-nowrap">
+              ACTION</th>
           </tr>
         </thead>
         <tbody id="stm-table-body" class="divide-y divide-slate-800/40 text-slate-300"></tbody>
       </table>
     </div>
 
-    <!-- Pagination Controller[cite: 31] -->
-    <div class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
-      <div id="stm-pagination-info" class="text-xs font-semibold text-slate-400 tracking-wide font-mono">Showing entries...</div>
+    <!-- 🎯 5. Pagination Controller Tray -->
+    <div
+      class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
+      <div id="stm-pagination-info" class="text-xs font-semibold text-slate-400 tracking-wide font-mono">Showing
+        entries...</div>
       <div class="flex items-center gap-2">
-        <button onclick="changePageStudentMoney(-1)" id="stm-btn-prev" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+        <button onclick="changePageStudentMoney(-1)" id="stm-btn-prev"
+          class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
           <i class="fa-solid fa-chevron-left text-[10px]"></i> Previous
         </button>
-        <button onclick="changePageStudentMoney(1)" id="stm-btn-next" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+        <button onclick="changePageStudentMoney(1)" id="stm-btn-next"
+          class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
           Next <i class="fa-solid fa-chevron-right text-[10px]"></i>
         </button>
       </div>
@@ -198,133 +200,182 @@
   </div>
 
   <!-- ============================================================================== -->
-  <!-- 💡 TAB 2: CANTEEN SALES BOOK (ALIGNED 4-KPIs GRID & RUNNING BALANCE AUDIT)[cite: 31]     -->
+  <!-- 💡 TAB 2: EVENING SETTLEMENT (ညနေငွေရှင်းတမ်း)                                  -->
   <!-- ============================================================================== -->
-  <div id="stm-canteen-view" class="space-y-4 hidden">
-    
-    <!-- 🎯 TAB 2: 1-ROW 4-KPI GRID[cite: 31] -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      
-      <!-- Card 1: Today Gross Sales[cite: 31] -->
-      <div class="stats-card p-5 rounded-xl flex items-start gap-4 bg-[#0c1322] border border-slate-800">
-        <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0">
-          <i class="fa-solid fa-cart-shopping text-xl"></i>
+  <div id="stm-settlement-view" class="space-y-4 hidden">
+
+    <!-- 🎯 1. Top 4-KPI Stats Cards Grid (Gross Sales, Cash Sales, Wallet Sales, Settlement Payout) -->
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;">
+
+      <!-- 1. Gross Sales -->
+      <div
+        class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+        <div class="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-400 shrink-0">
+          <i class="fa-solid fa-cart-shopping text-base"></i>
         </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-400 truncate">TODAY GROSS SALES (ဒီနေ့ စုစုပေါင်းအရောင်း)</p>
-          <h3 id="canteen-today-sales" class="text-base font-extrabold text-emerald-400 mt-1 font-mono">0 MMK</h3>
-          <p class="text-[10px] text-slate-500 mt-0.5 truncate">Cash + Wallet ယနေ့အရောင်းအားလုံး</p>
+        <div class="min-w-0">
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Gross Sales (MMK)</p>
+          <h3 id="adm-set-total" class="text-sm sm:text-base font-extrabold text-white mt-0.5 truncate">0 MMK</h3>
         </div>
       </div>
 
-      <!-- Card 2: Today Wallet Share[cite: 31] -->
-      <div class="stats-card p-5 rounded-xl flex items-start gap-4 bg-[#0c1322] border border-slate-800">
-        <div class="p-3.5 rounded-lg bg-indigo-500/10 text-indigo-400 shrink-0">
-          <i class="fa-solid fa-wallet text-xl"></i>
+      <!-- 2. Cash Sales -->
+      <div
+        class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+        <div class="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0">
+          <i class="fa-solid fa-money-bill-wave text-base"></i>
         </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-400 truncate">TODAY WALLET (မုန့်ဖိုးကတ်ရောင်းရငွေ)</p>
-          <h3 id="canteen-today-wallet" class="text-base font-extrabold text-indigo-400 mt-1 font-mono">0 MMK</h3>
-          <p class="text-[10px] text-slate-500 mt-0.5 truncate">Finance မှ ရှင်းပေးရမည့်ငွေ</p>
-        </div>
-      </div>
-
-      <!-- Card 3: Today Cash In-Hand[cite: 31] -->
-      <div class="stats-card p-5 rounded-xl flex items-start gap-4 bg-[#0c1322] border border-slate-800">
-        <div class="p-3.5 rounded-lg bg-teal-500/10 text-teal-400 shrink-0">
-          <i class="fa-solid fa-money-bill-wave text-xl"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-400 truncate">TODAY CASH (ဆိုင်ရငွေသား)</p>
-          <h3 id="canteen-today-cash" class="text-base font-extrabold text-teal-300 mt-1 font-mono">0 MMK</h3>
-          <p class="text-[10px] text-slate-500 mt-0.5 truncate">ကန်တင်းတွင် လက်ငင်းရငွေသား</p>
+        <div class="min-w-0">
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Cash Sales (MMK)</p>
+          <h3 id="adm-set-cash" class="text-sm sm:text-base font-extrabold text-white mt-0.5 truncate">0 MMK</h3>
         </div>
       </div>
 
-      <!-- Card 4: Filtered Total & Invoices[cite: 31] -->
-      <div class="stats-card p-5 rounded-xl flex items-start gap-4 bg-[#0c1322] border border-slate-800">
-        <div class="p-3.5 rounded-lg bg-amber-500/10 text-amber-400 shrink-0">
-          <i class="fa-solid fa-receipt text-xl"></i>
+      <!-- 3. Wallet Sales -->
+      <div
+        class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+        <div class="p-2.5 rounded-lg bg-sky-500/10 text-sky-400 shrink-0">
+          <i class="fa-solid fa-wallet text-base"></i>
         </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-400 truncate">TOTAL ENTRIES (ပြေစာစောင်ရေ)</p>
-          <h3 id="canteen-filtered-count" class="text-base font-extrabold text-amber-400 mt-1 font-mono">0</h3>
-          <p class="text-[10px] text-slate-400 mt-0.5 font-mono truncate">
-            စုစုပေါင်း: <span id="canteen-filtered-sales" class="text-sky-400 font-bold">0 MMK</span>
-          </p>
+        <div class="min-w-0">
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Wallet Sales (MMK)</p>
+          <h3 id="adm-set-pocket" class="text-sm sm:text-base font-extrabold text-white mt-0.5 truncate">0 MMK</h3>
+        </div>
+      </div>
+
+      <!-- 4. Settlement Payout -->
+      <div
+        class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+        <div class="p-2.5 rounded-lg bg-amber-500/10 text-amber-400 shrink-0">
+          <i class="fa-solid fa-coins text-base"></i>
+        </div>
+        <div class="min-w-0">
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Settlement Payout (MMK)</p>
+          <h3 id="adm-set-payout-display" class="text-sm sm:text-base font-extrabold text-amber-400 mt-0.5 truncate">0
+            MMK</h3>
+          <span id="adm-set-orders" class="hidden">0 စောင်</span>
         </div>
       </div>
 
     </div>
 
-    <!-- Filter & Action Toolbar[cite: 31] -->
-    <div class="flex flex-col lg:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
-      
-      <!-- 🟢 Left: Search & Date Filters[cite: 31] -->
-      <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
-        <button onclick="setFilterCanteenToday()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-black transition flex items-center gap-1.5 shadow-sm whitespace-nowrap">
-          <i class="fa-solid fa-calendar-day"></i> Today (ဒီနေ့)
-        </button>
-
-        <div class="relative w-full sm:w-60">
-          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
-          <input type="text" id="canteen-search" oninput="onSearchInputCanteenBook()" placeholder="Search description, VR No..." class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white focus:outline-none focus:border-emerald-500 transition-all">
+    <!-- 🎯 2. Control Search & Action Bar -->
+    <div
+      class="flex items-center justify-between bg-[#0c1322] border border-slate-800 p-2.5 sm:p-3 rounded-xl gap-2.5 overflow-x-auto">
+      <div class="flex items-center gap-2.5 shrink-0">
+        <div class="relative w-full sm:w-64 shrink-0" style="min-width: 250px;">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500 pointer-events-none">
+            <i class="fa-solid fa-magnifying-glass text-xs"></i>
+          </span>
+          <input type="text" id="settle-history-search" oninput="onSearchInputSettlement()"
+            placeholder="Search settlement no, receiver..."
+            class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-all font-sans">
         </div>
 
-        <div class="flex items-center gap-1.5 w-full sm:w-auto bg-[#0f172a] border border-slate-800 p-1 rounded-lg text-xs">
-          <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">From:</span>
-          <input type="date" id="canteen-date-from" onchange="onSearchInputCanteenBook()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
-          <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">To:</span>
-          <input type="date" id="canteen-date-to" onchange="onSearchInputCanteenBook()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
-          <button onclick="clearDateFilterCanteenBook()" class="p-1 text-slate-400 hover:text-rose-400 transition" title="Clear Date Filter"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
+        <div
+          class="flex items-center gap-1.5 bg-[#0f172a] border border-slate-800 px-2 py-1.5 rounded-lg text-xs shrink-0">
+          <span class="text-[10px] text-slate-400 font-bold px-1 uppercase">From:</span>
+          <input type="date" id="settle-history-date-from" onchange="onSearchInputSettlement()"
+            class="bg-transparent text-white text-xs outline-none cursor-pointer">
+          <span class="text-[10px] text-slate-400 font-bold px-1 uppercase">To:</span>
+          <input type="date" id="settle-history-date-to" onchange="onSearchInputSettlement()"
+            class="bg-transparent text-white text-xs outline-none cursor-pointer">
+          <button onclick="clearDateFilterSettlement()" class="p-1 text-slate-400 hover:text-rose-400 transition"
+            title="Clear Date Filter"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
         </div>
       </div>
 
-      <!-- 🔵 Right: Action Buttons[cite: 31] -->
-      <div class="flex items-center gap-2.5 w-full lg:w-auto justify-end">
-        <button onclick="switchStudentMoneySubTab('settlement')" class="p-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-amber-600/10 transition-all">
-          <i class="fa-solid fa-coins text-xs"></i> ညနေငွေရှင်းတမ်း သွားမည်
-        </button>
-        <button onclick="loadCanteenBookData(false)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
+      <!-- Actions (Standard + Add New Entry) -->
+      <div class="flex items-center gap-2 shrink-0">
+        <button onclick="loadAdminSettlementHistory(false)"
+          class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md shadow-slate-950/60 active:translate-y-0.5 transition-all whitespace-nowrap"
+          title="Refresh Data">
           <i class="fa-solid fa-rotate text-xs"></i> Refresh
         </button>
-        <button onclick="exportToCSVCanteenBook()" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
+
+        <button onclick="exportToCSVSettlements()"
+          class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md shadow-slate-950/60 active:translate-y-0.5 transition-all whitespace-nowrap">
           <i class="fa-solid fa-file-export text-xs"></i> Export CSV
         </button>
-      </div>
 
+        <button onclick="openSettlementActionModal()" id="settle-btn-add"
+          class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 active:translate-y-0.5 transition-all whitespace-nowrap">
+          <i class="fa-solid fa-plus text-xs"></i> Add New Entry
+        </button>
+      </div>
     </div>
 
-    <!-- Canteen Table[cite: 31] -->
+    <!-- 🎯 3. Sub-Tabs Bar (Search Bar နှင့် Table ကြားတွင် Cashier Book စတိုင်အတိုင်း ထားရှိသည်) -->
+    <div class="bg-[#0c1322] border border-slate-800 p-1.5 rounded-xl shadow-lg overflow-x-auto">
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;"
+        class="w-full min-w-[700px] xl:min-w-0">
+        <button onclick="switchStudentMoneySubTab('main')"
+          class="stm-tab-main ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap">
+          <i class="fa-solid fa-wallet text-sky-400 text-xs"></i> Student Money
+        </button>
+        <button onclick="switchStudentMoneySubTab('settlement')"
+          class="stm-tab-settlement ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap">
+          <i class="fa-solid fa-coins text-amber-400 text-xs"></i> Evening Settlement
+        </button>
+        <button onclick="switchStudentMoneySubTab('cashier')"
+          class="stm-tab-cashier ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap">
+          <i class="fa-solid fa-cash-register text-emerald-400 text-xs"></i> PM Cashier
+        </button>
+        <button onclick="switchStudentMoneySubTab('reconcile')"
+          class="stm-tab-reconcile ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap">
+          <i class="fa-solid fa-scale-balanced text-teal-400 text-xs"></i> Audit & Reconcile
+        </button>
+      </div>
+    </div>
+
+    <!-- 🎯 4. Settlement History Table Grid (Header အမြင့် 52px နှင့် ၂ ကြောင်းစနစ်) -->
     <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
-      <table class="w-full text-left border-collapse min-w-[1300px]">
+      <table class="w-full text-left border-collapse min-w-[1100px]">
         <thead>
-          <tr class="bg-[#0e172a]">
-            <th scope="col" class="w-12 text-center text-slate-400 text-xs py-3">NO</th>
-            <th scope="col" class="w-28 text-slate-400 text-xs py-3">DATE</th>
-            <th scope="col" class="w-40 text-slate-400 text-xs py-3">CATEGORY</th>
-            <th scope="col" class="min-w-[280px] text-slate-400 text-xs py-3">DESCRIPTION</th>
-            <th scope="col" class="w-24 text-slate-400 text-xs py-3">METHOD</th>
-            <th scope="col" class="w-36 text-right text-emerald-400 text-xs py-3">DEBIT (POS ရောင်းရငွေ)</th>
-            <th scope="col" class="w-36 text-right text-rose-400 text-xs py-3">CREDIT (ထုတ်ပေး/ညှိနှိုင်း)</th>
-            <th scope="col" class="w-36 text-right text-indigo-400 text-xs py-3">BALANCES (ရရန်ကျန်ငွေ)</th>
-            <th scope="col" class="w-32 text-slate-400 text-xs py-3">VR NO</th>
-            <th scope="col" class="w-24 text-slate-400 text-xs py-3">FY</th>
-            <th scope="col" class="w-20 text-center text-slate-400 text-xs py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">ACTION</th>
+          <tr class="bg-[#0e172a]" style="height: 52px;">
+            <th scope="col" class="w-12 text-center text-slate-400 text-xs px-2 align-middle whitespace-nowrap">NO</th>
+            <th scope="col" class="w-28 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">DATE</th>
+            <th scope="col" class="w-44 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">SETTLEMENT NO</th>
+            <th scope="col"
+              class="w-36 text-right text-slate-300 text-xs px-2 align-middle leading-tight whitespace-nowrap">
+              <div>GROSS SALES</div>
+              <div class="text-[10px] text-slate-400 font-semibold mt-0.5">(TOTAL)</div>
+            </th>
+            <th scope="col"
+              class="w-32 text-right text-emerald-400 text-xs px-2 align-middle leading-tight whitespace-nowrap">
+              <div>CASH SALES</div>
+              <div class="text-[10px] text-emerald-400/90 font-semibold mt-0.5">(DIRECT)</div>
+            </th>
+            <th scope="col"
+              class="w-36 text-right text-amber-400 text-xs px-2 align-middle leading-tight whitespace-nowrap">
+              <div>WALLET SHARE</div>
+              <div class="text-[10px] text-amber-400/90 font-semibold mt-0.5">(PAYOUT)</div>
+            </th>
+            <th scope="col" class="min-w-[140px] text-slate-400 text-xs px-2 align-middle whitespace-nowrap">HANDED OVER
+              BY</th>
+            <th scope="col" class="min-w-[140px] text-slate-300 font-bold text-xs px-2 align-middle whitespace-nowrap">
+              RECEIVED BY</th>
+            <th scope="col"
+              class="w-24 text-center text-slate-400 text-xs px-2 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg align-middle whitespace-nowrap">
+              ACTION</th>
           </tr>
         </thead>
-        <tbody id="canteen-table-body" class="divide-y divide-slate-800/40 text-slate-300"></tbody>
+        <tbody id="adm-settle-history-body" class="divide-y divide-slate-800/40 text-slate-300"></tbody>
       </table>
     </div>
 
-    <!-- Canteen Pagination[cite: 31] -->
-    <div class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
-      <div id="canteen-pagination-info" class="text-xs font-semibold text-slate-400 tracking-wide font-mono">Showing entries...</div>
+    <!-- 🎯 5. Pagination Tray -->
+    <div
+      class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
+      <div id="settle-pagination-info" class="text-xs font-semibold text-slate-400 tracking-wide font-mono">Showing
+        entries...</div>
       <div class="flex items-center gap-2">
-        <button onclick="changePageCanteenBook(-1)" id="canteen-btn-prev" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+        <button onclick="changePageSettlement(-1)" id="settle-btn-prev"
+          class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
           <i class="fa-solid fa-chevron-left text-[10px]"></i> Previous
         </button>
-        <button onclick="changePageCanteenBook(1)" id="canteen-btn-next" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+        <button onclick="changePageSettlement(1)" id="settle-btn-next"
+          class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
           Next <i class="fa-solid fa-chevron-right text-[10px]"></i>
         </button>
       </div>
@@ -332,314 +383,194 @@
   </div>
 
   <!-- ============================================================================== -->
-  <!-- 💡 TAB 3: CANTEEN EVENING SETTLEMENT (ALIGNED TO TAB 1 DESIGN)                -->
-  <!-- ============================================================================== -->
-  <div id="stm-settlement-view" class="space-y-4 hidden">
-    
-    <!-- 🌙 1. Unsettled Past Shift Smart Radar Banner -->
-    <div id="adm-set-unsettled-banner" class="hidden p-3 bg-amber-500/15 border border-amber-500/30 rounded-xl text-xs font-sans flex items-center justify-between gap-3 shadow-sm animate-pulse">
-      <div class="flex items-center gap-2 text-amber-400 font-bold min-w-0">
-        <i class="fa-solid fa-circle-exclamation text-amber-500 shrink-0 text-sm"></i>
-        <span class="truncate">မရှင်းရသေးသော အရောင်းရက်စွဲ (<strong id="adm-set-unsettled-date-label" class="font-mono text-amber-300"></strong>) တွေ့ရှိပါသည်!</span>
-      </div>
-      <button type="button" onclick="selectAdminSettlementDate(document.getElementById('adm-set-unsettled-date-label')?.textContent)" class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-black shrink-0 transition active:scale-95 shadow">
-        ထိုရက်စွဲ ရှင်းမည်
-      </button>
-    </div>
-
-    <!-- 🎯 2. TAB 1 ပုံစံအတိုင်း ညှိထားသော 4 UNIFIED KPI CARDS GRID -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      
-      <!-- Card 1: Total Invoices / Orders -->
-      <div class="stats-card p-5 rounded-xl flex items-center gap-4 bg-[#0c1322] border border-slate-800">
-        <div class="p-3.5 rounded-xl bg-sky-500/10 text-sky-400 shrink-0">
-          <i class="fa-solid fa-receipt text-xl"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-400 truncate">TOTAL ORDERS (ရောင်းချမှု အကြိမ်ပေါင်း)</p>
-          <h3 id="adm-set-orders" class="text-lg font-black text-sky-400 mt-0.5 font-mono">0 စောင်</h3>
-          <p class="text-[11px] text-slate-500 mt-0.5 truncate">Total Invoices စုစုပေါင်း</p>
-        </div>
-      </div>
-
-      <!-- Card 2: Gross Sales -->
-      <div class="stats-card p-5 rounded-xl flex items-center gap-4 bg-[#0c1322] border border-slate-800">
-        <div class="p-3.5 rounded-xl bg-indigo-500/10 text-indigo-400 shrink-0">
-          <i class="fa-solid fa-cart-shopping text-xl"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-400 truncate">GROSS SALES (စုစုပေါင်း အရောင်းရငွေ)</p>
-          <h3 id="adm-set-total" class="text-lg font-black text-indigo-400 mt-0.5 font-mono">0 MMK</h3>
-          <p class="text-[11px] text-slate-500 mt-0.5 truncate">Cash + Wallet စုစုပေါင်းအရောင်း</p>
-        </div>
-      </div>
-
-      <!-- Card 3: Direct Cash Sales -->
-      <div class="stats-card p-5 rounded-xl flex items-center gap-4 bg-[#0c1322] border border-slate-800">
-        <div class="p-3.5 rounded-xl bg-emerald-500/10 text-emerald-400 shrink-0">
-          <i class="fa-solid fa-money-bill-wave text-xl"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-400 truncate">CASH SALES (ဆိုင်ရ ငွေသားအရောင်း)</p>
-          <h3 id="adm-set-cash" class="text-lg font-black text-emerald-400 mt-0.5 font-mono">0 MMK</h3>
-          <p class="text-[11px] text-slate-500 mt-0.5 truncate">ကန်တင်းတွင် လက်ငင်းရငွေသား</p>
-        </div>
-      </div>
-
-      <!-- Card 4: Pocket Money Share (Payout Amount) -->
-      <div class="stats-card p-5 rounded-xl flex items-center gap-4 bg-[#0c1322] border border-slate-800">
-        <div class="p-3.5 rounded-xl bg-amber-500/10 text-amber-400 shrink-0">
-          <i class="fa-solid fa-wallet text-xl"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-400 truncate">POCKET MONEY (ရှင်းပေးရမည့်ငွေ)</p>
-          <h3 id="adm-set-pocket" class="text-lg font-black text-amber-400 mt-0.5 font-mono">0 MMK</h3>
-          <p class="text-[11px] text-slate-500 mt-0.5 truncate">Finance မှ ကန်တင်းသို့ ထုတ်ပေးငွေ</p>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- 3. Live Settlement Execution Card (Standard Dark Glass Container) -->
-    <div class="bg-[#0c1322] border border-slate-800 p-5 rounded-xl space-y-4 shadow-sm">
-      
-      <!-- Date Selector & Status Header Toolbar -->
-      <div class="flex flex-col sm:flex-row justify-between items-center bg-[#080e1c] border border-slate-800 p-3 rounded-xl gap-3">
-        <div class="flex items-center gap-2.5">
-          <span class="text-slate-400 font-bold uppercase text-[11px] flex items-center gap-1.5">
-            <i class="fa-solid fa-calendar-day text-emerald-400"></i> စာရင်းစစ်မည့် ရက်စွဲ:
-          </span>
-          <input type="date" id="adm-settle-date" onchange="loadAdminSettlementDailyStats(this.value)" class="bg-[#0c1322] border border-slate-700 text-white rounded-lg px-3 py-1.5 font-mono font-bold outline-none focus:border-amber-500 text-xs cursor-pointer">
-          <button onclick="loadAdminSettlementDailyStats()" class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition" title="Refresh"><i class="fa-solid fa-rotate"></i></button>
-        </div>
-        <div class="flex items-center gap-2">
-          <span id="adm-set-status-badge" class="px-2.5 py-1 rounded text-[10px] font-black bg-slate-800 text-slate-400 border border-slate-700 font-mono">LOADING</span>
-        </div>
-      </div>
-
-      <!-- Settlement Action Form Box -->
-      <div class="p-5 bg-[#080e1c] border border-slate-800/80 rounded-xl space-y-4">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-          <div class="space-y-1.5">
-            <label class="font-bold text-amber-400 uppercase tracking-wide text-xs flex items-center gap-1.5">
-              <i class="fa-solid fa-coins text-amber-400"></i> Finance မှ Canteen သို့ လက်ရောက်ပေးအပ်ငွေ (MMK)
-            </label>
-            <input type="number" id="adm-set-payout-input" class="w-full bg-[#0c1322] border border-amber-500/40 rounded-xl px-4 py-2.5 text-right font-mono font-black text-amber-400 text-base outline-none focus:border-amber-400 transition">
-          </div>
-          <div class="space-y-1.5">
-            <label class="font-bold text-slate-400 uppercase tracking-wide text-xs flex items-center gap-1.5">
-              <i class="fa-solid fa-user-check text-slate-400"></i> ငွေလက်ခံသူ (Canteen တာဝန်ခံ)
-            </label>
-            <input type="text" id="adm-set-receiver" value="Canteen Manager" class="w-full bg-[#0c1322] border border-slate-700 rounded-xl px-4 py-2.5 text-white font-bold outline-none focus:border-indigo-500 text-xs transition">
-          </div>
-        </div>
-
-        <button id="btn-adm-confirm-settle" onclick="submitAdminSettlement()" class="w-full py-3.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-black text-xs shadow-lg shadow-amber-950 transition active:scale-98 flex items-center justify-center gap-2">
-          <i class="fa-solid fa-circle-check text-sm"></i>
-          <span>Finance မှ ငွေထုတ်ပေးရှင်းလင်းမှု အတည်ပြုမည်</span>
-        </button>
-      </div>
-
-    </div>
-
-    <!-- 4. Paginated Settlement History Section (20 Rows D1 Quota Safe) -->
-    <div class="space-y-3">
-      
-      <!-- History Toolbar -->
-      <div class="flex flex-col lg:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
-        <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
-          <div class="relative w-full sm:w-64">
-            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
-            <input type="text" id="settle-history-search" oninput="onSearchInputSettlement()" placeholder="Search settlement no, receiver..." class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white focus:outline-none focus:border-amber-500 transition-all">
-          </div>
-
-          <div class="flex items-center gap-1.5 w-full sm:w-auto bg-[#0f172a] border border-slate-800 p-1 rounded-lg text-xs">
-            <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">From:</span>
-            <input type="date" id="settle-history-date-from" onchange="onSearchInputSettlement()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
-            <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">To:</span>
-            <input type="date" id="settle-history-date-to" onchange="onSearchInputSettlement()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
-            <button onclick="clearDateFilterSettlement()" class="p-1 text-slate-400 hover:text-rose-400 transition" title="Clear Date Filter"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
-          </div>
-        </div>
-
-        <div class="flex items-center gap-2.5 w-full lg:w-auto justify-end">
-          <button onclick="loadAdminSettlementHistory(false)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
-            <i class="fa-solid fa-rotate text-xs"></i> Refresh
-          </button>
-          <button onclick="exportToCSVSettlements()" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
-            <i class="fa-solid fa-file-export text-xs"></i> Export CSV
-          </button>
-        </div>
-      </div>
-
-      <!-- History Table Container -->
-      <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
-        <table class="w-full text-left border-collapse min-w-[1000px]">
-          <thead>
-            <tr class="bg-[#0e172a] text-slate-400 text-xs">
-              <th scope="col" class="py-3 px-3 text-center w-12">စဉ်</th>
-              <th scope="col" class="py-3 px-3 w-28">ရက်စွဲ</th>
-              <th scope="col" class="py-3 px-3 w-44">SETTLEMENT NO</th>
-              <th scope="col" class="py-3 px-3 text-right w-36">စုစုပေါင်းအရောင်း</th>
-              <th scope="col" class="py-3 px-3 text-right w-32">ဆိုင်ရငွေသား</th>
-              <th scope="col" class="py-3 px-3 text-right text-amber-400 w-36">မုန့်ဖိုးငွေ (ရှင်းငွေ)</th>
-              <th scope="col" class="py-3 px-3">ငွေလွှဲသူ</th>
-              <th scope="col" class="py-3 px-3">ငွေလက်ခံသူ</th>
-              <th scope="col" class="py-3 px-3 text-center w-24 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">ပြေစာ</th>
-            </tr>
-          </thead>
-          <tbody id="adm-settle-history-body" class="divide-y divide-slate-800/40 text-slate-300">
-            <!-- Dynamic 20 rows -->
-          </tbody>
-        </table>
-      </div>
-
-      <!-- 20-Row Pagination Controller -->
-      <div class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
-        <div id="settle-pagination-info" class="text-xs font-semibold text-slate-400 tracking-wide font-mono">Showing entries...</div>
-        <div class="flex items-center gap-2">
-          <button onclick="changePageSettlement(-1)" id="settle-btn-prev" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
-            <i class="fa-solid fa-chevron-left text-[10px]"></i> Previous
-          </button>
-          <button onclick="changePageSettlement(1)" id="settle-btn-next" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
-            Next <i class="fa-solid fa-chevron-right text-[10px]"></i>
-          </button>
-        </div>
-      </div>
-
-    </div>
-
-  </div>
-
-  <!-- ============================================================================== -->
-  <!-- 💡 TAB 4: PM CASHIER BOOK (ONLY ONE ROW 4-KPIs GRID)[cite: 31]                           -->
+  <!-- 💡 TAB 3: PM CASHIER BOOK                                                       -->
   <!-- ============================================================================== -->
   <div id="stm-cashier-view" class="space-y-4 hidden">
-    
-    <!-- 🎯 TAB 4: 1-Row 4-KPI Grid[cite: 31] -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <!-- Card 1: Cashier 1[cite: 31] -->
-      <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-        <div class="p-3.5 rounded-lg bg-sky-500/10 text-sky-400 shrink-0">
-          <i class="fa-solid fa-user-tie text-xl"></i>
+
+    <!-- 🎯 1. Top 4-KPI Stats Cards Grid -->
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;">
+
+      <!-- 1. Cashier 1 -->
+      <div
+        class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+        <div class="p-2.5 rounded-lg bg-sky-500/10 text-sky-400 shrink-0">
+          <i class="fa-solid fa-user-tie text-base"></i>
         </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">CASHIER 1 (ငွေကိုင် ၁)</p>
-          <h3 id="pm-c1-balance" class="text-base font-extrabold text-sky-400 mt-1">0 MMK</h3>
-          <p class="text-[10px] text-slate-400 mt-0.5 font-mono truncate">
-            အဝင်: <span id="pm-c1-in" class="text-emerald-400">0</span> | ထုတ်: <span id="pm-c1-out" class="text-rose-400">0</span>
-          </p>
+        <div class="min-w-0">
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Cashier 1 (MMK)</p>
+          <h3 id="pm-c1-balance" class="text-sm sm:text-base font-extrabold text-white mt-0.5 truncate">0 MMK</h3>
+          <span id="pm-c1-in" class="hidden">0</span><span id="pm-c1-out" class="hidden">0</span>
         </div>
       </div>
 
-      <!-- Card 2: Cashier 2[cite: 31] -->
-      <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-        <div class="p-3.5 rounded-lg bg-purple-500/10 text-purple-400 shrink-0">
-          <i class="fa-solid fa-user-tie text-xl"></i>
+      <!-- 2. Cashier 2 -->
+      <div
+        class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+        <div class="p-2.5 rounded-lg bg-purple-500/10 text-purple-400 shrink-0">
+          <i class="fa-solid fa-user-tie text-base"></i>
         </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">CASHIER 2 (ငွေကိုင် ၂)</p>
-          <h3 id="pm-c2-balance" class="text-base font-extrabold text-purple-400 mt-1">0 MMK</h3>
-          <p class="text-[10px] text-slate-400 mt-0.5 font-mono truncate">
-            အဝင်: <span id="pm-c2-in" class="text-emerald-400">0</span> | ထုတ်: <span id="pm-c2-out" class="text-rose-400">0</span>
-          </p>
-        </div>
-      </div>
-
-      <!-- Card 3: Total PM Cash in Hand[cite: 31] -->
-      <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-        <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0">
-          <i class="fa-solid fa-money-bill-wave text-xl"></i>
-        </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">TOTAL PM CASH IN HAND</p>
-          <h3 id="pm-total-hand-cash" class="text-base font-extrabold text-emerald-400 mt-1">0 MMK</h3>
-          <p class="text-[10px] text-slate-400 mt-0.5 font-mono truncate">
-            အဝင်: <span id="pm-total-in" class="text-emerald-400">0</span> | ထုတ်: <span id="pm-total-out" class="text-rose-400">0</span>
-          </p>
+        <div class="min-w-0">
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Cashier 2 (MMK)</p>
+          <h3 id="pm-c2-balance" class="text-sm sm:text-base font-extrabold text-white mt-0.5 truncate">0 MMK</h3>
+          <span id="pm-c2-in" class="hidden">0</span><span id="pm-c2-out" class="hidden">0</span>
         </div>
       </div>
 
-      <!-- Card 4: Cashier Entries[cite: 31] -->
-      <div class="stats-card p-5 rounded-xl flex items-start gap-4">
-        <div class="p-3.5 rounded-lg bg-amber-500/10 text-amber-400 shrink-0">
-          <i class="fa-solid fa-receipt text-xl"></i>
+      <!-- 3. Total Hand Cash -->
+      <div
+        class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+        <div class="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0">
+          <i class="fa-solid fa-money-bill-wave text-base"></i>
         </div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">CASHIER ENTRIES</p>
-          <h3 id="pm-cashier-entries-count" class="text-base font-extrabold text-amber-400 mt-1">0</h3>
-          <p class="text-[10px] text-slate-400 mt-0.5 truncate">ငွေလွှဲ / ငွေထုတ် စုစုပေါင်း</p>
+        <div class="min-w-0">
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Total Hand Cash (MMK)</p>
+          <h3 id="pm-total-hand-cash" class="text-sm sm:text-base font-extrabold text-white mt-0.5 truncate">0 MMK</h3>
+          <span id="pm-total-in" class="hidden">0</span><span id="pm-total-out" class="hidden">0</span>
         </div>
       </div>
+
+      <!-- 4. Cashier Entries -->
+      <div
+        class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
+        <div class="p-2.5 rounded-lg bg-amber-500/10 text-amber-400 shrink-0">
+          <i class="fa-solid fa-receipt text-base"></i>
+        </div>
+        <div class="min-w-0">
+          <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Cashier Entries</p>
+          <h3 id="pm-cashier-entries-count" class="text-sm sm:text-base font-extrabold text-white mt-0.5 truncate">0
+          </h3>
+        </div>
+      </div>
+
     </div>
 
-    <!-- PM Cashier Toolbar[cite: 31] -->
-    <div class="flex flex-col lg:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
-      <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
-        <div class="relative w-full sm:w-60">
-          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
-          <input type="text" id="pm-cashier-search" oninput="onSearchInputPmCashierBook()" placeholder="Search description, student ID..." class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white focus:outline-none focus:border-sky-500 transition-all">
+    <!-- 🎯 2. Control Search & Action Bar (All Cashiers Dropdown filter ကို Date filter ၏ ညာဘက်သို့ ရွှေ့ထားသည်) -->
+    <div
+      class="flex items-center justify-between bg-[#0c1322] border border-slate-800 p-2.5 sm:p-3 rounded-xl gap-2.5 overflow-x-auto">
+      <div class="flex items-center gap-2.5 shrink-0">
+        <div class="relative w-full sm:w-64 shrink-0" style="min-width: 250px;">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500 pointer-events-none">
+            <i class="fa-solid fa-magnifying-glass text-xs"></i>
+          </span>
+          <input type="text" id="pm-cashier-search" oninput="onSearchInputPmCashierBook()"
+            placeholder="Search description, student ID..."
+            class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 transition-all font-sans">
         </div>
 
-        <select id="pm-cashier-resp-filter" onchange="onPmCashierFilterChange()" class="w-full sm:w-44 bg-[#0f172a] border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-2 outline-none focus:border-sky-500 font-bold">
-          <option value="">All Cashiers (ငွေကိုင်အားလုံး)</option>
-          <option value="Cashier 1">Cashier 1 (ငွေကိုင် ၁)</option>
-          <option value="Cashier 2">Cashier 2 (ငွေကိုင် ၂)</option>
+        <div
+          class="flex items-center gap-1.5 bg-[#0f172a] border border-slate-800 px-2 py-1.5 rounded-lg text-xs shrink-0">
+          <span class="text-[10px] text-slate-400 font-bold px-1 uppercase">From:</span>
+          <input type="date" id="pm-cashier-date-from" onchange="onSearchInputPmCashierBook()"
+            class="bg-transparent text-white text-xs outline-none cursor-pointer">
+          <span class="text-[10px] text-slate-400 font-bold px-1 uppercase">To:</span>
+          <input type="date" id="pm-cashier-date-to" onchange="onSearchInputPmCashierBook()"
+            class="bg-transparent text-white text-xs outline-none cursor-pointer">
+          <button onclick="clearDateFilterPmCashierBook()" class="p-1 text-slate-400 hover:text-rose-400 transition"
+            title="Clear Date Filter"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
+        </div>
+
+        <!-- 💡 All Cashiers Filter (Date Filter ၏ ညာဘက်ခြမ်း) -->
+        <select id="pm-cashier-resp-filter" onchange="onPmCashierFilterChange()"
+          class="bg-[#0f172a] border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-2 outline-none focus:border-sky-500 font-bold cursor-pointer shrink-0">
+          <option value="">All Cashiers</option>
+          <option value="Cashier 1">Cashier 1</option>
+          <option value="Cashier 2">Cashier 2</option>
         </select>
-
-        <div class="flex items-center gap-1.5 w-full sm:w-auto bg-[#0f172a] border border-slate-800 p-1 rounded-lg text-xs">
-          <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">From:</span>
-          <input type="date" id="pm-cashier-date-from" onchange="onSearchInputPmCashierBook()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
-          <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">To:</span>
-          <input type="date" id="pm-cashier-date-to" onchange="onSearchInputPmCashierBook()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
-          <button onclick="clearDateFilterPmCashierBook()" class="p-1 text-slate-400 hover:text-rose-400 transition" title="Clear Date Filter"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
-        </div>
       </div>
 
-      <div class="flex items-center gap-2.5 w-full lg:w-auto justify-end">
-        <button onclick="loadPmCashierBookData(false)" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
+      <!-- Actions -->
+      <div class="flex items-center gap-2 shrink-0">
+        <button onclick="loadPmCashierBookData(false)"
+          class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md shadow-slate-950/60 active:translate-y-0.5 transition-all whitespace-nowrap"
+          title="Refresh Data">
           <i class="fa-solid fa-rotate text-xs"></i> Refresh
         </button>
-        <button onclick="exportToCSVPmCashierBook()" class="p-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all">
+
+        <button onclick="exportToCSVPmCashierBook()"
+          class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md shadow-slate-950/60 active:translate-y-0.5 transition-all whitespace-nowrap">
           <i class="fa-solid fa-file-export text-xs"></i> Export CSV
         </button>
-        <button onclick="openAddModalPmCashierBook()" class="p-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-sky-600/10 transition-all">
-          <i class="fa-solid fa-hand-holding-dollar text-xs"></i> PM Cashier Action
+
+        <button onclick="openAddModalPmCashierBook()" id="pm-btn-add"
+          class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 active:translate-y-0.5 transition-all whitespace-nowrap">
+          <i class="fa-solid fa-plus text-xs"></i> Add New Entry
         </button>
       </div>
     </div>
 
-    <!-- PM Cashier Table Grid[cite: 31] -->
+    <!-- 🎯 3. Sub-Tabs Bar (Search Bar နှင့် Table ကြားတွင် Cashier Book စတိုင်အတိုင်း ထားရှိသည်) -->
+    <div class="bg-[#0c1322] border border-slate-800 p-1.5 rounded-xl shadow-lg overflow-x-auto">
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;"
+        class="w-full min-w-[700px] xl:min-w-0">
+        <button onclick="switchStudentMoneySubTab('main')"
+          class="stm-tab-main ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap">
+          <i class="fa-solid fa-wallet text-sky-400 text-xs"></i> Student Money
+        </button>
+        <button onclick="switchStudentMoneySubTab('settlement')"
+          class="stm-tab-settlement ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap">
+          <i class="fa-solid fa-coins text-amber-400 text-xs"></i> Evening Settlement
+        </button>
+        <button onclick="switchStudentMoneySubTab('cashier')"
+          class="stm-tab-cashier ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap">
+          <i class="fa-solid fa-cash-register text-emerald-400 text-xs"></i> PM Cashier
+        </button>
+        <button onclick="switchStudentMoneySubTab('reconcile')"
+          class="stm-tab-reconcile ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap">
+          <i class="fa-solid fa-scale-balanced text-teal-400 text-xs"></i> Audit & Reconcile
+        </button>
+      </div>
+    </div>
+
+    <!-- 🎯 4. PM Cashier Table Grid (Header အမြင့် 52px နှင့် ၂ ကြောင်းစနစ်) -->
     <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
-      <table class="w-full text-left border-collapse min-w-[1350px]">
+      <table class="w-full text-left border-collapse min-w-[1400px]">
         <thead>
-          <tr class="bg-[#0e172a]">
-            <th scope="col" class="w-12 text-center text-slate-400 text-xs py-3">NO</th>
-            <th scope="col" class="w-28 text-slate-400 text-xs py-3">DATE</th>
-            <th scope="col" class="w-36 text-sky-400 text-xs py-3">CASHIER (တာဝန်ခံ)</th>
-            <th scope="col" class="w-36 text-slate-400 text-xs py-3">CATEGORY</th>
-            <th scope="col" class="min-w-[280px] text-slate-400 text-xs py-3">DESCRIPTION</th>
-            <th scope="col" class="w-24 text-slate-400 text-xs py-3">METHOD</th>
-            <th scope="col" class="w-36 text-right text-emerald-400 text-xs py-3">DEBIT (အရင်းအဝင်ငွေ)</th>
-            <th scope="col" class="w-36 text-right text-rose-400 text-xs py-3">CREDIT (မုန့်ဖိုးထုတ်ပေးငွေ)</th>
-            <th scope="col" class="w-36 text-right text-indigo-400 text-xs py-3">BALANCES (ငွေသားလက်ကျန်)</th>
-            <th scope="col" class="w-32 text-slate-400 text-xs py-3">VR NO</th>
-            <th scope="col" class="w-24 text-slate-400 text-xs py-3">FY</th>
-            <th scope="col" class="w-20 text-center text-slate-400 text-xs py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg">ACTION</th>
+          <tr class="bg-[#0e172a]" style="height: 52px;">
+            <th scope="col" class="w-12 text-center text-slate-400 text-xs px-2 align-middle whitespace-nowrap">NO</th>
+            <th scope="col" class="w-28 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">DATE</th>
+            <th scope="col" class="w-36 text-sky-400 text-xs px-2 align-middle whitespace-nowrap">CASHIER</th>
+            <th scope="col" class="w-36 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">CATEGORY</th>
+            <th scope="col" class="min-w-[280px] text-slate-400 text-xs px-2 align-middle whitespace-nowrap">DESCRIPTION
+            </th>
+            <th scope="col" class="w-24 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">METHOD</th>
+            <th scope="col"
+              class="w-36 text-right text-emerald-400 text-xs px-2 align-middle leading-tight whitespace-nowrap">
+              <div>DEBIT</div>
+              <div class="text-[10px] text-emerald-400/90 font-semibold mt-0.5">(FLOAT IN)</div>
+            </th>
+            <th scope="col"
+              class="w-36 text-right text-rose-400 text-xs px-2 align-middle leading-tight whitespace-nowrap">
+              <div>CREDIT</div>
+              <div class="text-[10px] text-rose-400/90 font-semibold mt-0.5">(WITHDRAW)</div>
+            </th>
+            <th scope="col"
+              class="w-36 text-right text-indigo-400 text-xs px-2 align-middle leading-tight whitespace-nowrap">
+              <div>BALANCES</div>
+              <div class="text-[10px] text-indigo-400/90 font-semibold mt-0.5">(HAND CASH)</div>
+            </th>
+            <th scope="col" class="w-32 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">VR NO</th>
+            <th scope="col" class="w-24 text-slate-400 text-xs px-2 align-middle whitespace-nowrap">FY</th>
+            <th scope="col"
+              class="w-20 text-center text-slate-400 text-xs px-2 right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg align-middle whitespace-nowrap">
+              ACTION</th>
           </tr>
         </thead>
         <tbody id="pm-cashier-table-body" class="divide-y divide-slate-800/40 text-slate-300"></tbody>
       </table>
     </div>
 
-    <!-- PM Cashier Pagination[cite: 31] -->
-    <div class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
-      <div id="pm-cashier-pagination-info" class="text-xs font-semibold text-slate-400 tracking-wide font-mono">Showing entries...</div>
+    <!-- 🎯 5. Pagination Tray -->
+    <div
+      class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
+      <div id="pm-cashier-pagination-info" class="text-xs font-semibold text-slate-400 tracking-wide font-mono">Showing
+        entries...</div>
       <div class="flex items-center gap-2">
-        <button onclick="changePagePmCashierBook(-1)" id="pm-cashier-btn-prev" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+        <button onclick="changePagePmCashierBook(-1)" id="pm-cashier-btn-prev"
+          class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
           <i class="fa-solid fa-chevron-left text-[10px]"></i> Previous
         </button>
-        <button onclick="changePagePmCashierBook(1)" id="pm-cashier-btn-next" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+        <button onclick="changePagePmCashierBook(1)" id="pm-cashier-btn-next"
+          class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
           Next <i class="fa-solid fa-chevron-right text-[10px]"></i>
         </button>
       </div>
@@ -647,75 +578,107 @@
   </div>
 
   <!-- ============================================================================== -->
-  <!-- 💡 TAB 5: AUDIT & RECONCILIATION[cite: 31]                                               -->
+  <!-- 💡 TAB 4: AUDIT & RECONCILIATION                                                -->
   <!-- ============================================================================== -->
-  <div id="stm-reconcile-view" class="space-y-5 hidden">
-    <div class="p-6 bg-[#0c1322] border border-slate-800 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
+  <div id="stm-reconcile-view" class="space-y-4 hidden">
+
+    <!-- 🎯 1. Sub-Tabs Bar (Search Bar မရှိသော်လည်း ညီညာစွာ ထိပ်ဆုံးတွင် ထားရှိသည်) -->
+    <div class="bg-[#0c1322] border border-slate-800 p-1.5 rounded-xl shadow-lg overflow-x-auto">
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;"
+        class="w-full min-w-[700px] xl:min-w-0">
+        <button onclick="switchStudentMoneySubTab('main')"
+          class="stm-tab-main ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap">
+          <i class="fa-solid fa-wallet text-sky-400 text-xs"></i> Student Money
+        </button>
+        <button onclick="switchStudentMoneySubTab('settlement')"
+          class="stm-tab-settlement ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap">
+          <i class="fa-solid fa-coins text-amber-400 text-xs"></i> Evening Settlement
+        </button>
+        <button onclick="switchStudentMoneySubTab('cashier')"
+          class="stm-tab-cashier ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap">
+          <i class="fa-solid fa-cash-register text-emerald-400 text-xs"></i> PM Cashier
+        </button>
+        <button onclick="switchStudentMoneySubTab('reconcile')"
+          class="stm-tab-reconcile ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap">
+          <i class="fa-solid fa-scale-balanced text-teal-400 text-xs"></i> Audit & Reconcile
+        </button>
+      </div>
+    </div>
+
+    <!-- 2. Header Box -->
+    <div
+      class="p-5 bg-[#0c1322] border border-slate-800 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4">
       <div>
-        <h3 class="text-base font-black text-white flex items-center gap-2">
+        <h3 class="text-sm font-black text-white flex items-center gap-2">
           <i class="fa-solid fa-scale-balanced text-teal-400"></i> SPMMS Automatic Reconciliation Engine
         </h3>
         <p class="text-xs text-slate-400 mt-1">
-          ဗဟိုဘဏ္ဍာ (Finance Vault) ရှိ ငွေသားနှင့် PM Cashiers များထံရှိ ငွေသားပေါင်းလဒ်သည် ကျောင်းသားများ၏ Virtual Wallet စုစုပေါင်းနှင့် အတိအကျ ကိုက်ညီရပါမည်[cite: 31]။
+          Finance Vault Cash + PM Cashiers Cash = Total Student Virtual Wallets (100% Balanced Equation)
         </p>
       </div>
-      <button onclick="loadSpmmsReconciliationData()" class="px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-black shadow-lg shadow-teal-600/10 transition flex items-center gap-2 shrink-0">
+      <button onclick="loadSpmmsReconciliationData()"
+        class="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-xs font-black shadow-lg shadow-teal-600/20 active:translate-y-0.5 transition flex items-center gap-2 shrink-0">
         <i class="fa-solid fa-arrows-rotate"></i> Recalculate & Verify
       </button>
     </div>
 
-    <!-- Reconciliation Formula Equation Cards Grid[cite: 31] -->
+    <!-- 3. Reconciliation Formula Equation Cards Grid -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div class="p-5 bg-[#0e172a] border border-slate-800 rounded-xl space-y-2">
+      <div class="p-4 bg-[#0c1322] border border-slate-800 rounded-xl space-y-1.5">
         <div class="flex items-center justify-between text-xs font-bold text-slate-400 uppercase">
-          <span>A. Total Student Wallets</span>
-          <span class="text-amber-400 font-mono">VIRTUAL LIABILITY</span>
+          <span>A. Virtual Wallets</span>
+          <span class="text-amber-400 font-mono text-[10px]">LIABILITY</span>
         </div>
-        <h3 id="rec-total-virtual" class="text-xl font-black text-white font-mono">0 MMK</h3>
-        <p class="text-[11px] text-slate-500">ကျောင်းသားတစ်ဦးချင်းစီ၏ စာရင်းအရ လက်ကျန်ငွေများ စုစုပေါင်း[cite: 31]</p>
+        <h3 id="rec-total-virtual" class="text-lg font-black text-white font-mono">0 MMK</h3>
+        <p class="text-[10px] text-slate-500">ကျောင်းသားများ၏ လက်ကျန်ငွေများ စုစုပေါင်း</p>
       </div>
 
-      <div class="p-5 bg-[#0e172a] border border-slate-800 rounded-xl space-y-2">
+      <div class="p-4 bg-[#0c1322] border border-slate-800 rounded-xl space-y-1.5">
         <div class="flex items-center justify-between text-xs font-bold text-slate-400 uppercase">
-          <span>B. Total Physical Cash</span>
-          <span class="text-emerald-400 font-mono">ACTUAL ASSETS</span>
+          <span>B. Physical Cash</span>
+          <span class="text-emerald-400 font-mono text-[10px]">ACTUAL ASSETS</span>
         </div>
-        <h3 id="rec-total-physical" class="text-xl font-black text-emerald-400 font-mono">0 MMK</h3>
-        <div class="text-[11px] text-slate-400 space-y-0.5">
-          <div class="flex justify-between"><span>Finance Vault Cash:</span><span id="rec-finance-cash" class="font-mono font-bold text-slate-300">0 MMK</span></div>
-          <div class="flex justify-between"><span>PM Cashiers Cash:</span><span id="rec-cashier-cash" class="font-mono font-bold text-slate-300">0 MMK</span></div>
+        <h3 id="rec-total-physical" class="text-lg font-black text-emerald-400 font-mono">0 MMK</h3>
+        <div class="text-[10px] text-slate-400 space-y-0.5 font-mono">
+          <div class="flex justify-between"><span>Finance Vault:</span><span id="rec-finance-cash"
+              class="font-bold text-slate-300">0 MMK</span></div>
+          <div class="flex justify-between"><span>PM Cashiers:</span><span id="rec-cashier-cash"
+              class="font-bold text-slate-300">0 MMK</span></div>
         </div>
       </div>
 
-      <div class="p-5 bg-[#0e172a] border border-slate-800 rounded-xl space-y-2">
+      <div class="p-4 bg-[#0c1322] border border-slate-800 rounded-xl space-y-1.5">
         <div class="flex items-center justify-between text-xs font-bold text-slate-400 uppercase">
-          <span>C. Variance (ကွာဟချက်)</span>
-          <span id="rec-status-badge" class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">MATCHED</span>
+          <span>C. Variance</span>
+          <span id="rec-status-badge"
+            class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">MATCHED</span>
         </div>
-        <h3 id="rec-variance" class="text-xl font-black text-white font-mono">0.00 MMK</h3>
-        <p id="rec-status-desc" class="text-[11px] text-emerald-400">စာရင်းနှင့် လက်ကျန်ငွေသား အတိအကျ ကိုက်ညီနေပါသည်။[cite: 31]</p>
+        <h3 id="rec-variance" class="text-lg font-black text-white font-mono">0.00 MMK</h3>
+        <p id="rec-status-desc" class="text-[10px] text-emerald-400">စာရင်းနှင့် လက်ကျန်ငွေသား အတိအကျ ကိုက်ညီနေပါသည်။
+        </p>
       </div>
     </div>
 
-    <!-- Visualizer[cite: 31] -->
-    <div class="p-5 bg-[#080e1c] border border-slate-800/80 rounded-xl flex flex-col md:flex-row items-center justify-around gap-4 text-center">
-      <div class="space-y-1">
-        <span class="text-[10px] text-slate-500 uppercase font-bold">Total Virtual Wallets</span>
-        <div id="rec-eq-virtual" class="text-sm font-mono font-black text-amber-300">0 MMK</div>
+    <!-- 4. Visualizer Equation Bar -->
+    <div
+      class="p-4 bg-[#0c1322] border border-slate-800 rounded-xl flex flex-col md:flex-row items-center justify-around gap-4 text-center">
+      <div class="space-y-0.5">
+        <span class="text-[9px] text-slate-500 uppercase font-bold">Total Virtual Wallets</span>
+        <div id="rec-eq-virtual" class="text-xs font-mono font-black text-amber-300">0 MMK</div>
       </div>
-      <div class="text-lg text-slate-600 font-black">=</div>
-      <div class="space-y-1">
-        <span class="text-[10px] text-slate-500 uppercase font-bold">Finance Vault Cash</span>
-        <div id="rec-eq-finance" class="text-sm font-mono font-black text-sky-400">0 MMK</div>
+      <div class="text-sm text-slate-600 font-black">=</div>
+      <div class="space-y-0.5">
+        <span class="text-[9px] text-slate-500 uppercase font-bold">Finance Vault Cash</span>
+        <div id="rec-eq-finance" class="text-xs font-mono font-black text-sky-400">0 MMK</div>
       </div>
-      <div class="text-lg text-slate-600 font-black">+</div>
-      <div class="space-y-1">
-        <span class="text-[10px] text-slate-500 uppercase font-bold">PM Cashiers Cash</span>
-        <div id="rec-eq-cashier" class="text-sm font-mono font-black text-emerald-400">0 MMK</div>
+      <div class="text-sm text-slate-600 font-black">+</div>
+      <div class="space-y-0.5">
+        <span class="text-[9px] text-slate-500 uppercase font-bold">PM Cashiers Cash</span>
+        <div id="rec-eq-cashier" class="text-xs font-mono font-black text-emerald-400">0 MMK</div>
       </div>
-      <div class="text-lg text-slate-600 font-black">➡</div>
-      <div class="space-y-1">
-        <span class="text-[10px] text-slate-500 uppercase font-bold">System Status</span>
+      <div class="text-sm text-slate-600 font-black">➡</div>
+      <div class="space-y-0.5">
+        <span class="text-[9px] text-slate-500 uppercase font-bold">Status</span>
         <div id="rec-eq-verdict" class="text-xs font-mono font-black text-emerald-400 uppercase">100% Balanced</div>
       </div>
     </div>
@@ -724,32 +687,123 @@
 </div>
 
 <!-- ============================================================================== -->
-<!-- 💡 ၃။ MODALS SECTION (PRESERVED ALL ORIGINAL 4 MODALS)[cite: 31]                         -->
+<!-- 💡 ၃။ MODALS SECTION (100% PRESERVED ALL MODALS & FUNCTIONAL HANDLERS)          -->
 <!-- ============================================================================== -->
 
-<!-- MODAL 1: STUDENT MONEY & TRANSFER MODAL[cite: 31] -->
-<div id="student-money-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-  <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+<!-- 🎯 MODAL 1: EVENING SETTLEMENT EXECUTION MODAL POPUP -->
+<div id="settlement-action-modal"
+  class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div
+    class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+
     <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
-      <h3 id="stm-form-title" class="text-sm font-black text-white uppercase tracking-wider">Add Student Money / Transfer</h3>
-      <button onclick="closeStudentMoneyModal()" class="text-slate-500 hover:text-white transition"><i class="fa-solid fa-xmark text-sm"></i></button>
+      <h3 class="text-sm font-black text-amber-400 uppercase tracking-wider flex items-center gap-2">
+        <i class="fa-solid fa-coins"></i> Canteen Evening Settlement Action
+      </h3>
+      <button onclick="closeSettlementActionModal()" class="text-slate-500 hover:text-white transition">
+        <i class="fa-solid fa-xmark text-sm"></i>
+      </button>
     </div>
 
-    <form id="student-money-form" onsubmit="saveStudentMoneyForm(event)" class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+    <div class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+
+      <!-- Date Selector & Status Header Toolbar -->
+      <div
+        class="flex flex-col sm:flex-row justify-between items-center bg-[#0f172a] border border-slate-800 p-3 rounded-xl gap-3">
+        <div class="flex items-center gap-2">
+          <span class="text-slate-400 font-bold uppercase text-[11px] flex items-center gap-1.5">
+            <i class="fa-solid fa-calendar-day text-emerald-400"></i> ရက်စွဲ:
+          </span>
+          <input type="date" id="adm-settle-date" onchange="loadAdminSettlementDailyStats(this.value)"
+            class="bg-[#0c1322] border border-slate-700 text-white rounded-lg px-3 py-1.5 font-mono font-bold outline-none focus:border-amber-500 text-xs cursor-pointer">
+          <button onclick="loadAdminSettlementDailyStats()"
+            class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs transition"
+            title="Refresh"><i class="fa-solid fa-rotate"></i></button>
+        </div>
+        <div>
+          <!-- 🎯 Border မပါသော Red Status Pill -->
+          <span id="adm-set-status-badge"
+            class="px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap bg-rose-500/15 text-rose-400 font-mono"
+            style="border: none !important;">REGISTER NOT CLOSED</span>
+        </div>
+      </div>
+
+      <!-- 🎯 Standard Clean Preview Card: Wallet Sales Share & Direct Cash Sales -->
+      <div class="bg-[#0f172a] border border-slate-800 rounded-xl p-3.5 space-y-2">
+        <div class="grid grid-cols-2 gap-3 text-center">
+          <div>
+            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">WALLET SALES SHARE</p>
+            <p id="adm-set-pocket-preview" class="text-sm font-extrabold text-sky-400 font-mono mt-0.5">0 MMK</p>
+          </div>
+          <div>
+            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">DIRECT CASH SALES</p>
+            <p id="adm-set-cash-preview" class="text-sm font-extrabold text-emerald-400 font-mono mt-0.5">0 MMK</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settlement Action Inputs -->
+      <div class="space-y-3">
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-amber-400 uppercase tracking-wide">
+            Finance မှ Canteen သို့ လက်ရောက်ပေးအပ်ငွေ (MMK)
+          </label>
+          <input type="number" id="adm-set-payout-input"
+            class="w-full bg-[#0f172a] border border-amber-500/40 rounded-xl px-4 py-2.5 text-right font-mono font-black text-amber-400 text-base outline-none focus:border-amber-400 transition">
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <label class="font-bold text-slate-400 uppercase tracking-wide">
+            ငွေလက်ခံသူ (Canteen တာဝန်ခံ)
+          </label>
+          <input type="text" id="adm-set-receiver" value="Canteen Manager"
+            class="w-full bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-2.5 text-white font-bold outline-none focus:border-indigo-500 text-xs transition">
+        </div>
+      </div>
+
+      <!-- 🎯 Standard Modal Footer (Cancel & Confirm ခလုတ်များသာ ထားရှိပြီး အောက်ဆုံး သတိပြုရန် စာကြောင်းကြီး ဖယ်ရှားထားသည်) -->
+      <div class="flex justify-end items-center gap-3 pt-4 border-t border-slate-800">
+        <button type="button" onclick="closeSettlementActionModal()"
+          class="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">Cancel</button>
+        <button type="button" id="btn-adm-confirm-settle" onclick="submitAdminSettlement()"
+          class="px-5 py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20 active:translate-y-0.5 transition-all">Confirm</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- 🎯 MODAL 2: STUDENT MONEY & TRANSFER MODAL -->
+<div id="student-money-modal"
+  class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div
+    class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+    <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
+      <h3 id="stm-form-title" class="text-sm font-black text-white uppercase tracking-wider">Add Student Money /
+        Transfer</h3>
+      <button onclick="closeStudentMoneyModal()" class="text-slate-500 hover:text-white transition"><i
+          class="fa-solid fa-xmark text-sm"></i></button>
+    </div>
+
+    <form id="student-money-form" onsubmit="saveStudentMoneyForm(event)"
+      class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
       <input type="hidden" id="stm-uniqueId">
 
       <div class="grid grid-cols-3 gap-3">
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Select FY</label>
-          <select id="stm-fy" onchange="onStudentIdOrFYChangeMoney()" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500 font-mono"></select>
+          <select id="stm-fy" onchange="onStudentIdOrFYChangeMoney()" required
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500 font-mono"></select>
         </div>
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Date</label>
-          <input type="date" id="stm-date" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+          <input type="date" id="stm-date" required
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500">
         </div>
         <div class="flex flex-col gap-1">
           <label class="font-bold text-amber-400 uppercase tracking-wide">Action Type</label>
-          <select id="stm-entry-type" onchange="onStudentMoneyEntryTypeChange()" required class="w-full bg-[#0f172a] border border-slate-800 text-amber-300 font-bold rounded-lg p-2.5 outline-none focus:border-amber-500">
+          <select id="stm-entry-type" onchange="onStudentMoneyEntryTypeChange()" required
+            class="w-full bg-[#0f172a] border border-slate-800 text-amber-300 font-bold rounded-lg p-2.5 outline-none focus:border-amber-500">
             <option value="Deposit" selected>Student Deposit (ကျောင်းသားငွေသွင်း)</option>
             <option value="Withdraw">Student Withdraw (ကျောင်းသားငွေထုတ်)</option>
             <option value="Transfer to PM Cashier">Transfer to PM Cashier (ငွေကိုင်သို့ အရင်းလွှဲခြင်း)</option>
@@ -757,9 +811,12 @@
         </div>
       </div>
 
-      <div id="stm-resp-person-box" class="flex flex-col gap-1 p-3 bg-sky-950/20 border border-sky-500/20 rounded-xl hidden">
-        <label class="font-bold text-sky-400 uppercase tracking-wide">Target Cashier (တာဝန်ခံ ငွေကိုင်ရွေးချယ်ပါ)</label>
-        <select id="stm-responsibility-person" class="w-full bg-[#0f172a] border border-slate-800 text-white rounded-lg p-2.5 outline-none focus:border-sky-500 font-bold">
+      <div id="stm-resp-person-box"
+        class="flex flex-col gap-1 p-3 bg-sky-950/20 border border-sky-500/20 rounded-xl hidden">
+        <label class="font-bold text-sky-400 uppercase tracking-wide">Target Cashier (တာဝန်ခံ
+          ငွေကိုင်ရွေးချယ်ပါ)</label>
+        <select id="stm-responsibility-person"
+          class="w-full bg-[#0f172a] border border-slate-800 text-white rounded-lg p-2.5 outline-none focus:border-sky-500 font-bold">
           <option value="Cashier 1" selected>Cashier 1 (ငွေကိုင် ၁)</option>
           <option value="Cashier 2">Cashier 2 (ငွေကိုင် ၂)</option>
         </select>
@@ -769,24 +826,29 @@
         <div class="grid grid-cols-3 gap-3">
           <div class="flex flex-col gap-1">
             <label class="font-bold text-indigo-400 uppercase tracking-wide">Student ID</label>
-            <input type="number" id="stm-id-search" oninput="onStudentIdOrFYChangeMoney()" placeholder="e.g. 1" class="w-full font-mono font-bold text-indigo-300 bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-indigo-500">
+            <input type="number" id="stm-id-search" oninput="onStudentIdOrFYChangeMoney()" placeholder="e.g. 1"
+              class="w-full font-mono font-bold text-indigo-300 bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-indigo-500">
           </div>
           <div class="flex flex-col gap-1">
             <label class="font-bold text-slate-400 uppercase tracking-wide">FYID</label>
-            <input type="text" id="stm-fyid-show" readonly class="w-full font-mono bg-slate-900/60 border border-slate-800 text-slate-400 rounded-lg p-2.5 outline-none">
+            <input type="text" id="stm-fyid-show" readonly
+              class="w-full font-mono bg-slate-900/60 border border-slate-800 text-slate-400 rounded-lg p-2.5 outline-none">
           </div>
           <div class="flex flex-col gap-1">
             <label class="font-bold text-slate-400 uppercase tracking-wide">Class</label>
-            <input type="text" id="stm-class" readonly class="w-full bg-slate-900/60 border border-slate-800 text-slate-400 rounded-lg p-2.5 outline-none">
+            <input type="text" id="stm-class" readonly
+              class="w-full bg-slate-900/60 border border-slate-800 text-slate-400 rounded-lg p-2.5 outline-none">
           </div>
         </div>
 
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Student Name</label>
-          <input type="text" id="stm-fyidname-show" readonly class="w-full font-bold text-white bg-slate-900/60 border border-slate-800 rounded-lg p-2.5 outline-none">
+          <input type="text" id="stm-fyidname-show" readonly
+            class="w-full font-bold text-white bg-slate-900/60 border border-slate-800 rounded-lg p-2.5 outline-none">
         </div>
 
-        <div id="stm-wallet-live-badge" class="flex items-center justify-between text-xs pt-1 border-t border-indigo-500/10 hidden">
+        <div id="stm-wallet-live-badge"
+          class="flex items-center justify-between text-xs pt-1 border-t border-indigo-500/10 hidden">
           <span class="font-bold text-slate-300">လက်ရှိ မုန့်ဖိုးလက်ကျန်:</span>
           <span id="stm-wallet-live-amount" class="font-mono font-black text-amber-400 text-sm">0 MMK</span>
         </div>
@@ -794,67 +856,84 @@
 
       <div class="grid grid-cols-3 gap-3 items-start">
         <div class="flex flex-col gap-1.5">
-          <label class="font-bold text-slate-400 uppercase tracking-wide text-[11px] h-5 flex items-center">Payment Method</label>
-          <select id="stm-method" required class="w-full h-10 bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg px-3 outline-none focus:border-indigo-500 text-xs">
+          <label class="font-bold text-slate-400 uppercase tracking-wide text-[11px] h-5 flex items-center">Payment
+            Method</label>
+          <select id="stm-method" required
+            class="w-full h-10 bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg px-3 outline-none focus:border-indigo-500 text-xs">
             <option value="Cash" selected>Cash</option>
             <option value="Bank">Bank</option>
           </select>
         </div>
         <div class="flex flex-col gap-1.5">
-          <label class="font-bold text-emerald-400 uppercase tracking-wide text-[11px] h-5 flex items-center justify-between">
+          <label
+            class="font-bold text-emerald-400 uppercase tracking-wide text-[11px] h-5 flex items-center justify-between">
             <span>Deposit (အပ်ငွေ)</span>
             <span class="text-[9px] font-mono text-emerald-400/80 font-normal">DEBIT</span>
           </label>
-          <input type="number" id="stm-debit" value="0" oninput="onDebitInputStudentMoney()" class="w-full h-10 text-right font-bold text-emerald-400 font-mono bg-[#0f172a] border border-slate-800 rounded-lg px-3 outline-none focus:border-emerald-500 text-xs">
+          <input type="number" id="stm-debit" value="0" oninput="onDebitInputStudentMoney()"
+            class="w-full h-10 text-right font-bold text-emerald-400 font-mono bg-[#0f172a] border border-slate-800 rounded-lg px-3 outline-none focus:border-emerald-500 text-xs">
         </div>
         <div class="flex flex-col gap-1.5">
-          <label class="font-bold text-rose-400 uppercase tracking-wide text-[11px] h-5 flex items-center justify-between">
+          <label
+            class="font-bold text-rose-400 uppercase tracking-wide text-[11px] h-5 flex items-center justify-between">
             <span>Withdraw / Transfer</span>
             <span class="text-[9px] font-mono text-rose-400/80 font-normal">CREDIT</span>
           </label>
-          <input type="number" id="stm-credit" value="0" oninput="onCreditInputStudentMoney()" class="w-full h-10 text-right font-bold text-rose-400 font-mono bg-[#0f172a] border border-slate-800 rounded-lg px-3 outline-none focus:border-rose-500 text-xs">
+          <input type="number" id="stm-credit" value="0" oninput="onCreditInputStudentMoney()"
+            class="w-full h-10 text-right font-bold text-rose-400 font-mono bg-[#0f172a] border border-slate-800 rounded-lg px-3 outline-none focus:border-rose-500 text-xs">
         </div>
       </div>
 
       <div class="flex flex-col gap-1">
         <label class="font-bold text-slate-400 uppercase tracking-wide">Remark / Purpose</label>
-        <textarea id="stm-remark" rows="2" placeholder="အသုံးပြုအကြောင်းပြချက် မှတ်ချက်..." class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500"></textarea>
+        <textarea id="stm-remark" rows="2" placeholder="အသုံးပြုအကြောင်းပြချက် မှတ်ချက်..."
+          class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-indigo-500"></textarea>
       </div>
 
+      <!-- 🎯 Standard Modal Footer (Cancel & Confirm) -->
       <div class="flex justify-end items-center gap-3 pt-4 border-t border-slate-800">
-        <button type="button" onclick="closeStudentMoneyModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">Cancel</button>
-        <button type="submit" class="px-5 py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10 transition-all">Confirm Entry</button>
+        <button type="button" onclick="closeStudentMoneyModal()"
+          class="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">Cancel</button>
+        <button type="submit"
+          class="px-5 py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20 active:translate-y-0.5 transition-all">Confirm</button>
       </div>
     </form>
   </div>
 </div>
 
-<!-- MODAL 2: PM CASHIER ACTION MODAL[cite: 31] -->
-<div id="pm-cashier-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-  <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+<!-- 🎯 MODAL 3: PM CASHIER ACTION MODAL -->
+<div id="pm-cashier-modal"
+  class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div
+    class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
     <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
       <h3 class="text-sm font-black text-white uppercase tracking-wider">PM Cashier Action</h3>
-      <button onclick="closePmCashierBookModal()" class="text-slate-500 hover:text-white transition"><i class="fa-solid fa-xmark text-sm"></i></button>
+      <button onclick="closePmCashierBookModal()" class="text-slate-500 hover:text-white transition"><i
+          class="fa-solid fa-xmark text-sm"></i></button>
     </div>
 
-    <form id="pm-cashier-form" onsubmit="savePmCashierBookForm(event)" class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+    <form id="pm-cashier-form" onsubmit="savePmCashierBookForm(event)"
+      class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
       <input type="hidden" id="pm-cashier-uniqueId">
 
       <div class="grid grid-cols-3 gap-3">
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Date</label>
-          <input type="date" id="pm-cashier-date" required class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-sky-500">
+          <input type="date" id="pm-cashier-date" required
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-sky-500">
         </div>
         <div class="flex flex-col gap-1">
           <label class="font-bold text-sky-400 uppercase tracking-wide">Action Type</label>
-          <select id="pm-cashier-category" onchange="onPmCashierCategoryChange()" required class="w-full bg-[#0f172a] border border-slate-800 text-sky-300 font-bold rounded-lg p-2.5 outline-none focus:border-sky-500">
+          <select id="pm-cashier-category" onchange="onPmCashierCategoryChange()" required
+            class="w-full bg-[#0f172a] border border-slate-800 text-sky-300 font-bold rounded-lg p-2.5 outline-none focus:border-sky-500">
             <option value="PM Withdraw" selected>PM Withdraw (မုန့်ဖိုးထုတ်ပေးငွေ)</option>
             <option value="Return to Finance">Return to Finance (Finance သို့ ငွေပြန်လွှဲခြင်း)</option>
           </select>
         </div>
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Cashier (ငွေကိုင်)</label>
-          <select id="pm-cashier-responsibility-person" required class="w-full bg-[#0f172a] border border-slate-800 text-white font-bold rounded-lg p-2.5 outline-none focus:border-sky-500">
+          <select id="pm-cashier-responsibility-person" required
+            class="w-full bg-[#0f172a] border border-slate-800 text-white font-bold rounded-lg p-2.5 outline-none focus:border-sky-500">
             <option value="Cashier 1" selected>Cashier 1</option>
             <option value="Cashier 2">Cashier 2</option>
           </select>
@@ -865,24 +944,29 @@
         <div class="grid grid-cols-3 gap-3">
           <div class="flex flex-col gap-1">
             <label class="font-bold text-sky-400 uppercase tracking-wide">Student ID</label>
-            <input type="number" id="pm-student-id-search" oninput="onPmStudentLookup()" placeholder="e.g. 1" class="w-full font-mono font-bold text-sky-300 bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-sky-500">
+            <input type="number" id="pm-student-id-search" oninput="onPmStudentLookup()" placeholder="e.g. 1"
+              class="w-full font-mono font-bold text-sky-300 bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-sky-500">
           </div>
           <div class="flex flex-col gap-1">
             <label class="font-bold text-slate-400 uppercase tracking-wide">FYID</label>
-            <input type="text" id="pm-student-fyid" readonly class="w-full font-mono bg-slate-900/60 border border-slate-800 text-slate-400 rounded-lg p-2.5 outline-none">
+            <input type="text" id="pm-student-fyid" readonly
+              class="w-full font-mono bg-slate-900/60 border border-slate-800 text-slate-400 rounded-lg p-2.5 outline-none">
           </div>
           <div class="flex flex-col gap-1">
             <label class="font-bold text-slate-400 uppercase tracking-wide">Class</label>
-            <input type="text" id="pm-student-class" readonly class="w-full bg-slate-900/60 border border-slate-800 text-slate-400 rounded-lg p-2.5 outline-none">
+            <input type="text" id="pm-student-class" readonly
+              class="w-full bg-slate-900/60 border border-slate-800 text-slate-400 rounded-lg p-2.5 outline-none">
           </div>
         </div>
 
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Student Name</label>
-          <input type="text" id="pm-student-name" readonly class="w-full font-bold text-white bg-slate-900/60 border border-slate-800 rounded-lg p-2.5 outline-none">
+          <input type="text" id="pm-student-name" readonly
+            class="w-full font-bold text-white bg-slate-900/60 border border-slate-800 rounded-lg p-2.5 outline-none">
         </div>
 
-        <div id="pm-student-wallet-badge" class="flex items-center justify-between text-xs pt-1 border-t border-sky-500/10 hidden">
+        <div id="pm-student-wallet-badge"
+          class="flex items-center justify-between text-xs pt-1 border-t border-sky-500/10 hidden">
           <span class="font-bold text-slate-300">ကျောင်းသား လက်ကျန်ငွေ:</span>
           <span id="pm-student-wallet-bal" class="font-mono font-black text-amber-400 text-sm">0 MMK</span>
         </div>
@@ -891,47 +975,52 @@
       <div class="grid grid-cols-2 gap-4">
         <div class="flex flex-col gap-1">
           <label class="font-bold text-slate-400 uppercase tracking-wide">Method</label>
-          <select id="pm-cashier-method" class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-sky-500">
+          <select id="pm-cashier-method"
+            class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-sky-500">
             <option value="Cash" selected>Cash</option>
             <option value="Bank">Bank</option>
           </select>
         </div>
         <div class="flex flex-col gap-1">
           <label class="font-bold text-rose-400 uppercase tracking-wide">Amount (ထုတ်ငွေ / ပြန်လွှဲငွေ CREDIT)</label>
-          <input type="number" id="pm-cashier-credit" value="0" required class="w-full text-right font-bold text-rose-400 font-mono bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-rose-500">
+          <input type="number" id="pm-cashier-credit" value="0" required
+            class="w-full text-right font-bold text-rose-400 font-mono bg-[#0f172a] border border-slate-800 rounded-lg p-2.5 outline-none focus:border-rose-500">
         </div>
       </div>
 
       <div class="flex flex-col gap-1">
         <label class="font-bold text-slate-400 uppercase tracking-wide">Description</label>
-        <textarea id="pm-cashier-description" rows="2" placeholder="အသုံးပြုအကြောင်းပြချက်..." class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-sky-500"></textarea>
+        <textarea id="pm-cashier-description" rows="2" placeholder="အသုံးပြုအကြောင်းပြချက်..."
+          class="w-full bg-[#0f172a] border border-slate-800 text-slate-100 rounded-lg p-2.5 outline-none focus:border-sky-500"></textarea>
       </div>
 
+      <!-- 🎯 Standard Modal Footer: Confirm Action အစား Confirm သို့ ပြောင်းလဲထားသည် -->
       <div class="flex justify-end items-center gap-3 pt-4 border-t border-slate-800">
-        <button type="button" onclick="closePmCashierBookModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">Cancel</button>
-        <button type="submit" class="px-5 py-2 rounded-lg text-xs font-black bg-sky-600 hover:bg-sky-500 text-white shadow-lg shadow-sky-600/10 transition-all">Confirm Action</button>
+        <button type="button" onclick="closePmCashierBookModal()"
+          class="px-4 py-2 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">Cancel</button>
+        <button type="submit"
+          class="px-5 py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20 active:translate-y-0.5 transition-all">Confirm</button>
       </div>
     </form>
   </div>
 </div>
 
-<!-- MODAL 3: STATEMENT TIMELINE MODAL[cite: 31] -->
-<div id="stm-statement-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-  <div class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200">
-    
-    <!-- Modal Header[cite: 31] -->
+<!-- 🎯 MODAL 4: STATEMENT TIMELINE MODAL (100% PRESERVED) -->
+<div id="stm-statement-modal"
+  class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div
+    class="bg-[#0c1322] border border-slate-800 rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200">
     <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#0e172a] shrink-0">
       <div>
-        <h3 id="stm-stmt-student-name" class="text-sm font-black text-white uppercase tracking-wider">Student Pocket Money Statement</h3>
+        <h3 id="stm-stmt-student-name" class="text-sm font-black text-white uppercase tracking-wider">Student Pocket
+          Money Statement</h3>
         <p id="stm-stmt-student-info" class="text-[11px] text-slate-400 mt-0.5 font-mono"></p>
       </div>
-      <button onclick="closeStudentStatementModal()" class="text-slate-500 hover:text-white transition"><i class="fa-solid fa-xmark text-sm"></i></button>
+      <button onclick="closeStudentStatementModal()" class="text-slate-500 hover:text-white transition"><i
+          class="fa-solid fa-xmark text-sm"></i></button>
     </div>
 
-    <!-- Modal Body[cite: 31] -->
     <div class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
-      
-      <!-- Top 3 KPI Cards[cite: 31] -->
       <div class="grid grid-cols-3 gap-3">
         <div class="p-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-center">
           <span class="text-[10px] font-bold text-slate-400 uppercase">Period Deposited (ကာလတွင်း အပ်ငွေ)</span>
@@ -947,20 +1036,21 @@
         </div>
       </div>
 
-      <!-- STATEMENT DATE FILTER TOOLBAR[cite: 31] -->
-      <div class="flex flex-col sm:flex-row justify-between items-center bg-[#080e1c] border border-slate-800 p-2.5 rounded-xl gap-2">
+      <div
+        class="flex flex-col sm:flex-row justify-between items-center bg-[#080e1c] border border-slate-800 p-2.5 rounded-xl gap-2">
         <div class="flex items-center gap-2 w-full sm:w-auto">
           <span class="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1.5 pl-1">
             <i class="fa-solid fa-calendar-days text-indigo-400"></i> Date Filter:
           </span>
           <div class="flex items-center gap-1.5 bg-[#0c1322] border border-slate-800 px-2 py-1 rounded-lg text-xs">
             <span class="text-[10px] text-slate-500 font-bold uppercase">From:</span>
-            <input type="date" id="stm-stmt-date-from" onchange="onStmtDateFilterChange()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
+            <input type="date" id="stm-stmt-date-from" onchange="onStmtDateFilterChange()"
+              class="bg-transparent text-white text-xs outline-none cursor-pointer">
             <span class="text-[10px] text-slate-500 font-bold uppercase ml-1">To:</span>
-            <input type="date" id="stm-stmt-date-to" onchange="onStmtDateFilterChange()" class="bg-transparent text-white text-xs outline-none cursor-pointer">
-            <button onclick="clearStmtDateFilter()" class="p-1 text-slate-500 hover:text-rose-400 transition" title="Clear Date Filter">
-              <i class="fa-solid fa-circle-xmark text-xs"></i>
-            </button>
+            <input type="date" id="stm-stmt-date-to" onchange="onStmtDateFilterChange()"
+              class="bg-transparent text-white text-xs outline-none cursor-pointer">
+            <button onclick="clearStmtDateFilter()" class="p-1 text-slate-500 hover:text-rose-400 transition"
+              title="Clear Date Filter"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
           </div>
         </div>
         <div class="text-[11px] font-mono text-slate-500 pr-2 hidden sm:block">
@@ -968,7 +1058,6 @@
         </div>
       </div>
 
-      <!-- Statement Table (Sticky Header)[cite: 31] -->
       <div class="table-container bg-[#080e1c] border border-slate-800 rounded-xl overflow-x-auto relative">
         <table class="w-full text-left text-xs border-collapse min-w-[700px]">
           <thead class="sticky top-0 bg-[#0e172a] z-10">
@@ -982,43 +1071,43 @@
               <th class="py-2.5 px-3">REMARK / PURPOSE</th>
             </tr>
           </thead>
-          <tbody id="stm-stmt-table-body" class="divide-y divide-slate-800/40 text-slate-300">
-            <!-- Dynamic Rows[cite: 31] -->
-          </tbody>
+          <tbody id="stm-stmt-table-body" class="divide-y divide-slate-800/40 text-slate-300"></tbody>
         </table>
       </div>
 
-      <!-- STATEMENT PAGINATION CONTROLLER[cite: 31] -->
       <div class="flex justify-between items-center bg-[#080e1c] border border-slate-800 px-4 py-2 rounded-xl text-xs">
         <div id="stm-stmt-pagination-info" class="text-slate-400 font-mono text-[11px]">Showing 0 entries</div>
         <div class="flex items-center gap-2">
-          <button onclick="changeStmtPage(-1)" id="stm-stmt-btn-prev" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition disabled:opacity-30 disabled:pointer-events-none text-[11px] flex items-center gap-1">
+          <button onclick="changeStmtPage(-1)" id="stm-stmt-btn-prev"
+            class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition disabled:opacity-30 disabled:pointer-events-none text-[11px] flex items-center gap-1">
             <i class="fa-solid fa-chevron-left text-[9px]"></i> Previous
           </button>
-          <button onclick="changeStmtPage(1)" id="stm-stmt-btn-next" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition disabled:opacity-30 disabled:pointer-events-none text-[11px] flex items-center gap-1">
+          <button onclick="changeStmtPage(1)" id="stm-stmt-btn-next"
+            class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition disabled:opacity-30 disabled:pointer-events-none text-[11px] flex items-center gap-1">
             Next <i class="fa-solid fa-chevron-right text-[9px]"></i>
           </button>
         </div>
       </div>
-
     </div>
 
-    <!-- Modal Footer[cite: 31] -->
     <div class="px-6 py-3 border-t border-slate-800 bg-[#0e172a] flex justify-end items-center shrink-0">
-      <button onclick="closeStudentStatementModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition">Close Statement</button>
+      <button onclick="closeStudentStatementModal()"
+        class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition">Close
+        Statement</button>
     </div>
   </div>
 </div>
 
-<!-- MODAL 4: PHYSICAL CASH TRANSFER VOUCHER PRINT MODAL[cite: 31] -->
-<div id="stm-voucher-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-  <div class="bg-white text-slate-900 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
-    
-    <!-- Printable Area Start[cite: 31] -->
+<!-- 🎯 MODAL 5: PHYSICAL CASH TRANSFER VOUCHER PRINT MODAL (100% PRESERVED) -->
+<div id="stm-voucher-modal"
+  class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+  <div
+    class="bg-white text-slate-900 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
     <div id="stm-voucher-print-area" class="p-8 space-y-5 bg-white text-slate-900">
       <div class="text-center border-b border-slate-300 pb-4">
         <h2 class="text-lg font-black tracking-wider uppercase text-slate-900">GOLDEN ERP CASH SYSTEM</h2>
-        <p class="text-xs font-bold text-slate-600 uppercase tracking-widest mt-0.5">INTERNAL CASH TRANSFER VOUCHER (ငွေလွှဲပြေစာ)</p>
+        <p class="text-xs font-bold text-slate-600 uppercase tracking-widest mt-0.5">INTERNAL CASH TRANSFER VOUCHER
+          (ငွေလွှဲပြေစာ)</p>
       </div>
 
       <div class="grid grid-cols-2 gap-4 text-xs font-mono border-b border-slate-200 pb-3">
@@ -1041,16 +1130,18 @@
       </div>
 
       <div class="p-4 bg-slate-100 rounded-xl text-center space-y-1">
-        <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wide">TRANSFER AMOUNT (လွှဲပြောင်းငွေပမာဏ)</span>
+        <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wide">TRANSFER AMOUNT
+          (လွှဲပြောင်းငွေပမာဏ)</span>
         <h3 id="vch-amount" class="text-2xl font-black text-slate-900 font-mono tracking-tight">0 MMK</h3>
       </div>
 
       <div class="text-xs space-y-1">
         <span class="font-bold text-slate-600">REMARK / PURPOSE:</span>
-        <p id="vch-remark" class="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 italic font-mono text-[11px]">Finance မှ PM Cashier သို့ အရင်းငွေလွှဲပေးခြင်း</p>
+        <p id="vch-remark"
+          class="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 italic font-mono text-[11px]">
+          Finance မှ PM Cashier သို့ အရင်းငွေလွှဲပေးခြင်း</p>
       </div>
 
-      <!-- Dual Signatures (နှစ်ဦးနှစ်ဖက် လက်မှတ်)[cite: 31] -->
       <div class="grid grid-cols-2 gap-8 pt-8 text-center text-xs font-bold text-slate-700">
         <div>
           <div class="border-b border-slate-400 pb-8 mb-1.5"></div>
@@ -1064,12 +1155,12 @@
         </div>
       </div>
     </div>
-    <!-- Printable Area End[cite: 31] -->
 
-    <!-- Modal Footer Toolbar[cite: 31] -->
     <div class="px-6 py-4 bg-slate-100 border-t border-slate-200 flex justify-between items-center shrink-0">
-      <button onclick="closeTransferVoucherModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 transition">Close</button>
-      <button onclick="triggerVoucherPrint()" class="px-5 py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg transition flex items-center gap-2">
+      <button onclick="closeTransferVoucherModal()"
+        class="px-4 py-2 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 transition">Close</button>
+      <button onclick="triggerVoucherPrint()"
+        class="px-5 py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg transition flex items-center gap-2">
         <i class="fa-solid fa-print"></i> Print Voucher (ပြေစာထုတ်မည်)
       </button>
     </div>
