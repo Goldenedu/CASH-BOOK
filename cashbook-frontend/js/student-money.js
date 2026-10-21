@@ -88,20 +88,32 @@ function syncStudentMoneyTabUI(activeTab) {
   });
 }
 
+/**
+ * 💡 Switch Student Money Sub-Tabs (Strictly Scoped inside #view-container)
+ */
 function switchStudentMoneySubTab(tabName) {
   gCurrentStudentMoneyTab = tabName || 'main';
   const tabs = ['main', 'settlement', 'cashier', 'reconcile'];
 
-  // 1. Tab Buttons Styling Sync
-  syncStudentMoneyTabUI(gCurrentStudentMoneyTab);
+  const activeClass = "stm-sub-tab-btn ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 bg-sky-500/10 text-white shadow-sm whitespace-nowrap";
+  const inactiveClass = "stm-sub-tab-btn ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap";
 
-  // 2. View Toggle (Visible / Hidden)
+  // 🎯 Fix: Sidebar Menu ကို လုံးဝ မထိခိုက်စေရန် #view-container အတွင်းရှိ .stm-sub-tab-btn များကိုသာ သီးသန့်ရွေးထုတ်သည်
+  const container = document.getElementById('view-container') || document;
+  container.querySelectorAll('.stm-sub-tab-btn').forEach(btn => {
+    const target = btn.getAttribute('data-stm-tab');
+    const isActive = (target === gCurrentStudentMoneyTab);
+    btn.className = isActive ? activeClass : inactiveClass;
+    btn.style.border = isActive ? "1.5px solid #38bdf8" : "none";
+  });
+
+  // View Toggle (Visible / Hidden)
   tabs.forEach(t => {
     const view = document.getElementById(`stm-${t}-view`);
     if (view) view.classList.toggle('hidden', t !== gCurrentStudentMoneyTab);
   });
 
-  // 3. Dynamic Add Button Visibility Control
+  // Dynamic Add Button Visibility Control
   const btnAdd = document.getElementById('stm-btn-add');
   if (btnAdd) {
     if (gCurrentStudentMoneyTab === 'reconcile') {
@@ -111,7 +123,7 @@ function switchStudentMoneySubTab(tabName) {
     }
   }
 
-  // 4. Trigger Module Data Loaders
+  // Trigger Module Data Loaders
   if (gCurrentStudentMoneyTab === 'main') {
     loadStudentMoneyData(false);
   } else if (gCurrentStudentMoneyTab === 'settlement') {
