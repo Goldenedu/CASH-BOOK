@@ -65,18 +65,23 @@ const escAttr = window.escapeJsAttr || (s => s ? String(s).replace(/'/g, "\\'") 
 // ==============================================================================
 // 💡 1. MAIN TAB SWITCHER (5 CORE UNIFIED TABS)
 // ==============================================================================
+
 /**
- * 💡 Switch Student Money Sub-Tabs (Robust Multi-View Tab Switcher)
+ * ==============================================================================
+ * 💡 UNIFIED STUDENT MONEY SUB-TAB SWITCHER (Cashier Book Design Standard)
+ * ==============================================================================
  */
 function switchStudentMoneySubTab(tabName) {
   gCurrentStudentMoneyTab = tabName || 'main';
   const tabs = ['main', 'settlement', 'cashier', 'reconcile'];
 
-  const activeClass = "ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-sky-400 bg-sky-500/10 text-white shadow-sm whitespace-nowrap";
-  const inactiveClass = "ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-transparent text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap";
+  // 🎯 Cashier Book စံနှုန်းအတိုင်း Active (အပြာရောင် Border) နှင့် Inactive (Borderless)
+  const activeClass = "ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 bg-sky-500/10 text-white shadow-sm whitespace-nowrap";
+  const inactiveClass = "ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap";
 
-  // 🎯 View အားလုံးရှိ Tab ခလုတ်များအား class, id သို့မဟုတ် onclick မှတစ်ဆင့် တိကျစွာ ရွေးထုတ်ခြင်း
+  // 1. Tab Buttons Styling & Border Synchronization
   tabs.forEach(t => {
+    // View တိုင်းတွင် ရှိနေသော သက်ဆိုင်ရာ Tab ခလုတ်များ အားလုံးကို ညီညာစွာ Update လုပ်သည်
     const selector = `.stm-tab-${t}, #stm-tab-${t}, button[onclick*="'${t}'"]`;
     document.querySelectorAll(selector).forEach(btn => {
       const isActive = (t === gCurrentStudentMoneyTab);
@@ -84,19 +89,35 @@ function switchStudentMoneySubTab(tabName) {
       btn.style.border = isActive ? "1.5px solid #38bdf8" : "none";
     });
 
+    // 2. View Toggle (Visible / Hidden)
     const view = document.getElementById(`stm-${t}-view`);
     if (view) view.classList.toggle('hidden', t !== gCurrentStudentMoneyTab);
   });
 
-  if (gCurrentStudentMoneyTab === 'main') loadStudentMoneyData(false);
-  else if (gCurrentStudentMoneyTab === 'settlement') {
+  // 3. Dynamic Add Button Visibility Control (Cashier Book စံနှုန်းအတိုင်း)
+  const btnAdd = document.getElementById('stm-btn-add');
+  if (btnAdd) {
+    // Reconcile Tab တွင် Add New Entry ခလုတ်ကို ဖုံးကွယ်မည်၊ ကျန် Tab များတွင် ပေါ်စေမည်
+    if (gCurrentStudentMoneyTab === 'reconcile') {
+      btnAdd.classList.add('hidden');
+    } else {
+      btnAdd.classList.remove('hidden');
+    }
+  }
+
+  // 4. Trigger Module Data Loaders
+  if (gCurrentStudentMoneyTab === 'main') {
+    loadStudentMoneyData(false);
+  } else if (gCurrentStudentMoneyTab === 'settlement') {
     const todayStr = getMMTDateString();
     const dateInput = document.getElementById('adm-settle-date')?.value || todayStr;
     loadAdminSettlementDailyStats(dateInput);
     loadAdminSettlementHistory(false);
+  } else if (gCurrentStudentMoneyTab === 'cashier') {
+    loadPmCashierBookData(false);
+  } else if (gCurrentStudentMoneyTab === 'reconcile') {
+    loadSpmmsReconciliationData();
   }
-  else if (gCurrentStudentMoneyTab === 'cashier') loadPmCashierBookData(false);
-  else if (gCurrentStudentMoneyTab === 'reconcile') loadSpmmsReconciliationData();
 }
 
 /**

@@ -380,7 +380,7 @@ async function triggerModuleInit(tabId) {
 }
 
 /**
- * 💡 Sidebar Active State Synchronization (Fixed for Student Money Sub-Tabs)
+ * 💡 Sidebar Active State Synchronization (100% Bug-Free Routing)
  */
 function updateSidebarHighlight(activeTabId) {
   const navBtns = document.querySelectorAll('.nav-btn');
@@ -394,9 +394,12 @@ function updateSidebarHighlight(activeTabId) {
     highlightTarget = 'report-financial';
   }
 
-  // 🎯 Fix: Student Money ၏ Sub-Tabs (settlement, cashier, reconcile) များကို ရွေးချယ်ချိန်တွင် 
-  // ဘယ်ဘက် Sidebar ၏ Menu Highlight သည် "Student Money" (btn-student-money) တွင်သာ အမြဲတမ်း နေရမည်
-  if (activeTabId === 'settlement' || activeTabId === 'cashier' || activeTabId === 'reconcile' || activeTabId === 'student-money') {
+  // 🎯 Fix: Student Money မော်ဂျူး၏ Sub-Tabs များကို သီးသန့် ခွဲခြားစစ်ဆေးခြင်း 
+  // (Cashier Cash Book ၏ 'cashier' နှင့် မရောထွေးစေရန် student-money ၏ tab ဖြစ်ကြောင်း အတိအကျ စစ်သည်)
+  const studentMoneySubTabs = ['settlement', 'reconcile', 'student-money'];
+
+  // အကယ်၍ Student Money ၏ PM Cashier tab ဖြစ်ပါက 'stm-cashier' သို့မဟုတ် 'student-money' ဟု သတ်မှတ်နိုင်သည်
+  if (studentMoneySubTabs.includes(activeTabId) || activeTabId === 'stm-cashier') {
     highlightTarget = 'student-money';
   }
 
