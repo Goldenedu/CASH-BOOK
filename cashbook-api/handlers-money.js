@@ -44,7 +44,7 @@ export async function getStudentMoneyData(db, body) {
     const searchVal = String(body.searchVal || "").trim();
     const studentIdFilter = parseInt(body.studentId, 10) || 0;
     const balanceFilter = String(body.balanceFilter || "").trim(); // 'has_balance' | 'zero_balance'
-    
+
     const page = Math.max(1, parseInt(body.page || 1, 10));
     const limit = Math.min(100, Math.max(1, parseInt(body.limit || 20, 10)));
     const offset = (page - 1) * limit;
@@ -98,16 +98,17 @@ export async function getStudentMoneyData(db, body) {
 
     const whereSql = `WHERE ${whereClauses.join(' AND ')}`;
 
-    // 🚀 D1 BATCH OPTIMIZATION: Main Book (တစ်ကျောင်းလုံး) နှင့် Single Student Statement ကို ခွဲခြားတွက်ချက်ခြင်း
+    // 🚀 D1 BATCH OPTIMIZATION: Zero Extra Round-Trip (Active Depositors Count Included)
     const batchQueries = [
       // ၁။ Pagination အတွက် Filtered Count
       db.prepare(`SELECT COUNT(id) as c FROM student_money ${whereSql}`).bind(...params),
-      
-      // ၂။ Filtered Range Stats (စာမျက်နှာတွင်း ကာလအပိုင်းအခြား အဝင်/အထွက်)
+
+      // ၂။ Filtered Range Stats & Active Depositors (မုန့်ဖိုးအပ်နှံထားသော ကျောင်းသားဦးရေပါ တစ်ပါတည်း တွက်ချက်သည်)
       db.prepare(`
         SELECT 
           COALESCE(SUM(CASE WHEN student_id IS NOT NULL THEN debit ELSE 0 END), 0) as d,
-          COALESCE(SUM(CASE WHEN student_id IS NOT NULL THEN credit ELSE 0 END), 0) as c
+          COALESCE(SUM(CASE WHEN student_id IS NOT NULL THEN credit ELSE 0 END), 0) as c,
+          COUNT(DISTINCT CASE WHEN student_id IS NOT NULL THEN student_id END) as active_depositors
         FROM student_money ${whereSql}
       `).bind(...params)
     ];
@@ -140,7 +141,7 @@ export async function getStudentMoneyData(db, body) {
     const totalRows = batchResults[0]?.results[0]?.c || 0;
     const stats = batchResults[1]?.results[0] || { d: 0, c: 0 };
     const cumStats = batchResults[2]?.results[0] || { cum_d: 0, cum_c: 0 };
-    
+
     // ကျောင်းသား Statement ဖြစ်ပါက ထိုကျောင်းသား၏ All-Time Balance ဖြစ်ပြီး ပင်မစာအုပ်ဖြစ်ပါက ကျောင်းလုံးကျွတ် Cumulative Trust Balance ဖြစ်သည်
     const cumulativeTrustBal = parseFloat(cumStats.cum_d || 0) - parseFloat(cumStats.cum_c || 0);
     const pmCashierCash = (studentIdFilter === 0 && batchResults[3]) ? parseFloat(batchResults[3].results[0]?.pm_bal || 0) : 0;
@@ -160,10 +161,11 @@ export async function getStudentMoneyData(db, body) {
         ...r, studentId: r.student_id, fyidName: r.fyid_name, uniqueId: r.uniqueid
       })),
       totalRows, page, limit,
-      stats: { 
-        totalIncome: parseFloat(stats.d || 0), 
-        totalExpense: parseFloat(stats.c || 0), 
+      stats: {
+        totalIncome: parseFloat(stats.d || 0),
+        totalExpense: parseFloat(stats.c || 0),
         balance: cumulativeTrustBal,
+        activeDepositors: parseInt(stats.active_depositors || 0, 10),
         pmCashierCash,
         financeVaultCash,
         filteredBalance: parseFloat(stats.d || 0) - parseFloat(stats.c || 0)
@@ -216,10 +218,10 @@ export async function getStudentMoneySummary(db, body) {
       ${havingClause}
       ORDER BY netBalance DESC
     `;
-    
+
     const rowsRes = await db.prepare(query).bind(...params).all();
-    const formatted = (rowsRes.results || []).map((r, i) => ({ 
-      no: i + 1, 
+    const formatted = (rowsRes.results || []).map((r, i) => ({
+      no: i + 1,
       ...r,
       todaySpent: parseFloat(r.todaySpent || 0)
     }));
@@ -227,8 +229,8 @@ export async function getStudentMoneySummary(db, body) {
     let tD = 0, tW = 0, tB = 0;
     formatted.forEach(r => { tD += r.totalDeposit; tW += r.totalWithdraw; tB += r.netBalance; });
 
-    return { 
-      success: true, data: formatted, 
+    return {
+      success: true, data: formatted,
       stats: { totalDeposited: tD, totalWithdrawn: tW, totalBalance: tB, studentCount: formatted.length }
     };
   } catch (err) { return { success: false, message: err.message }; }
@@ -239,25 +241,25 @@ export async function saveStudentMoneyEntry(db, session, body) {
     const entryDate = getMyanmarDateString(body.date);
     const d = new Date(entryDate);
     const my = `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()]}-${d.getFullYear()}`;
-    
+
     const fy = normalizeFyStr(body.fy || computeAcademicFy(entryDate));
     const cleanFy = fy.replace(/^FY\s*/i, '');
-    
+
     const rawCore = body.uniqueId ? String(body.uniqueId).trim().replace(/^(STM_|PMC_|CAN_)+/i, '') : generateUniqueId('').replace(/^_/, '');
     const stmUniqueId = `STM_${rawCore}`;
     const pmcUniqueId = `PMC_${rawCore}`;
-    
+
     const rawType = String(body.entryType || 'Deposit').trim();
-    
+
     let debit = safeAmount(body.debit);
     let credit = safeAmount(body.credit);
     const studentId = parseInt(body.studentId, 10) || null;
     const method = body.method || 'Cash';
-    
-    const isTransfer = rawType.toLowerCase().includes('transfer') || 
-                       rawType.toLowerCase().includes('pm cashier') || 
-                       rawType.toLowerCase().includes('အရင်းလွှဲ');
-    
+
+    const isTransfer = rawType.toLowerCase().includes('transfer') ||
+      rawType.toLowerCase().includes('pm cashier') ||
+      rawType.toLowerCase().includes('အရင်းလွှဲ');
+
     const batchStatements = [];
     let generatedVrNo = null;
 
@@ -286,13 +288,13 @@ export async function saveStudentMoneyEntry(db, session, body) {
 
       batchStatements.push(
         db.prepare(`INSERT INTO pm_cashier_book (no, date, responsibility_person, category, description, method, debit, credit, balances, vr_no, my, fy, created_by, uniqueid) VALUES (?, ?, ?, 'Float Receive', ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)`)
-        .bind(noPm, entryDate, respPerson, pmRemark, method, credit, vrPm, my, fy, session?.name || 'Finance', pmcUniqueId)
+          .bind(noPm, entryDate, respPerson, pmRemark, method, credit, vrPm, my, fy, session?.name || 'Finance', pmcUniqueId)
       );
 
       const noStu = await generateFyNo(db, 'student_money', cleanFy);
       batchStatements.push(
         db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, NULL, 'TRANSFER', ?, 'Vault Transfer', ?, 0, ?, 0, ?, ?, ?)`)
-        .bind(noStu, entryDate, cleanFy, `[Transfer] PM Cashier (${respPerson})`, method, credit, `[Finance Transfer] ${respPerson} သို့ အရင်းလွှဲ: ${pmRemark}`, session?.name || 'Finance', stmUniqueId)
+          .bind(noStu, entryDate, cleanFy, `[Transfer] PM Cashier (${respPerson})`, method, credit, `[Finance Transfer] ${respPerson} သို့ အရင်းလွှဲ: ${pmRemark}`, session?.name || 'Finance', stmUniqueId)
       );
 
     } else {
@@ -305,7 +307,7 @@ export async function saveStudentMoneyEntry(db, session, body) {
         const stuBalRow = await db.prepare(
           "SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND student_id = ?"
         ).bind(cleanFy, `FY ${cleanFy}`, studentId).first();
-        
+
         const curStuBal = parseFloat(stuBalRow?.bal || 0);
         if (credit > curStuBal) {
           return {
@@ -326,7 +328,7 @@ export async function saveStudentMoneyEntry(db, session, body) {
 
       batchStatements.push(
         db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`)
-        .bind(noStu, entryDate, cleanFy, studentId, body.fyid || '', stuName, body.class || '', method, debit, credit, remark, session?.name || 'Finance', stmUniqueId)
+          .bind(noStu, entryDate, cleanFy, studentId, body.fyid || '', stuName, body.class || '', method, debit, credit, remark, session?.name || 'Finance', stmUniqueId)
       );
     }
 
@@ -348,7 +350,7 @@ export async function deleteStudentMoneyEntry(db, session, body) {
   try {
     const uid = body.uniqueId;
     if (!uid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
-    
+
     const existing = await db.prepare("SELECT fy, date, student_id, remark, uniqueid FROM student_money WHERE uniqueid = ?").bind(uid).first();
     if (!existing) return { success: false, message: "ဖျက်မည့် စာရင်း ရှာမတွေ့ပါ။" };
 
@@ -387,7 +389,7 @@ export async function getPmCashierBookData(db, body, session) {
     const fy = normalizeFyStr(body.fy || getCurrentAcademicYear()).replace(/^FY\s*/i, '');
     const todayStr = getMyanmarDateString(body.date);
     const role = session?.role || '';
-    
+
     const isPaginated = Boolean(body.page || body.limit);
     const page = Math.max(1, parseInt(body.page || 1, 10));
     const limit = Math.min(100, Math.max(1, parseInt(body.limit || 20, 10)));
@@ -439,10 +441,10 @@ export async function getPmCashierBookData(db, body, session) {
       return {
         success: true,
         data: (rowsRes.results || []).map(r => ({ ...r, uniqueId: r.uniqueid })),
-        stats: { 
-          totalIn, 
-          totalOut, 
-          balance, 
+        stats: {
+          totalIn,
+          totalOut,
+          balance,
           totalRows,
           todayIn,
           todayOut,
@@ -474,22 +476,22 @@ export async function getPmCashierBookData(db, body, session) {
       const todayOut = parseFloat(stats.todayOut || 0);
       const totalRows = parseInt(stats.totalRows || 0, 10);
 
-      return { 
-        success: true, 
+      return {
+        success: true,
         data: (rowsRes.results || []).map(r => ({ ...r, uniqueId: r.uniqueid })),
-        stats: { 
-          totalIn, 
-          totalOut, 
-          balance, 
+        stats: {
+          totalIn,
+          totalOut,
+          balance,
           totalRows,
-          todayIn, 
-          todayOut, 
-          todayDate: todayStr 
+          todayIn,
+          todayOut,
+          todayDate: todayStr
         }
       };
     }
-  } catch (err) { 
-    return { success: false, message: err.message }; 
+  } catch (err) {
+    return { success: false, message: err.message };
   }
 }
 
@@ -500,7 +502,7 @@ export async function savePmCashierBookEntry(db, session, body) {
     const my = `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()]}-${d.getFullYear()}`;
     const fy = normalizeFyStr(body.fy || computeAcademicFy(entryDate));
     const cleanFy = fy.replace(/^FY\s*/i, '');
-    
+
     const rawCore = body.uniqueId ? String(body.uniqueId).trim().replace(/^(STM_|PMC_|CAN_)+/i, '') : generateUniqueId('').replace(/^_/, '');
     const pmcUniqueId = `PMC_${rawCore}`;
     const stmUniqueId = `STM_${rawCore}`;
@@ -510,7 +512,7 @@ export async function savePmCashierBookEntry(db, session, body) {
     const debit = safeAmount(body.debit);
     const studentId = parseInt(body.studentId, 10) || null;
     const stuFyid = String(body.fyid || '').trim();
-    
+
     // 🔒 ANTI-IMPERSONATION
     let respPerson = body.responsibilityPerson || 'Cashier 1';
     if (session?.role === 'pm_cashier1') respPerson = 'Cashier 1';
@@ -518,12 +520,12 @@ export async function savePmCashierBookEntry(db, session, body) {
 
     let finalDescription = (body.description || '').trim();
     if (category === 'PM Withdraw' && studentId > 0) {
-      const stuPrefix = body.studentName 
-        ? `[${stuFyid || 'ID ' + studentId}] ${body.studentName}`.trim() 
+      const stuPrefix = body.studentName
+        ? `[${stuFyid || 'ID ' + studentId}] ${body.studentName}`.trim()
         : `[ID ${studentId}]`;
-      
+
       if (!finalDescription.includes(stuPrefix) && !(body.studentName && finalDescription.includes(body.studentName))) {
-        finalDescription = finalDescription 
+        finalDescription = finalDescription
           ? `${stuPrefix} - ${finalDescription}`
           : `${stuPrefix} - မုန့်ဖိုးထုတ်ပေးငွေ`;
       }
@@ -554,9 +556,9 @@ export async function savePmCashierBookEntry(db, session, body) {
 
     // 🛡️ CASHIER FLOAT OVERDRAFT GUARD
     if (credit > 0 && credit > curCashierBal) {
-      return { 
-        success: false, 
-        message: `${respPerson} တွင် ငွေသားလက်ကျန် (${curCashierBal.toLocaleString('en-US')} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString('en-US')} MMK) ထုတ်ပေး/ပြန်လွှဲခွင့် မပြုပါ!` 
+      return {
+        success: false,
+        message: `${respPerson} တွင် ငွေသားလက်ကျန် (${curCashierBal.toLocaleString('en-US')} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString('en-US')} MMK) ထုတ်ပေး/ပြန်လွှဲခွင့် မပြုပါ!`
       };
     }
 
@@ -564,20 +566,20 @@ export async function savePmCashierBookEntry(db, session, body) {
     if (category === 'PM Withdraw' && (studentId > 0 || stuFyid) && credit > 0) {
       const curStuBal = parseFloat(verifyRes[1]?.results[0]?.bal || 0);
       if (credit > curStuBal) {
-        return { 
-          success: false, 
-          message: `မုန့်ဖိုးထုတ်ပေးခွင့် မပြုပါ! ကျောင်းသားတွင် လက်ရှိမုန့်ဖိုးလက်ကျန် (${curStuBal.toLocaleString('en-US')} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString('en-US')} MMK) ပိုမိုထုတ်ယူခွင့် မရှိပါ။` 
+        return {
+          success: false,
+          message: `မုန့်ဖိုးထုတ်ပေးခွင့် မပြုပါ! ကျောင်းသားတွင် လက်ရှိမုန့်ဖိုးလက်ကျန် (${curStuBal.toLocaleString('en-US')} MMK) သာ ရှိသဖြင့် (${credit.toLocaleString('en-US')} MMK) ပိုမိုထုတ်ယူခွင့် မရှိပါ။`
         };
       }
     }
-    
+
     const noPm = await generateFyNo(db, 'pm_cashier_book', fy);
     const vrPm = body.vrNo || await generateVoucherNo(db, 'pm_cashier_book', 'PMC', entryDate);
     const batchStatements = [];
 
     batchStatements.push(
       db.prepare(`INSERT INTO pm_cashier_book (no, date, responsibility_person, category, description, method, debit, credit, balances, vr_no, my, fy, created_by, uniqueid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`)
-      .bind(noPm, entryDate, respPerson, category, finalDescription, body.method || 'Cash', debit, credit, vrPm, my, fy, session?.name || 'PM Cashier', pmcUniqueId)
+        .bind(noPm, entryDate, respPerson, category, finalDescription, body.method || 'Cash', debit, credit, vrPm, my, fy, session?.name || 'PM Cashier', pmcUniqueId)
     );
 
     if (category === 'PM Withdraw' && studentId > 0 && credit > 0) {
@@ -587,7 +589,7 @@ export async function savePmCashierBookEntry(db, session, body) {
 
       batchStatements.push(
         db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?)`)
-        .bind(noStu, entryDate, cleanFy, studentId, stuFyid, stuName, body.studentClass || '', body.method || 'Cash', credit, desc, session?.name || 'PM Cashier', stmUniqueId)
+          .bind(noStu, entryDate, cleanFy, studentId, stuFyid, stuName, body.studentClass || '', body.method || 'Cash', credit, desc, session?.name || 'PM Cashier', stmUniqueId)
       );
     } else if (category === 'Return to Finance' && credit > 0) {
       const noStu = await generateFyNo(db, 'student_money', cleanFy);
@@ -595,7 +597,7 @@ export async function savePmCashierBookEntry(db, session, body) {
 
       batchStatements.push(
         db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, NULL, 'RETURN', ?, 'Vault Return', ?, ?, 0, 0, ?, ?, ?)`)
-        .bind(noStu, entryDate, cleanFy, `[Return] Finance Vault (${respPerson})`, body.method || 'Cash', credit, desc, session?.name || 'PM Cashier', stmUniqueId)
+          .bind(noStu, entryDate, cleanFy, `[Return] Finance Vault (${respPerson})`, body.method || 'Cash', credit, desc, session?.name || 'PM Cashier', stmUniqueId)
       );
     }
 
@@ -614,7 +616,7 @@ export async function deletePmCashierBookEntry(db, session, body) {
   try {
     const uid = body.uniqueId;
     if (!uid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
-    
+
     const existing = await db.prepare("SELECT fy, date, category, responsibility_person, uniqueid FROM pm_cashier_book WHERE uniqueid = ?").bind(uid).first();
     if (!existing) return { success: false, message: "ဖျက်မည့် စာရင်း ရှာမတွေ့ပါ။" };
 
@@ -622,9 +624,9 @@ export async function deletePmCashierBookEntry(db, session, body) {
     const isCashierRole = (role === 'pm_cashier1' || role === 'pm_cashier2');
 
     if (isCashierRole && existing.category === 'Float Receive') {
-      return { 
-        success: false, 
-        message: "ငွေလွှဲခွင့် မပြုပါ! Finance မှ လွှဲပေးထားသော အရင်းငွေစာရင်း (Float Receive) ကို ငွေကိုင်မှ ဖျက်ပိုင်ခွင့် လုံးဝမရှိပါ။ Finance သို့ ဆက်သွယ်ပါ။" 
+      return {
+        success: false,
+        message: "ငွေလွှဲခွင့် မပြုပါ! Finance မှ လွှဲပေးထားသော အရင်းငွေစာရင်း (Float Receive) ကို ငွေကိုင်မှ ဖျက်ပိုင်ခွင့် လုံးဝမရှိပါ။ Finance သို့ ဆက်သွယ်ပါ။"
       };
     }
 
@@ -638,9 +640,9 @@ export async function deletePmCashierBookEntry(db, session, body) {
     if (isCashierRole) {
       const todayStr = getMyanmarDateString();
       if (existing.date !== todayStr) {
-        return { 
-          success: false, 
-          message: "ဖျက်ခွင့် မရှိပါ! စာရင်းသွင်းပြီး ၁ ရက် (ယနေ့) ကျော်လွန်သွားသော စာရင်းဟောင်းများကို ငွေကိုင်မှ ဖျက်ပိုင်ခွင့် မရှိပါ။ Admin သို့ တင်ပြပါ။" 
+        return {
+          success: false,
+          message: "ဖျက်ခွင့် မရှိပါ! စာရင်းသွင်းပြီး ၁ ရက် (ယနေ့) ကျော်လွန်သွားသော စာရင်းဟောင်းများကို ငွေကိုင်မှ ဖျက်ပိုင်ခွင့် မရှိပါ။ Admin သို့ တင်ပြပါ။"
         };
       }
     }
@@ -660,8 +662,8 @@ export async function deletePmCashierBookEntry(db, session, body) {
     await recalculateLedgerBalances(db, 'student_money', cleanFy, existing.date);
 
     return { success: true };
-  } catch (err) { 
-    return { success: false, message: err.message }; 
+  } catch (err) {
+    return { success: false, message: err.message };
   }
 }
 
@@ -685,7 +687,7 @@ export async function saveCanteenBookEntry(db, session, body) {
     const my = `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()]}-${d.getFullYear()}`;
     const fy = normalizeFyStr(body.fy || computeAcademicFy(entryDate));
     const cleanFy = fy.replace(/^FY\s*/i, '');
-    
+
     const rawCore = body.uniqueId ? String(body.uniqueId).trim().replace(/^(STM_|PMC_|CAN_)+/i, '') : generateUniqueId('').replace(/^_/, '');
     const canUniqueId = `CAN_${rawCore}`;
     const stmUniqueId = `STM_${rawCore}`;
@@ -701,7 +703,7 @@ export async function saveCanteenBookEntry(db, session, body) {
       const stuBalRow = await db.prepare(
         "SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND student_id = ?"
       ).bind(cleanFy, `FY ${cleanFy}`, studentId).first();
-      
+
       const curStuBal = parseFloat(stuBalRow?.bal || 0);
       if (debit > curStuBal) {
         return {
@@ -710,14 +712,14 @@ export async function saveCanteenBookEntry(db, session, body) {
         };
       }
     }
-    
+
     const noCan = await generateFyNo(db, 'canteen_book', fy);
     const vrCan = body.vrNo || await generateVoucherNo(db, 'canteen_book', 'CAN', entryDate);
     const batchStatements = [];
 
     batchStatements.push(
       db.prepare(`INSERT INTO canteen_book (no, date, category, description, method, debit, credit, balances, vr_no, my, fy, created_by, uniqueid) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)`)
-      .bind(noCan, entryDate, category, body.description || '', body.method || 'Transfer', debit, vrCan, my, fy, session?.name || 'System', canUniqueId)
+        .bind(noCan, entryDate, category, body.description || '', body.method || 'Transfer', debit, vrCan, my, fy, session?.name || 'System', canUniqueId)
     );
 
     if (category === 'POS Sales' && studentId > 0) {
@@ -727,7 +729,7 @@ export async function saveCanteenBookEntry(db, session, body) {
 
       batchStatements.push(
         db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?)`)
-        .bind(noStu, entryDate, cleanFy, studentId, body.fyid || '', stuName, body.studentClass || '', body.method || 'Transfer', debit, desc, session?.name || 'System', stmUniqueId)
+          .bind(noStu, entryDate, cleanFy, studentId, body.fyid || '', stuName, body.studentClass || '', body.method || 'Transfer', debit, desc, session?.name || 'System', stmUniqueId)
       );
     }
 
@@ -746,17 +748,17 @@ export async function deleteCanteenBookEntry(db, session, body) {
   try {
     const uid = body.uniqueId;
     if (!uid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
-    
+
     const existing = await db.prepare("SELECT fy, date, category, description, uniqueid FROM canteen_book WHERE uniqueid = ?").bind(uid).first();
     if (!existing) return { success: false, message: "ဖျက်မည့် စာရင်း ရှာမတွေ့ပါ။" };
 
     const coreId = uid.replace(/^(STM_|PMC_|CAN_|POS_|SETTLE_|CAN_SETTLE_)+/i, '');
     const exactKeys = [
-      uid, 
-      coreId, 
-      `CAN_${coreId}`, 
-      `STM_${coreId}`, 
-      `STM_CAN_${coreId}`, 
+      uid,
+      coreId,
+      `CAN_${coreId}`,
+      `STM_${coreId}`,
+      `STM_CAN_${coreId}`,
       `POS_${coreId}`,
       `SETTLE_${coreId}`,
       `CAN_SETTLE_${coreId}`
@@ -789,7 +791,7 @@ export async function deleteCanteenBookEntry(db, session, body) {
 export async function getSpmmsReconciliation(db, body) {
   try {
     const fy = normalizeFyStr(body.fy || getCurrentAcademicYear()).replace(/^FY\s*/i, '');
-    
+
     const [stuBalRes, pmBalRes] = await db.batch([
       db.prepare("SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND student_id IS NOT NULL").bind(fy, `FY ${fy}`),
       db.prepare("SELECT COALESCE(SUM(debit - credit), 0) as bal FROM pm_cashier_book WHERE fy IN (?, ?)").bind(fy, `FY ${fy}`)
