@@ -701,6 +701,16 @@ async function saveStaffForm(event) {
     return;
   }
 
+  // 💡 အသစ်ထပ်ထည့်ထားသော Salary Grade Validation (Full Time အတွက်သာ)
+  if (gStaffCategory === 'Full Time') {
+    const gradeVal = document.getElementById('staff-grade')?.value || 'Non';
+    if (gradeVal === 'Non') {
+      isStaffSubmitting = false; // Submit လုပ်ခြင်းကို ရပ်တန့်မည်
+      if (typeof showToast === 'function') showToast("ERROR", "Salary Grade (လစာအဆင့်) ရွေးချယ်ရန် လိုအပ်ပါသည်။");
+      return;
+    }
+  }
+
   const uid = document.getElementById('staff-uniqueId')?.value || '';
   const actionName = uid ? 'updateStaffEntry' : 'saveStaffEntry';
 
@@ -736,7 +746,7 @@ async function saveStaffForm(event) {
     uniqueId: uid,
     joinDate: document.getElementById('staff-joindate')?.value || '',
     name: staffName,
-    gender: autoDetectGender(staffName),
+    gender: autoDetectGender(staffName), // 👈 ယခင် gender ပြဿနာအတွက် ပြင်ဆင်ချက်
     education: document.getElementById('staff-education')?.value || '',
     position: document.getElementById('staff-position')?.value || '',
     salaryGrade: (gStaffCategory === 'Full Time') ? (document.getElementById('staff-grade')?.value || 'Non') : 'Non',
