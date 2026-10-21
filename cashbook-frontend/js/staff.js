@@ -736,6 +736,7 @@ async function saveStaffForm(event) {
     uniqueId: uid,
     joinDate: document.getElementById('staff-joindate')?.value || '',
     name: staffName,
+    gender: autoDetectGender(staffName),
     education: document.getElementById('staff-education')?.value || '',
     position: document.getElementById('staff-position')?.value || '',
     salaryGrade: (gStaffCategory === 'Full Time') ? (document.getElementById('staff-grade')?.value || 'Non') : 'Non',
