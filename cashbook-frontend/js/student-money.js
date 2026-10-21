@@ -66,7 +66,7 @@ const escAttr = window.escapeJsAttr || (s => s ? String(s).replace(/'/g, "\\'") 
 // 💡 1. MAIN TAB SWITCHER (5 CORE UNIFIED TABS)
 // ==============================================================================
 /**
- * 💡 Switch Student Money Sub-Tabs (100% Robust Multi-View Sync with data-tab)
+ * 💡 Switch Student Money Sub-Tabs (Robust Multi-View Tab Switcher)
  */
 function switchStudentMoneySubTab(tabName) {
   gCurrentStudentMoneyTab = tabName || 'main';
@@ -75,16 +75,15 @@ function switchStudentMoneySubTab(tabName) {
   const activeClass = "ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-sky-400 bg-sky-500/10 text-white shadow-sm whitespace-nowrap";
   const inactiveClass = "ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-transparent text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap";
 
-  // 🎯 Fix 1: View အားလုံးရှိ data-tab ခလုတ်များကို တစ်ပြိုင်နက် Active / Inactive အတိအကျ ပြောင်းပေးသည်
-  document.querySelectorAll('.ca-sub-tab-btn[data-tab]').forEach(btn => {
-    const targetTab = btn.getAttribute('data-tab');
-    const isActive = (targetTab === gCurrentStudentMoneyTab);
-    btn.className = isActive ? activeClass : inactiveClass;
-    btn.style.border = isActive ? "1.5px solid #38bdf8" : "none";
-  });
-
-  // 🎯 Fix 2: သက်ဆိုင်ရာ View ကိုသာ ပြသပြီး ကျန် View များကို ပုန်းအောင်းသည်
+  // 🎯 View အားလုံးရှိ Tab ခလုတ်များအား class, id သို့မဟုတ် onclick မှတစ်ဆင့် တိကျစွာ ရွေးထုတ်ခြင်း
   tabs.forEach(t => {
+    const selector = `.stm-tab-${t}, #stm-tab-${t}, button[onclick*="'${t}'"]`;
+    document.querySelectorAll(selector).forEach(btn => {
+      const isActive = (t === gCurrentStudentMoneyTab);
+      btn.className = isActive ? activeClass : inactiveClass;
+      btn.style.border = isActive ? "1.5px solid #38bdf8" : "none";
+    });
+
     const view = document.getElementById(`stm-${t}-view`);
     if (view) view.classList.toggle('hidden', t !== gCurrentStudentMoneyTab);
   });
