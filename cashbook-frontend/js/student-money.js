@@ -1665,8 +1665,10 @@ async function loadStudentStatementData() {
   try {
     if (typeof toggleLoading === 'function') toggleLoading(true);
 
+    // 🎯 studentId အား integer အဖြစ် သီးသန့် ပေးပို့ပြီး searchVal ကို empty string သတ်မှတ်သည်
     const res = await callApi('getStudentMoneyData', {
-      studentId: gStmtStudentId,
+      studentId: parseInt(gStmtStudentId, 10),
+      searchVal: '',
       page: gStmtPage,
       limit: gStmtLimit,
       dateFrom,
