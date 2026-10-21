@@ -303,7 +303,7 @@ function renderStaffKpis(stats) {
       <div class="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0"><i class="fa-solid fa-money-bill-wave text-base"></i></div>
       <div class="min-w-0">
         <p class="text-[10px] uppercase font-bold tracking-wider text-slate-500 truncate">Total Net Payroll</p>
-        <h3 class="text-sm sm:text-base font-extrabold text-white mt-0.5 truncate">${Number(stats.totalNetAmt || 0).toLocaleString('en-US')} MMK</h3>
+        <h3 class="text-sm sm:text-base font-extrabold text-white mt-0.5 truncate">${Number(stats.totalNetAmt || 0).toLocaleString('en-US')}</h3>
       </div>
     </div>
     <div class="stats-card p-3 sm:p-3.5 rounded-xl flex items-center gap-3 bg-[#0c1322] border border-slate-800 shadow-md">
