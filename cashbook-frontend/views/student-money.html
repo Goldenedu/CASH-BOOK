@@ -1,15 +1,15 @@
 <!-- ============================================================================== -->
 <!-- GOLDEN ERP SYSTEM - SPMMS & CANTEEN INTEGRATED FINANCE WORKSPACE               -->
-<!-- File: views/student-money.html (Enterprise V9.9 Full Production Edition)       -->
+<!-- File: views/student-money.html (Enterprise V10.0 Zero-Shift Aligned Edition)   -->
 <!-- ============================================================================== -->
-<div class="space-y-4 max-w-[1920px] mx-auto">
+<div class="w-full max-w-[1920px] mx-auto">
 
   <!-- ============================================================================== -->
   <!-- 💡 TAB 1: STUDENT MONEY BOOK (MAIN FINANCE & VIRTUAL WALLETS)                   -->
   <!-- ============================================================================== -->
   <div id="stm-main-view" class="space-y-4">
 
-    <!-- 🎯 1. Top 4-KPI Stats Cards Grid (Cashier Book အတိုင်း ၁ တန်းတည်း ၄ ကွက်) -->
+    <!-- 🎯 1. Top 4-KPI Stats Cards Grid -->
     <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;">
 
       <!-- 1. Total Deposit -->
@@ -94,7 +94,7 @@
         </div>
       </div>
 
-      <!-- Actions (3D Embossed Buttons & Standard Add New Entry) -->
+      <!-- Actions -->
       <div class="flex items-center gap-2 shrink-0">
         <button onclick="loadStudentMoneyData(false)"
           class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md shadow-slate-950/60 active:translate-y-0.5 transition-all whitespace-nowrap"
@@ -114,35 +114,34 @@
       </div>
     </div>
 
-    <!-- 💡 Sub-Tabs Bar (View တိုင်းတွင် ညီညာစွာ ချိတ်ဆက်ထားသော Tab Bar) -->
+    <!-- 🎯 3. Sub-Tabs Bar (Default Active Border ထည့်သွင်းထားသည်) -->
     <div class="bg-[#0c1322] border border-slate-800 p-1.5 rounded-xl shadow-lg overflow-x-auto">
       <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;"
         class="w-full min-w-[700px] xl:min-w-0">
-
-        <button onclick="switchStudentMoneySubTab('main')" id="stm-tab-main"
-          class="stm-tab-main ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap text-slate-400 hover:text-white hover:bg-slate-800/30">
+        <button onclick="switchStudentMoneySubTab('main')" id="stm-tab-main" data-tab="main"
+          style="border: 1.5px solid #38bdf8;"
+          class="stm-tab-main ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 bg-sky-500/10 text-white shadow-sm whitespace-nowrap">
           <i class="fa-solid fa-wallet text-sky-400 text-xs"></i> Student Money
         </button>
-
-        <button onclick="switchStudentMoneySubTab('settlement')" id="stm-tab-settlement"
-          class="stm-tab-settlement ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap text-slate-400 hover:text-white hover:bg-slate-800/30">
+        <button onclick="switchStudentMoneySubTab('settlement')" id="stm-tab-settlement" data-tab="settlement"
+          style="border: none;"
+          class="stm-tab-settlement ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap">
           <i class="fa-solid fa-coins text-amber-400 text-xs"></i> Evening Settlement
         </button>
-
-        <button onclick="switchStudentMoneySubTab('cashier')" id="stm-tab-cashier"
-          class="stm-tab-cashier ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap text-slate-400 hover:text-white hover:bg-slate-800/30">
+        <button onclick="switchStudentMoneySubTab('cashier')" id="stm-tab-cashier" data-tab="cashier"
+          style="border: none;"
+          class="stm-tab-cashier ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap">
           <i class="fa-solid fa-cash-register text-emerald-400 text-xs"></i> PM Cashier
         </button>
-
-        <button onclick="switchStudentMoneySubTab('reconcile')" id="stm-tab-reconcile"
-          class="stm-tab-reconcile ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap text-slate-400 hover:text-white hover:bg-slate-800/30">
+        <button onclick="switchStudentMoneySubTab('reconcile')" id="stm-tab-reconcile" data-tab="reconcile"
+          style="border: none;"
+          class="stm-tab-reconcile ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap">
           <i class="fa-solid fa-scale-balanced text-teal-400 text-xs"></i> Audit & Reconcile
         </button>
-
       </div>
     </div>
 
-    <!-- 🎯 4. Student Money Table Grid (Header အမြင့် 52px နှင့် ၂ ကြောင်းစနစ် ညှိထားသည်) -->
+    <!-- 🎯 4. Student Money Table Grid -->
     <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
       <table class="w-full text-left border-collapse min-w-[1450px]">
         <thead>
@@ -204,7 +203,7 @@
   <!-- ============================================================================== -->
   <div id="stm-settlement-view" class="space-y-4 hidden">
 
-    <!-- 🎯 1. Top 4-KPI Stats Cards Grid (Gross Sales, Cash Sales, Wallet Sales, Settlement Payout) -->
+    <!-- 🎯 1. Top 4-KPI Stats Cards Grid (Banner အပိုမပါဘဲ ထိပ်ဆုံးမှ တိုက်ရိုက် စတင်သည်) -->
     <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;">
 
       <!-- 1. Gross Sales -->
@@ -285,7 +284,7 @@
         </div>
       </div>
 
-      <!-- Actions (Standard + Add New Entry) -->
+      <!-- Actions -->
       <div class="flex items-center gap-2 shrink-0">
         <button onclick="loadAdminSettlementHistory(false)"
           class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md shadow-slate-950/60 active:translate-y-0.5 transition-all whitespace-nowrap"
@@ -305,7 +304,7 @@
       </div>
     </div>
 
-    <!-- 🎯 3. Sub-Tabs Bar (Search Bar နှင့် Table ကြားတွင် Cashier Book စတိုင်အတိုင်း ထားရှိသည်) -->
+    <!-- 🎯 3. Sub-Tabs Bar -->
     <div class="bg-[#0c1322] border border-slate-800 p-1.5 rounded-xl shadow-lg overflow-x-auto">
       <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;"
         class="w-full min-w-[700px] xl:min-w-0">
@@ -328,7 +327,7 @@
       </div>
     </div>
 
-    <!-- 🎯 4. Settlement History Table Grid (Header အမြင့် 52px နှင့် ၂ ကြောင်းစနစ်) -->
+    <!-- 🎯 4. Settlement History Table Grid -->
     <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
       <table class="w-full text-left border-collapse min-w-[1100px]">
         <thead>
@@ -444,7 +443,7 @@
 
     </div>
 
-    <!-- 🎯 2. Control Search & Action Bar (All Cashiers Dropdown filter ကို Date filter ၏ ညာဘက်သို့ ရွှေ့ထားသည်) -->
+    <!-- 🎯 2. Control Search & Action Bar -->
     <div
       class="flex items-center justify-between bg-[#0c1322] border border-slate-800 p-2.5 sm:p-3 rounded-xl gap-2.5 overflow-x-auto">
       <div class="flex items-center gap-2.5 shrink-0">
@@ -498,7 +497,7 @@
       </div>
     </div>
 
-    <!-- 🎯 3. Sub-Tabs Bar (Search Bar နှင့် Table ကြားတွင် Cashier Book စတိုင်အတိုင်း ထားရှိသည်) -->
+    <!-- 🎯 3. Sub-Tabs Bar -->
     <div class="bg-[#0c1322] border border-slate-800 p-1.5 rounded-xl shadow-lg overflow-x-auto">
       <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;"
         class="w-full min-w-[700px] xl:min-w-0">
@@ -521,7 +520,7 @@
       </div>
     </div>
 
-    <!-- 🎯 4. PM Cashier Table Grid (Header အမြင့် 52px နှင့် ၂ ကြောင်းစနစ်) -->
+    <!-- 🎯 4. PM Cashier Table Grid -->
     <div class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto">
       <table class="w-full text-left border-collapse min-w-[1400px]">
         <thead>
@@ -582,7 +581,7 @@
   <!-- ============================================================================== -->
   <div id="stm-reconcile-view" class="space-y-4 hidden">
 
-    <!-- 🎯 1. Sub-Tabs Bar (Search Bar မရှိသော်လည်း ညီညာစွာ ထိပ်ဆုံးတွင် ထားရှိသည်) -->
+    <!-- 🎯 1. Sub-Tabs Bar -->
     <div class="bg-[#0c1322] border border-slate-800 p-1.5 rounded-xl shadow-lg overflow-x-auto">
       <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;"
         class="w-full min-w-[700px] xl:min-w-0">

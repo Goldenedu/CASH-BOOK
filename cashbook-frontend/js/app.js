@@ -380,7 +380,7 @@ async function triggerModuleInit(tabId) {
 }
 
 /**
- * 💡 Sidebar Active State Synchronization (100% Bug-Free Routing)
+ * 💡 Sidebar Active State Synchronization (100% Conflict-Free Routing)
  */
 function updateSidebarHighlight(activeTabId) {
   const navBtns = document.querySelectorAll('.nav-btn');
@@ -390,19 +390,19 @@ function updateSidebarHighlight(activeTabId) {
 
   let highlightTarget = activeTabId;
 
-  if (activeTabId.startsWith('report-')) {
+  // ၁။ Reports မော်ဂျူးခွဲများအားလုံးကို Financial Report ခလုတ်သို့ ချိတ်ဆက်ခြင်း
+  if (activeTabId && activeTabId.startsWith('report-')) {
     highlightTarget = 'report-financial';
   }
 
-  // 🎯 Fix: Student Money မော်ဂျူး၏ Sub-Tabs များကို သီးသန့် ခွဲခြားစစ်ဆေးခြင်း 
-  // (Cashier Cash Book ၏ 'cashier' နှင့် မရောထွေးစေရန် student-money ၏ tab ဖြစ်ကြောင်း အတိအကျ စစ်သည်)
-  const studentMoneySubTabs = ['settlement', 'reconcile', 'student-money'];
-
-  // အကယ်၍ Student Money ၏ PM Cashier tab ဖြစ်ပါက 'stm-cashier' သို့မဟုတ် 'student-money' ဟု သတ်မှတ်နိုင်သည်
-  if (studentMoneySubTabs.includes(activeTabId) || activeTabId === 'student-money') {
+  // ၂။ Student Money ၏ Sub-Tabs များဖြစ်ပါက Sidebar တွင် "btn-student-money" သို့သာ တိကျစွာ ချိတ်ဆက်ခြင်း
+  // (Cashier Cash Book ၏ 'cashier' နှင့် လုံးဝ မတိုက်မိစေရန် သီးသန့် စစ်ဆေးသည်)
+  const studentMoneyTabs = ['student-money', 'settlement', 'reconcile', 'stm-cashier'];
+  if (studentMoneyTabs.includes(activeTabId)) {
     highlightTarget = 'student-money';
   }
 
+  // ၃။ သက်ဆိုင်ရာ Sidebar Menu ခလုတ်အား Active Class ပေးခြင်း
   const activeBtn = document.getElementById(`btn-${highlightTarget}`);
   if (activeBtn) {
     activeBtn.classList.add('active');

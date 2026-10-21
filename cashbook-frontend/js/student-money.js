@@ -68,35 +68,42 @@ const escAttr = window.escapeJsAttr || (s => s ? String(s).replace(/'/g, "\\'") 
 
 /**
  * ==============================================================================
- * 💡 UNIFIED STUDENT MONEY SUB-TAB SWITCHER (Cashier Book Design Standard)
+ * 💡 UNIFIED STUDENT MONEY SUB-TAB SWITCHER & SYNCHRONIZER
  * ==============================================================================
  */
+function syncStudentMoneyTabUI(activeTab) {
+  const currentTab = activeTab || gCurrentStudentMoneyTab || 'main';
+  const tabs = ['main', 'settlement', 'cashier', 'reconcile'];
+
+  const activeClass = "ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 bg-sky-500/10 text-white shadow-sm whitespace-nowrap";
+  const inactiveClass = "ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap";
+
+  tabs.forEach(t => {
+    const selector = `.stm-tab-${t}, #stm-tab-${t}, [data-tab="${t}"], button[onclick*="'${t}'"]`;
+    document.querySelectorAll(selector).forEach(btn => {
+      const isActive = (t === currentTab);
+      btn.className = isActive ? activeClass : inactiveClass;
+      btn.style.border = isActive ? "1.5px solid #38bdf8" : "none";
+    });
+  });
+}
+
 function switchStudentMoneySubTab(tabName) {
   gCurrentStudentMoneyTab = tabName || 'main';
   const tabs = ['main', 'settlement', 'cashier', 'reconcile'];
 
-  // 🎯 Cashier Book စံနှုန်းအတိုင်း Active (အပြာရောင် Border) နှင့် Inactive (Borderless)
-  const activeClass = "ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 bg-sky-500/10 text-white shadow-sm whitespace-nowrap";
-  const inactiveClass = "ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap";
+  // 1. Tab Buttons Styling Sync
+  syncStudentMoneyTabUI(gCurrentStudentMoneyTab);
 
-  // 1. Tab Buttons Styling & Border Synchronization
+  // 2. View Toggle (Visible / Hidden)
   tabs.forEach(t => {
-    // 🎯 Fix: Class, ID နှင့် onclick attribute တို့ကို အပြည့်အစုံ လွှမ်းခြုံရှာဖွေစေခြင်းဖြင့် Tab ၄ ခုစလုံး Active 100% မှန်ကန်စေသည်
-    const selector = `.stm-tab-${t}, #stm-tab-${t}, [onclick*="switchStudentMoneySubTab('${t}')"], [onclick*='switchStudentMoneySubTab("${t}")']`;
-    document.querySelectorAll(selector).forEach(btn => {
-      const isActive = (t === gCurrentStudentMoneyTab);
-      btn.className = isActive ? activeClass : inactiveClass;
-      btn.style.border = isActive ? "1.5px solid #38bdf8" : "none";
-    });
-
     const view = document.getElementById(`stm-${t}-view`);
     if (view) view.classList.toggle('hidden', t !== gCurrentStudentMoneyTab);
   });
 
-  // 3. Dynamic Add Button Visibility Control (Cashier Book စံနှုန်းအတိုင်း)
+  // 3. Dynamic Add Button Visibility Control
   const btnAdd = document.getElementById('stm-btn-add');
   if (btnAdd) {
-    // Reconcile Tab တွင် Add New Entry ခလုတ်ကို ဖုံးကွယ်မည်၊ ကျန် Tab များတွင် ပေါ်စေမည်
     if (gCurrentStudentMoneyTab === 'reconcile') {
       btnAdd.classList.add('hidden');
     } else {
@@ -135,11 +142,8 @@ function renderTopKPIs(deposit, withdraw, bal, activeDepositors) {
 }
 
 async function loadStudentMoneyData(isSilent) {
-  // 🎯 Fix 3: စာမျက်နှာ စဖွင့်ချိန်တွင် Student Money Tab ကို Active Border အလိုအလျောက် သေချာဆွဲပေးသည်
-  document.querySelectorAll('.ca-sub-tab-btn[data-tab]').forEach(btn => {
-    const isActive = (btn.getAttribute('data-tab') === gCurrentStudentMoneyTab);
-    btn.style.border = isActive ? "1.5px solid #38bdf8" : "none";
-  });
+  // 🎯 Fix 1: စာမျက်နှာ စဖွင့်သည်နှင့်တစ်ပြိုင်နက် Student Money Tab အား Active Highlight ချက်ချင်း ဆွဲပေးသည်
+  syncStudentMoneyTabUI(gCurrentStudentMoneyTab || 'main');
 
   try {
     if (!isSilent && typeof toggleLoading === 'function') toggleLoading(true);
