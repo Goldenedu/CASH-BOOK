@@ -112,7 +112,7 @@ function switchStudentMoneySubTab(tabName, forceReload = false) {
   gCurrentStudentMoneyTab = tabName || 'main';
   const tabs = ['main', 'settlement', 'cashier', 'reconcile'];
 
-  // 1. View Toggle (Visible / Hidden) - အရင် render ပြီးသား view ကို ချက်ချင်း ဖော်ပြသည်
+  // 1. View Toggle (Visible / Hidden) - DOM ထဲရှိပြီးသား View ကို ချက်ချင်း ပေါ်စေသည်
   tabs.forEach(t => {
     const view = document.getElementById(`stm-${t}-view`);
     if (view) view.classList.toggle('hidden', t !== gCurrentStudentMoneyTab);
@@ -131,20 +131,20 @@ function switchStudentMoneySubTab(tabName, forceReload = false) {
     }
   }
 
-  // 4. 🎯 ZERO-LOADING ENGINE: ပထမတစ်ကြိမ် ဖွင့်ပြီးသား Tab ဖြစ်ပါက Loading မပြဘဲ ချက်ချင်း အလုပ်လုပ်စေသည်
-  const isAlreadyLoaded = gLoadedTabs[gCurrentStudentMoneyTab];
-  if (!isAlreadyLoaded || forceReload) {
+  // 4. 🎯 ZERO-LOADING ENGINE: ပထမတစ်ကြိမ်သာ Data ခေါ်ယူမည်၊ ဒုတိယအကြိမ်မှစ၍ Loading လုံးဝ မပြတော့ပါ
+  const isLoaded = gLoadedTabs[gCurrentStudentMoneyTab];
+  if (!isLoaded || forceReload) {
     if (gCurrentStudentMoneyTab === 'main') {
-      loadStudentMoneyData(!isAlreadyLoaded ? false : true, forceReload);
+      loadStudentMoneyData(isLoaded, forceReload);
     } else if (gCurrentStudentMoneyTab === 'settlement') {
       const todayStr = getMMTDateString();
       const dateInput = document.getElementById('adm-settle-date')?.value || todayStr;
       loadAdminSettlementDailyStats(dateInput);
-      loadAdminSettlementHistory(!isAlreadyLoaded ? false : true, forceReload);
+      loadAdminSettlementHistory(isLoaded, forceReload);
     } else if (gCurrentStudentMoneyTab === 'cashier') {
-      loadPmCashierBookData(!isAlreadyLoaded ? false : true, forceReload);
+      loadPmCashierBookData(isLoaded, forceReload);
     } else if (gCurrentStudentMoneyTab === 'reconcile') {
-      loadSpmmsReconciliationData(forceReload);
+      loadSpmmsReconciliationData(isLoaded, forceReload);
     }
   }
 }
@@ -158,9 +158,9 @@ function renderTopKPIs(deposit, withdraw, bal, activeDepositors) {
   const elBal = document.getElementById('stm-balance');
   const elDepositors = document.getElementById('stm-active-depositors') || document.getElementById('stm-entries-count');
 
-  if (elDep) elDep.textContent = `${Number(deposit || 0).toLocaleString('en-US')} MMK`;
-  if (elWith) elWith.textContent = `${Number(withdraw || 0).toLocaleString('en-US')} MMK`;
-  if (elBal) elBal.textContent = `${Number(bal || 0).toLocaleString('en-US')} MMK`;
+  if (elDep) elDep.textContent = `${Number(deposit || 0).toLocaleString('en-US')}`;
+  if (elWith) elWith.textContent = `${Number(withdraw || 0).toLocaleString('en-US')}`;
+  if (elBal) elBal.textContent = `${Number(bal || 0).toLocaleString('en-US')}`;
   if (elDepositors) elDepositors.textContent = Number(activeDepositors || 0).toLocaleString('en-US');
 }
 
@@ -861,19 +861,23 @@ async function selectAdminSettlementDate(date) {
 }
 
 // 🎯 D1 Quota-Shield: ၂၀ စောင်စီ Paginated Settlement History ဆွဲယူခြင်း[cite: 12, 15]
-async function loadAdminSettlementHistory(useCache = true) {
+async function loadAdminSettlementHistory(isSilent = false, forceRefresh = false) {
   try {
+    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(true);
+
     const searchVal = (document.getElementById('settle-history-search')?.value || '').trim();
     const dateFrom = document.getElementById('settle-history-date-from')?.value || '';
     const dateTo = document.getElementById('settle-history-date-to')?.value || '';
 
-    const payload = { page: gSettlePage, limit: gSettleLimit, searchVal, dateFrom, dateTo };
-    const cacheKey = `getCanteenSettlements_${JSON.stringify(payload)}`;
-    const hasCache = useCache && !!window.getApiCache(cacheKey);
-
-    if (!hasCache && typeof toggleLoading === 'function') toggleLoading(true);
-
-    const res = await callApi('getCanteenSettlements', { ...payload, forceRefresh: !useCache }, 'GET');
+    // 🎯 forceRefresh ကို dynamic ပြောင်းထားသဖြင့် Cache ရှိပါက D1 သို့ မခေါ်ပါ
+    const res = await callApi('getCanteenSettlements', {
+      page: gSettlePage,
+      limit: gSettleLimit,
+      searchVal,
+      dateFrom,
+      dateTo,
+      forceRefresh: forceRefresh
+    }, 'GET');
 
     const tbody = document.getElementById('adm-settle-history-body');
     if (!tbody) return;
@@ -883,13 +887,13 @@ async function loadAdminSettlementHistory(useCache = true) {
       gSettleHistoryData = res.data || [];
       gSettleTotalRows = res.totalRows || 0;
       gCanteenSettlementsData = gSettleHistoryData;
+      gLoadedTabs.settlement = true; // 🎯 Loaded အဖြစ် သတ်မှတ်သည်
 
       if (gSettleHistoryData.length === 0) {
         tbody.innerHTML = `<tr><td colspan="9" class="text-center py-6 text-slate-500 font-bold">ရှင်းလင်းပြီး မှတ်တမ်း မရှိသေးပါ။</td></tr>`;
         const info = document.getElementById('settle-pagination-info');
         if (info) info.textContent = "Showing 0 entries";
       } else {
-        // ... (မူရင်း render logic ကို ဒီအတိုင်းထားပါ) ...
         gSettleHistoryData.forEach((r, idx) => {
           const displayNo = gSettleTotalRows - ((gSettlePage - 1) * gSettleLimit + idx);
           tbody.innerHTML += `
@@ -927,7 +931,7 @@ async function loadAdminSettlementHistory(useCache = true) {
   } catch (err) {
     console.error("Settlement History Load Error:", err);
   } finally {
-    if (typeof toggleLoading === 'function') toggleLoading(false);
+    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(false);
   }
 }
 
@@ -1153,18 +1157,16 @@ function printCanteenSettlementVoucher(settlementNo) {
 // ==============================================================================
 // 💡 5. PM CASHIER BOOK[cite: 12]
 // ==============================================================================
-async function loadPmCashierBookData(useCache = true) {
+async function loadPmCashierBookData(isSilent = false, forceRefresh = false) {
   try {
-    const cacheKey = `getPmCashierBookData_${JSON.stringify({})}`;
-    const hasCache = useCache && !!window.getApiCache(cacheKey);
+    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(true);
 
-    if (!hasCache && typeof toggleLoading === 'function') toggleLoading(true);
-
-    const res = await callApi('getPmCashierBookData', { forceRefresh: !useCache }, 'GET');
+    // 🎯 forceRefresh: forceRefresh ဖြင့် ပြင်ဆင်သည်
+    const res = await callApi('getPmCashierBookData', { forceRefresh: forceRefresh }, 'GET');
     if (res && res.success) {
       gPmCashierBookData = res.data || [];
+      gLoadedTabs.cashier = true; // 🎯 Loaded အဖြစ် သတ်မှတ်သည်
 
-      // ... (မူရင်း KPI တွက်ချက်ခြင်းနှင့် Render လုပ်ခြင်းများ အတိုင်းထားပါ) ...
       let totDeb = 0, totCred = 0;
       let c1Deb = 0, c1Cred = 0;
       let c2Deb = 0, c2Cred = 0;
@@ -1218,7 +1220,7 @@ async function loadPmCashierBookData(useCache = true) {
   } catch (err) {
     console.error("PM Cashier Load Error:", err);
   } finally {
-    if (typeof toggleLoading === 'function') toggleLoading(false);
+    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(false);
   }
 }
 
@@ -1514,18 +1516,16 @@ function exportToCSVPmCashierBook() {
 // ==============================================================================
 // 💡 6. RECONCILIATION AUDIT CONTROLLER[cite: 12]
 // ==============================================================================
-async function loadSpmmsReconciliationData(useCache = true) {
+async function loadSpmmsReconciliationData(isSilent = false, forceRefresh = false) {
   try {
-    const cacheKey = `getSpmmsReconciliation_${JSON.stringify({})}`;
-    const hasCache = useCache && !!window.getApiCache(cacheKey);
+    // 🎯 isSilent မဟုတ်မှသာ toggleLoading ပြုလုပ်မည်
+    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(true);
 
-    if (!hasCache && typeof toggleLoading === 'function') toggleLoading(true);
-
-    const res = await callApi('getSpmmsReconciliation', { forceRefresh: !useCache }, 'GET');
+    const res = await callApi('getSpmmsReconciliation', { forceRefresh: forceRefresh }, 'GET');
     if (res && res.success) {
       const data = res.data;
+      gLoadedTabs.reconcile = true; // 🎯 Loaded အဖြစ် သတ်မှတ်သည်
 
-      // ... (မူရင်း Status Badge Update လုပ်ခြင်းများ အတိုင်းထားပါ) ...
       document.getElementById('rec-total-virtual').textContent = `${Number(data.totalVirtual).toLocaleString('en-US', { minimumFractionDigits: 2 })} MMK`;
       document.getElementById('rec-total-physical').textContent = `${Number(data.totalPhysicalCash).toLocaleString('en-US', { minimumFractionDigits: 2 })} MMK`;
       document.getElementById('rec-finance-cash').textContent = `${Number(data.totalFinance).toLocaleString('en-US')} MMK`;
@@ -1559,7 +1559,7 @@ async function loadSpmmsReconciliationData(useCache = true) {
   } catch (err) {
     console.error("Reconciliation Error:", err);
   } finally {
-    if (typeof toggleLoading === 'function') toggleLoading(false);
+    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(false);
   }
 }
 
