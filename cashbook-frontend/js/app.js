@@ -399,7 +399,7 @@ function updateSidebarHighlight(activeTabId) {
   const studentMoneySubTabs = ['settlement', 'reconcile', 'student-money'];
 
   // အကယ်၍ Student Money ၏ PM Cashier tab ဖြစ်ပါက 'stm-cashier' သို့မဟုတ် 'student-money' ဟု သတ်မှတ်နိုင်သည်
-  if (studentMoneySubTabs.includes(activeTabId) || activeTabId === 'stm-cashier') {
+  if (studentMoneySubTabs.includes(activeTabId) || activeTabId === 'student-money') {
     highlightTarget = 'student-money';
   }
 
