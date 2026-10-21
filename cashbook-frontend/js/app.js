@@ -73,23 +73,17 @@ function initApp() {
 
   document.documentElement.className = 'dark is-authed';
   updateHeaderMetadata(user);
-
-  document.documentElement.className = 'dark is-authed';
-  updateHeaderMetadata(user);
   initNetworkStatusWatcher(); // ⚡ Real-Time Online/Offline Status Initializer
 
   if (typeof window.prefetchCoreModules === 'function') {
     window.prefetchCoreModules();
   }
 
-  // 🎯 ZERO-QUOTA OFFLINE MASTER CACHE:
-  // Login ဝင်ချိန်တွင် ကျောင်းသားစာရင်းနှင့် Promotion နှုန်းထားများကို Offline အသုံးပြုနိုင်ရန် Pre-fetch လုပ်သည်
-  // Cache သက်တမ်း ၂၄ နာရီ ရှိပြီးသားဖြစ်ပါက D1 သို့ လုံးဝ မခေါ်ပါ (D1 Quota = 0)
+  // 🎯 FORCE PREFETCH MASTER DATA: Login ဝင်ချိန်တွင် Offline အတွက် ကျောင်းသားစာရင်းကို နောက်ခံတွင် အတင်းအကျပ် ဆွဲယူသိမ်းဆည်းပေးသည်
   if (navigator.onLine && typeof window.prefetchOfflineMasterData === 'function') {
-    window.prefetchOfflineMasterData();
+    window.prefetchOfflineMasterData(true); // force = true ဖြင့် ခေါ်မည်
   }
 
-  // Header ရှိ Pending Button အရေအတွက်ကို စတင်တွက်ချက်ပြသသည်
   if (typeof window.updatePendingUI === 'function') {
     window.updatePendingUI();
   }
@@ -544,7 +538,7 @@ document.addEventListener('click', function (e) {
 });
 
 /**
- * 💡 Real-Time Network & WiFi Status Watcher (0 D1 Quota Cost)
+ * 💡 Real-Time Network & WiFi Status Watcher (With Auto-Sync Engine)
  */
 function initNetworkStatusWatcher() {
   updateNetworkStatusIndicator(navigator.onLine);
@@ -552,6 +546,13 @@ function initNetworkStatusWatcher() {
   window.addEventListener('online', () => {
     updateNetworkStatusIndicator(true);
     showCenterSystemMessage('SUCCESS', 'အင်တာနက်လိုင်း ပြန်လည်ချိတ်ဆက်မိပါပြီ (Online)');
+
+    // 🎯 AUTO SYNC: အင်တာနက် ပြန်လည်ချိတ်ဆက်မိသည်နှင့် Pending ရှိ/မရှိ စစ်ဆေးပြီး အလိုအလျောက် ပို့ပေးသည်
+    const queue = window.OfflineSync ? window.OfflineSync.getQueue() : [];
+    if (queue.length > 0 && typeof window.syncAllPendingNow === 'function') {
+      showCenterSystemMessage('INFO', `Pending စာရင်း (${queue.length}) ခုကို D1 သို့ အလိုအလျောက် ပို့ဆောင်နေပါသည်...`);
+      setTimeout(() => window.syncAllPendingNow(), 1000);
+    }
   });
 
   window.addEventListener('offline', () => {
@@ -796,14 +797,17 @@ window.clearAllPendingQueue = function () {
 
 /**
  * 💡 Pre-fetch Student Master Data (0 D1 Quota Cost when cached)
+ * @param {boolean} force - Force refresh via API even if cache exists (Used during Login)
  */
-window.prefetchOfflineMasterData = async function () {
+window.prefetchOfflineMasterData = async function (force = false) {
   const currentFy = typeof window.getCurrentAcademicYear === 'function' ? window.getCurrentAcademicYear() : '2026-2027';
   const cacheKey = `golden_master_students_${currentFy}`;
 
-  // LocalStorage တွင် ရှိပြီးသားဖြစ်ပါက D1 သို့ လုံးဝ မခေါ်ပါ
-  const existing = localStorage.getItem(cacheKey);
-  if (existing) return;
+  // Force မဟုတ်ပါက LocalStorage တွင် ရှိပြီးသားဖြစ်လျှင် D1 သို့ လုံးဝ မခေါ်ပါ
+  if (!force) {
+    const existing = localStorage.getItem(cacheKey);
+    if (existing) return;
+  }
 
   try {
     const res = await callApi('getStudentData', { fy: currentFy, limit: 5000 }, 'GET');
@@ -818,9 +822,10 @@ window.prefetchOfflineMasterData = async function () {
         promo: s.promo
       }));
       localStorage.setItem(cacheKey, JSON.stringify(compactList));
+      console.log(`[Offline Sync] Pre-fetched ${compactList.length} students for FY ${currentFy}`);
     }
   } catch (e) {
-    console.warn("Offline prefetch skipped:", e.message);
+    console.warn("[Offline Sync] Pre-fetch skipped:", e.message);
   }
 };
 
