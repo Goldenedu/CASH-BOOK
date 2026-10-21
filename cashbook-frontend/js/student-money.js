@@ -118,18 +118,18 @@ function switchStudentMoneySubTab(tabName) {
     }
   }
 
-  // 4. Trigger Module Data Loaders
+  // 4. Trigger Module Data Loaders (🎯 Use Cache = true ဖြင့် ခေါ်ယူသဖြင့် နောက်တစ်ခေါက် နှိပ်တိုင်း Loading မပေါ်တော့ပါ)
   if (gCurrentStudentMoneyTab === 'main') {
-    loadStudentMoneyData(false);
+    loadStudentMoneyData(true);
   } else if (gCurrentStudentMoneyTab === 'settlement') {
     const todayStr = getMMTDateString();
     const dateInput = document.getElementById('adm-settle-date')?.value || todayStr;
     loadAdminSettlementDailyStats(dateInput);
-    loadAdminSettlementHistory(false);
+    loadAdminSettlementHistory(true);
   } else if (gCurrentStudentMoneyTab === 'cashier') {
-    loadPmCashierBookData(false);
+    loadPmCashierBookData(true);
   } else if (gCurrentStudentMoneyTab === 'reconcile') {
-    loadSpmmsReconciliationData();
+    loadSpmmsReconciliationData(true);
   }
 }
 
@@ -148,25 +148,30 @@ function renderTopKPIs(deposit, withdraw, bal, activeDepositors) {
   if (elDepositors) elDepositors.textContent = Number(activeDepositors || 0).toLocaleString('en-US');
 }
 
-async function loadStudentMoneyData(isSilent) {
-  // 🎯 Fix 1: စာမျက်နှာ စဖွင့်သည်နှင့်တစ်ပြိုင်နက် Student Money Tab အား Active Highlight ချက်ချင်း ဆွဲပေးသည်
+async function loadStudentMoneyData(useCache = true) {
   syncStudentMoneyTabUI(gCurrentStudentMoneyTab || 'main');
 
   try {
-    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(true);
-
     const searchVal = (document.getElementById('stm-search')?.value || '').trim();
     const dateFrom = document.getElementById('stm-date-from')?.value || '';
     const dateTo = document.getElementById('stm-date-to')?.value || '';
 
-    const res = await callApi('getStudentMoneyData', {
+    // 🎯 D1 Quota-Shield: Payload ပေါ်မူတည်၍ Cache ရှိ/မရှိ စစ်ဆေးသည်
+    const payload = {
       page: gStudentMoneyPage,
       limit: gStudentMoneyLimit,
       searchVal,
       dateFrom,
-      dateTo,
-      forceRefresh: true
-    }, 'GET');
+      dateTo
+    };
+
+    const cacheKey = `getStudentMoneyData_${JSON.stringify(payload)}`;
+    const hasCache = useCache && !!window.getApiCache(cacheKey);
+
+    // Cache မရှိမှသာ Loading လည်မည်
+    if (!hasCache && typeof toggleLoading === 'function') toggleLoading(true);
+
+    const res = await callApi('getStudentMoneyData', { ...payload, forceRefresh: !useCache }, 'GET');
 
     if (res && res.success) {
       gStudentMoneyHistoryData = res.data || [];
@@ -179,7 +184,7 @@ async function loadStudentMoneyData(isSilent) {
   } catch (err) {
     console.error("Student Money Load Error:", err);
   } finally {
-    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(false);
+    if (typeof toggleLoading === 'function') toggleLoading(false);
   }
 }
 
@@ -841,22 +846,19 @@ async function selectAdminSettlementDate(date) {
 }
 
 // 🎯 D1 Quota-Shield: ၂၀ စောင်စီ Paginated Settlement History ဆွဲယူခြင်း[cite: 12, 15]
-async function loadAdminSettlementHistory(isSilent = false) {
+async function loadAdminSettlementHistory(useCache = true) {
   try {
-    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(true);
-
     const searchVal = (document.getElementById('settle-history-search')?.value || '').trim();
     const dateFrom = document.getElementById('settle-history-date-from')?.value || '';
     const dateTo = document.getElementById('settle-history-date-to')?.value || '';
 
-    const res = await callApi('getCanteenSettlements', {
-      page: gSettlePage,
-      limit: gSettleLimit,
-      searchVal,
-      dateFrom,
-      dateTo,
-      forceRefresh: true
-    }, 'GET');
+    const payload = { page: gSettlePage, limit: gSettleLimit, searchVal, dateFrom, dateTo };
+    const cacheKey = `getCanteenSettlements_${JSON.stringify(payload)}`;
+    const hasCache = useCache && !!window.getApiCache(cacheKey);
+
+    if (!hasCache && typeof toggleLoading === 'function') toggleLoading(true);
+
+    const res = await callApi('getCanteenSettlements', { ...payload, forceRefresh: !useCache }, 'GET');
 
     const tbody = document.getElementById('adm-settle-history-body');
     if (!tbody) return;
@@ -865,13 +867,14 @@ async function loadAdminSettlementHistory(isSilent = false) {
     if (res && res.success) {
       gSettleHistoryData = res.data || [];
       gSettleTotalRows = res.totalRows || 0;
-      gCanteenSettlementsData = gSettleHistoryData; // Backwards-compatible for voucher print
+      gCanteenSettlementsData = gSettleHistoryData;
 
       if (gSettleHistoryData.length === 0) {
         tbody.innerHTML = `<tr><td colspan="9" class="text-center py-6 text-slate-500 font-bold">ရှင်းလင်းပြီး မှတ်တမ်း မရှိသေးပါ။</td></tr>`;
         const info = document.getElementById('settle-pagination-info');
         if (info) info.textContent = "Showing 0 entries";
       } else {
+        // ... (မူရင်း render logic ကို ဒီအတိုင်းထားပါ) ...
         gSettleHistoryData.forEach((r, idx) => {
           const displayNo = gSettleTotalRows - ((gSettlePage - 1) * gSettleLimit + idx);
           tbody.innerHTML += `
@@ -909,7 +912,7 @@ async function loadAdminSettlementHistory(isSilent = false) {
   } catch (err) {
     console.error("Settlement History Load Error:", err);
   } finally {
-    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(false);
+    if (typeof toggleLoading === 'function') toggleLoading(false);
   }
 }
 
@@ -1135,13 +1138,18 @@ function printCanteenSettlementVoucher(settlementNo) {
 // ==============================================================================
 // 💡 5. PM CASHIER BOOK[cite: 12]
 // ==============================================================================
-async function loadPmCashierBookData(isSilent) {
+async function loadPmCashierBookData(useCache = true) {
   try {
-    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(true);
-    const res = await callApi('getPmCashierBookData', { forceRefresh: true }, 'GET');
+    const cacheKey = `getPmCashierBookData_${JSON.stringify({})}`;
+    const hasCache = useCache && !!window.getApiCache(cacheKey);
+
+    if (!hasCache && typeof toggleLoading === 'function') toggleLoading(true);
+
+    const res = await callApi('getPmCashierBookData', { forceRefresh: !useCache }, 'GET');
     if (res && res.success) {
       gPmCashierBookData = res.data || [];
 
+      // ... (မူရင်း KPI တွက်ချက်ခြင်းနှင့် Render လုပ်ခြင်းများ အတိုင်းထားပါ) ...
       let totDeb = 0, totCred = 0;
       let c1Deb = 0, c1Cred = 0;
       let c2Deb = 0, c2Cred = 0;
@@ -1195,7 +1203,7 @@ async function loadPmCashierBookData(isSilent) {
   } catch (err) {
     console.error("PM Cashier Load Error:", err);
   } finally {
-    if (!isSilent && typeof toggleLoading === 'function') toggleLoading(false);
+    if (typeof toggleLoading === 'function') toggleLoading(false);
   }
 }
 
@@ -1491,13 +1499,18 @@ function exportToCSVPmCashierBook() {
 // ==============================================================================
 // 💡 6. RECONCILIATION AUDIT CONTROLLER[cite: 12]
 // ==============================================================================
-async function loadSpmmsReconciliationData() {
+async function loadSpmmsReconciliationData(useCache = true) {
   try {
-    if (typeof toggleLoading === 'function') toggleLoading(true);
-    const res = await callApi('getSpmmsReconciliation', { forceRefresh: true }, 'GET');
+    const cacheKey = `getSpmmsReconciliation_${JSON.stringify({})}`;
+    const hasCache = useCache && !!window.getApiCache(cacheKey);
+
+    if (!hasCache && typeof toggleLoading === 'function') toggleLoading(true);
+
+    const res = await callApi('getSpmmsReconciliation', { forceRefresh: !useCache }, 'GET');
     if (res && res.success) {
       const data = res.data;
 
+      // ... (မူရင်း Status Badge Update လုပ်ခြင်းများ အတိုင်းထားပါ) ...
       document.getElementById('rec-total-virtual').textContent = `${Number(data.totalVirtual).toLocaleString('en-US', { minimumFractionDigits: 2 })} MMK`;
       document.getElementById('rec-total-physical').textContent = `${Number(data.totalPhysicalCash).toLocaleString('en-US', { minimumFractionDigits: 2 })} MMK`;
       document.getElementById('rec-finance-cash').textContent = `${Number(data.totalFinance).toLocaleString('en-US')} MMK`;
