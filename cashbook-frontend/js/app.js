@@ -309,7 +309,9 @@ async function triggerModuleInit(tabId) {
         break;
 
       case 'student-money':
-        if (typeof loadStudentMoneyData === 'function') {
+        if (typeof window.switchStudentMoneySubTab === 'function') {
+          window.switchStudentMoneySubTab('main');
+        } else if (typeof loadStudentMoneyData === 'function') {
           await loadStudentMoneyData(false);
         }
         break;

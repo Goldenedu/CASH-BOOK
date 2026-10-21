@@ -68,52 +68,47 @@ const escAttr = window.escapeJsAttr || (s => s ? String(s).replace(/'/g, "\\'") 
 
 /**
  * ==============================================================================
- * 💡 UNIFIED STUDENT MONEY SUB-TAB SWITCHER & SYNCHRONIZER
+ * 💡 UNIFIED STUDENT MONEY SUB-TAB SWITCHER & SYNCHRONIZER (100% CONFLICT-FREE)
  * ==============================================================================
  */
 function syncStudentMoneyTabUI(activeTab) {
   const currentTab = activeTab || gCurrentStudentMoneyTab || 'main';
   const tabs = ['main', 'settlement', 'cashier', 'reconcile'];
 
-  const activeClass = "ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 bg-sky-500/10 text-white shadow-sm whitespace-nowrap";
-  const inactiveClass = "ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap";
+  // 🎯 Sidebar ကို လုံးဝ မထိခိုက်စေရန် #view-container အတွင်း၌သာ ကန့်သတ်ရှာဖွေသည်
+  const container = document.getElementById('view-container');
+  if (!container) return;
 
   tabs.forEach(t => {
-    const selector = `.stm-tab-${t}, #stm-tab-${t}, [data-tab="${t}"], button[onclick*="'${t}'"]`;
-    document.querySelectorAll(selector).forEach(btn => {
-      const isActive = (t === currentTab);
-      btn.className = isActive ? activeClass : inactiveClass;
+    const isActive = (t === currentTab);
+    const baseClass = `stm-tab-${t} stm-sub-tab-btn ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap`;
+    const stateClass = isActive
+      ? "bg-sky-500/10 text-white shadow-sm"
+      : "text-slate-400 hover:text-white hover:bg-slate-800/30";
+
+    // View ၄ ခုစလုံးရှိ သက်ဆိုင်ရာ Tab ခလုတ်များကို တစ်ပြိုင်နက်တည်း Active/Inactive ပြောင်းပေးသည်
+    const selector = `.stm-tab-${t}, #stm-tab-${t}, [data-stm-tab="${t}"], [onclick*="switchStudentMoneySubTab('${t}')"]`;
+    container.querySelectorAll(selector).forEach(btn => {
+      btn.className = `${baseClass} ${stateClass}`;
       btn.style.border = isActive ? "1.5px solid #38bdf8" : "none";
     });
   });
 }
 
-/**
- * 💡 Switch Student Money Sub-Tabs (Strictly Scoped inside #view-container)
- */
 function switchStudentMoneySubTab(tabName) {
   gCurrentStudentMoneyTab = tabName || 'main';
   const tabs = ['main', 'settlement', 'cashier', 'reconcile'];
 
-  const activeClass = "stm-sub-tab-btn ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 bg-sky-500/10 text-white shadow-sm whitespace-nowrap";
-  const inactiveClass = "stm-sub-tab-btn ca-sub-tab-btn w-full px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-800/30 whitespace-nowrap";
-
-  // 🎯 Fix: Sidebar Menu ကို လုံးဝ မထိခိုက်စေရန် #view-container အတွင်းရှိ .stm-sub-tab-btn များကိုသာ သီးသန့်ရွေးထုတ်သည်
-  const container = document.getElementById('view-container') || document;
-  container.querySelectorAll('.stm-sub-tab-btn').forEach(btn => {
-    const target = btn.getAttribute('data-stm-tab');
-    const isActive = (target === gCurrentStudentMoneyTab);
-    btn.className = isActive ? activeClass : inactiveClass;
-    btn.style.border = isActive ? "1.5px solid #38bdf8" : "none";
-  });
-
-  // View Toggle (Visible / Hidden)
+  // 1. View Toggle (Visible / Hidden)
   tabs.forEach(t => {
     const view = document.getElementById(`stm-${t}-view`);
     if (view) view.classList.toggle('hidden', t !== gCurrentStudentMoneyTab);
   });
 
-  // Dynamic Add Button Visibility Control
+  // 2. Tab Buttons Styling & Border Synchronization (Scoped inside #view-container)
+  syncStudentMoneyTabUI(gCurrentStudentMoneyTab);
+
+  // 3. Dynamic Add Button Visibility Control
   const btnAdd = document.getElementById('stm-btn-add');
   if (btnAdd) {
     if (gCurrentStudentMoneyTab === 'reconcile') {
@@ -123,7 +118,7 @@ function switchStudentMoneySubTab(tabName) {
     }
   }
 
-  // Trigger Module Data Loaders
+  // 4. Trigger Module Data Loaders
   if (gCurrentStudentMoneyTab === 'main') {
     loadStudentMoneyData(false);
   } else if (gCurrentStudentMoneyTab === 'settlement') {
