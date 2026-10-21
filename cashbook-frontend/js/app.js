@@ -54,6 +54,7 @@ window.formatCategoryBadgeHtml = function (categoryStr) {
 };
 
 document.addEventListener('DOMContentLoaded', function () {
+  initNetworkStatusWatcher();
   initApp();
 });
 
