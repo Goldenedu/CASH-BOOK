@@ -109,7 +109,7 @@ function updateStatsUniform() {
   if (cQtyEl) cQtyEl.innerText = Number(stats.currentQty || 0).toLocaleString('en-US');
 
   const valEl = document.getElementById('uni-stock-value');
-  if (valEl) valEl.innerText = Number(stats.totalStockValue || 0).toLocaleString('en-US') + " MMK";
+  if (valEl) valEl.innerText = Number(stats.totalStockValue || 0).toLocaleString('en-US');
 
   const countEl = document.getElementById('uni-total-products');
   if (countEl) countEl.innerText = window.UniformState.totalRows.toLocaleString('en-US');
