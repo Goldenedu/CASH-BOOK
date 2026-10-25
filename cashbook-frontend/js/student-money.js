@@ -247,13 +247,20 @@ function renderStudentMoneyTable() {
     const isTransfer = row.studentId === null || row.studentId === 0 || row.fyid === 'TRANSFER' || row.fyid === 'RETURN';
     const cleanFyid = typeof window.sanitizeFyidStr === 'function' ? window.sanitizeFyidStr(row.fyid) : (row.fyid || '');
 
-    // 🎯 Case-Insensitive Color Validation: Transfer (Red) / Return (Green)
     const isReturn = String(row.fyid || '').toUpperCase() === 'RETURN' || String(row.remark || '').includes('Return') || String(row.class || '').includes('Return');
     const isXferOut = String(row.fyid || '').toUpperCase() === 'TRANSFER' || String(row.remark || '').includes('Transfer') || String(row.class || '').includes('Transfer');
 
     const balStr = isTransfer
       ? '<span class="text-slate-500 font-mono">-</span>'
       : Number(row.balances || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
+
+    // 🎯 Role စစ်ဆေးချက်: Admin သို့မဟုတ် Owner သာလျှင် Action အပြည့်အဝ လုပ်ခွင့်ရှိမည် (ကျန်သူများ မှိန်နေမည်)
+    const userRole = localStorage.getItem('golden_user_role') || '';
+    const isAdmin = (userRole === 'Admin' || userRole === 'Owner' || userRole === 'Finance' || userRole === 'Accountant');
+
+    // ခွင့်ပြုချက်မရှိပါက ခလုတ်ကို နှိပ်မရအောင် opacity-30 နှင့် pointer-events-none ပေးထားမည်
+    const editBtnClass = isAdmin ? "p-1 text-indigo-400 hover:text-indigo-300 transition" : "p-1 text-indigo-400 opacity-30 cursor-not-allowed pointer-events-none";
+    const delBtnClass = isAdmin ? "p-1 text-rose-400 hover:text-rose-300 transition" : "p-1 text-rose-400 opacity-30 cursor-not-allowed pointer-events-none";
 
     tbody.innerHTML += `
       <tr class="hover:bg-slate-800/30 text-slate-300 text-xs border-b border-slate-800/40">
@@ -278,7 +285,9 @@ function renderStudentMoneyTable() {
             ${isTransfer
         ? `<button onclick="printRowTransferVoucher('${escAttr(row.uniqueId)}', 'main')" class="p-1 text-sky-400 hover:text-sky-300 transition" title="Print Transfer Slip"><i class="fa-solid fa-print"></i></button>`
         : `<button onclick="openStudentStatementModal(${row.studentId})" class="p-1 text-amber-400 hover:text-amber-300 transition" title="Statement"><i class="fa-solid fa-file-invoice"></i></button>`}
-            <button onclick="deleteStudentMoneyEntry('${escAttr(row.uniqueId)}')" class="p-1 text-rose-400 hover:text-rose-300 transition" title="Delete"><i class="fa-solid fa-trash"></i></button>
+            
+            <button onclick="editStudentMoneyEntry('${escAttr(row.uniqueId)}')" class="${editBtnClass}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>
+            <button onclick="deleteStudentMoneyEntry('${escAttr(row.uniqueId)}')" class="${delBtnClass}" title="Delete"><i class="fa-solid fa-trash"></i></button>
           </div>
         </td>
       </tr>
@@ -1338,6 +1347,16 @@ function renderPmCashierBookTable() {
     const balStr = Number(row.balances || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
     const isXfer = row.category === 'Float Receive' || row.category === 'Return to Finance';
 
+    // 🎯 Role စစ်ဆေးချက်: PM Cashier ကိုယ်တိုင်မှလွဲ၍ ကျန်သူများ (Admin အပါအဝင်) Action ခလုတ်များ မှိန်နေမည်
+    const userRole = localStorage.getItem('golden_user_role') || '';
+    const isOwnerCashier1 = (userRole === 'pm_cashier1' && row.responsibility_person === 'Cashier 1');
+    const isOwnerCashier2 = (userRole === 'pm_cashier2' && row.responsibility_person === 'Cashier 2');
+    const isOwnerCashier = isOwnerCashier1 || isOwnerCashier2;
+
+    // PM Cashier အစစ်အမှန်မဟုတ်ပါက (သို့မဟုတ်) Admin ဖြစ်နေပါက ဖျက်ခွင့်/ပြင်ခွင့်ကို ပိတ်ပင်ထားမည်
+    const actionBtnClass = isOwnerCashier ? "p-1 text-indigo-400 hover:text-indigo-300 transition" : "p-1 text-indigo-400 opacity-30 cursor-not-allowed pointer-events-none";
+    const delBtnClass = isOwnerCashier ? "p-1 text-rose-400 hover:text-rose-300 transition" : "p-1 text-rose-400 opacity-30 cursor-not-allowed pointer-events-none";
+
     tbody.innerHTML += `
       <tr class="hover:bg-slate-800/30 text-slate-300 text-xs border-b border-slate-800/40">
         <td class="text-center font-mono py-3 px-2 font-bold text-slate-400">${displayNo}</td>
@@ -1353,10 +1372,10 @@ function renderPmCashierBookTable() {
         <td class="font-mono text-slate-500 py-3 px-2">${esc(row.fy)}</td>
         <td class="text-center right-0 sticky bg-[#0c1322] border-l border-slate-800 py-3 px-2">
           <div class="flex justify-center items-center gap-2">
-            ${isXfer
-        ? `<button onclick="printRowTransferVoucher('${escAttr(row.uniqueId)}', 'cashier')" class="p-1 text-sky-400 hover:text-sky-300 transition" title="Print Voucher"><i class="fa-solid fa-print"></i></button>`
-        : ''}
-            <button onclick="deletePmCashierBookEntry('${escAttr(row.uniqueId)}')" class="p-1 text-rose-400 hover:text-rose-300 transition" title="Delete"><i class="fa-solid fa-trash"></i></button>
+            <!-- Print ကိုတော့ အားလုံးထုတ်ခွင့်ပေးမည် -->
+            <button onclick="printRowTransferVoucher('${escAttr(row.uniqueId)}', 'cashier')" class="p-1 text-sky-400 hover:text-sky-300 transition" title="Print Voucher"><i class="fa-solid fa-print"></i></button>
+            <button onclick="editPmCashierBookEntry('${escAttr(row.uniqueId)}')" class="${actionBtnClass}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>
+            <button onclick="deletePmCashierBookEntry('${escAttr(row.uniqueId)}')" class="${delBtnClass}" title="Delete"><i class="fa-solid fa-trash"></i></button>
           </div>
         </td>
       </tr>
@@ -1971,6 +1990,63 @@ function closeAdminSettlementModal() {
   closeSettlementActionModal();
   switchStudentMoneySubTab('settlement');
 }
+
+/**
+ * 💡 EDIT ENTRY: Student Money
+ */
+function editStudentMoneyEntry(uniqueId) {
+  const row = gStudentMoneyHistoryData.find(r => r.uniqueId === uniqueId);
+  if (!row) return showToast("ERROR", "မူရင်း အချက်အလက် ရှာမတွေ့ပါ။");
+
+  openAddModalStudentMoney(); // Modal ဖွင့်သည်
+
+  document.getElementById('stm-uniqueId').value = row.uniqueId || '';
+  document.getElementById('stm-date').value = row.date || getMMTDateString();
+
+  if (row.studentId) {
+    document.getElementById('stm-entry-type').value = (row.credit > 0) ? 'Withdraw' : 'Deposit';
+    document.getElementById('stm-id-search').value = row.studentId;
+    onStudentIdOrFYChangeMoney();
+  } else {
+    document.getElementById('stm-entry-type').value = 'Transfer to PM Cashier';
+  }
+
+  onStudentMoneyEntryTypeChange();
+  document.getElementById('stm-method').value = row.method || 'Cash';
+  document.getElementById('stm-debit').value = row.debit || 0;
+  document.getElementById('stm-credit').value = row.credit || 0;
+  document.getElementById('stm-remark').value = row.remark || '';
+}
+
+/**
+ * 💡 EDIT ENTRY: PM Cashier
+ */
+function editPmCashierBookEntry(uniqueId) {
+  const row = gPmCashierBookData.find(r => r.uniqueId === uniqueId);
+  if (!row) return showToast("ERROR", "မူရင်း အချက်အလက် ရှာမတွေ့ပါ။");
+
+  openAddModalPmCashierBook(); // Modal ဖွင့်သည်
+
+  document.getElementById('pm-cashier-uniqueId').value = row.uniqueId || '';
+  document.getElementById('pm-cashier-date').value = row.date || getMMTDateString();
+  document.getElementById('pm-cashier-category').value = row.category || 'PM Withdraw';
+  onPmCashierCategoryChange();
+
+  if (row.category === 'PM Withdraw') {
+    const match = String(row.description || '').match(/ID\s*[-:\s]*\d{2}-\d{2}\s*(\d+)/i);
+    if (match) {
+      document.getElementById('pm-student-id-search').value = parseInt(match[1], 10);
+      onPmStudentLookup();
+    }
+  }
+
+  document.getElementById('pm-cashier-method').value = row.method || 'Cash';
+  document.getElementById('pm-cashier-credit').value = row.credit || row.debit || 0;
+  document.getElementById('pm-cashier-description').value = row.description || '';
+}
+
+window.editStudentMoneyEntry = editStudentMoneyEntry;
+window.editPmCashierBookEntry = editPmCashierBookEntry;
 
 // ==============================================================================
 // 💡 GLOBAL EXPORTS (CLEAN & NON-DUPLICATE)

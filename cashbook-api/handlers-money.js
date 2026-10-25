@@ -633,7 +633,24 @@ export async function deletePmCashierBookEntry(db, session, body) {
     const role = session?.role || '';
     const isCashierRole = (role === 'pm_cashier1' || role === 'pm_cashier2');
 
-    if (isCashierRole && existing.category === 'Float Receive') {
+    // 🎯 FEATURE: pm_cashier သာလျှင် မြန်မာစံတော်ချိန် ည ၁၂ နာရီမကျော်မီ (Today) ဖျက်ခွင့်ရှိမည်။ Admin အပါအဝင် အခြားမည်သူမျှ ဖျက်ခွင့် မရှိပါ။
+    const todayStr = getMyanmarDateString();
+
+    if (!isCashierRole) {
+      return {
+        success: false,
+        message: "ဖျက်ခွင့် မရှိပါ! ဤစာရင်းအား သက်ဆိုင်ရာ PM Cashier ကိုယ်တိုင်မှလွဲ၍ မည်သူမျှ (Admin အပါအဝင်) ဖျက်ခွင့် မရှိပါ။"
+      };
+    }
+
+    if (existing.date !== todayStr) {
+      return {
+        success: false,
+        message: "ဖျက်ခွင့် မရှိပါ! နေ့စဥ်စာရင်းချုပ်ပြီး နောက်နေ့သို့ ကူးပြောင်းသွားသော စာရင်းဟောင်းများကို မည်သူမှ ဖျက်ပိုင်ခွင့် မရှိတော့ပါ။"
+      };
+    }
+
+    if (existing.category === 'Float Receive') {
       return {
         success: false,
         message: "ငွေလွှဲခွင့် မပြုပါ! Finance မှ လွှဲပေးထားသော အရင်းငွေစာရင်း (Float Receive) ကို ငွေကိုင်မှ ဖျက်ပိုင်ခွင့် လုံးဝမရှိပါ။ Finance သို့ ဆက်သွယ်ပါ။"
@@ -645,16 +662,6 @@ export async function deletePmCashierBookEntry(db, session, body) {
     }
     if (role === 'pm_cashier2' && existing.responsibility_person !== 'Cashier 2') {
       return { success: false, message: "Cashier 2 ၏ စာရင်း မဟုတ်သဖြင့် ဖျက်ခွင့်မရှိပါ။" };
-    }
-
-    if (isCashierRole) {
-      const todayStr = getMyanmarDateString();
-      if (existing.date !== todayStr) {
-        return {
-          success: false,
-          message: "ဖျက်ခွင့် မရှိပါ! စာရင်းသွင်းပြီး ၁ ရက် (ယနေ့) ကျော်လွန်သွားသော စာရင်းဟောင်းများကို ငွေကိုင်မှ ဖျက်ပိုင်ခွင့် မရှိပါ။ Admin သို့ တင်ပြပါ။"
-        };
-      }
     }
 
     const coreId = uid.replace(/^(STM_|PMC_|CAN_|POS_|SETTLE_)+/i, '');

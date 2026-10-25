@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="my" class="dark">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -7,15 +8,16 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
-    body { 
-      background-color: #050b14; 
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-      -webkit-tap-highlight-color: transparent; 
+    body {
+      background-color: #050b14;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
     }
-    .glass-card { 
-      background: rgba(15, 23, 42, 0.75); 
-      backdrop-filter: blur(12px); 
-      border: 1px solid rgba(51, 65, 85, 0.4); 
+
+    .glass-card {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(51, 65, 85, 0.4);
     }
   </style>
 
@@ -23,12 +25,15 @@
   <script src="js/config.js"></script>
   <script src="js/api.js"></script>
 </head>
+
 <body class="text-slate-100 min-h-screen pb-24 select-none">
 
   <!-- 💡 App Header -->
-  <header class="sticky top-0 z-40 bg-[#080f1e]/90 backdrop-blur-md border-b border-slate-800/80 px-4 py-3 flex items-center justify-between">
+  <header
+    class="sticky top-0 z-40 bg-[#080f1e]/90 backdrop-blur-md border-b border-slate-800/80 px-4 py-3 flex items-center justify-between">
     <div class="flex items-center gap-2.5">
-      <div class="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 font-black text-sm">
+      <div
+        class="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 font-black text-sm">
         <i class="fa-solid fa-cash-register"></i>
       </div>
       <div>
@@ -37,10 +42,21 @@
       </div>
     </div>
     <div class="flex items-center gap-2">
-      <button onclick="loadPmCashierData()" class="w-8 h-8 rounded-lg bg-slate-800 text-slate-300 flex items-center justify-center text-xs active:scale-95 transition" title="Refresh">
+      <!-- 🎯 SEARCH BUTTON -->
+      <button onclick="openMobileSearchModal()"
+        class="w-8 h-8 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20 flex items-center justify-center text-xs active:scale-95 transition"
+        title="Search">
+        <i class="fa-solid fa-magnifying-glass"></i>
+      </button>
+
+      <button onclick="loadPmCashierData()"
+        class="w-8 h-8 rounded-lg bg-slate-800 text-slate-300 flex items-center justify-center text-xs active:scale-95 transition"
+        title="Refresh">
         <i class="fa-solid fa-arrows-rotate"></i>
       </button>
-      <button onclick="logoutCashier()" class="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center justify-center text-xs active:scale-95 transition" title="Logout">
+      <button onclick="logoutCashier()"
+        class="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center justify-center text-xs active:scale-95 transition"
+        title="Logout">
         <i class="fa-solid fa-power-off"></i>
       </button>
     </div>
@@ -50,17 +66,22 @@
   <main class="p-4 space-y-4 max-w-lg mx-auto">
 
     <!-- 🎯 Hero KPI Card: Cash in Hand & Today vs All-Time Split -->
-    <div class="glass-card p-5 rounded-2xl relative overflow-hidden border border-sky-500/30 bg-gradient-to-br from-[#0c1e38] via-[#091528] to-[#070e1c] shadow-2xl space-y-3">
+    <div
+      class="glass-card p-5 rounded-2xl relative overflow-hidden border border-sky-500/30 bg-gradient-to-br from-[#0c1e38] via-[#091528] to-[#070e1c] shadow-2xl space-y-3">
       <div class="flex justify-between items-start">
-        <span class="text-[10px] font-black uppercase tracking-widest text-sky-400">လက်ဝယ်ရှိ ငွေသား (Cash In Hand)</span>
-        <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">ACTIVE</span>
+        <span class="text-[10px] font-black uppercase tracking-widest text-sky-400">လက်ဝယ်ရှိ ငွေသား (Cash In
+          Hand)</span>
+        <span
+          class="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">ACTIVE</span>
       </div>
       <div>
-        <h2 id="pm-hand-cash" class="text-3xl font-black text-white font-mono tracking-tight">0 <span class="text-sm font-bold text-sky-400">MMK</span></h2>
+        <h2 id="pm-hand-cash" class="text-3xl font-black text-white font-mono tracking-tight">0 <span
+            class="text-sm font-bold text-sky-400">MMK</span></h2>
       </div>
 
       <!-- 📅 Row 1: ဒီနေ့ လုပ်ငန်းစဉ် (TODAY OPERATIONS) -->
-      <div class="grid grid-cols-2 gap-2 pt-3 border-t border-slate-700/50 text-xs font-mono bg-sky-950/20 -mx-5 px-5 py-2.5">
+      <div
+        class="grid grid-cols-2 gap-2 pt-3 border-t border-slate-700/50 text-xs font-mono bg-sky-950/20 -mx-5 px-5 py-2.5">
         <div>
           <span class="text-[10px] text-sky-300 font-bold block font-sans flex items-center gap-1">
             <i class="fa-solid fa-calendar-day text-[9px]"></i> ဒီနေ့ အရင်းအဝင်
@@ -90,12 +111,14 @@
 
     <!-- 🎯 Fast Primary Action Buttons -->
     <div class="grid grid-cols-2 gap-3">
-      <button onclick="openWithdrawModal()" class="py-3.5 px-4 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white rounded-xl font-black text-xs shadow-lg shadow-sky-950 flex items-center justify-center gap-2 active:scale-95 transition">
+      <button onclick="openWithdrawModal()"
+        class="py-3.5 px-4 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white rounded-xl font-black text-xs shadow-lg shadow-sky-950 flex items-center justify-center gap-2 active:scale-95 transition">
         <i class="fa-solid fa-hand-holding-dollar text-sm"></i>
         <span>မုန့်ဖိုးထုတ်ပေးမည်</span>
       </button>
 
-      <button onclick="openReturnModal()" class="py-3.5 px-4 bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 rounded-xl font-bold text-xs flex items-center justify-center gap-2 active:scale-95 transition">
+      <button onclick="openReturnModal()"
+        class="py-3.5 px-4 bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 rounded-xl font-bold text-xs flex items-center justify-center gap-2 active:scale-95 transition">
         <i class="fa-solid fa-vault text-amber-400 text-sm"></i>
         <span>Finance ငွေပြန်အပ်</span>
       </button>
@@ -119,10 +142,12 @@
       <div class="flex items-center justify-between pt-2 px-1 text-xs">
         <span id="pm-page-indicator" class="text-[11px] font-mono text-slate-400">Page 1</span>
         <div class="flex items-center gap-2">
-          <button id="btn-pm-prev" onclick="changePmPage(-1)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold disabled:opacity-30 disabled:pointer-events-none transition flex items-center gap-1">
+          <button id="btn-pm-prev" onclick="changePmPage(-1)"
+            class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold disabled:opacity-30 disabled:pointer-events-none transition flex items-center gap-1">
             <i class="fa-solid fa-chevron-left text-[10px]"></i> ရှေ့သို့
           </button>
-          <button id="btn-pm-next" onclick="changePmPage(1)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold disabled:opacity-30 disabled:pointer-events-none transition flex items-center gap-1">
+          <button id="btn-pm-next" onclick="changePmPage(1)"
+            class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold disabled:opacity-30 disabled:pointer-events-none transition flex items-center gap-1">
             နောက်သို့ <i class="fa-solid fa-chevron-right text-[10px]"></i>
           </button>
         </div>
@@ -131,19 +156,23 @@
   </main>
 
   <!-- MODAL 1: PM WITHDRAW -->
-  <div id="pm-withdraw-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
-    <div class="bg-[#0e172a] border-t sm:border border-slate-800 w-full max-w-md rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+  <div id="pm-withdraw-modal"
+    class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div
+      class="bg-[#0e172a] border-t sm:border border-slate-800 w-full max-w-md rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-center pb-2 border-b border-slate-800">
         <h3 class="text-sm font-black text-white flex items-center gap-2">
           <i class="fa-solid fa-hand-holding-dollar text-sky-400"></i> ကျောင်းသား မုန့်ဖိုးထုတ်ပေးခြင်း
         </h3>
-        <button onclick="closeModal('pm-withdraw-modal')" class="text-slate-400 hover:text-white p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
+        <button onclick="closeModal('pm-withdraw-modal')" class="text-slate-400 hover:text-white p-1 text-sm"><i
+            class="fa-solid fa-xmark"></i></button>
       </div>
 
       <form onsubmit="submitWithdraw(event)" class="space-y-3.5 text-xs">
         <div class="space-y-1">
           <label class="font-bold text-slate-400 uppercase">ကျောင်းသား ID</label>
-          <input type="number" id="w-student-id" oninput="lookupStudent()" placeholder="e.g. 1" required class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3.5 py-3 text-base font-mono font-bold text-white focus:border-sky-500 outline-none">
+          <input type="number" id="w-student-id" oninput="lookupStudent()" placeholder="e.g. 1" required
+            class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3.5 py-3 text-base font-mono font-bold text-white focus:border-sky-500 outline-none">
         </div>
 
         <div id="w-student-card" class="hidden p-3 bg-sky-950/20 border border-sky-500/20 rounded-xl space-y-1">
@@ -159,15 +188,18 @@
 
         <div class="space-y-1">
           <label class="font-bold text-rose-400 uppercase">ထုတ်ပေးမည့် ငွေပမာဏ (MMK)</label>
-          <input type="number" id="w-amount" placeholder="0" required class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3.5 py-3 text-xl font-mono font-black text-rose-400 text-right focus:border-rose-500 outline-none">
+          <input type="number" id="w-amount" placeholder="0" required
+            class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3.5 py-3 text-xl font-mono font-black text-rose-400 text-right focus:border-rose-500 outline-none">
         </div>
 
         <div class="space-y-1">
           <label class="font-bold text-slate-400 uppercase">မှတ်ချက်</label>
-          <input type="text" id="w-remark" placeholder="မုန့်ဖိုးထုတ်ပေးငွေ" class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none">
+          <input type="text" id="w-remark" placeholder="မုန့်ဖိုးထုတ်ပေးငွေ"
+            class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none">
         </div>
 
-        <button type="submit" class="w-full py-3.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-black text-xs shadow-lg shadow-sky-900 active:scale-95 transition">
+        <button type="submit"
+          class="w-full py-3.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-black text-xs shadow-lg shadow-sky-900 active:scale-95 transition">
           ငွေထုတ်ပေးမှု အတည်ပြုမည်
         </button>
       </form>
@@ -175,34 +207,79 @@
   </div>
 
   <!-- MODAL 2: RETURN TO FINANCE -->
-  <div id="pm-return-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
-    <div class="bg-[#0e172a] border-t sm:border border-slate-800 w-full max-w-md rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+  <div id="pm-return-modal"
+    class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div
+      class="bg-[#0e172a] border-t sm:border border-slate-800 w-full max-w-md rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-center pb-2 border-b border-slate-800">
         <h3 class="text-sm font-black text-white flex items-center gap-2">
           <i class="fa-solid fa-vault text-amber-400"></i> Finance သို့ လက်ကျန်ငွေ ပြန်အပ်ခြင်း
         </h3>
-        <button onclick="closeModal('pm-return-modal')" class="text-slate-400 hover:text-white p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
+        <button onclick="closeModal('pm-return-modal')" class="text-slate-400 hover:text-white p-1 text-sm"><i
+            class="fa-solid fa-xmark"></i></button>
       </div>
 
       <form onsubmit="submitReturn(event)" class="space-y-3.5 text-xs">
         <div class="space-y-1">
           <label class="font-bold text-amber-400 uppercase">ပြန်အပ်မည့် ငွေပမာဏ (MMK)</label>
-          <input type="number" id="r-amount" placeholder="0" required class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3.5 py-3 text-xl font-mono font-black text-amber-400 text-right focus:border-amber-500 outline-none">
+          <input type="number" id="r-amount" placeholder="0" required
+            class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3.5 py-3 text-xl font-mono font-black text-amber-400 text-right focus:border-amber-500 outline-none">
         </div>
 
         <div class="space-y-1">
           <label class="font-bold text-slate-400 uppercase">အကြောင်းပြချက်</label>
-          <input type="text" id="r-remark" value="PM Cashier မှ Finance သို့ လက်ကျန်ငွေ ပြန်လည်အပ်နှံခြင်း" class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none">
+          <input type="text" id="r-remark" value="PM Cashier မှ Finance သို့ လက်ကျန်ငွေ ပြန်လည်အပ်နှံခြင်း"
+            class="w-full bg-[#070e1c] border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none">
         </div>
 
-        <button type="submit" class="w-full py-3.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-black text-xs shadow-lg shadow-amber-900 active:scale-95 transition">
+        <button type="submit"
+          class="w-full py-3.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-black text-xs shadow-lg shadow-amber-900 active:scale-95 transition">
           Finance သို့ ငွေပြန်လွှဲမည်
         </button>
       </form>
     </div>
   </div>
 
-  <div id="pm-toast-box" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[999999] pointer-events-none w-11/12 max-w-sm"></div>
+  <!-- 🎯 MOBILE SEARCH MODAL (BOTTOM SHEET) -->
+  <div id="mobile-search-modal"
+    class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] hidden flex flex-col justify-end">
+    <div
+      class="bg-[#0f172a] rounded-t-3xl p-5 border-t border-slate-800 shadow-2xl h-[75vh] flex flex-col animate-in slide-in-from-bottom-full duration-300">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-sm font-black text-sky-400 flex items-center gap-2"><i
+            class="fa-solid fa-clock-rotate-left"></i> Student History</h3>
+        <button onclick="closeMobileSearchModal()" class="text-slate-400 p-1 hover:text-white"><i
+            class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="relative mb-4 shrink-0">
+        <span class="absolute left-3 top-3 text-slate-500"><i class="fa-solid fa-magnifying-glass"></i></span>
+        <input type="number" id="mobile-student-id-search" oninput="executeMobileSearch()"
+          placeholder="Enter Student ID (e.g. 76)"
+          class="w-full bg-[#0c1322] border border-slate-700 text-white rounded-xl py-3 pl-10 pr-4 font-bold text-sm outline-none focus:border-sky-500">
+      </div>
+
+      <!-- List Container -->
+      <div id="mobile-search-results" class="flex-1 overflow-y-auto space-y-3 pb-6">
+        <div class="text-center py-10 text-slate-500 font-bold text-xs">ID ရိုက်ထည့်၍ ရှာဖွေပါ...</div>
+      </div>
+
+      <!-- Mobile Pagination (Next/Prev) -->
+      <div class="flex justify-between items-center pt-3 border-t border-slate-800 shrink-0">
+        <button id="ms-btn-prev" onclick="changeMobileSearchPage(-1)" disabled
+          class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 text-[11px] font-bold disabled:opacity-30 disabled:pointer-events-none transition"><i
+            class="fa-solid fa-chevron-left"></i> Prev</button>
+        <span id="ms-page-info" class="text-[10px] font-mono text-slate-400">Page 1</span>
+        <button id="ms-btn-next" onclick="changeMobileSearchPage(1)" disabled
+          class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 text-[11px] font-bold disabled:opacity-30 disabled:pointer-events-none transition">Next
+          <i class="fa-solid fa-chevron-right"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="pm-toast-box"
+    class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[999999] pointer-events-none w-11/12 max-w-sm">
+  </div>
 
   <!-- ============================================================================== -->
   <!-- 💡 JAVASCRIPT APP LOGIC (STRICT MMT, AUTO-LOGOUT WATCHDOG & 20-ROWS FEED)      -->
@@ -242,7 +319,7 @@
           const payload = JSON.parse(atob(base64Url));
           if (payload && payload.exp && Date.now() >= payload.exp * 1000) return true;
         }
-      } catch (e) {}
+      } catch (e) { }
 
       return false;
     }
@@ -286,8 +363,7 @@
       if (!box) return;
       const isErr = (type === 'ERROR');
       box.innerHTML = `
-        <div class="pointer-events-auto p-4 rounded-2xl shadow-2xl border-2 flex items-center gap-3 animate-in zoom-in-95 duration-150 ${
-          isErr ? 'bg-rose-950 border-rose-500 text-white shadow-[0_0_40px_rgba(244,63,94,0.4)]' : 'bg-emerald-950 border-emerald-500 text-white shadow-[0_0_40px_rgba(16,185,129,0.4)]'
+        <div class="pointer-events-auto p-4 rounded-2xl shadow-2xl border-2 flex items-center gap-3 animate-in zoom-in-95 duration-150 ${isErr ? 'bg-rose-950 border-rose-500 text-white shadow-[0_0_40px_rgba(244,63,94,0.4)]' : 'bg-emerald-950 border-emerald-500 text-white shadow-[0_0_40px_rgba(16,185,129,0.4)]'
         }">
           <i class="fa-solid ${isErr ? 'fa-triangle-exclamation text-rose-400 text-xl' : 'fa-circle-check text-emerald-400 text-xl'}"></i>
           <p class="text-xs font-bold leading-snug flex-1">${msg}</p>
@@ -327,11 +403,11 @@
         const role = gSession?.role || '';
         const targetPerson = (role === 'pm_cashier1') ? 'Cashier 1' : ((role === 'pm_cashier2') ? 'Cashier 2' : '');
 
-        const res = await callApi('getPmCashierBookData', { 
-          page: gPmPage, 
+        const res = await callApi('getPmCashierBookData', {
+          page: gPmPage,
           limit: gPmPageLimit,
           responsibilityPerson: targetPerson,
-          forceRefresh: true 
+          forceRefresh: true
         }, 'GET');
 
         if (res && res.success) {
@@ -347,7 +423,7 @@
           const todayOut = stats.todayOut !== undefined ? stats.todayOut : 0;
 
           document.getElementById('pm-hand-cash').innerHTML = `${Number(bal).toLocaleString('en-US')} <span class="text-sm font-bold text-sky-400">MMK</span>`;
-          
+
           // 🎯 FEATURE: ယနေ့ အရင်းအဝင် နှင့် ယနေ့ ထုတ်ပေးငွေ
           const elTodayIn = document.getElementById('pm-today-in');
           if (elTodayIn) elTodayIn.textContent = `+${Number(todayIn).toLocaleString('en-US')} MMK`;
@@ -392,7 +468,7 @@
 
         let descHtml = '';
         const match = (r.description || '').match(/^(\[[^\]]+\]\s*[^-]+)(?:\s*-\s*(.*))?$/);
-        
+
         if (match && !isFloat && !isReturn) {
           const studentInfo = match[1].trim();
           const remarkText = (match[2] || '').trim();
@@ -407,17 +483,15 @@
         feed.innerHTML += `
           <div class="glass-card p-3.5 rounded-xl border border-slate-800/80 flex items-center justify-between gap-3">
             <div class="flex items-center gap-3 min-w-0">
-              <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                isFloat ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
-                (isReturn ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20')
-              }">
+              <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isFloat ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+            (isReturn ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20')
+          }">
                 <i class="fa-solid ${isFloat ? 'fa-arrow-down' : (isReturn ? 'fa-vault' : 'fa-arrow-up')} text-sm"></i>
               </div>
               <div class="min-w-0">
                 <div class="flex items-center gap-1.5">
-                  <span class="text-[9px] font-bold px-1.5 py-0.2 rounded uppercase ${
-                    isFloat ? 'bg-emerald-500/20 text-emerald-300' : (isReturn ? 'bg-amber-500/20 text-amber-300' : 'bg-sky-500/20 text-sky-300')
-                  }">${r.category}</span>
+                  <span class="text-[9px] font-bold px-1.5 py-0.2 rounded uppercase ${isFloat ? 'bg-emerald-500/20 text-emerald-300' : (isReturn ? 'bg-amber-500/20 text-amber-300' : 'bg-sky-500/20 text-sky-300')
+          }">${r.category}</span>
                   <span class="text-[10px] font-mono text-slate-400">${r.date}</span>
                 </div>
                 ${descHtml}
@@ -658,8 +732,8 @@
       document.getElementById('pm-return-modal').classList.remove('hidden');
     }
 
-    function closeModal(id) { 
-      document.getElementById(id).classList.add('hidden'); 
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
     }
 
     function logoutCashier(isExpired = false) {
@@ -672,6 +746,100 @@
       localStorage.removeItem('user');
       window.location.href = isExpired ? '/?session_expired=1' : '/';
     }
+
+    // ==========================================
+    // 🎯 MOBILE SEARCH & HISTORY LOGIC
+    // ==========================================
+    let mobileSearchTimeout = null;
+    let msSearchQuery = '';
+    let msPage = 1;
+    const msLimit = 10;
+    let msTotalRows = 0;
+
+    function openMobileSearchModal() {
+      document.getElementById('mobile-search-modal')?.classList.remove('hidden');
+      document.getElementById('mobile-student-id-search').value = '';
+      msSearchQuery = '';
+      msPage = 1;
+      document.getElementById('mobile-search-results').innerHTML = '<div class="text-center py-10 text-slate-500 font-bold text-xs">ID ရိုက်ထည့်၍ ရှာဖွေပါ...</div>';
+      updateMobileSearchPagination();
+    }
+
+    function closeMobileSearchModal() {
+      document.getElementById('mobile-search-modal')?.classList.add('hidden');
+    }
+
+    function executeMobileSearch() {
+      clearTimeout(mobileSearchTimeout);
+      mobileSearchTimeout = setTimeout(() => {
+        const sId = document.getElementById('mobile-student-id-search').value.trim();
+        if (!sId) {
+          msSearchQuery = '';
+          document.getElementById('mobile-search-results').innerHTML = '<div class="text-center py-10 text-slate-500 font-bold text-xs">ID ရိုက်ထည့်၍ ရှာဖွေပါ...</div>';
+          updateMobileSearchPagination();
+          return;
+        }
+        msSearchQuery = `ID ${sId}`;
+        msPage = 1; // Reset to page 1 for new search
+        fetchMobileSearchResults();
+      }, 500); // 500ms debounce
+    }
+
+    function changeMobileSearchPage(delta) {
+      msPage += delta;
+      fetchMobileSearchResults();
+    }
+
+    function updateMobileSearchPagination() {
+      const start = (msPage - 1) * msLimit + 1;
+      const end = Math.min(start + msLimit - 1, msTotalRows);
+
+      const info = document.getElementById('ms-page-info');
+      if (info) info.textContent = msTotalRows === 0 ? '0 results' : `Show ${start}-${end} of ${msTotalRows}`;
+
+      const prevBtn = document.getElementById('ms-btn-prev');
+      const nextBtn = document.getElementById('ms-btn-next');
+      if (prevBtn) prevBtn.disabled = (msPage <= 1);
+      if (nextBtn) nextBtn.disabled = (end >= msTotalRows);
+    }
+
+    async function fetchMobileSearchResults() {
+      const resBox = document.getElementById('mobile-search-results');
+      resBox.innerHTML = '<div class="text-center py-10 text-sky-400 font-bold text-xs"><i class="fa-solid fa-spinner fa-spin mr-2"></i> ရှာဖွေနေပါသည်...</div>';
+
+      try {
+        const res = await callApi('getPmCashierBookData', { searchVal: msSearchQuery, page: msPage, limit: msLimit, forceRefresh: true }, 'GET');
+
+        if (res && res.success && res.data.length > 0) {
+          msTotalRows = res.stats?.totalRows || 0;
+
+          resBox.innerHTML = res.data.map((r, i) => {
+            const displayNo = msTotalRows - ((msPage - 1) * msLimit + i);
+            return `
+              <div class="bg-[#0c1322] border border-slate-800 p-3.5 rounded-xl flex justify-between items-center shadow-lg">
+                 <div class="flex-1 min-w-0 pr-2">
+                   <span class="text-[10px] text-slate-400 font-bold font-mono bg-slate-800 px-1.5 py-0.5 rounded mr-1">#${displayNo}</span>
+                   <span class="text-[10px] text-slate-500 font-bold font-mono">${r.date}</span>
+                   <p class="text-[11px] font-bold text-white mt-1.5 truncate leading-relaxed" title="${r.description}">${r.description || '-'}</p>
+                 </div>
+                 <div class="text-right shrink-0">
+                   <div class="text-sm font-black ${r.credit > 0 ? 'text-rose-400' : 'text-emerald-400'}">${r.credit > 0 ? '-' : '+'}${Number(r.credit || r.debit).toLocaleString()}</div>
+                   <div class="text-[9px] font-bold text-slate-500 mt-0.5">Bal: ${Number(r.balances).toLocaleString()}</div>
+                 </div>
+              </div>
+            `;
+          }).join('');
+        } else {
+          msTotalRows = 0;
+          resBox.innerHTML = '<div class="text-center py-10 text-rose-400 font-bold text-xs"><i class="fa-solid fa-circle-xmark mb-1 text-lg"></i><br>စာရင်း မတွေ့ရှိပါ။</div>';
+        }
+      } catch (err) {
+        msTotalRows = 0;
+        resBox.innerHTML = '<div class="text-center py-10 text-rose-400 font-bold text-xs">Error loading data</div>';
+      }
+      updateMobileSearchPagination();
+    }
   </script>
 </body>
+
 </html>
