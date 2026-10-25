@@ -68,24 +68,25 @@ function showReportPanel(panelId) {
   populateReportFyDropdowns();
   document.querySelectorAll('.report-panel').forEach(el => el.classList.add('hidden'));
 
-  const tabBtnMap = {
-    'panel-report-financial': { btnId: 'btn-rep-fin', activeClass: 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20 ring-2 ring-emerald-400/50 font-black' },
-    'panel-report-income-detail': { btnId: 'btn-rep-indetail', activeClass: 'bg-sky-600 text-white shadow-lg shadow-sky-600/20 ring-2 ring-sky-400/50 font-black' },
-    'panel-report-monthly-income': { btnId: 'btn-rep-inrep', activeClass: 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 ring-2 ring-indigo-400/50 font-black' },
-    'panel-report-student': { btnId: 'btn-rep-student', activeClass: 'bg-amber-600 text-white shadow-lg shadow-amber-600/20 ring-2 ring-amber-400/50 font-black' },
-    'panel-report-staff-fund': { btnId: 'btn-rep-staff-fund', activeClass: 'bg-teal-600 text-white shadow-lg shadow-teal-600/20 ring-2 ring-teal-400/50 font-black' }
-  };
+  const tabBtns = [
+    { panel: 'panel-report-financial', id: 'btn-rep-fin' },
+    { panel: 'panel-report-income-detail', id: 'btn-rep-indetail' },
+    { panel: 'panel-report-monthly-income', id: 'btn-rep-inrep' },
+    { panel: 'panel-report-student', id: 'btn-rep-student' },
+    { panel: 'panel-report-staff-fund', id: 'btn-rep-staff-fund' }
+  ];
 
-  Object.values(tabBtnMap).forEach(cfg => {
-    const btn = document.getElementById(cfg.btnId);
-    if (btn) btn.className = 'rep-sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-all bg-slate-800 text-slate-400 hover:text-white flex items-center gap-2';
+  // 🎯 Solid Background မပါဘဲ အပြာရောင် Border သီးသန့်ဖြင့်သာ Highlight ပြသမည်
+  const activeClass = "rep-sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 bg-sky-500/10 text-white shadow-sm";
+  const inactiveClass = "rep-sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/30";
+
+  tabBtns.forEach(t => {
+    const btn = document.getElementById(t.id);
+    if (!btn) return;
+    const isActive = (t.panel === panelId);
+    btn.className = isActive ? activeClass : inactiveClass;
+    btn.style.border = isActive ? "1.5px solid #38bdf8" : "1.5px solid transparent";
   });
-
-  const activeCfg = tabBtnMap[panelId];
-  if (activeCfg) {
-    const btn = document.getElementById(activeCfg.btnId);
-    if (btn) btn.className = `rep-sub-tab-btn px-4 py-2 rounded-lg text-xs transition-all flex items-center gap-2 ${activeCfg.activeClass}`;
-  }
 
   const targetPanel = document.getElementById(panelId);
   if (targetPanel) targetPanel.classList.remove('hidden');
