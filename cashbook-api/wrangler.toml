@@ -12,13 +12,14 @@ compatibility_flags = ["nodejs_compat"]
 # 💡 1. CLOUDFLARE D1 DATABASE BINDING (Dev Account အသစ်၏ Database ID)
 [[d1_databases]]
 binding = "DB"
-database_name = "school-db"
-database_id = "945c2d8b-f2ac-496a-a7bd-018c18be84bf"
+database_name = "school-db-dev"
+database_id = "cb3cc9ab-413e-455b-9f60-1abac992bf32"
 
 # 💡 2. ENVIRONMENT VARIABLES (Development CORS Whitelist)
 [vars]
 # Dev Pages Domain အသစ်နှင့် Localhost test links များကို ခွင့်ပြုထားပါသည်
-ALLOWED_ORIGIN = "https://cash-book-c4o.pages.dev"
+ALLOWED_ORIGIN = "https://cash-book-dev.pages.dev"
+ENVIRONMENT = "development"
 
 # 💡 3. AUTOMATED CRON TRIGGERS (Database Maintenance)
 [triggers]
