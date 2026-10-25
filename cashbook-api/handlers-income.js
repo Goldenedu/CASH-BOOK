@@ -386,7 +386,7 @@ export async function getIncomeData(db, body) {
       SELECT id, no, effect_date, date, fy, student_id, fyid, fyid_name, class, category, account_name, method, debit, credit, aut_amount, promo, my, vr_no, remark, uniqueid, is_locked 
       FROM income 
       ${whereSql} 
-      ORDER BY id DESC 
+      ORDER BY date DESC, no DESC 
       LIMIT ? OFFSET ?
     `;
     const rowsRes = await db.prepare(dataQuery).bind(...params, limit, offset).all();
