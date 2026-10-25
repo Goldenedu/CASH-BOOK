@@ -4,7 +4,7 @@
 # 💡 Features: Development D1 Binding, Flexible Dev CORS & Localhost Whitelist
 # ==============================================================================
 
-name = "cashbook-app-api-dev"
+name = "cashbook-app-api"
 main = "worker.js"
 compatibility_date = "2026-08-01"
 compatibility_flags = ["nodejs_compat"]
