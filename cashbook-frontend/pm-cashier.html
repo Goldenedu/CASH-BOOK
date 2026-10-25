@@ -42,10 +42,10 @@
       </div>
     </div>
     <div class="flex items-center gap-2">
-      <!-- 🎯 SEARCH BUTTON -->
+      <!-- 🎯 SEARCH BUTTON (Refresh ဘေးတွင် တည်ရှိသည်) -->
       <button onclick="openMobileSearchModal()"
         class="w-8 h-8 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20 flex items-center justify-center text-xs active:scale-95 transition"
-        title="Search">
+        title="Search Student History">
         <i class="fa-solid fa-magnifying-glass"></i>
       </button>
 
@@ -135,10 +135,10 @@
 
       <!-- Feed Container -->
       <div id="pm-feed-list" class="space-y-2.5">
-        <!-- Dynamic Cards (Max 20 rows) -->
+        <!-- Dynamic Cards -->
       </div>
 
-      <!-- 🎯 MOBILE PAGINATION CONTROLLER (နောက်ဆုံး ၂၀ စာရင်း ထိန်းချုပ်ခလုတ်များ) -->
+      <!-- 🎯 MOBILE PAGINATION CONTROLLER -->
       <div class="flex items-center justify-between pt-2 px-1 text-xs">
         <span id="pm-page-indicator" class="text-[11px] font-mono text-slate-400">Page 1</span>
         <div class="flex items-center gap-2">
@@ -240,40 +240,79 @@
     </div>
   </div>
 
-  <!-- 🎯 MOBILE SEARCH MODAL (BOTTOM SHEET) -->
+  <!-- ============================================================================== -->
+  <!-- 🎯 MODAL 3: MOBILE STUDENT STATEMENT TIMELINE SEARCH MODAL (BOTTOM SHEET)       -->
+  <!-- ============================================================================== -->
   <div id="mobile-search-modal"
-    class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] hidden flex flex-col justify-end">
+    class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-[100] hidden flex flex-col justify-end">
     <div
-      class="bg-[#0f172a] rounded-t-3xl p-5 border-t border-slate-800 shadow-2xl h-[75vh] flex flex-col animate-in slide-in-from-bottom-full duration-300">
-      <div class="flex justify-between items-center mb-4">
-        <h3 class="text-sm font-black text-sky-400 flex items-center gap-2"><i
-            class="fa-solid fa-clock-rotate-left"></i> Student History</h3>
-        <button onclick="closeMobileSearchModal()" class="text-slate-400 p-1 hover:text-white"><i
+      class="bg-[#0b1220] rounded-t-3xl p-4 sm:p-5 border-t border-slate-800 shadow-2xl h-[85vh] flex flex-col animate-in slide-in-from-bottom-full duration-250">
+
+      <!-- Modal Top Bar -->
+      <div class="flex justify-between items-center mb-3 pb-2 border-b border-slate-800/80 shrink-0">
+        <h3 class="text-xs font-black text-sky-400 uppercase tracking-wider flex items-center gap-2">
+          <i class="fa-solid fa-file-invoice text-sm"></i> Student Pocket Money Statement
+        </h3>
+        <button onclick="closeMobileSearchModal()" class="text-slate-400 hover:text-white p-1 text-sm"><i
             class="fa-solid fa-xmark"></i></button>
       </div>
 
-      <div class="relative mb-4 shrink-0">
-        <span class="absolute left-3 top-3 text-slate-500"><i class="fa-solid fa-magnifying-glass"></i></span>
+      <!-- Search Input Container -->
+      <div class="relative mb-3 shrink-0">
+        <span class="absolute left-3.5 top-3.5 text-slate-500"><i
+            class="fa-solid fa-magnifying-glass text-xs"></i></span>
         <input type="number" id="mobile-student-id-search" oninput="executeMobileSearch()"
-          placeholder="Enter Student ID (e.g. 76)"
-          class="w-full bg-[#0c1322] border border-slate-700 text-white rounded-xl py-3 pl-10 pr-4 font-bold text-sm outline-none focus:border-sky-500">
+          placeholder="ကျောင်းသား ID ရိုက်ထည့်ပါ (ဥပမာ - 1, 76)..."
+          class="w-full bg-[#070e1c] border border-slate-700 text-white rounded-xl py-3 pl-10 pr-4 font-mono font-bold text-sm outline-none focus:border-sky-500 shadow-inner">
       </div>
 
-      <!-- List Container -->
-      <div id="mobile-search-results" class="flex-1 overflow-y-auto space-y-3 pb-6">
-        <div class="text-center py-10 text-slate-500 font-bold text-xs">ID ရိုက်ထည့်၍ ရှာဖွေပါ...</div>
+      <!-- 🎯 Student Header Banner & 3-KPI Cards Grid (Desktop Statement အတိုင်း ၁၀၀% ကိုက်ညီသည်) -->
+      <div id="ms-student-header-area" class="hidden shrink-0 space-y-2.5 mb-3">
+        <div class="bg-sky-950/20 border border-sky-500/20 p-2.5 rounded-xl">
+          <h4 id="ms-student-name-title" class="text-xs font-black text-white truncate">[ID 26-27 0001] မောင်ဟန်ထက်ဖြိုး
+          </h4>
+          <p id="ms-student-info-sub" class="text-[10px] text-slate-400 font-mono mt-0.5">FY: 2026-2027 | Class: Grade
+            12 | ID: 1</p>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2 text-center font-mono">
+          <div class="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+            <span class="text-[9px] font-sans font-bold text-slate-400 uppercase block">ကာလတွင်း အပ်ငွေ</span>
+            <span id="ms-kpi-deposit" class="text-xs font-black text-emerald-400 mt-0.5 block truncate">0 MMK</span>
+          </div>
+          <div class="p-2 rounded-xl bg-rose-500/10 border border-rose-500/20">
+            <span class="text-[9px] font-sans font-bold text-slate-400 uppercase block">ကာလတွင်း ထုတ်ငွေ</span>
+            <span id="ms-kpi-withdraw" class="text-xs font-black text-rose-400 mt-0.5 block truncate">0 MMK</span>
+          </div>
+          <div class="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
+            <span class="text-[9px] font-sans font-bold text-slate-400 uppercase block">လက်ရှိ မုန့်ဖိုးလက်ကျန်</span>
+            <span id="ms-kpi-balance" class="text-xs font-black text-amber-300 mt-0.5 block truncate">0 MMK</span>
+          </div>
+        </div>
       </div>
 
-      <!-- Mobile Pagination (Next/Prev) -->
-      <div class="flex justify-between items-center pt-3 border-t border-slate-800 shrink-0">
+      <!-- 🎯 Transactions List Feed Container -->
+      <div id="mobile-search-results" class="flex-1 overflow-y-auto space-y-2.5 pr-1">
+        <div class="text-center py-12 text-slate-500 font-bold text-xs">
+          <i class="fa-solid fa-id-card text-2xl text-slate-600 mb-2 block"></i>
+          ကျောင်းသား ID ရိုက်ထည့်၍ Statement စာရင်း စစ်ဆေးပါ...
+        </div>
+      </div>
+
+      <!-- 🎯 Mobile Pagination Controller (နောက်ဆုံး ၁၀ စာရင်းစီ ထိန်းချုပ်ခလုတ်များ) -->
+      <div id="ms-pagination-tray"
+        class="hidden flex justify-between items-center pt-3 border-t border-slate-800 shrink-0">
         <button id="ms-btn-prev" onclick="changeMobileSearchPage(-1)" disabled
-          class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 text-[11px] font-bold disabled:opacity-30 disabled:pointer-events-none transition"><i
-            class="fa-solid fa-chevron-left"></i> Prev</button>
-        <span id="ms-page-info" class="text-[10px] font-mono text-slate-400">Page 1</span>
+          class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold disabled:opacity-30 disabled:pointer-events-none transition flex items-center gap-1.5">
+          <i class="fa-solid fa-chevron-left text-[10px]"></i> ရှေ့သို့
+        </button>
+        <span id="ms-page-info" class="text-[10px] font-mono text-slate-400 font-bold">0 entries</span>
         <button id="ms-btn-next" onclick="changeMobileSearchPage(1)" disabled
-          class="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 text-[11px] font-bold disabled:opacity-30 disabled:pointer-events-none transition">Next
-          <i class="fa-solid fa-chevron-right"></i></button>
+          class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold disabled:opacity-30 disabled:pointer-events-none transition flex items-center gap-1.5">
+          နောက်သို့ <i class="fa-solid fa-chevron-right text-[10px]"></i>
+        </button>
       </div>
+
     </div>
   </div>
 
@@ -282,7 +321,7 @@
   </div>
 
   <!-- ============================================================================== -->
-  <!-- 💡 JAVASCRIPT APP LOGIC (STRICT MMT, AUTO-LOGOUT WATCHDOG & 20-ROWS FEED)      -->
+  <!-- 💡 JAVASCRIPT APP LOGIC                                                        -->
   <!-- ============================================================================== -->
   <script>
     // 🕒 Pure Non-Recursive MMT Date Helper (UTC+06:30)
@@ -292,7 +331,6 @@
       }
       const d = dInput ? new Date(dInput) : new Date();
       const targetMs = isNaN(d.getTime()) ? Date.now() : d.getTime();
-      // Myanmar is strictly UTC + 6 hours 30 minutes (23,400,000 ms)
       const mmt = new Date(targetMs + (6.5 * 60 * 60 * 1000));
       return mmt.toISOString().slice(0, 10);
     }
@@ -333,7 +371,6 @@
     }
 
     function initSessionWatchdog() {
-      // Background check every 30 seconds
       setInterval(() => {
         if (navigator.onLine && isTokenExpired()) {
           handleSessionExpired();
@@ -353,7 +390,6 @@
     let gCashierList = [];
     let gMatchedStudent = null;
 
-    // 🎯 Pagination State (အကြောင်း ၂၀ စီသာ ခေါ်ယူပြသခြင်း)
     let gPmPage = 1;
     const gPmPageLimit = 20;
     let gPmTotalRows = 0;
@@ -371,13 +407,12 @@
       `;
       setTimeout(() => { if (box) box.innerHTML = ''; }, 3500);
     }
-    window.showToast = showToast; // Bridge for api.js
+    window.showToast = showToast;
 
     window.addEventListener('DOMContentLoaded', async () => {
       const userStr = localStorage.getItem('golden_user') || localStorage.getItem('user');
       const token = localStorage.getItem('golden_auth_token') || localStorage.getItem('token');
 
-      // 🔒 Proactive Expiration Check on Load
       if (!userStr || !token || (navigator.onLine && isTokenExpired())) {
         logoutCashier(true);
         return;
@@ -390,14 +425,12 @@
       else if (role === 'pm_cashier2') titleEl.textContent = 'PM CASHIER 2 (ငွေကိုင် ၂)';
       else titleEl.textContent = gSession.name || 'PM CASHIER';
 
-      // 🕒 Strict MMT Today Display
       document.getElementById('pm-today-date').textContent = getMMTDateString();
 
       initSessionWatchdog();
       await loadPmCashierData();
     });
 
-    // 🚀 D1 Quota & Role-Scoped: မိမိ Cashier လက်ကျန်၊ ယနေ့စာရင်းနှင့် စာရင်းမှတ်တမ်းများကို သီးသန့် ဆွဲယူခြင်း
     async function loadPmCashierData() {
       try {
         const role = gSession?.role || '';
@@ -415,7 +448,6 @@
           const stats = res.stats || {};
           gPmTotalRows = stats.totalRows || gCashierList.length;
 
-          // လက်ဝယ်ရှိ ငွေသားလက်ကျန်
           const bal = stats.balance || 0;
           const tIn = stats.totalIn || 0;
           const tOut = stats.totalOut || 0;
@@ -424,14 +456,12 @@
 
           document.getElementById('pm-hand-cash').innerHTML = `${Number(bal).toLocaleString('en-US')} <span class="text-sm font-bold text-sky-400">MMK</span>`;
 
-          // 🎯 FEATURE: ယနေ့ အရင်းအဝင် နှင့် ယနေ့ ထုတ်ပေးငွေ
           const elTodayIn = document.getElementById('pm-today-in');
           if (elTodayIn) elTodayIn.textContent = `+${Number(todayIn).toLocaleString('en-US')} MMK`;
 
           const elTodayOut = document.getElementById('pm-today-out');
           if (elTodayOut) elTodayOut.textContent = `-${Number(todayOut).toLocaleString('en-US')} MMK`;
 
-          // စုစုပေါင်း သမိုင်းဝင် အရင်းအဝင် / ထုတ်ပေးငွေ
           document.getElementById('pm-stat-in').textContent = `+${Number(tIn).toLocaleString('en-US')} MMK`;
           document.getElementById('pm-stat-out').textContent = `-${Number(tOut).toLocaleString('en-US')} MMK`;
           document.getElementById('pm-entries-count').textContent = `${gPmTotalRows} စောင်`;
@@ -457,13 +487,14 @@
         return;
       }
 
-      // 🕒 Strict MMT Today Filter
+      // 🕒 Strict MMT Today Check (ည ၁၂ နာရီမကူးမီ ယနေ့စာရင်းသာ ဖျက်ခွင့်ပေးမည်)
       const todayStr = getMMTDateString();
 
       gCashierList.forEach(r => {
         const isFloat = r.category === 'Float Receive';
         const isReturn = r.category === 'Return to Finance';
         const isToday = (r.date === todayStr);
+        // 🎯 RULE: Float Receive မဟုတ်ဘဲ ယနေ့ရက်စွဲ (Today) ဖြစ်မှသာ ဖျက်ခွင့်ရှိမည်
         const canDelete = !isFloat && isToday;
 
         let descHtml = '';
@@ -479,6 +510,11 @@
         } else {
           descHtml = `<h4 class="text-xs font-bold text-white truncate mt-0.5" title="${r.description || ''}">${r.description || '-'}</h4>`;
         }
+
+        // 🎯 Access မရှိပါက ဖျောက်မထားဘဲ မှိန်ထားခြင်း (opacity: 0.25)
+        const delBtnHtml = canDelete
+          ? `<button onclick="deleteEntry('${r.uniqueId}')" class="text-slate-400 hover:text-rose-400 text-xs p-1 transition" title="Delete"><i class="fa-solid fa-trash"></i></button>`
+          : `<button disabled style="opacity: 0.25; cursor: not-allowed; pointer-events: none;" class="text-slate-600 text-xs p-1" title="${isFloat ? 'အရင်းငွေစာရင်း ဖျက်ခွင့်မရှိပါ' : 'ယနေ့စာရင်း မဟုတ်ပါ (ရက်ကျော်လွန်သွားပါပြီ)'}"><i class="fa-solid fa-trash"></i></button>`;
 
         feed.innerHTML += `
           <div class="glass-card p-3.5 rounded-xl border border-slate-800/80 flex items-center justify-between gap-3">
@@ -504,7 +540,7 @@
               </span>
               <div class="flex justify-end gap-2 mt-1">
                 ${(isFloat || isReturn) ? `<button onclick="printVoucher('${r.uniqueId}')" class="text-slate-400 hover:text-sky-400 text-xs p-1" title="Print"><i class="fa-solid fa-print"></i></button>` : ''}
-                ${canDelete ? `<button onclick="deleteEntry('${r.uniqueId}')" class="text-slate-500 hover:text-rose-400 text-xs p-1" title="Delete"><i class="fa-solid fa-trash"></i></button>` : ''}
+                ${delBtnHtml}
               </div>
             </div>
           </div>
@@ -512,7 +548,6 @@
       });
     }
 
-    // 🎯 Pagination Controller
     function updatePaginationControls() {
       const start = (gPmPage - 1) * gPmPageLimit + 1;
       const end = Math.min(start + gPmPageLimit - 1, gPmTotalRows);
@@ -580,7 +615,6 @@
       const userRemark = (document.getElementById('w-remark').value || '').trim();
       const finalDesc = userRemark ? `${stuPrefix} - ${userRemark}` : `${stuPrefix} - မုန့်ဖိုးထုတ်ပေးငွေ`;
 
-      // 🕒 Strict MMT Date Payload
       const payload = {
         date: getMMTDateString(),
         category: 'PM Withdraw',
@@ -619,7 +653,6 @@
         return showToast("ERROR", `လက်ထဲတွင် ငွေသား (${curCash.toLocaleString()} MMK) သာ ရှိသဖြင့် (${amount.toLocaleString()} MMK) ပြန်အပ်၍ မရပါ!`);
       }
 
-      // 🕒 Strict MMT Date Payload
       const payload = {
         date: getMMTDateString(),
         category: 'Return to Finance',
@@ -668,7 +701,6 @@
       const isFloat = row.category === 'Float Receive';
       const amount = (row.credit > 0 ? row.credit : row.debit) || 0;
       const vrNo = row.vrNo || 'TRF-' + String(row.date || '').replace(/-/g, '') + '-' + (row.no || '01');
-      // 🕒 Strict MMT Voucher Date
       const dateStr = row.date || getMMTDateString();
       const respPerson = row.responsibility_person || gSession?.name || 'Cashier';
 
@@ -747,22 +779,29 @@
       window.location.href = isExpired ? '/?session_expired=1' : '/';
     }
 
-    // ==========================================
-    // 🎯 MOBILE SEARCH & HISTORY LOGIC
-    // ==========================================
+    // ==============================================================================
+    // 🎯 REFINED MOBILE STUDENT STATEMENT SEARCH & TIMELINE ENGINE
+    // ==============================================================================
     let mobileSearchTimeout = null;
-    let msSearchQuery = '';
+    let msCurrentStudentId = null;
     let msPage = 1;
-    const msLimit = 10;
+    const msLimit = 10; // ⚡ D1 Quota-Shield: ၁၀ ကြောင်းစီသာ အတိအကျ ခေါ်ယူသည်
     let msTotalRows = 0;
 
     function openMobileSearchModal() {
       document.getElementById('mobile-search-modal')?.classList.remove('hidden');
       document.getElementById('mobile-student-id-search').value = '';
-      msSearchQuery = '';
+      document.getElementById('ms-student-header-area')?.classList.add('hidden');
+      document.getElementById('ms-pagination-tray')?.classList.add('hidden');
+      msCurrentStudentId = null;
       msPage = 1;
-      document.getElementById('mobile-search-results').innerHTML = '<div class="text-center py-10 text-slate-500 font-bold text-xs">ID ရိုက်ထည့်၍ ရှာဖွေပါ...</div>';
-      updateMobileSearchPagination();
+      document.getElementById('mobile-search-results').innerHTML = `
+        <div class="text-center py-12 text-slate-500 font-bold text-xs">
+          <i class="fa-solid fa-id-card text-2xl text-slate-600 mb-2 block"></i>
+          ကျောင်းသား ID ရိုက်ထည့်၍ Statement စာရင်း စစ်ဆေးပါ...
+        </div>
+      `;
+      setTimeout(() => document.getElementById('mobile-student-id-search')?.focus(), 150);
     }
 
     function closeMobileSearchModal() {
@@ -772,72 +811,144 @@
     function executeMobileSearch() {
       clearTimeout(mobileSearchTimeout);
       mobileSearchTimeout = setTimeout(() => {
-        const sId = document.getElementById('mobile-student-id-search').value.trim();
-        if (!sId) {
-          msSearchQuery = '';
-          document.getElementById('mobile-search-results').innerHTML = '<div class="text-center py-10 text-slate-500 font-bold text-xs">ID ရိုက်ထည့်၍ ရှာဖွေပါ...</div>';
-          updateMobileSearchPagination();
+        const rawId = document.getElementById('mobile-student-id-search').value.trim();
+        const sId = parseInt(rawId, 10);
+
+        if (!sId || isNaN(sId)) {
+          msCurrentStudentId = null;
+          document.getElementById('ms-student-header-area')?.classList.add('hidden');
+          document.getElementById('ms-pagination-tray')?.classList.add('hidden');
+          document.getElementById('mobile-search-results').innerHTML = `
+            <div class="text-center py-12 text-slate-500 font-bold text-xs">
+              <i class="fa-solid fa-id-card text-2xl text-slate-600 mb-2 block"></i>
+              ကျောင်းသား ID ရိုက်ထည့်၍ Statement စာရင်း စစ်ဆေးပါ...
+            </div>
+          `;
           return;
         }
-        msSearchQuery = `ID ${sId}`;
-        msPage = 1; // Reset to page 1 for new search
-        fetchMobileSearchResults();
-      }, 500); // 500ms debounce
+
+        msCurrentStudentId = sId;
+        msPage = 1; // Reset to first page
+        fetchMobileStudentStatement();
+      }, 400); // 400ms Debounce
     }
 
     function changeMobileSearchPage(delta) {
       msPage += delta;
-      fetchMobileSearchResults();
+      fetchMobileStudentStatement();
     }
 
-    function updateMobileSearchPagination() {
-      const start = (msPage - 1) * msLimit + 1;
-      const end = Math.min(start + msLimit - 1, msTotalRows);
+    /**
+     * 💡 Fetch Real Student Money Statement Timeline (Exact Desktop Parity)
+     */
+    async function fetchMobileStudentStatement() {
+      if (!msCurrentStudentId) return;
 
-      const info = document.getElementById('ms-page-info');
-      if (info) info.textContent = msTotalRows === 0 ? '0 results' : `Show ${start}-${end} of ${msTotalRows}`;
-
-      const prevBtn = document.getElementById('ms-btn-prev');
-      const nextBtn = document.getElementById('ms-btn-next');
-      if (prevBtn) prevBtn.disabled = (msPage <= 1);
-      if (nextBtn) nextBtn.disabled = (end >= msTotalRows);
-    }
-
-    async function fetchMobileSearchResults() {
       const resBox = document.getElementById('mobile-search-results');
-      resBox.innerHTML = '<div class="text-center py-10 text-sky-400 font-bold text-xs"><i class="fa-solid fa-spinner fa-spin mr-2"></i> ရှာဖွေနေပါသည်...</div>';
+      const headerArea = document.getElementById('ms-student-header-area');
+      const paginationTray = document.getElementById('ms-pagination-tray');
+
+      resBox.innerHTML = '<div class="text-center py-12 text-sky-400 font-bold text-xs"><i class="fa-solid fa-spinner fa-spin text-xl mr-2"></i> ကျောင်းသား စာရင်း ဆွဲယူနေပါသည်...</div>';
 
       try {
-        const res = await callApi('getPmCashierBookData', { searchVal: msSearchQuery, page: msPage, limit: msLimit, forceRefresh: true }, 'GET');
+        // 🎯 ဤနေရာတွင် getPmCashierBookData အစား student_money မှ တိုက်ရိုက်ခေါ်ယူသည်
+        const res = await callApi('getStudentMoneyData', {
+          studentId: msCurrentStudentId,
+          searchVal: '',
+          page: msPage,
+          limit: msLimit,
+          forceRefresh: true
+        }, 'GET');
 
-        if (res && res.success && res.data.length > 0) {
-          msTotalRows = res.stats?.totalRows || 0;
+        if (res && res.success) {
+          const records = res.data || [];
+          msTotalRows = res.totalRows || 0;
+          const stats = res.stats || {};
 
-          resBox.innerHTML = res.data.map((r, i) => {
-            const displayNo = msTotalRows - ((msPage - 1) * msLimit + i);
+          if (records.length === 0 && msPage === 1) {
+            headerArea.classList.add('hidden');
+            paginationTray.classList.add('hidden');
+            resBox.innerHTML = `
+              <div class="text-center py-12 text-slate-500 font-bold text-xs">
+                <i class="fa-solid fa-folder-open text-2xl text-slate-600 mb-2 block"></i>
+                ကျောင်းသား ID [${msCurrentStudentId}] အတွက် မုန့်ဖိုးစာရင်း မရှိသေးပါ။
+              </div>
+            `;
+            return;
+          }
+
+          // ၁။ Update Student Info Header Banner
+          const firstRow = records[0] || {};
+          const studentName = firstRow.fyidName || `ID ${msCurrentStudentId}`;
+          const studentClass = firstRow.class || '-';
+          const studentFy = firstRow.fy || '2026-2027';
+
+          document.getElementById('ms-student-name-title').textContent = `${studentName} - Statement`;
+          document.getElementById('ms-student-info-sub').textContent = `FY: ${studentFy} | Class: ${studentClass} | ID: ${msCurrentStudentId}`;
+
+          // ၂။ Update 3-KPI Cards (Desktop Statement နှင့် အတိအကျတူညီသည်)
+          document.getElementById('ms-kpi-deposit').textContent = `${Number(stats.totalIncome || 0).toLocaleString('en-US')} MMK`;
+          document.getElementById('ms-kpi-withdraw').textContent = `${Number(stats.totalExpense || 0).toLocaleString('en-US')} MMK`;
+          document.getElementById('ms-kpi-balance').textContent = `${Number(stats.balance || 0).toLocaleString('en-US')} MMK`;
+
+          headerArea.classList.remove('hidden');
+
+          // ၃။ Render Individual Transactions Cards (System အတိုင်း Latest ကို နံပါတ်အကြီးဆုံး တပ်သည်)
+          resBox.innerHTML = records.map((r, idx) => {
+            const displayNo = msTotalRows - ((msPage - 1) * msLimit + idx);
+            const deb = Number(r.debit || 0);
+            const cred = Number(r.credit || 0);
+            const isDeposit = deb > 0;
+            const balStr = Number(r.balances || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
+
             return `
-              <div class="bg-[#0c1322] border border-slate-800 p-3.5 rounded-xl flex justify-between items-center shadow-lg">
-                 <div class="flex-1 min-w-0 pr-2">
-                   <span class="text-[10px] text-slate-400 font-bold font-mono bg-slate-800 px-1.5 py-0.5 rounded mr-1">#${displayNo}</span>
-                   <span class="text-[10px] text-slate-500 font-bold font-mono">${r.date}</span>
-                   <p class="text-[11px] font-bold text-white mt-1.5 truncate leading-relaxed" title="${r.description}">${r.description || '-'}</p>
-                 </div>
-                 <div class="text-right shrink-0">
-                   <div class="text-sm font-black ${r.credit > 0 ? 'text-rose-400' : 'text-emerald-400'}">${r.credit > 0 ? '-' : '+'}${Number(r.credit || r.debit).toLocaleString()}</div>
-                   <div class="text-[9px] font-bold text-slate-500 mt-0.5">Bal: ${Number(r.balances).toLocaleString()}</div>
-                 </div>
+              <div class="glass-card p-3 rounded-xl border border-slate-800/80 space-y-1.5 shadow-md">
+                <div class="flex justify-between items-start">
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">#${displayNo}</span>
+                    <span class="text-[10px] font-mono text-slate-400">${r.date}</span>
+                    <span class="text-[9px] font-bold px-1.5 py-0.2 rounded ${r.method === 'Bank' ? 'bg-indigo-500/10 text-indigo-300' : 'bg-teal-500/10 text-teal-300'}">${r.method || 'Cash'}</span>
+                  </div>
+                  <div class="text-right">
+                    <span class="font-mono font-bold text-xs ${isDeposit ? 'text-emerald-400' : 'text-rose-400'}">
+                      ${isDeposit ? '+' + deb.toLocaleString('en-US') : '-' + cred.toLocaleString('en-US')} MMK
+                    </span>
+                  </div>
+                </div>
+
+                <div class="flex justify-between items-end gap-2 pt-1 border-t border-slate-800/60">
+                  <p class="text-[10px] text-slate-300 leading-snug truncate flex-1" title="${r.remark || '-'}">
+                    ${r.remark || '-'}
+                  </p>
+                  <span class="text-[10px] font-mono font-bold text-indigo-300 shrink-0">
+                    Bal: ${balStr}
+                  </span>
+                </div>
               </div>
             `;
           }).join('');
+
+          // ၄။ Update Mobile Pagination Controls
+          const start = (msPage - 1) * msLimit + 1;
+          const end = Math.min(start + msLimit - 1, msTotalRows);
+          document.getElementById('ms-page-info').textContent = `Showing ${start}–${end} of ${msTotalRows}`;
+
+          const prevBtn = document.getElementById('ms-btn-prev');
+          const nextBtn = document.getElementById('ms-btn-next');
+          if (prevBtn) prevBtn.disabled = (msPage <= 1);
+          if (nextBtn) nextBtn.disabled = (end >= msTotalRows);
+
+          paginationTray.classList.remove('hidden');
         } else {
-          msTotalRows = 0;
-          resBox.innerHTML = '<div class="text-center py-10 text-rose-400 font-bold text-xs"><i class="fa-solid fa-circle-xmark mb-1 text-lg"></i><br>စာရင်း မတွေ့ရှိပါ။</div>';
+          headerArea.classList.add('hidden');
+          paginationTray.classList.add('hidden');
+          resBox.innerHTML = '<div class="text-center py-12 text-rose-400 font-bold text-xs"><i class="fa-solid fa-circle-exclamation text-lg mb-1 block"></i> စာရင်း ဖတ်ယူ၍ မရပါ။</div>';
         }
       } catch (err) {
-        msTotalRows = 0;
-        resBox.innerHTML = '<div class="text-center py-10 text-rose-400 font-bold text-xs">Error loading data</div>';
+        headerArea.classList.add('hidden');
+        paginationTray.classList.add('hidden');
+        resBox.innerHTML = `<div class="text-center py-12 text-rose-400 font-bold text-xs">Error: ${err.message}</div>`;
       }
-      updateMobileSearchPagination();
     }
   </script>
 </body>
