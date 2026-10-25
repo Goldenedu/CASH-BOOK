@@ -68,7 +68,7 @@ function filterIncomeData(list, searchVal, fromDate, toDate) {
   var safeList = Array.isArray(list) ? list : [];
   return safeList.filter(function (row) {
     if (typeof window.isDateInRange === 'function') {
-      if (!window.isDateInRange(row.effDate || row.date, fromDate, toDate)) return false;
+      if (!window.isDateInRange(row.date || row.effDate, fromDate, toDate)) return false;
     }
 
     if (!searchVal || !searchVal.trim()) return true;
