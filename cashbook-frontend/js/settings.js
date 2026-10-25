@@ -25,30 +25,36 @@ function switchSettingsSubTab(tabName) {
   const panelExport = document.getElementById('panel-settings-export');
   const panelD1 = document.getElementById('panel-settings-d1');
 
-  const activeBtnClass = "px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 border bg-indigo-600 text-white border-indigo-500/40 shadow-lg shadow-indigo-600/20";
-  const inactiveBtnClass = "px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border bg-slate-900/90 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700";
+  // 🎯 Solid Background အစား အခြား Sub-Tabs များအတိုင်း Border သီးသန့် Class သတ်မှတ်ခြင်း
+  const activeBtnClass = "px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 bg-sky-500/10 text-white shadow-sm";
+  const inactiveBtnClass = "px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/30";
 
   // Reset All Panels
   if (panelBalances) panelBalances.classList.add('hidden');
   if (panelExport) panelExport.classList.add('hidden');
   if (panelD1) panelD1.classList.add('hidden');
 
-  // Reset All Button Styles
-  if (tabBtnBalances) tabBtnBalances.className = inactiveBtnClass;
-  if (tabBtnExport) tabBtnExport.className = inactiveBtnClass;
-  if (tabBtnD1) tabBtnD1.className = inactiveBtnClass;
+  // Reset All Button Styles & Borders
+  const tabBtns = [
+    { key: 'balances', btn: tabBtnBalances },
+    { key: 'export', btn: tabBtnExport },
+    { key: 'd1', btn: tabBtnD1 }
+  ];
 
-  // Activate Target Tab & Panel
+  tabBtns.forEach(({ key, btn }) => {
+    if (!btn) return;
+    const isActive = (key === tabName);
+    btn.className = isActive ? activeBtnClass : inactiveBtnClass;
+    btn.style.border = isActive ? "1.5px solid #38bdf8" : "1.5px solid transparent";
+  });
+
+  // Activate Target Panel
   if (tabName === 'export') {
     if (panelExport) panelExport.classList.remove('hidden');
-    if (tabBtnExport) tabBtnExport.className = activeBtnClass;
   } else if (tabName === 'd1') {
     if (panelD1) panelD1.classList.remove('hidden');
-    if (tabBtnD1) tabBtnD1.className = activeBtnClass;
   } else {
-    // Default to Balances Tab
     if (panelBalances) panelBalances.classList.remove('hidden');
-    if (tabBtnBalances) tabBtnBalances.className = activeBtnClass;
   }
 }
 
@@ -64,7 +70,7 @@ async function loadSettingsData(forceRefresh) {
     if (res && res.success) {
       gSettingsData = res;
       gAvailableFys = res.availableFys || ["2026-2027", "2025-2026", "2027-2028"];
-      
+
       // 1. Render Balances Control (Tab 1)
       renderBalancesControlTable(res.balancesControl);
 
@@ -127,9 +133,8 @@ function renderD1UsageMonitor(usageData) {
   }
 
   if (elProgressBar) {
-    elProgressBar.className = `h-full rounded-full transition-all duration-700 ${
-      statusColor === 'rose' ? 'bg-rose-500' : (statusColor === 'amber' ? 'bg-amber-500' : 'bg-emerald-500')
-    }`;
+    elProgressBar.className = `h-full rounded-full transition-all duration-700 ${statusColor === 'rose' ? 'bg-rose-500' : (statusColor === 'amber' ? 'bg-amber-500' : 'bg-emerald-500')
+      }`;
   }
 
   if (elPercent) {
@@ -137,9 +142,8 @@ function renderD1UsageMonitor(usageData) {
   }
 
   if (elTabStatusDot) {
-    elTabStatusDot.className = `w-2 h-2 rounded-full animate-pulse ml-1 ${
-      statusColor === 'rose' ? 'bg-rose-500' : (statusColor === 'amber' ? 'bg-amber-500' : 'bg-emerald-400')
-    }`;
+    elTabStatusDot.className = `w-2 h-2 rounded-full animate-pulse ml-1 ${statusColor === 'rose' ? 'bg-rose-500' : (statusColor === 'amber' ? 'bg-amber-500' : 'bg-emerald-400')
+      }`;
   }
 
   // 3. Health & Plan Upgrade Reminder Banner
@@ -316,8 +320,8 @@ function renderExportTable() {
   const tbody = document.getElementById('settings-export-table-body');
   if (!tbody) return;
 
-  const currentActiveFy = (typeof window.getCurrentAcademicYear === 'function') 
-    ? window.getCurrentAcademicYear() 
+  const currentActiveFy = (typeof window.getCurrentAcademicYear === 'function')
+    ? window.getCurrentAcademicYear()
     : '2026-2027';
 
   const startYr = parseInt(currentActiveFy.split('-')[0], 10) || new Date().getFullYear();
@@ -469,7 +473,7 @@ async function handleExportWorkbook(groupKey) {
     if (typeof toggleLoading === 'function') toggleLoading(true);
 
     const { wb, groupTitle, totalRecords, dateRangeTitle } = await generateMultiTabExcelWorkbook(groupKey, selectedFy, fromDate, toDate);
-    
+
     let dateSuffix = `FY_${selectedFy.replace(/^FY\s*/i, '') || 'ALL'}`;
     if (fromDate && toDate) dateSuffix = `D_${fromDate}_to_${toDate}`;
     else if (fromDate) dateSuffix = `D_From_${fromDate}`;
@@ -514,7 +518,7 @@ async function handleSendEmailBackup(groupKey) {
 
     const { wb, groupTitle } = await generateMultiTabExcelWorkbook(groupKey, selectedFy, fromDate, toDate);
     const excelBase64 = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
-    
+
     let dateSuffix = `FY_${selectedFy.replace(/^FY\s*/i, '') || 'ALL'}`;
     if (fromDate && toDate) dateSuffix = `D_${fromDate}_to_${toDate}`;
     else if (fromDate) dateSuffix = `D_From_${fromDate}`;
