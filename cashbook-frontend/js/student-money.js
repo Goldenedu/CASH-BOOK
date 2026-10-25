@@ -254,13 +254,21 @@ function renderStudentMoneyTable() {
       ? '<span class="text-slate-500 font-mono">-</span>'
       : Number(row.balances || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
 
-    // 🎯 Role စစ်ဆေးချက်: Admin သို့မဟုတ် Owner သာလျှင် Action အပြည့်အဝ လုပ်ခွင့်ရှိမည် (ကျန်သူများ မှိန်နေမည်)
+    // 🎯 RULE: PM Cashier စာရင်း ဟုတ်/မဟုတ် စစ်ဆေးခြင်း
+    const isPmCashierTx = String(row.remark || '').includes('PM Cashier') ||
+      String(row.fyidName || '').includes('PM Cashier') ||
+      String(row.class || '').includes('Vault Transfer') ||
+      String(row.class || '').includes('Vault Return');
+
+    // 🎯 Role စစ်ဆေးချက်: Admin ဖြစ်စေကာမူ PM Cashier စာရင်းများကို Edit/Delete လုံးဝ မပြုလုပ်နိုင်စေရ (မှိန်နေမည်)
     const userRole = localStorage.getItem('golden_user_role') || '';
     const isAdmin = (userRole === 'Admin' || userRole === 'Owner' || userRole === 'Finance' || userRole === 'Accountant');
 
-    // ခွင့်ပြုချက်မရှိပါက ခလုတ်ကို နှိပ်မရအောင် opacity-30 နှင့် pointer-events-none ပေးထားမည်
-    const editBtnClass = isAdmin ? "p-1 text-indigo-400 hover:text-indigo-300 transition" : "p-1 text-indigo-400 opacity-30 cursor-not-allowed pointer-events-none";
-    const delBtnClass = isAdmin ? "p-1 text-rose-400 hover:text-rose-300 transition" : "p-1 text-rose-400 opacity-30 cursor-not-allowed pointer-events-none";
+    const canEdit = isAdmin && !isPmCashierTx;
+    const canDelete = isAdmin && !isPmCashierTx;
+
+    const editBtnClass = canEdit ? "p-1 text-indigo-400 hover:text-indigo-300 transition" : "p-1 text-indigo-400 opacity-20 cursor-not-allowed pointer-events-none";
+    const delBtnClass = canDelete ? "p-1 text-rose-400 hover:text-rose-300 transition" : "p-1 text-rose-400 opacity-20 cursor-not-allowed pointer-events-none";
 
     tbody.innerHTML += `
       <tr class="hover:bg-slate-800/30 text-slate-300 text-xs border-b border-slate-800/40">
@@ -286,8 +294,9 @@ function renderStudentMoneyTable() {
         ? `<button onclick="printRowTransferVoucher('${escAttr(row.uniqueId)}', 'main')" class="p-1 text-sky-400 hover:text-sky-300 transition" title="Print Transfer Slip"><i class="fa-solid fa-print"></i></button>`
         : `<button onclick="openStudentStatementModal(${row.studentId})" class="p-1 text-amber-400 hover:text-amber-300 transition" title="Statement"><i class="fa-solid fa-file-invoice"></i></button>`}
             
-            <button onclick="editStudentMoneyEntry('${escAttr(row.uniqueId)}')" class="${editBtnClass}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>
-            <button onclick="deleteStudentMoneyEntry('${escAttr(row.uniqueId)}')" class="${delBtnClass}" title="Delete"><i class="fa-solid fa-trash"></i></button>
+            <!-- 🎯 PM Cashier စာရင်းဖြစ်ပါက Admin ဖြစ်စေကာမူ Edit နှင့် Delete ခလုတ်များ မှိန်နေမည် -->
+            <button onclick="editStudentMoneyEntry('${escAttr(row.uniqueId)}')" class="${editBtnClass}" title="${isPmCashierTx ? 'PM Cashier စာရင်းအား ဤနေရာမှ ပြင်ခွင့်မရှိပါ' : 'Edit'}"><i class="fa-solid fa-pen-to-square"></i></button>
+            <button onclick="deleteStudentMoneyEntry('${escAttr(row.uniqueId)}')" class="${delBtnClass}" title="${isPmCashierTx ? 'PM Cashier စာရင်းအား ဤနေရာမှ ဖျက်ခွင့်မရှိပါ' : 'Delete'}"><i class="fa-solid fa-trash"></i></button>
           </div>
         </td>
       </tr>
