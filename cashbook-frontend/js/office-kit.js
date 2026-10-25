@@ -61,6 +61,19 @@ function safeCsvCell(val) {
   return `"${str.replace(/"/g, '""')}"`;
 }
 
+// 🕒 Pure Non-Recursive MMT Date Helper (UTC+06:30)
+function getMMTDateString(dInput) {
+  if (dInput && typeof dInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dInput.trim())) {
+    return dInput.trim();
+  }
+  const d = dInput ? new Date(dInput) : new Date();
+  const targetMs = isNaN(d.getTime()) ? Date.now() : d.getTime();
+  // မြန်မာစံတော်ချိန် UTC+06:30 သို့ တိကျစွာ ပြောင်းပြီး UTC slice ရယူသည်
+  const mmt = new Date(targetMs + (6.5 * 60 * 60 * 1000));
+  return mmt.toISOString().slice(0, 10);
+}
+window.getMMTDateString = window.getMMTDateString || getMMTDateString;
+
 // ==============================================================================
 // 💡 GLOBAL VARIABLES & STATE
 // ==============================================================================
@@ -777,11 +790,8 @@ async function openAddModalOffice() {
 
   var dateEl = document.getElementById('office-date');
   if (dateEl) {
-    var now = new Date(Date.now() + (6.5 * 3600 * 1000));
-    var yyyy = now.getFullYear();
-    var mm = String(now.getMonth() + 1).padStart(2, '0');
-    var dd = String(now.getDate()).padStart(2, '0');
-    dateEl.value = yyyy + '-' + mm + '-' + dd;
+    // 🎯 FIX: အချိန် ၂ ထပ်ကွမ်း မဖြစ်စေဘဲ တိကျသော မြန်မာစံတော်ချိန် ရက်စွဲကို ရယူသည်
+    dateEl.value = getMMTDateString();
   }
 
   var titleEl = document.getElementById('office-form-title');
