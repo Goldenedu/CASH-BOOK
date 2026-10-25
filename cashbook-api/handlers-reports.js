@@ -111,9 +111,9 @@ function monthLabelToYYYYMM(label) {
  * 💡 Generate 12 Fiscal Month Labels starting from March (e.g. Mar to Feb)
  */
 function get12FiscalMonths(fyStr) {
-  const dynamicFallback = getCurrentAcademicYear(); 
+  const dynamicFallback = getCurrentAcademicYear();
   let startYear = parseInt(dynamicFallback.split('-')[0], 10) || new Date().getFullYear();
-  
+
   const parts = String(fyStr || '').replace(/^FY\s*/i, '').split(/[-/]/);
   if (parts.length >= 1 && !isNaN(parseInt(parts[0], 10))) {
     startYear = parseInt(parts[0], 10);
@@ -285,7 +285,7 @@ export async function getIncomeDetailReportData(db, body) {
     const fallbackFy = `FY ${getCurrentAcademicYear()}`;
     const activeFy = normalizeFyStr(body.fy || fallbackFy);
     const fyClean = activeFy.replace(/^FY\s*/i, '');
-    
+
     const page = parseInt(body.page || 1, 10);
     const limit = parseInt(body.limit || 50, 10);
     const offset = (page - 1) * limit;
@@ -295,7 +295,7 @@ export async function getIncomeDetailReportData(db, body) {
 
     const monthKeys = get12FiscalMonths(activeFy);
     const monthKeysYYYYMM = monthKeys.map(mk => monthLabelToYYYYMM(mk));
-    
+
     const headers = [
       "NO", "FY", "ID", "FYID", "STUDENT NAME", "PROMO", "JOIN DATE", "TRANSFER MONTH", "STATUS", "CLASS",
       "Registration", "Ferry", "Night Study Fees", "Others",
@@ -318,8 +318,8 @@ export async function getIncomeDetailReportData(db, body) {
       SELECT s.student_id, s.id, s.fy, s.fyid, s.name, s.fyid_name, s.promo, s.date, s.transfer_date, s.status, s.class 
       FROM student s ${whereSql}
     `).bind(...params).all()).results || [];
-    
-    
+
+
     // Fetch Income Data including 'my' and 'remark'
     const allIncome = (await db.prepare(`
       SELECT student_id, account_name, credit, debit, effect_date, date, my, remark 
@@ -385,7 +385,7 @@ export async function getIncomeDetailReportData(db, body) {
       const rText = String(row.remark || '').toLowerCase();
       if (rText.includes('leave') || rText.includes('inactive') || rText.includes('နား') || rText.includes('ခွင့်')) {
         let foundExplicitMonth = false;
-        
+
         monthKeys.forEach((mKey, idx) => {
           const shortMonth = mKey.split('-')[0].toLowerCase();
           const keywords = myanmarMonths[shortMonth] || [shortMonth];
@@ -394,7 +394,7 @@ export async function getIncomeDetailReportData(db, body) {
             foundExplicitMonth = true;
           }
         });
-        
+
         if (!foundExplicitMonth && mIdx >= 0) {
           stGroup.leaveMonths.add(mIdx);
         }
@@ -466,8 +466,8 @@ export async function getIncomeDetailReportData(db, body) {
 
           const promoStr = String(st.promo || '').toLowerCase().trim();
           const catStr = String(st.category || '').toLowerCase().trim();
-          if ((promoStr.includes('full') && promoStr.includes('scholar')) || 
-              (catStr.includes('full') && catStr.includes('scholar'))) {
+          if ((promoStr.includes('full') && promoStr.includes('scholar')) ||
+            (catStr.includes('full') && catStr.includes('scholar'))) {
             return false;
           }
 
@@ -502,7 +502,7 @@ export async function getIncomeDetailReportData(db, body) {
       let idxB = classOrder.indexOf(b.class);
       if (idxA === -1) idxA = 99;
       if (idxB === -1) idxB = 99;
-      
+
       if (idxA === idxB) return String(a.name).localeCompare(String(b.name));
       return idxA - idxB;
     });
@@ -534,9 +534,9 @@ export async function getIncomeDetailReportData(db, body) {
       ];
 
       for (let c = 10; c < rowArr.length; c++) {
-         if (typeof rowArr[c] === 'number') {
-            pageTotals[c] += parseFloat(rowArr[c] || 0);
-         }
+        if (typeof rowArr[c] === 'number') {
+          pageTotals[c] += parseFloat(rowArr[c] || 0);
+        }
       }
       dataMatrix.push(rowArr);
     });
@@ -560,6 +560,9 @@ export async function getIncomeDetailReportData(db, body) {
 /**
  * 💡 3. Monthly Income Report (InRep) - 🚀 SQL OPTIMIZED
  */
+/**
+ * 💡 3. Monthly Income Report (InRep) - 🚀 SQL OPTIMIZED with EXACT TOTALS
+ */
 export async function getMonthlyIncomeReportData(db, body) {
   try {
     const fallbackFy = `FY ${getCurrentAcademicYear()}`;
@@ -572,18 +575,38 @@ export async function getMonthlyIncomeReportData(db, body) {
     const monthKeys = get12FiscalMonths(activeFy);
     const headers = ["ACCOUNT / CATEGORY", ...monthKeys, "TOTAL"];
 
-    const accounts = ["Registration", "Services", "Ferry", "Night Study Fees", "Others"];
+    // ============================================
+    // 🎯 TABLE 1: Primary Revenue Breakdown
+    // ============================================
     const t1Totals = new Array(14).fill(0);
+    const accounts = ["Registration", "Services", "Ferry", "Night Study Fees", "Others"];
 
     const t1Data = accounts.map(acc => {
       const monthAmts = new Array(12).fill(0);
-      list.filter(r => String(r.account_name || '').toLowerCase().trim() === acc.toLowerCase()).forEach(r => {
-        let mStr = parseSafeMonthYear(r.effect_date, activeFy);
-        if (!mStr || !monthKeys.includes(mStr)) mStr = parseSafeMonthYear(r.my, activeFy);
-        if (!mStr || !monthKeys.includes(mStr)) mStr = parseSafeMonthYear(r.date, activeFy);
 
-        const idx = mStr ? monthKeys.indexOf(mStr) : -1;
-        if (idx >= 0) monthAmts[idx] += (parseFloat(r.credit || 0) - parseFloat(r.debit || 0));
+      list.forEach(r => {
+        const rawAcc = String(r.account_name || '').toLowerCase().trim();
+        let isMatch = false;
+
+        if (acc === 'Others') {
+          // 🎯 Catch-All: Registration, Service, Ferry, Night မဟုတ်သမျှ အားလုံးသည် Others ထဲသို့ အလိုအလျောက် ဝင်မည် (စာလုံးပေါင်း မှားသည်ဖြစ်စေ)
+          isMatch = !rawAcc.includes('registration') && !rawAcc.includes('service') &&
+            !rawAcc.includes('ferry') && !rawAcc.includes('night');
+        } else if (acc === 'Registration' && rawAcc.includes('registration')) {
+          isMatch = true;
+        } else if (acc === 'Services' && rawAcc.includes('service')) {
+          isMatch = true;
+        } else if (acc === 'Ferry' && rawAcc.includes('ferry')) {
+          isMatch = true;
+        } else if (acc === 'Night Study Fees' && rawAcc.includes('night')) {
+          isMatch = true;
+        }
+
+        if (isMatch) {
+          let mStr = parseSafeMonthYear(r.effect_date, activeFy) || parseSafeMonthYear(r.my, activeFy) || parseSafeMonthYear(r.date, activeFy);
+          const idx = mStr ? monthKeys.indexOf(mStr) : -1;
+          if (idx >= 0) monthAmts[idx] += (parseFloat(r.credit || 0) - parseFloat(r.debit || 0));
+        }
       });
 
       const rowSum = monthAmts.reduce((a, b) => a + b, 0);
@@ -591,18 +614,38 @@ export async function getMonthlyIncomeReportData(db, body) {
       t1Totals[13] += rowSum;
       return [acc, ...monthAmts, rowSum];
     });
-
     const t1TotalRow = ["Total", ...t1Totals.slice(1)];
-    const categories = ["Boarder", "Semi Boarder", "Day Student"];
+
+
+    // ============================================
+    // 🎯 TABLE 2: Secondary Category Summary
+    // ============================================
     const t2Totals = new Array(14).fill(0);
+    const categories = ["Boarder", "Semi Boarder", "Day Student", "Other Category"];
 
     const t2Data = categories.map(cat => {
       const monthAmts = new Array(12).fill(0);
-      list.filter(r => String(r.category || '').toLowerCase().trim().includes(cat.toLowerCase())).forEach(r => {
-        const txDate = r.date || r.effect_date || '';
-        const mStr = parseSafeMonthYear(txDate);
-        const idx = monthKeys.indexOf(mStr);
-        if (idx >= 0) monthAmts[idx] += (parseFloat(r.credit || 0) - parseFloat(r.debit || 0));
+
+      list.forEach(r => {
+        const rawCat = String(r.category || '').toLowerCase().trim();
+        let isMatch = false;
+
+        if (cat === 'Other Category') {
+          // 🎯 Catch-All: Boarder, Semi, Day မဟုတ်သမျှ အားလုံး Other ထဲ ဝင်မည်
+          isMatch = !rawCat.includes('boarder') && !rawCat.includes('semi') && !rawCat.includes('day');
+        } else if (cat === 'Semi Boarder' && rawCat.includes('semi')) {
+          isMatch = true;
+        } else if (cat === 'Boarder' && rawCat.includes('boarder') && !rawCat.includes('semi')) {
+          isMatch = true;
+        } else if (cat === 'Day Student' && rawCat.includes('day')) {
+          isMatch = true;
+        }
+
+        if (isMatch) {
+          const mStr = parseSafeMonthYear(r.date || r.effect_date || '');
+          const idx = monthKeys.indexOf(mStr);
+          if (idx >= 0) monthAmts[idx] += (parseFloat(r.credit || 0) - parseFloat(r.debit || 0));
+        }
       });
 
       const rowSum = monthAmts.reduce((a, b) => a + b, 0);
@@ -610,7 +653,6 @@ export async function getMonthlyIncomeReportData(db, body) {
       t2Totals[13] += rowSum;
       return [cat, ...monthAmts, rowSum];
     });
-
     const t2TotalRow = ["Total", ...t2Totals.slice(1)];
 
     return {
