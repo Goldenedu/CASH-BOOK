@@ -89,13 +89,13 @@ function updateOffKpiLabels() {
     'off-total-expense': 'TOTAL EXPENSE (MMK)',
     'off-balance': 'TOTAL BALANCES (MMK)'
   };
-  
+
   for (const [id, text] of Object.entries(labels)) {
     const valueEl = document.getElementById(id);
     if (valueEl) {
       const parent = valueEl.parentElement;
       if (parent) {
-        const labelEl = parent.querySelector('p'); 
+        const labelEl = parent.querySelector('p');
         if (labelEl) labelEl.textContent = text;
       }
     }
@@ -111,9 +111,9 @@ function adjustOffKpiFontSizes() {
     const el = document.getElementById(id);
     if (!el) return;
 
-    el.style.fontSize = '24px'; 
+    el.style.fontSize = '24px';
     el.style.whiteSpace = 'nowrap';
-    
+
     let currentSize = 24;
     while (el.scrollWidth > el.clientWidth && currentSize > 12) {
       currentSize--;
@@ -131,11 +131,11 @@ function parseLiabilityAmount(val) {
   if (val === undefined || val === null || val === '') return 0;
   if (typeof val === 'number') return isNaN(val) ? 0 : val;
   var s = String(val).trim().replace(/,/g, '');
-  
+
   if (s.startsWith('(') && s.endsWith(')')) {
     s = '-' + s.slice(1, -1).trim();
   }
-  
+
   var n = parseFloat(s);
   return isNaN(n) ? 0 : n;
 }
@@ -146,22 +146,22 @@ function parseLiabilityAmount(val) {
 function extractProductIdFromDescription(description) {
   if (!description) return null;
   var str = String(description).trim();
-  
+
   var match = str.match(/PID\s*(\d+)/i);
   if (match && match[1]) {
     return match[1].trim();
   }
-  
+
   var pidMatch = str.match(/^([A-Z0-9]+)\s/);
   if (pidMatch && pidMatch[1]) {
     return pidMatch[1];
   }
-  
+
   var numMatch = str.match(/^(\d+)\s/);
   if (numMatch && numMatch[1]) {
     return numMatch[1];
   }
-  
+
   return null;
 }
 
@@ -202,7 +202,7 @@ function updateOfficeAddButtonLabel() {
  */
 function getUniformItemProps(p) {
   if (!p) return { id: '', name: '', type: '', size: '', unitPrice: 0, sellingPrice: 0, stock: 0, uniqueKey: '' };
-  
+
   var pid = p.product_id ?? p.productId ?? p.id ?? '';
   var pname = p.product_name ?? p.productName ?? '';
   var ptype = p.type ?? '';
@@ -212,8 +212,8 @@ function getUniformItemProps(p) {
 
   var openStock = parseCleanNum(p.opening_stock ?? p.openingStock ?? 0);
   var sellUnit = parseCleanNum(p.selling_unit ?? p.sellingUnit ?? 0);
-  var cQty = (p.current_qty !== undefined && p.current_qty !== null) 
-    ? parseCleanNum(p.current_qty) 
+  var cQty = (p.current_qty !== undefined && p.current_qty !== null)
+    ? parseCleanNum(p.current_qty)
     : ((p.currentQty !== undefined && p.currentQty !== null) ? parseCleanNum(p.currentQty) : (openStock - sellUnit));
 
   var uniqueKey = p.uniqueid || p.uniqueId || (String(pid).trim() + '|' + String(psize).trim() + '|' + String(ptype).trim());
@@ -257,7 +257,7 @@ function buildUniformDropdownOptions(list) {
   }
 
   var html = '<option value="">-- Select Product ID --</option>';
-  list.forEach(function(p) {
+  list.forEach(function (p) {
     var item = getUniformItemProps(p);
     if (item.id) {
       var sizeStr = item.size ? ' (' + item.size + ')' : '';
@@ -305,7 +305,7 @@ async function fetchUniformProductsListOffice() {
  */
 function filterOfficeData(list, searchVal, fromDate, toDate) {
   var safeList = Array.isArray(list) ? list : [];
-  return safeList.filter(function(row) {
+  return safeList.filter(function (row) {
     if (typeof window.isDateInRange === 'function') {
       if (!window.isDateInRange(row.date, fromDate, toDate)) return false;
     }
@@ -340,19 +340,19 @@ async function populateDropdownsOffice() {
 
   var catSelect = document.getElementById('office-category');
   if (catSelect && def.category) {
-    catSelect.innerHTML = def.category.map(function(c) { return '<option value="' + c + '">' + c + '</option>'; }).join('');
+    catSelect.innerHTML = def.category.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join('');
   }
 
   var methodSelect = document.getElementById('office-method');
   if (methodSelect && def.method) {
-    methodSelect.innerHTML = def.method.map(function(m) { return '<option value="' + m + '">' + m + '</option>'; }).join('');
+    methodSelect.innerHTML = def.method.map(function (m) { return '<option value="' + m + '">' + m + '</option>'; }).join('');
   }
 
   var transSelect = document.getElementById('office-transfer');
   if (transSelect) {
     if (def.transfer) {
       transSelect.innerHTML = '<option value="">-- No Transfer --</option>' +
-        def.transfer.map(function(t) { return '<option value="' + t + '">' + t + '</option>'; }).join('');
+        def.transfer.map(function (t) { return '<option value="' + t + '">' + t + '</option>'; }).join('');
     } else {
       transSelect.innerHTML = '<option value="">-- No Transfer --</option>';
     }
@@ -396,7 +396,7 @@ async function onCategoryChangeOffice() {
 
     await fetchUniformProductsListOffice();
     onProductChangeOffice();
-  } 
+  }
   else if (isLiabilities) {
     if (prodContainer) prodContainer.classList.add('hidden');
     if (profitPreviewContainer) profitPreviewContainer.classList.add('hidden');
@@ -407,7 +407,7 @@ async function onCategoryChangeOffice() {
     if (creditInput) { creditInput.value = 0; creditInput.disabled = true; }
     if (methodSelect) methodSelect.disabled = true;
     if (transSelect) { transSelect.value = ""; transSelect.disabled = true; }
-  } 
+  }
   else {
     if (prodContainer) prodContainer.classList.add('hidden');
     if (profitPreviewContainer) profitPreviewContainer.classList.add('hidden');
@@ -449,10 +449,10 @@ function onProductChangeOffice() {
   var productsList = getAvailableUniformProducts();
 
   if (selectedKey && productsList.length > 0) {
-    var rawProd = productsList.find(function(p) {
+    var rawProd = productsList.find(function (p) {
       var item = getUniformItemProps(p);
       return item.uniqueKey.toLowerCase() === String(selectedKey).trim().toLowerCase() ||
-             item.id.toLowerCase() === String(selectedKey).trim().toLowerCase();
+        item.id.toLowerCase() === String(selectedKey).trim().toLowerCase();
     });
 
     if (rawProd) {
@@ -503,10 +503,10 @@ function calculateDebitOffice() {
     var productsList = getAvailableUniformProducts();
 
     if (selectedKey && productsList.length > 0) {
-      var rawProd = productsList.find(function(p) {
+      var rawProd = productsList.find(function (p) {
         var item = getUniformItemProps(p);
         return item.uniqueKey.toLowerCase() === String(selectedKey).trim().toLowerCase() ||
-               item.id.toLowerCase() === String(selectedKey).trim().toLowerCase();
+          item.id.toLowerCase() === String(selectedKey).trim().toLowerCase();
       });
 
       if (rawProd) {
@@ -573,7 +573,7 @@ async function loadOfficeData(isSilent, forceRefresh) {
 
 function updateStatsOffice() {
   var stats = window.OfficeState.stats;
-  var setT = function(id, val) { var el = document.getElementById(id); if (el) el.innerText = val; };
+  var setT = function (id, val) { var el = document.getElementById(id); if (el) el.innerText = val; };
 
   updateOffKpiLabels();
 
@@ -622,7 +622,7 @@ function renderOfficeTable() {
   var userRole = (window.AppState ? window.AppState.currentUserRole : 'Viewer');
   var isViewer = (userRole === "Viewer");
 
-  tableBody.innerHTML = pageItems.map(function(row) {
+  tableBody.innerHTML = pageItems.map(function (row) {
     var displayDate = row.date || "";
     if (displayDate) {
       var parts = displayDate.split('-');
@@ -635,47 +635,47 @@ function renderOfficeTable() {
     var disabledAttr = isLocked ? 'disabled' : '';
 
     var catBadge = typeof window.formatCategoryBadgeHtml === 'function' ? window.formatCategoryBadgeHtml(row.category) : escapeHtml(row.category);
-    var debitStr = row.debit > 0 ? Number(row.debit).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-';
-    var creditStr = row.credit > 0 ? Number(row.credit).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-';
-    var balStr = Number(row.balances || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    
+    var debitStr = row.debit > 0 ? Number(row.debit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-';
+    var creditStr = row.credit > 0 ? Number(row.credit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-';
+    var balStr = Number(row.balances || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
     var rawLiab = Number(row.liabilities || 0);
     var liabStr = '0.00';
     if (rawLiab < 0) {
-      liabStr = `-${Math.abs(rawLiab).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+      liabStr = `-${Math.abs(rawLiab).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     } else if (rawLiab > 0) {
-      liabStr = rawLiab.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      liabStr = rawLiab.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
-    var priceStr = Number(row.unitPrice || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    var priceStr = Number(row.unitPrice || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     var displayNo = Math.floor(parseCleanNum(row.no || row.id)) || 1;
 
     return '<tr class="hover:bg-slate-800/20 text-slate-300">' +
-        '<td class="text-center font-mono font-semibold text-slate-500 py-3 px-2">' + displayNo + '</td>' +
-        '<td class="font-mono text-xs py-3 px-2">' + escapeHtml(displayDate) + '</td>' +
-        '<td class="py-3 px-2">' + catBadge + '</td>' +
-        '<td class="min-w-[280px] max-w-md truncate py-3 px-2" title="' + escapeHtml(row.description) + '">' + escapeHtml(row.description) + '</td>' +
-        '<td class="text-right font-mono py-3 px-2">' + (row.unit || '0') + '</td>' +
-        '<td class="text-right font-mono py-3 px-2">' + priceStr + '</td>' +
-        '<td class="font-bold py-3 px-2">' + escapeHtml(row.method || '-') + '</td>' +
-        '<td class="text-right text-emerald-400 font-mono font-semibold py-3 px-2">' + debitStr + '</td>' +
-        '<td class="text-right text-rose-400 font-mono font-semibold py-3 px-2">' + creditStr + '</td>' +
-        '<td class="text-right text-slate-400 font-mono font-bold py-3 px-2">' + balStr + '</td>' +
-        '<td class="office-liab-col text-right ' + (rawLiab < 0 ? 'text-emerald-400' : 'text-rose-400') + ' font-mono font-bold py-3 px-2">' + liabStr + '</td>' +
-        '<td class="text-xs text-indigo-400 py-3 px-2">' + escapeHtml(row.transfer || '-') + '</td>' +
-        '<td class="font-mono text-xs text-slate-400 py-3 px-2">' + escapeHtml(row.vrNo || '-') + '</td>' +
-        '<td class="font-mono text-xs py-3 px-2">' + escapeHtml(row.my || '-') + '</td>' +
-        '<td class="font-mono text-xs font-bold text-indigo-300 py-3 px-2">' + escapeHtml(row.fy || '-') + '</td>' +
-        '<td class="right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg text-center py-3 px-2">' +
-          '<div class="flex items-center justify-center gap-3">' +
-            '<button onclick="editOfficeEntry(\'' + escapeJsAttr(row.uniqueId) + '\')" class="text-indigo-400 hover:text-indigo-300 transition ' + lockClass + '" title="' + lockTitle + '" ' + disabledAttr + '>' +
-              '<i class="fa-solid fa-pen-to-square"></i>' +
-            '</button>' +
-            '<button onclick="deleteOfficeEntry(\'' + escapeJsAttr(row.uniqueId) + '\')" class="text-rose-400 hover:text-rose-300 transition ' + lockClass + '" title="' + lockTitle + '" ' + disabledAttr + '>' +
-              '<i class="fa-solid fa-trash"></i>' +
-            '</button>' +
-          '</div>' +
-        '</td>' +
+      '<td class="text-center font-mono font-semibold text-slate-500 py-3 px-2">' + displayNo + '</td>' +
+      '<td class="font-mono text-xs py-3 px-2">' + escapeHtml(displayDate) + '</td>' +
+      '<td class="py-3 px-2">' + catBadge + '</td>' +
+      '<td class="min-w-[280px] max-w-md truncate py-3 px-2" title="' + escapeHtml(row.description) + '">' + escapeHtml(row.description) + '</td>' +
+      '<td class="text-right font-mono py-3 px-2">' + (row.unit || '0') + '</td>' +
+      '<td class="text-right font-mono py-3 px-2">' + priceStr + '</td>' +
+      '<td class="font-bold py-3 px-2">' + escapeHtml(row.method || '-') + '</td>' +
+      '<td class="text-right text-emerald-400 font-mono font-semibold py-3 px-2">' + debitStr + '</td>' +
+      '<td class="text-right text-rose-400 font-mono font-semibold py-3 px-2">' + creditStr + '</td>' +
+      '<td class="text-right text-slate-400 font-mono font-bold py-3 px-2">' + balStr + '</td>' +
+      '<td class="office-liab-col text-right ' + (rawLiab < 0 ? 'text-emerald-400' : 'text-rose-400') + ' font-mono font-bold py-3 px-2">' + liabStr + '</td>' +
+      '<td class="text-xs text-indigo-400 py-3 px-2">' + escapeHtml(row.transfer || '-') + '</td>' +
+      '<td class="font-mono text-xs text-slate-400 py-3 px-2">' + escapeHtml(row.vrNo || '-') + '</td>' +
+      '<td class="font-mono text-xs py-3 px-2">' + escapeHtml(row.my || '-') + '</td>' +
+      '<td class="font-mono text-xs font-bold text-indigo-300 py-3 px-2">' + escapeHtml(row.fy || '-') + '</td>' +
+      '<td class="right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg text-center py-3 px-2">' +
+      '<div class="flex items-center justify-center gap-3">' +
+      '<button onclick="editOfficeEntry(\'' + escapeJsAttr(row.uniqueId) + '\')" class="text-indigo-400 hover:text-indigo-300 transition ' + lockClass + '" title="' + lockTitle + '" ' + disabledAttr + '>' +
+      '<i class="fa-solid fa-pen-to-square"></i>' +
+      '</button>' +
+      '<button onclick="deleteOfficeEntry(\'' + escapeJsAttr(row.uniqueId) + '\')" class="text-rose-400 hover:text-rose-300 transition ' + lockClass + '" title="' + lockTitle + '" ' + disabledAttr + '>' +
+      '<i class="fa-solid fa-trash"></i>' +
+      '</button>' +
+      '</div>' +
+      '</td>' +
       '</tr>';
   }).join('');
 
@@ -694,7 +694,7 @@ function toggleOfficeLiabilitiesColumn() {
   if (th) th.classList.toggle('hidden', !show);
 
   var cells = document.querySelectorAll('#office-table-body .office-liab-col');
-  cells.forEach(function(td) {
+  cells.forEach(function (td) {
     td.classList.toggle('hidden', !show);
   });
 }
@@ -705,13 +705,18 @@ function updatePaginationOffice(currentCount) {
   var totalToDisplay = (currentCount !== undefined) ? currentCount : state.totalRows;
 
   if (info) {
-    var start = totalToDisplay === 0 ? 0 : (state.page - 1) * state.limit + 1;
-    var end = Math.min(state.page * state.limit, totalToDisplay);
-    info.innerHTML = 'Showing <span class="text-indigo-400 font-extrabold">${start}</span> to <span class="text-indigo-400 font-extrabold">${end}</span> of <span class="text-indigo-400 font-extrabold">${totalToDisplay}</span> entries';
+    if (totalToDisplay === 0) {
+      info.innerHTML = 'Showing <span class="text-indigo-400 font-extrabold">0</span> entries';
+    } else {
+      var start = (state.page - 1) * state.limit + 1;
+      var end = Math.min(state.page * state.limit, totalToDisplay);
+      // 🎯 FIX: Single Quote အစား Backticks (``) သို့ ပြောင်းလဲထားသည်
+      info.innerHTML = `Showing <span class="text-indigo-400 font-extrabold">${start}</span> to <span class="text-indigo-400 font-extrabold">${end}</span> of <span class="text-indigo-400 font-extrabold">${totalToDisplay}</span> entries`;
+    }
   }
 
   var prevBtn = document.getElementById('off-btn-prev');
-  if (prevBtn) prevBtn.disabled = (state.page === 1);
+  if (prevBtn) prevBtn.disabled = (state.page <= 1);
 
   var nextBtn = document.getElementById('off-btn-next');
   if (nextBtn) nextBtn.disabled = (state.page * state.limit >= totalToDisplay);
@@ -738,7 +743,7 @@ function changePageOffice(dir) {
  */
 function onSearchInputOffice() {
   clearTimeout(searchTimeoutOffice);
-  searchTimeoutOffice = setTimeout(function() {
+  searchTimeoutOffice = setTimeout(function () {
     var input = document.getElementById('office-search');
     window.OfficeState.searchVal = input ? input.value.trim() : '';
     window.OfficeState.page = 1;
@@ -809,7 +814,7 @@ async function saveOfficeForm(e) {
   var category = document.getElementById('office-category')?.value || '';
   var prodEl = document.getElementById('office-product-id');
   var selectedKey = prodEl ? prodEl.value : '';
-  
+
   var selectedOpt = prodEl && prodEl.selectedIndex >= 0 ? prodEl.options[prodEl.selectedIndex] : null;
   var cleanPid = selectedOpt ? (selectedOpt.getAttribute('data-pid') || selectedKey) : selectedKey;
 
@@ -820,10 +825,10 @@ async function saveOfficeForm(e) {
   var calculatedProfit = 0;
 
   if ((category === "Advance Uniform" || category === "Advance Unifrom") && selectedKey && productsList.length > 0) {
-    var rawProd = productsList.find(function(p) {
+    var rawProd = productsList.find(function (p) {
       var item = getUniformItemProps(p);
       return item.uniqueKey.toLowerCase() === String(selectedKey).trim().toLowerCase() ||
-             item.id.toLowerCase() === String(selectedKey).trim().toLowerCase();
+        item.id.toLowerCase() === String(selectedKey).trim().toLowerCase();
     });
     if (rawProd) {
       var prod = getUniformItemProps(rawProd);
@@ -866,7 +871,7 @@ async function saveOfficeForm(e) {
         var label = ctx.label;
         showToast("SUCCESS", isAdd ? (label + " Expense စာရင်းသစ် အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။") : (label + " Expense စာရင်း အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။"));
       }
-      
+
       if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
 
       if (category === "Advance Uniform" || category === "Advance Unifrom") {
@@ -895,7 +900,7 @@ async function saveOfficeForm(e) {
  * 💡 EDIT OFFICE ENTRY
  */
 async function editOfficeEntry(uniqueId) {
-  var row = window.OfficeState.activeData.find(function(item) { return item.uniqueId === uniqueId; });
+  var row = window.OfficeState.activeData.find(function (item) { return item.uniqueId === uniqueId; });
   if (!row) {
     if (typeof showToast === 'function') showToast("ERROR", "မူရင်းဒေတာကို ရှာမတွေ့ပါ။");
     return;
@@ -924,7 +929,7 @@ async function editOfficeEntry(uniqueId) {
       pidToSearch = pidToSearch.replace(/^PID\s*/i, '').trim();
       var searchTerm = pidToSearch.toLowerCase();
 
-      var matchingOpt = Array.from(prodSelect.options).find(function(opt) {
+      var matchingOpt = Array.from(prodSelect.options).find(function (opt) {
         var optValue = (opt.value || '').toLowerCase();
         var optDataPid = (opt.getAttribute('data-pid') || '').toLowerCase();
         var optText = (opt.text || '').toLowerCase();
@@ -1009,40 +1014,40 @@ function exportToCSVOffice() {
 
   if (ctx.isKitchen) {
     csv = "NO,DATE,CATEGORY,DESCRIPTION,METHOD,DEBIT,CREDIT,BALANCES,TRANSFER,VR NO,MY,FY,UNIQUEID\n";
-    data.forEach(function(row) {
+    data.forEach(function (row) {
       csv += (row.no || '') + ',' +
-             safeCsvCell(row.date || '') + ',' +
-             safeCsvCell(row.category || '') + ',' +
-             safeCsvCell(row.description || '') + ',' +
-             safeCsvCell(row.method || '') + ',' +
-             (row.debit || 0) + ',' +
-             (row.credit || 0) + ',' +
-             (row.balances || 0) + ',' +
-             safeCsvCell(row.transfer || '') + ',' +
-             safeCsvCell(row.vrNo || row.vr_no || '') + ',' +
-             safeCsvCell(row.my || '') + ',' +
-             safeCsvCell(row.fy || '') + ',' +
-             safeCsvCell(row.uniqueId || row.uniqueid || '') + '\n';
+        safeCsvCell(row.date || '') + ',' +
+        safeCsvCell(row.category || '') + ',' +
+        safeCsvCell(row.description || '') + ',' +
+        safeCsvCell(row.method || '') + ',' +
+        (row.debit || 0) + ',' +
+        (row.credit || 0) + ',' +
+        (row.balances || 0) + ',' +
+        safeCsvCell(row.transfer || '') + ',' +
+        safeCsvCell(row.vrNo || row.vr_no || '') + ',' +
+        safeCsvCell(row.my || '') + ',' +
+        safeCsvCell(row.fy || '') + ',' +
+        safeCsvCell(row.uniqueId || row.uniqueid || '') + '\n';
     });
   } else {
     csv = "NO,DATE,CATEGORY,DESCRIPTION,UNIT,UNIT PRICE,METHOD,DEBIT,CREDIT,BALANCES,LIABILITIES,TRANSFER,VR NO,MY,FY,UNIQUEID\n";
-    data.forEach(function(row) {
+    data.forEach(function (row) {
       csv += (row.no || '') + ',' +
-             safeCsvCell(row.date || '') + ',' +
-             safeCsvCell(row.category || '') + ',' +
-             safeCsvCell(row.description || '') + ',' +
-             (row.unit || 0) + ',' +
-             (row.unitPrice || 0) + ',' +
-             safeCsvCell(row.method || '') + ',' +
-             (row.debit || 0) + ',' +
-             (row.credit || 0) + ',' +
-             (row.balances || 0) + ',' +
-             (row.liabilities || 0) + ',' +
-             safeCsvCell(row.transfer || '') + ',' +
-             safeCsvCell(row.vrNo || row.vr_no || '') + ',' +
-             safeCsvCell(row.my || '') + ',' +
-             safeCsvCell(row.fy || '') + ',' +
-             safeCsvCell(row.uniqueId || row.uniqueid || '') + '\n';
+        safeCsvCell(row.date || '') + ',' +
+        safeCsvCell(row.category || '') + ',' +
+        safeCsvCell(row.description || '') + ',' +
+        (row.unit || 0) + ',' +
+        (row.unitPrice || 0) + ',' +
+        safeCsvCell(row.method || '') + ',' +
+        (row.debit || 0) + ',' +
+        (row.credit || 0) + ',' +
+        (row.balances || 0) + ',' +
+        (row.liabilities || 0) + ',' +
+        safeCsvCell(row.transfer || '') + ',' +
+        safeCsvCell(row.vrNo || row.vr_no || '') + ',' +
+        safeCsvCell(row.my || '') + ',' +
+        safeCsvCell(row.fy || '') + ',' +
+        safeCsvCell(row.uniqueId || row.uniqueid || '') + '\n';
     });
   }
 
@@ -1050,7 +1055,7 @@ function exportToCSVOffice() {
   var link = document.createElement("a");
   var url = URL.createObjectURL(blob);
   link.setAttribute("href", url);
-  link.setAttribute("download", (ctx.isKitchen ? 'kitchen_expense_' : 'office_expense_') + new Date().toISOString().slice(0,10) + '.csv');
+  link.setAttribute("download", (ctx.isKitchen ? 'kitchen_expense_' : 'office_expense_') + new Date().toISOString().slice(0, 10) + '.csv');
   link.style.visibility = 'hidden';
   document.body.appendChild(link);
   link.click();
