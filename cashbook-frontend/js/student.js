@@ -51,17 +51,23 @@ function autoDetectGender(nameStr) {
   if (!nameStr) return 'Male';
   const clean = String(nameStr).trim();
 
-  if (clean.startsWith('မေ') || clean.startsWith('ဒေါ်') || clean.startsWith('နန်း') || clean.startsWith('နော်') ||
-    /^(May|Daw|Nang|Naw)\b/i.test(clean) || clean.includes('Daw ') || clean.includes('ဒေါ်')) {
-    return 'Female';
-  }
+  // 💡 ၁။ ယောကျ်ားလေး (Male) ရှေ့စာလုံးများကို အရင်စစ်ဆေးပါမည် ("မောင်" သည် "မေ" နှင့် ငြိနိုင်သောကြောင့် အပေါ်မှထားစစ်ပါသည်)
   if (clean.startsWith('မောင်') || clean.startsWith('ကို') || clean.startsWith('ဦး') ||
     clean.startsWith('မင်း') || /^(Mg|Ko|U|Min)\b/i.test(clean) || /^(မောင်|ကို|ဦး|မင်း)/.test(clean)) {
     return 'Male';
   }
+
+  // 💡 ၂။ ထို့နောက်မှ မိန်းကလေး (Female) ရှေ့စာလုံးများကို စစ်ဆေးပါ
+  if (clean.startsWith('မေ') || clean.startsWith('ဒေါ်') || clean.startsWith('နန်း') || clean.startsWith('နော်') ||
+    /^(May|Daw|Nang|Naw)\b/i.test(clean) || clean.includes('Daw ') || clean.includes('ဒေါ်')) {
+    return 'Female';
+  }
+
+  // 💡 ၃။ 'မ' ဖြင့်စပြီး 'မောင်'၊ 'မင်း' မဟုတ်သော အခြားအမည်များကို Female အဖြစ် သတ်မှတ်ပါ
   if ((clean.startsWith('မ') && !clean.startsWith('မောင်') && !clean.startsWith('မင်း')) || /^(Ma)\b/i.test(clean)) {
     return 'Female';
   }
+
   return 'Male';
 }
 

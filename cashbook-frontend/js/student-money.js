@@ -254,13 +254,25 @@ function renderStudentMoneyTable() {
       ? '<span class="text-slate-500 font-mono">-</span>'
       : Number(row.balances || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
 
-    // 🎯 Role စစ်ဆေးချက်: Admin သို့မဟုတ် Owner သာလျှင် Action အပြည့်အဝ လုပ်ခွင့်ရှိမည် (ကျန်သူများ မှိန်နေမည်)
+    // 🎯 ၁။ PM Cashier စာရင်း ဟုတ်/မဟုတ် တိကျစွာ စစ်ဆေးခြင်း
+    const isPmCashierTx = String(row.remark || '').includes('PM Cashier') ||
+      String(row.fyidName || '').includes('PM Cashier') ||
+      String(row.class || '').includes('Vault Transfer') ||
+      String(row.class || '').includes('Vault Return');
+
+    // 🎯 ၂။ Admin ဖြစ်စေကာမူ PM Cashier စာရင်းဖြစ်ပါက Edit/Delete လုံးဝ ခွင့်မပြုပါ
     const userRole = localStorage.getItem('golden_user_role') || '';
     const isAdmin = (userRole === 'Admin' || userRole === 'Owner' || userRole === 'Finance' || userRole === 'Accountant');
 
-    // ခွင့်ပြုချက်မရှိပါက ခလုတ်ကို နှိပ်မရအောင် opacity-30 နှင့် pointer-events-none ပေးထားမည်
-    const editBtnClass = isAdmin ? "p-1 text-indigo-400 hover:text-indigo-300 transition" : "p-1 text-indigo-400 opacity-30 cursor-not-allowed pointer-events-none";
-    const delBtnClass = isAdmin ? "p-1 text-rose-400 hover:text-rose-300 transition" : "p-1 text-rose-400 opacity-30 cursor-not-allowed pointer-events-none";
+    const canEdit = isAdmin && !isPmCashierTx;
+    const canDelete = isAdmin && !isPmCashierTx;
+
+    // 🎯 ၃။ Inline Style ဖြင့် သေချာစွာ မှိန်ချခြင်း (Tailwind CSS သီးသန့် အားမကိုးဘဲ 100% သေချာစေသည်)
+    const activeEditStyle = "color: #818cf8; cursor: pointer;";
+    const disabledEditStyle = "color: #475569; opacity: 0.2; cursor: not-allowed; pointer-events: none;";
+
+    const activeDelStyle = "color: #fb7185; cursor: pointer;";
+    const disabledDelStyle = "color: #475569; opacity: 0.2; cursor: not-allowed; pointer-events: none;";
 
     tbody.innerHTML += `
       <tr class="hover:bg-slate-800/30 text-slate-300 text-xs border-b border-slate-800/40">
@@ -286,8 +298,23 @@ function renderStudentMoneyTable() {
         ? `<button onclick="printRowTransferVoucher('${escAttr(row.uniqueId)}', 'main')" class="p-1 text-sky-400 hover:text-sky-300 transition" title="Print Transfer Slip"><i class="fa-solid fa-print"></i></button>`
         : `<button onclick="openStudentStatementModal(${row.studentId})" class="p-1 text-amber-400 hover:text-amber-300 transition" title="Statement"><i class="fa-solid fa-file-invoice"></i></button>`}
             
-            <button onclick="editStudentMoneyEntry('${escAttr(row.uniqueId)}')" class="${editBtnClass}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>
-            <button onclick="deleteStudentMoneyEntry('${escAttr(row.uniqueId)}')" class="${delBtnClass}" title="Delete"><i class="fa-solid fa-trash"></i></button>
+            <!-- 🎯 Edit Button (PM Cashier စာရင်းဆိုပါက မီးခိုးရောင် အမှိန် ဖြစ်နေမည်) -->
+            <button onclick="editStudentMoneyEntry('${escAttr(row.uniqueId)}')" 
+                    style="${canEdit ? activeEditStyle : disabledEditStyle}" 
+                    class="p-1 transition" 
+                    title="${isPmCashierTx ? 'PM Cashier စာရင်းအား ဤနေရာမှ ပြင်ခွင့်မရှိပါ' : 'Edit'}"
+                    ${canEdit ? '' : 'disabled'}>
+              <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+            
+            <!-- 🎯 Delete Button (PM Cashier စာရင်းဆိုပါက မီးခိုးရောင် အမှိန် ဖြစ်နေမည်) -->
+            <button onclick="deleteStudentMoneyEntry('${escAttr(row.uniqueId)}')" 
+                    style="${canDelete ? activeDelStyle : disabledDelStyle}" 
+                    class="p-1 transition" 
+                    title="${isPmCashierTx ? 'PM Cashier စာရင်းအား ဤနေရာမှ ဖျက်ခွင့်မရှိပါ' : 'Delete'}"
+                    ${canDelete ? '' : 'disabled'}>
+              <i class="fa-solid fa-trash"></i>
+            </button>
           </div>
         </td>
       </tr>
@@ -1347,15 +1374,17 @@ function renderPmCashierBookTable() {
     const balStr = Number(row.balances || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
     const isXfer = row.category === 'Float Receive' || row.category === 'Return to Finance';
 
-    // 🎯 Role စစ်ဆေးချက်: PM Cashier ကိုယ်တိုင်မှလွဲ၍ ကျန်သူများ (Admin အပါအဝင်) Action ခလုတ်များ မှိန်နေမည်
+    // 🎯 Role စစ်ဆေးချက်: PM Cashier ကိုယ်တိုင်မှလွဲ၍ ကျန်သူများ (Admin အပါအဝင်) အားလုံး မှိန်နေမည်
     const userRole = localStorage.getItem('golden_user_role') || '';
     const isOwnerCashier1 = (userRole === 'pm_cashier1' && row.responsibility_person === 'Cashier 1');
     const isOwnerCashier2 = (userRole === 'pm_cashier2' && row.responsibility_person === 'Cashier 2');
     const isOwnerCashier = isOwnerCashier1 || isOwnerCashier2;
 
-    // PM Cashier အစစ်အမှန်မဟုတ်ပါက (သို့မဟုတ်) Admin ဖြစ်နေပါက ဖျက်ခွင့်/ပြင်ခွင့်ကို ပိတ်ပင်ထားမည်
-    const actionBtnClass = isOwnerCashier ? "p-1 text-indigo-400 hover:text-indigo-300 transition" : "p-1 text-indigo-400 opacity-30 cursor-not-allowed pointer-events-none";
-    const delBtnClass = isOwnerCashier ? "p-1 text-rose-400 hover:text-rose-300 transition" : "p-1 text-rose-400 opacity-30 cursor-not-allowed pointer-events-none";
+    const activeEditStyle = "color: #818cf8; cursor: pointer;";
+    const disabledEditStyle = "color: #475569; opacity: 0.2; cursor: not-allowed; pointer-events: none;";
+
+    const activeDelStyle = "color: #fb7185; cursor: pointer;";
+    const disabledDelStyle = "color: #475569; opacity: 0.2; cursor: not-allowed; pointer-events: none;";
 
     tbody.innerHTML += `
       <tr class="hover:bg-slate-800/30 text-slate-300 text-xs border-b border-slate-800/40">
@@ -1372,10 +1401,23 @@ function renderPmCashierBookTable() {
         <td class="font-mono text-slate-500 py-3 px-2">${esc(row.fy)}</td>
         <td class="text-center right-0 sticky bg-[#0c1322] border-l border-slate-800 py-3 px-2">
           <div class="flex justify-center items-center gap-2">
-            <!-- Print ကိုတော့ အားလုံးထုတ်ခွင့်ပေးမည် -->
             <button onclick="printRowTransferVoucher('${escAttr(row.uniqueId)}', 'cashier')" class="p-1 text-sky-400 hover:text-sky-300 transition" title="Print Voucher"><i class="fa-solid fa-print"></i></button>
-            <button onclick="editPmCashierBookEntry('${escAttr(row.uniqueId)}')" class="${actionBtnClass}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>
-            <button onclick="deletePmCashierBookEntry('${escAttr(row.uniqueId)}')" class="${delBtnClass}" title="Delete"><i class="fa-solid fa-trash"></i></button>
+            
+            <button onclick="editPmCashierBookEntry('${escAttr(row.uniqueId)}')" 
+                    style="${isOwnerCashier ? activeEditStyle : disabledEditStyle}" 
+                    class="p-1 transition" 
+                    title="${isOwnerCashier ? 'Edit' : 'လုပ်ပိုင်ခွင့် မရှိပါ'}"
+                    ${isOwnerCashier ? '' : 'disabled'}>
+              <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+            
+            <button onclick="deletePmCashierBookEntry('${escAttr(row.uniqueId)}')" 
+                    style="${isOwnerCashier ? activeDelStyle : disabledDelStyle}" 
+                    class="p-1 transition" 
+                    title="${isOwnerCashier ? 'Delete' : 'လုပ်ပိုင်ခွင့် မရှိပါ'}"
+                    ${isOwnerCashier ? '' : 'disabled'}>
+              <i class="fa-solid fa-trash"></i>
+            </button>
           </div>
         </td>
       </tr>

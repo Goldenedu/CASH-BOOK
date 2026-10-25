@@ -361,8 +361,19 @@ export async function deleteStudentMoneyEntry(db, session, body) {
     const uid = body.uniqueId;
     if (!uid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
 
-    const existing = await db.prepare("SELECT fy, date, student_id, remark, uniqueid FROM student_money WHERE uniqueid = ?").bind(uid).first();
+    const existing = await db.prepare("SELECT fy, date, student_id, remark, created_by, uniqueid FROM student_money WHERE uniqueid = ?").bind(uid).first();
     if (!existing) return { success: false, message: "ဖျက်မည့် စာရင်း ရှာမတွေ့ပါ။" };
+
+    // 🎯 BULLETPROOF SECURITY: PM Cashier မှ သွင်းထားသော စာရင်းများ ဖြစ်ပါက Student Money စာအုပ်မှ လုံးဝ ဖျက်ခွင့် မပြုပါ
+    const isPmCashierTransaction = (existing.remark && existing.remark.includes('PM Cashier')) ||
+      (existing.created_by && existing.created_by.includes('PM Cashier'));
+
+    if (isPmCashierTransaction) {
+      return {
+        success: false,
+        message: "ဖျက်ခွင့် မရှိပါ! PM Cashier (Cashier 1 / Cashier 2) စာရင်းများကို သက်ဆိုင်ရာ ငွေကိုင်ကိုယ်တိုင်မှသာ pm_cashier.html တွင် ည ၁၂ နာရီမတိုင်မီ သတ်မှတ်ချိန်အတွင်း ဖျက်ခွင့်ရှိပြီး၊ Student Money စာအုပ်မှ မည်သူမျှ (Admin အပါအဝင်) ဖျက်ပိုင်ခွင့် လုံးဝ မရှိပါ။"
+      };
+    }
 
     const coreId = uid.replace(/^(STM_|PMC_|CAN_|POS_|OFF_)+/i, '');
     const cleanFy = existing.fy ? existing.fy.replace(/^FY\s*/i, '') : '';
