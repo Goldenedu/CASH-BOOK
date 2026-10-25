@@ -3,24 +3,28 @@
 
   <!-- Sub-Panel Selector Tabs -->
   <div class="flex flex-wrap items-center gap-2 p-1.5 bg-[#0c1322] border border-slate-800 rounded-xl w-fit">
-    <button onclick="showReportPanel('panel-report-financial')" id="btn-rep-fin"
-      class="rep-sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-all bg-emerald-600 text-white flex items-center gap-2">
-      <i class="fa-solid fa-chart-pie"></i> Financial Statement
+    <button onclick="showReportPanel('panel-report-financial')" id="btn-rep-fin" style="border: 1.5px solid #38bdf8;"
+      class="rep-sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-all bg-sky-500/10 text-white flex items-center gap-2">
+      <i class="fa-solid fa-chart-pie text-sky-400"></i> Financial Statement
     </button>
     <button onclick="showReportPanel('panel-report-income-detail')" id="btn-rep-indetail"
-      class="rep-sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-all bg-slate-800 text-slate-400 hover:text-white flex items-center gap-2">
+      style="border: 1.5px solid transparent;"
+      class="rep-sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white hover:bg-slate-800/30 flex items-center gap-2">
       <i class="fa-solid fa-file-invoice-dollar text-sky-400"></i> Income Detail (InDetail)
     </button>
     <button onclick="showReportPanel('panel-report-monthly-income')" id="btn-rep-inrep"
-      class="rep-sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-all bg-slate-800 text-slate-400 hover:text-white flex items-center gap-2">
+      style="border: 1.5px solid transparent;"
+      class="rep-sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white hover:bg-slate-800/30 flex items-center gap-2">
       <i class="fa-solid fa-calendar-check text-indigo-400"></i> Monthly Income (InRep)
     </button>
     <button onclick="showReportPanel('panel-report-student')" id="btn-rep-student"
-      class="rep-sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-all bg-slate-800 text-slate-400 hover:text-white flex items-center gap-2">
+      style="border: 1.5px solid transparent;"
+      class="rep-sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white hover:bg-slate-800/30 flex items-center gap-2">
       <i class="fa-solid fa-users-rectangle text-amber-400"></i> Student Demographics
     </button>
     <button onclick="showReportPanel('panel-report-staff-fund')" id="btn-rep-staff-fund"
-      class="rep-sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-all bg-slate-800 text-slate-400 hover:text-white flex items-center gap-2">
+      style="border: 1.5px solid transparent;"
+      class="rep-sub-tab-btn px-4 py-2 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white hover:bg-slate-800/30 flex items-center gap-2">
       <i class="fa-solid fa-hand-holding-dollar text-teal-400"></i> Staff Bonus & Fund
     </button>
   </div>
