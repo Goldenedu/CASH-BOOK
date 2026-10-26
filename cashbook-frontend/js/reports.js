@@ -141,6 +141,37 @@ function renderFinancialReportData(data) {
     `;
   }
 
+  const hrBody = document.getElementById('report-fin-hr-payroll-body');
+  if (hrBody && data.hrPayroll) {
+    const hr = data.hrPayroll;
+    hrBody.innerHTML = `
+      <tr>
+        <td class="text-center font-bold text-slate-400 py-2">1</td>
+        <td class="font-semibold text-slate-300 py-2">Full Time Bonus</td>
+        <td class="text-right font-extrabold text-rose-400 font-mono pr-2 py-2">${formatNumWithCommas(hr.fullTimeBonus)} MMK</td>
+      </tr>
+      <tr>
+        <td class="text-center font-bold text-slate-400 py-2">2</td>
+        <td class="font-semibold text-slate-300 py-2">Full Time Fund</td>
+        <td class="text-right font-extrabold text-rose-400 font-mono pr-2 py-2">${formatNumWithCommas(hr.fullTimeFund)} MMK</td>
+      </tr>
+      <tr>
+        <td class="text-center font-bold text-slate-400 py-2">3</td>
+        <td class="font-semibold text-slate-300 py-2">Bank Interest</td>
+        <td class="text-right font-extrabold text-rose-400 font-mono pr-2 py-2">${formatNumWithCommas(hr.bankInterest)} MMK</td>
+      </tr>
+      <tr>
+        <td class="text-center font-bold text-slate-400 py-2">4</td>
+        <td class="font-semibold text-slate-300 py-2">Other</td>
+        <td class="text-right font-extrabold text-rose-400 font-mono pr-2 py-2">${formatNumWithCommas(hr.other)} MMK</td>
+      </tr>
+      <tr class="bg-rose-500/10 font-black text-rose-300 border-t border-rose-500/30">
+        <td colspan="2" class="py-2.5 uppercase tracking-wider pl-2 text-xs">Total HR Liabilities</td>
+        <td class="text-right font-mono pr-2 text-sm text-rose-400">${formatNumWithCommas(hr.total)} MMK</td>
+      </tr>
+    `;
+  }
+
   const expBody = document.getElementById('report-fin-exp-body');
   if (expBody) {
     const o = data.office || {};
@@ -189,7 +220,7 @@ function renderFinancialReportData(data) {
 
 function onSearchInputReportFinancial() {
   const searchVal = (document.getElementById('report-financial-search')?.value || '').toLowerCase().trim();
-  const rows = document.querySelectorAll('#report-fin-inc-cat-body tr, #report-fin-inc-acc-body tr, #report-fin-exp-body tr');
+  const rows = document.querySelectorAll('#report-fin-inc-cat-body tr, #report-fin-inc-acc-body tr, #report-fin-exp-body tr, #report-fin-hr-payroll-body tr');
 
   rows.forEach(row => {
     if (row.classList.contains('font-black') || row.innerText.includes('Total')) return;
@@ -221,6 +252,14 @@ function exportToCSVReportFinancial() {
     csv += `${window.safeCsvCell("Income by Account")},${window.safeCsvCell("Night Study Fees")},${d.accounts.nightStudy || 0}\n`;
     csv += `${window.safeCsvCell("Income by Account")},${window.safeCsvCell("Others")},${d.accounts.others || 0}\n`;
     csv += `${window.safeCsvCell("Income by Account")},${window.safeCsvCell("Total Account Income")},${d.accounts.total || 0}\n\n`;
+  }
+
+  if (d.hrPayroll) {
+    csv += `${window.safeCsvCell("HR Payroll Bank Book")},${window.safeCsvCell("Full Time Bonus")},${d.hrPayroll.fullTimeBonus || 0}\n`;
+    csv += `${window.safeCsvCell("HR Payroll Bank Book")},${window.safeCsvCell("Full Time Fund")},${d.hrPayroll.fullTimeFund || 0}\n`;
+    csv += `${window.safeCsvCell("HR Payroll Bank Book")},${window.safeCsvCell("Bank Interest")},${d.hrPayroll.bankInterest || 0}\n`;
+    csv += `${window.safeCsvCell("HR Payroll Bank Book")},${window.safeCsvCell("Other")},${d.hrPayroll.other || 0}\n`;
+    csv += `${window.safeCsvCell("HR Payroll Bank Book")},${window.safeCsvCell("Total HR Liabilities")},${d.hrPayroll.total || 0}\n\n`;
   }
 
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });

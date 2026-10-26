@@ -233,16 +233,28 @@ export async function getFinancialReportData(db, body) {
       WHERE fy IN (?, ?)
     `).bind(activeFy, fyClean).first() || {};
 
+    // 💡 0 D1 Quota Overhead: မူလ payroll query ထဲတွင် Liabilities များပါ တစ်ပြိုင်နက် ရယူခြင်း
     const payAgg = await db.prepare(`
       SELECT 
         COALESCE(SUM(CASE WHEN LOWER(category) LIKE '%full%time%salary%' THEN credit ELSE 0 END), 0) as fullTimeSalary,
         COALESCE(SUM(CASE WHEN LOWER(category) LIKE '%part%time%salary%' THEN credit ELSE 0 END), 0) as partTimeSalary,
         COALESCE(SUM(CASE WHEN LOWER(category) LIKE '%full%time%bonus%' THEN credit ELSE 0 END), 0) as fullTimeBonus,
         COALESCE(SUM(CASE WHEN LOWER(category) LIKE '%full%time%fund%' THEN credit ELSE 0 END), 0) as fullTimeFund,
-        COALESCE(SUM(credit), 0) as totalPayroll
+        COALESCE(SUM(credit), 0) as totalPayroll,
+        -- 🎯 HR Payroll Bank Book Liabilities တွက်ချက်မှုများ
+        COALESCE(SUM(CASE WHEN COALESCE(unpaid_bonus, 0) != 0 THEN unpaid_bonus WHEN LOWER(category) LIKE '%full%time%bonus%' THEN (debit - credit) ELSE 0 END), 0) as hrBonus,
+        COALESCE(SUM(CASE WHEN COALESCE(unpaid_fund, 0) != 0 THEN unpaid_fund WHEN LOWER(category) LIKE '%full%time%fund%' THEN (debit - credit) ELSE 0 END), 0) as hrFund,
+        COALESCE(SUM(CASE WHEN LOWER(category) LIKE '%bank%interest%' THEN debit ELSE 0 END), 0) as hrBankInterest,
+        COALESCE(SUM(CASE WHEN LOWER(category) LIKE '%other%' THEN (debit - credit) ELSE 0 END), 0) as hrOther
       FROM payroll 
       WHERE fy IN (?, ?)
     `).bind(activeFy, fyClean).first() || {};
+
+    const hrBonus = parseFloat(payAgg.hrBonus || 0);
+    const hrFund = parseFloat(payAgg.hrFund || 0);
+    const hrBankInterest = parseFloat(payAgg.hrBankInterest || 0);
+    const hrOther = parseFloat(payAgg.hrOther || 0);
+    const totalHrLiabilities = hrBonus + hrFund + hrBankInterest + hrOther;
 
     return {
       success: true,
@@ -268,6 +280,13 @@ export async function getFinancialReportData(db, body) {
           fullTimeSalary: parseFloat(payAgg.fullTimeSalary || 0), partTimeSalary: parseFloat(payAgg.partTimeSalary || 0),
           fullTimeBonus: parseFloat(payAgg.fullTimeBonus || 0), fullTimeFund: parseFloat(payAgg.fullTimeFund || 0),
           total: parseFloat(payAgg.totalPayroll || 0)
+        },
+        hrPayroll: {
+          fullTimeBonus: hrBonus,
+          fullTimeFund: hrFund,
+          bankInterest: hrBankInterest,
+          other: hrOther,
+          total: totalHrLiabilities
         }
       }
     };
