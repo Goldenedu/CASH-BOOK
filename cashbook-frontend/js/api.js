@@ -55,23 +55,20 @@ window.OfflineSync = {
   enqueue: async function (action, payload, method = 'POST') {
     let queue = this.getQueue();
 
-    // 🎯 စာရင်းတစ်ခုချင်းစီအတွက် ထပ်တူမကျသော Client-side UUID သတ်မှတ်ခြင်း
     const prefix = payload.bookName ? payload.bookName.slice(0, 3).toUpperCase() : 'REC';
     const tempId = payload.uniqueId || `${prefix}_OFF_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    const tempVr = payload.vrNo || `OFF-${Date.now().toString().slice(-6)}`;
+    // 🎯 ယာယီဘောင်ချာနံပါတ်အား ရှင်းလင်းစွာ TEMP- ဖြင့် စတင်စေသည်
+    const tempVr = `TEMP-${Date.now().toString().slice(-6)}`;
 
-    // Queue ထဲတွင် ဤ ID ဖြင့် ရှိပြီးသားဖြစ်နေပါက ထပ်မံမထည့်ပါ (Duplicate Guard)
-    if (queue.some(item => item.id === tempId)) {
-      return;
-    }
+    if (queue.some(item => item.id === tempId)) return;
 
     const entry = {
       id: tempId,
       action: action,
       method: method,
-      payload: { ...payload, uniqueId: tempId, vrNo: tempVr },
+      // 🎯 isOfflineTempVr: true ဖြင့် အမှတ်အသားပြုပြီး Server သို့ ရောက်ချိန်တွင် ဘောင်ချာအသစ် ထုတ်ယူစေမည်
+      payload: { ...payload, uniqueId: tempId, vrNo: tempVr, isOfflineTempVr: true },
       timestamp: new Date().toISOString(),
-      // စာအုပ်အားလုံးနှင့် ကိုက်ညီသော Title / Details
       bookName: payload.bookName || (action.includes('Income') ? 'Main Income Book' : (action.includes('StudentMoney') ? 'Student Money' : 'Ledger Book')),
       category: payload.category || payload.accountName || '-',
       description: payload.description || payload.remark || payload.name || payload.fyidName || 'Entry',

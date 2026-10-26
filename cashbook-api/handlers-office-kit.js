@@ -292,7 +292,11 @@ export async function saveExpenseEntry(db, session, body) {
     }
 
     const newNo = (isMigration && body.no) ? parseInt(body.no, 10) : await generateFyNo(db, tableName, fy);
-    const vrNo = body.vrNo || await generateVoucherNo(db, tableName, bookPrefix, entryDate);
+    // 🎯 FIX: Offline ယာယီဘောင်ချာနံပါတ် ဖြစ်နေပါက အသုံးမပြုဘဲ D1 ထဲမှ နောက်ဆုံးနံပါတ်ကို စစ်၍ အသစ်ထုတ်ယူစေမည်
+    const isTempVr = !body.vrNo || body.isOfflineTempVr || String(body.vrNo).startsWith('TEMP-') || /^OFF-\d{6}$/.test(String(body.vrNo));
+    const vrNo = (!isTempVr && body.vrNo)
+      ? body.vrNo
+      : await generateVoucherNo(db, tableName, bookPrefix, entryDate);
 
     // ⚡ DIRECT IMPORT / MIGRATION MODE
     if (isMigration) {

@@ -545,7 +545,10 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration, re
         }
       }
     } else {
-      const vrNo = body.vrNo || await generateVoucherNo(db, 'income', 'INC', entryDate);
+      // 🎯 FIX: ယာယီဘောင်ချာ မဟုတ်မှသာ လက်ခံပြီး၊ ယာယီဖြစ်နေပါက INC နောက်ဆုံးနံပါတ်ကို စစ်ပြီး အသစ်ထုတ်ပေးသည်
+      const isTempVr = !body.vrNo || body.isOfflineTempVr || String(body.vrNo).startsWith('TEMP-') || String(body.vrNo).startsWith('OFF-');
+      const vrNo = (!isTempVr && body.vrNo) ? body.vrNo : await generateVoucherNo(db, 'income', 'INC', entryDate);
+
       const debit = parseFloat(body.debit || 0);
       const credit = parseFloat(body.credit || 0);
 

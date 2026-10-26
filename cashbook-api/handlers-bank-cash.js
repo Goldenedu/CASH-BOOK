@@ -277,7 +277,9 @@ export async function saveBankCashEntry(db, session, body) {
     }
 
     const newNo = (isMigration && body.no) ? parseInt(body.no, 10) : await generateFyNo(db, tableName, fy);
-    const vrNo = body.vrNo || await generateVoucherNo(db, tableName, prefix, entryDate);
+    // 🎯 FIX: ယာယီဘောင်ချာနံပါတ် မဟုတ်မှသာ လက်ခံမည်
+    const isTempVr = !body.vrNo || body.isOfflineTempVr || String(body.vrNo).startsWith('TEMP-') || String(body.vrNo).startsWith('OFF-');
+    const vrNo = (!isTempVr && body.vrNo) ? body.vrNo : await generateVoucherNo(db, tableName, prefix, entryDate);
 
     // ⚡ MIGRATION DIRECT IMPORT MODE
     if (isMigration) {

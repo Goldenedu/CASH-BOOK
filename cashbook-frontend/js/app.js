@@ -770,8 +770,14 @@ window.syncAllPendingNow = async function () {
   let successCount = 0;
   for (const item of queue) {
     try {
-      // D1 API Call (Existing callApi logic: forceRefresh = true to bypass cache)
-      const res = await callApi(item.action, { ...item.payload, forceRefresh: true }, item.method);
+      // 🎯 FIX: အော့ဖ်လိုင်း ယာယီဘောင်ချာ (TEMP- / OFF-) ဖြစ်နေပါက Server က တရားဝင် ဘောင်ချာနံပါတ် အသစ်ထုတ်ပေးနိုင်ရန် vrNo ကို ဖယ်ထုတ်၍ ပို့သည်
+      const syncPayload = { ...item.payload };
+      if (syncPayload.isOfflineTempVr || (syncPayload.vrNo && (syncPayload.vrNo.startsWith('TEMP-') || /^OFF-\d{6}$/.test(syncPayload.vrNo)))) {
+        delete syncPayload.vrNo;
+        delete syncPayload.isOfflineTempVr;
+      }
+
+      const res = await callApi(item.action, { ...syncPayload, forceRefresh: true }, item.method);
       if (res && res.success) {
         window.OfflineSync.remove(item.id);
         successCount++;
@@ -790,8 +796,13 @@ window.syncAllPendingNow = async function () {
   window.updatePendingUI();
 
   if (successCount > 0) {
-    showToast("SUCCESS", `Pending စာရင်း (${successCount}) ခုကို Cloudflare D1 သို့ အောင်မြင်စွာ ပို့ဆောင်ပြီးပါပြီ။`);
-    if (typeof loadIncomeData === 'function') loadIncomeData(false);
+    showToast("SUCCESS", `Pending စာရင်း (${successCount}) ခုကို Cloudflare D1 သို့ တရားဝင်ဘောင်ချာနံပါတ်များဖြင့် အောင်မြင်စွာ ပို့ဆောင်ပြီးပါပြီ။`);
+
+    // လက်ရှိ ဖွင့်ထားသော စာမျက်နှာရှိ ဇယားကို Data အသစ်ဖြင့် ပြန်လည် Refresh လုပ်ပေးခြင်း
+    if (typeof loadIncomeData === 'function') loadIncomeData(true, true);
+    if (typeof loadOfficeData === 'function') loadOfficeData(true, true);
+    if (typeof loadBankCashKitData === 'function') loadBankCashKitData(true, true);
+    if (typeof loadStudentMoneyData === 'function') loadStudentMoneyData(true, true);
   }
 };
 
