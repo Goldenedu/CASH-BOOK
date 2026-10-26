@@ -808,6 +808,25 @@ window.syncAllPendingNow = async function () {
     if (typeof loadBankCashKitData === 'function') loadBankCashKitData(true, true);
     if (typeof loadStudentMoneyData === 'function') loadStudentMoneyData(true, true);
     if (typeof loadPmCashierBookData === 'function') loadPmCashierBookData(true, true);
+
+    // 🎯 ၃။ CASHIER CASH BOOK (TABS အားလုံး) အလိုအလျောက် AUTO REFRESH ပြုလုပ်ခြင်း
+    if (typeof loadCashierData === 'function') {
+      loadCashierData(true); // forceRefresh = true ဖြင့် D1 သို့ တိုက်ရိုက်ခေါ်ယူသည်
+    }
+
+    // လက်ရှိ ဖွင့်ထားသော Cashier Sub-tab (CABank, CACash, CAOffice, CAKitchen, CAPayroll, Today Income) အား Re-render လုပ်သည်
+    if (typeof window.initCashierView === 'function') {
+      const activeCashierSub = window.gCurrentCashierSubBook || window.currentCashierSubBook || 'CABank';
+      window.initCashierView(activeCashierSub, true);
+    }
+    if (typeof window.switchCashierSubBook === 'function' && (window.gCurrentCashierSubBook || window.currentCashierSubBook)) {
+      window.switchCashierSubBook(window.gCurrentCashierSubBook || window.currentCashierSubBook, true);
+    }
+
+    // လက်ရှိ Active Module ပေါ်မူတည်၍ တစ်ပြေးညီ ပြန်လည် Re-render စေခြင်း
+    if (window.AppState && window.AppState.currentModule && typeof triggerModuleInit === 'function') {
+      triggerModuleInit(window.AppState.currentModule);
+    }
   }
 };
 
