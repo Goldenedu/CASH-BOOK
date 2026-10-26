@@ -863,7 +863,7 @@ window.prefetchOfflineMasterData = async function (force = false) {
       }
     }
 
-    // ၂။ Staff List Pre-cache (Full Time + Part Time)
+    // ၂။ Staff List Pre-cache (Full Time & Part Time)
     if (force || !localStorage.getItem(staffCacheKey)) {
       const [ftRes, ptRes] = await Promise.all([
         callApi('getStaffData', { category: 'Full Time' }, 'GET'),
@@ -872,18 +872,29 @@ window.prefetchOfflineMasterData = async function (force = false) {
 
       const allStaff = [...(ftRes?.data || []), ...(ptRes?.data || [])];
       if (allStaff.length > 0) {
-        const compactStaff = allStaff.map(st => ({
-          id: st.id,
-          staffId: st.staffId,
-          name: st.name,
-          category: st.category,
-          position: st.position,
-          salaryGrade: st.salaryGrade,
-          unpaidBonus: st.unpaidBonus || 0,
-          unpaidFund: st.unpaidFund || 0
-        }));
+        const compactStaff = allStaff.map(st => {
+          // 🎯 FIX: Primary Key (st.id) အစား တကယ့် Staff ID (st.staffId) ကို အဓိက သတ်မှတ်သည်
+          const realStaffId = parseInt(st.staffId || st.staff_id, 10);
+          return {
+            id: realStaffId,
+            staffId: realStaffId,
+            staff_id: realStaffId,
+            name: st.name || '',
+            staffIdName: st.staffIdName || st.staff_idname || `[FID ${String(realStaffId).padStart(3, '0')}] ${st.name || ''}`,
+            category: st.category || 'Full Time',
+            position: st.position || '',
+            salaryGrade: st.salaryGrade || '',
+            basicAmt: st.basicAmt || 0,
+            extraAmt: st.extraAmt || 0,
+            totalSalary: st.totalSalary || 0,
+            bonus: st.bonus || 0,
+            fund: st.fund || 0,
+            unpaidBonus: st.unpaidBonus || 0,
+            unpaidFund: st.unpaidFund || 0
+          };
+        });
         localStorage.setItem(staffCacheKey, JSON.stringify(compactStaff));
-        console.log(`[Offline Sync] Cached ${compactStaff.length} staff records (Full + Part Time).`);
+        console.log(`[Offline Sync] Cached ${compactStaff.length} staff records with exact Staff IDs.`);
       }
     }
 

@@ -211,15 +211,28 @@ async function preloadStaffCacheForPayroll() {
 }
 
 async function ensureStaffCacheForCategory(isPartTime) {
+  // 🎯 ၁။ Memory Cache တွင် မရှိပါက LocalStorage Pre-cache မှ အရင်ဆုံး ဖတ်ယူသည် (Offline Ready & 0 D1 Quota)
+  if ((!gHrStaffFT || gHrStaffFT.length === 0) || (!gHrStaffPT || gHrStaffPT.length === 0)) {
+    try {
+      const localMaster = localStorage.getItem('golden_master_staff');
+      if (localMaster) {
+        const parsed = JSON.parse(localMaster);
+        gHrStaffFT = parsed.filter(s => String(s.category || '').toLowerCase().includes('full'));
+        gHrStaffPT = parsed.filter(s => String(s.category || '').toLowerCase().includes('part'));
+        gHrStaffCache = parsed;
+      }
+    } catch (e) { }
+  }
+
   const needsRefresh = isPartTime
     ? (!gHrStaffPT || gHrStaffPT.length === 0)
     : (!gHrStaffFT || gHrStaffFT.length === 0);
 
-  if (!needsRefresh) return;
+  if (!needsRefresh || !navigator.onLine) return;
 
   try {
     const category = isPartTime ? 'Part Time' : 'Full Time';
-    const res = await callApi('getStaffData', { category, page: 1, limit: 500, forceRefresh: true }, 'GET');
+    const res = await callApi('getStaffData', { category, page: 1, limit: 500, forceRefresh: false }, 'GET');
 
     if (res && res.success && Array.isArray(res.data)) {
       if (isPartTime) {
@@ -466,17 +479,14 @@ async function onStaffIdChangePayroll() {
   const targetIdNum = parseInt(rawStaffId, 10);
   const prefixKey = isPartTime ? 'pid' : 'fid';
 
-  const matchedStaff = (targetStaffList || []).find((s, idx) => {
+  // 🎯 FIX: d1Id နှင့် rowNo များကို လုံးဝ မစစ်ဆေးတော့ဘဲ တကယ့် Staff ID (sId) နှင့် Format အတိအကျဖြင့်သာ ရှာဖွေသည်
+  const matchedStaff = (targetStaffList || []).find((s) => {
     const sId = parseInt(s.staff_id || s.staffId || 0, 10);
-    const d1Id = parseInt(s.id || 0, 10);
-    const rowNo = parseInt(s.no || (idx + 1), 10);
-    const sName = String(s.staff_idname || s.staffIdName || s.name || '').toLowerCase();
     const searchPad = `00${targetIdNum}`.slice(-3);
+    const sName = String(s.staff_idname || s.staffIdName || '').toLowerCase();
 
     return (
       sId === targetIdNum ||
-      d1Id === targetIdNum ||
-      rowNo === targetIdNum ||
       sName.includes(`${prefixKey} ${searchPad}`) ||
       sName.includes(`${prefixKey}${searchPad}`)
     );
