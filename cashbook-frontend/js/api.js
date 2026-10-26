@@ -427,15 +427,29 @@ window.callApi = async function (action, payload = {}, method = 'POST') {
   // 📶 Offline Read Fallback: အင်တာနက်မရှိချိန်တွင် Pre-cached Data များမှ တိုက်ရိုက်ဖတ်ယူခြင်း
   if (isReadAction && !navigator.onLine) {
     const currentFy = typeof window.getCurrentAcademicYear === 'function' ? window.getCurrentAcademicYear() : '2026-2027';
+
     if (action === 'getPayrollSettings') {
-      const cachedSettings = localStorage.getItem('golden_master_payroll_settings');
-      if (cachedSettings) return { success: true, data: JSON.parse(cachedSettings) };
+      const cached = localStorage.getItem('golden_master_payroll_settings');
+      if (cached) return { success: true, data: JSON.parse(cached) };
     } else if (action === 'getStaffData') {
-      const cachedStaff = localStorage.getItem('golden_master_staff');
-      if (cachedStaff) return { success: true, data: JSON.parse(cachedStaff), totalRows: JSON.parse(cachedStaff).length };
+      const cached = localStorage.getItem('golden_master_staff');
+      if (cached) return { success: true, data: JSON.parse(cached), totalRows: JSON.parse(cached).length };
     } else if (action === 'getStudentData' || action === 'lookupStudentById') {
-      const cachedStudents = localStorage.getItem(`golden_master_students_${currentFy}`);
-      if (cachedStudents) return { success: true, data: JSON.parse(cachedStudents) };
+      const cached = localStorage.getItem(`golden_master_students_${currentFy}`);
+      if (cached) return { success: true, data: JSON.parse(cached) };
+    } else if (action === 'getStudentMoneySummary') {
+      const cached = localStorage.getItem(`golden_master_students_${currentFy}`);
+      if (cached) {
+        const list = JSON.parse(cached);
+        const summaryData = list.map(s => ({
+          studentId: s.id || s.studentId,
+          fyid: s.fyid,
+          fyidName: s.name || s.fyidName,
+          class: s.class,
+          netBalance: s.balance || 0
+        }));
+        return { success: true, data: summaryData };
+      }
     }
   }
 

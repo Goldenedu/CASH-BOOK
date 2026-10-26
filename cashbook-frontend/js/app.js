@@ -750,8 +750,10 @@ function renderPendingTable() {
   });
 }
 
+
 /**
- * 💡 Sync All Pending Transactions to Cloudflare D1 (Zero Full-Table Scan)
+ * 💡 Sync All Pending Transactions to Cloudflare D1
+ * Auto-strips temp vouchers and triggers Auto-Refresh across all modules (including HR Payroll)
  */
 window.syncAllPendingNow = async function () {
   if (!navigator.onLine) {
@@ -770,7 +772,7 @@ window.syncAllPendingNow = async function () {
   let successCount = 0;
   for (const item of queue) {
     try {
-      // 🎯 FIX: အော့ဖ်လိုင်း ယာယီဘောင်ချာ (TEMP- / OFF-) ဖြစ်နေပါက Server က တရားဝင် ဘောင်ချာနံပါတ် အသစ်ထုတ်ပေးနိုင်ရန် vrNo ကို ဖယ်ထုတ်၍ ပို့သည်
+      // 🎯 FIX: အော့ဖ်လိုင်း ယာယီဘောင်ချာ (TEMP- / OFF-) ဖြစ်နေပါက Server မှ တရားဝင်ဘောင်ချာ ထုတ်ပေးနိုင်ရန် vrNo ကို ဖယ်ထုတ်၍ ပို့သည်
       const syncPayload = { ...item.payload };
       if (syncPayload.isOfflineTempVr || (syncPayload.vrNo && (syncPayload.vrNo.startsWith('TEMP-') || /^OFF-\d{6}$/.test(syncPayload.vrNo)))) {
         delete syncPayload.vrNo;
@@ -798,11 +800,14 @@ window.syncAllPendingNow = async function () {
   if (successCount > 0) {
     showToast("SUCCESS", `Pending စာရင်း (${successCount}) ခုကို Cloudflare D1 သို့ တရားဝင်ဘောင်ချာနံပါတ်များဖြင့် အောင်မြင်စွာ ပို့ဆောင်ပြီးပါပြီ။`);
 
-    // လက်ရှိ ဖွင့်ထားသော စာမျက်နှာရှိ ဇယားကို Data အသစ်ဖြင့် ပြန်လည် Refresh လုပ်ပေးခြင်း
+    // 🎯 AUTO REFRESH: စာရင်း Sync ပြီးသည်နှင့် သက်ဆိုင်ရာ စာမျက်နှာရှိ ဇယားများကို Data အသစ်ဖြင့် Auto-Refresh ပြုလုပ်ပေးခြင်း
+    if (typeof loadHrPayrollData === 'function') loadHrPayrollData(true); // 🎯 HR Payroll Auto Refresh
+    if (typeof loadStaffData === 'function') loadStaffData(false);
     if (typeof loadIncomeData === 'function') loadIncomeData(true, true);
     if (typeof loadOfficeData === 'function') loadOfficeData(true, true);
     if (typeof loadBankCashKitData === 'function') loadBankCashKitData(true, true);
     if (typeof loadStudentMoneyData === 'function') loadStudentMoneyData(true, true);
+    if (typeof loadPmCashierBookData === 'function') loadPmCashierBookData(true, true);
   }
 };
 
@@ -843,12 +848,14 @@ window.prefetchOfflineMasterData = async function (force = false) {
           const sId = parseInt(s.student_id || s.studentId || s.id, 10);
           return {
             id: sId,
+            studentId: sId,
             fyid: s.fyid || '',
             name: s.name || s.fyid_name || '',
+            fyidName: s.fyidName || s.fyid_name || s.name || '',
             class: s.class || '',
             category: s.category || '',
             promo: s.promo || '',
-            balance: balanceMap.get(sId) || 0 // 🎯 Wallet Balance ပါ တစ်ခါတည်း ပါဝင်သည်
+            balance: balanceMap.get(sId) || 0 // 🎯 Wallet Balance ပါ တစ်ခါတည်း Cache သိမ်းဆည်းသည်
           };
         });
         localStorage.setItem(stuCacheKey, JSON.stringify(compactStudents));
@@ -856,11 +863,16 @@ window.prefetchOfflineMasterData = async function (force = false) {
       }
     }
 
-    // ၂။ Staff List Pre-cache (Full Time & Part Time)
+    // ၂။ Staff List Pre-cache (Full Time + Part Time)
     if (force || !localStorage.getItem(staffCacheKey)) {
-      const staffRes = await callApi('getStaffData', { category: 'Full Time' }, 'GET');
-      if (staffRes && staffRes.success && Array.isArray(staffRes.data)) {
-        const compactStaff = staffRes.data.map(st => ({
+      const [ftRes, ptRes] = await Promise.all([
+        callApi('getStaffData', { category: 'Full Time' }, 'GET'),
+        callApi('getStaffData', { category: 'Part Time' }, 'GET')
+      ]);
+
+      const allStaff = [...(ftRes?.data || []), ...(ptRes?.data || [])];
+      if (allStaff.length > 0) {
+        const compactStaff = allStaff.map(st => ({
           id: st.id,
           staffId: st.staffId,
           name: st.name,
@@ -871,7 +883,7 @@ window.prefetchOfflineMasterData = async function (force = false) {
           unpaidFund: st.unpaidFund || 0
         }));
         localStorage.setItem(staffCacheKey, JSON.stringify(compactStaff));
-        console.log(`[Offline Sync] Cached ${compactStaff.length} staff records.`);
+        console.log(`[Offline Sync] Cached ${compactStaff.length} staff records (Full + Part Time).`);
       }
     }
 
