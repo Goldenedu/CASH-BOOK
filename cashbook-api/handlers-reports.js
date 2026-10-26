@@ -132,7 +132,7 @@ function get12FiscalMonths(fyStr) {
 /**
  * 💡 Helper to intelligently detect a student's regular monthly fee
  */
-function detectStudentMonthlyFee(monthlyServices, remarksList = []) {
+/* function detectStudentMonthlyFee(monthlyServices, remarksList = []) {
   const nonZero = monthlyServices.filter(v => v > 0);
   if (nonZero.length === 0) return 0;
 
@@ -172,7 +172,7 @@ function detectStudentMonthlyFee(monthlyServices, remarksList = []) {
   }
 
   return minVal;
-}
+} */
 
 export async function getFinancialReportData(db, body) {
   try {
@@ -428,7 +428,7 @@ export async function getIncomeDetailReportData(db, body) {
       }
     });
 
-    // ⚡ ADVANCE AUTO-ROLLOVER ENGINE (Cascading advance payments forward)
+    /* // ⚡ ADVANCE AUTO-ROLLOVER ENGINE (Cascading advance payments forward)
     studentGroupMap.forEach(stGroup => {
       const regularFee = detectStudentMonthlyFee(stGroup.monthlyServices, stGroup.remarksList);
 
@@ -453,7 +453,7 @@ export async function getIncomeDetailReportData(db, body) {
           }
         }
       }
-    });
+    }); */
 
     let processedList = Array.from(studentGroupMap.values());
 
