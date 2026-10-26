@@ -604,8 +604,13 @@ export async function getMonthlyIncomeReportData(db, body) {
 
         if (isMatch) {
           let mStr = parseSafeMonthYear(r.effect_date, activeFy) || parseSafeMonthYear(r.my, activeFy) || parseSafeMonthYear(r.date, activeFy);
-          const idx = mStr ? monthKeys.indexOf(mStr) : -1;
-          if (idx >= 0) monthAmts[idx] += (parseFloat(r.credit || 0) - parseFloat(r.debit || 0));
+          let idx = mStr ? monthKeys.indexOf(mStr) : -1;
+
+          // 🎯 OOB Guard (Out of Bounds): ရက်စွဲသည် ဤဘဏ္ဍာနှစ် ၁၂ လ အတွင်း မပါဝင်ခဲ့လျှင်သော်လည်းကောင်း၊ Format မှားနေလျှင်သော်လည်းကောင်း ငွေမပျောက်စေရန် 
+          // ပထမဆုံးလ (e.g. Mar-26) ထဲသို့ Default ထည့်သွင်းပေးမည်။ ထိုမှသာ Table 1 နှင့် Table 2 ၏ Grand Total အတိအကျ ညီမျှမည် ဖြစ်ပါသည်။
+          if (idx === -1) idx = 0;
+
+          monthAmts[idx] += (parseFloat(r.credit || 0) - parseFloat(r.debit || 0));
         }
       });
 
@@ -642,9 +647,13 @@ export async function getMonthlyIncomeReportData(db, body) {
         }
 
         if (isMatch) {
-          const mStr = parseSafeMonthYear(r.date || r.effect_date || '');
-          const idx = monthKeys.indexOf(mStr);
-          if (idx >= 0) monthAmts[idx] += (parseFloat(r.credit || 0) - parseFloat(r.debit || 0));
+          let mStr = parseSafeMonthYear(r.date, activeFy) || parseSafeMonthYear(r.effect_date, activeFy) || parseSafeMonthYear(r.my, activeFy);
+          let idx = mStr ? monthKeys.indexOf(mStr) : -1;
+
+          // 🎯 OOB Guard: ငွေမပျောက်စေရန် Default နေရာသို့ ထည့်သွင်းခြင်း
+          if (idx === -1) idx = 0;
+
+          monthAmts[idx] += (parseFloat(r.credit || 0) - parseFloat(r.debit || 0));
         }
       });
 
