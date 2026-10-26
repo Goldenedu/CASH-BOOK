@@ -381,9 +381,21 @@ export async function saveHrPayrollForm(db, userSession, body) {
     const isPrivilegedAdmin = ['Owner', 'Admin'].includes(userSession?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport);
 
-    const uniqueid = (isMigration && body.uniqueId)
+    // 🎯 FIX 1: Frontend မှ uniqueId ကို အတည်ယူသုံးမည်
+    const uniqueid = body.uniqueId
       ? String(body.uniqueId).trim()
       : generateUniqueId('SAL');
+
+    // 🎯 FIX 2: 🛡️ IDEMPOTENCY GUARD: ဤ uniqueid ဖြင့် D1 တွင် စာရင်း ရှိနှင့်ပြီးသားဖြစ်ပါက Duplicate မဖြစ်စေရန် Return ပေးသည်
+    const existingCheck = await db.prepare("SELECT id, vr_no FROM payroll WHERE uniqueid = ?").bind(uniqueid).first();
+    if (existingCheck && !body.isUpdate && !isMigration) {
+      return {
+        success: true,
+        message: "ဤ HR Payroll စာရင်းသည် D1 Database ထဲတွင် ရှိနှင့်ပြီးသား ဖြစ်ပါသည်။ (Duplicate Prevented)",
+        uniqueId: uniqueid,
+        vrNo: existingCheck.vr_no || body.vrNo || ''
+      };
+    }
 
     const dateStr = body.date || new Date().toISOString().split('T')[0];
     const category = body.category || 'Full Time Salary';
@@ -397,7 +409,12 @@ export async function saveHrPayrollForm(db, userSession, body) {
 
     const fy = normalizeFyStr(body.fy, dateStr);
 
-    const vrNoVal = body.vrNo || await generateVoucherNo(db, 'payroll', 'SAL', dateStr);
+    // 🎯 FIX 3: ယာယီဘောင်ချာ (TEMP- / OFF-) ဖြစ်နေပါက အသုံးမပြုဘဲ D1 မှ နောက်ဆုံးဘောင်ချာကို စစ်၍ SAL-yyMMdd-xxx အသစ် ထုတ်ပေးသည်
+    const isTempVr = !body.vrNo || body.isOfflineTempVr || String(body.vrNo).startsWith('TEMP-') || String(body.vrNo).startsWith('OFF-');
+    const vrNoVal = (!isTempVr && body.vrNo)
+      ? body.vrNo
+      : await generateVoucherNo(db, 'payroll', 'SAL', dateStr);
+
     const newNo = (isMigration && body.no) ? parseInt(body.no, 10) : await generateFyNo(db, 'payroll', fy);
 
     const debitVal = parseFloat(body.debit || 0);
@@ -422,7 +439,6 @@ export async function saveHrPayrollForm(db, userSession, body) {
 
     if (!isMigration && staffIdStr) {
       const targetStaffId = parseInt(staffIdStr, 10);
-      // 🚀 ULTRA-OPTIMIZATION: Explicit Column Select
       const staffRow = await db.prepare("SELECT id, unpaid_bonus, unpaid_fund, bonus, fund FROM staff_fulltime WHERE staff_id = ? OR id = ? LIMIT 1").bind(targetStaffId, targetStaffId).first();
 
       if (staffRow) {

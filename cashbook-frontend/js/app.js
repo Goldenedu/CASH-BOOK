@@ -814,36 +814,78 @@ window.clearAllPendingQueue = function () {
 };
 
 /**
- * 💡 Pre-fetch Student Master Data (0 D1 Quota Cost when cached)
- * @param {boolean} force - Force refresh via API even if cache exists (Used during Login)
+ * 💡 Pre-fetch Complete Offline Master Dataset (0 D1 Quota Cost when cached)
+ * Caches: 1. Students + Wallet Balances, 2. Staff Lists, 3. Salary Grade Matrix
  */
 window.prefetchOfflineMasterData = async function (force = false) {
-  const currentFy = typeof window.getCurrentAcademicYear === 'function' ? window.getCurrentAcademicYear() : '2026-2027';
-  const cacheKey = `golden_master_students_${currentFy}`;
+  if (!navigator.onLine) return;
 
-  // Force မဟုတ်ပါက LocalStorage တွင် ရှိပြီးသားဖြစ်လျှင် D1 သို့ လုံးဝ မခေါ်ပါ
-  if (!force) {
-    const existing = localStorage.getItem(cacheKey);
-    if (existing) return;
-  }
+  const currentFy = typeof window.getCurrentAcademicYear === 'function' ? window.getCurrentAcademicYear() : '2026-2027';
+  const stuCacheKey = `golden_master_students_${currentFy}`;
+  const staffCacheKey = 'golden_master_staff';
+  const gradeCacheKey = 'golden_master_payroll_settings';
 
   try {
-    const res = await callApi('getStudentData', { fy: currentFy, limit: 5000 }, 'GET');
-    if (res && res.success && res.data) {
-      // Memory ချွေတာရန် လိုအပ်သော Field များကိုသာ ညှိယူသိမ်းဆည်းသည်
-      const compactList = res.data.map(s => ({
-        id: s.student_id || s.studentId || s.id,
-        fyid: s.fyid,
-        name: s.name,
-        class: s.class,
-        category: s.category,
-        promo: s.promo
-      }));
-      localStorage.setItem(cacheKey, JSON.stringify(compactList));
-      console.log(`[Offline Sync] Pre-fetched ${compactList.length} students for FY ${currentFy}`);
+    // ၁။ Students Directory & Wallet Balances Pre-cache
+    if (force || !localStorage.getItem(stuCacheKey)) {
+      const [stuRes, sumRes] = await Promise.all([
+        callApi('getStudentData', { fy: currentFy, limit: 5000 }, 'GET'),
+        callApi('getStudentMoneySummary', { fy: currentFy }, 'GET')
+      ]);
+
+      const balanceMap = new Map();
+      if (sumRes && sumRes.success && Array.isArray(sumRes.data)) {
+        sumRes.data.forEach(r => balanceMap.set(parseInt(r.studentId, 10), parseFloat(r.netBalance || 0)));
+      }
+
+      if (stuRes && stuRes.success && Array.isArray(stuRes.data)) {
+        const compactStudents = stuRes.data.map(s => {
+          const sId = parseInt(s.student_id || s.studentId || s.id, 10);
+          return {
+            id: sId,
+            fyid: s.fyid || '',
+            name: s.name || s.fyid_name || '',
+            class: s.class || '',
+            category: s.category || '',
+            promo: s.promo || '',
+            balance: balanceMap.get(sId) || 0 // 🎯 Wallet Balance ပါ တစ်ခါတည်း ပါဝင်သည်
+          };
+        });
+        localStorage.setItem(stuCacheKey, JSON.stringify(compactStudents));
+        console.log(`[Offline Sync] Cached ${compactStudents.length} students with wallet balances.`);
+      }
     }
-  } catch (e) {
-    console.warn("[Offline Sync] Pre-fetch skipped:", e.message);
+
+    // ၂။ Staff List Pre-cache (Full Time & Part Time)
+    if (force || !localStorage.getItem(staffCacheKey)) {
+      const staffRes = await callApi('getStaffData', { category: 'Full Time' }, 'GET');
+      if (staffRes && staffRes.success && Array.isArray(staffRes.data)) {
+        const compactStaff = staffRes.data.map(st => ({
+          id: st.id,
+          staffId: st.staffId,
+          name: st.name,
+          category: st.category,
+          position: st.position,
+          salaryGrade: st.salaryGrade,
+          unpaidBonus: st.unpaidBonus || 0,
+          unpaidFund: st.unpaidFund || 0
+        }));
+        localStorage.setItem(staffCacheKey, JSON.stringify(compactStaff));
+        console.log(`[Offline Sync] Cached ${compactStaff.length} staff records.`);
+      }
+    }
+
+    // ၃။ Salary Grade Matrix Settings Pre-cache
+    if (force || !localStorage.getItem(gradeCacheKey)) {
+      const gradeRes = await callApi('getPayrollSettings', {}, 'GET');
+      if (gradeRes && gradeRes.success && gradeRes.data) {
+        localStorage.setItem(gradeCacheKey, JSON.stringify(gradeRes.data));
+        console.log(`[Offline Sync] Cached Salary Grade Matrix.`);
+      }
+    }
+
+  } catch (err) {
+    console.warn("[Offline Sync Pre-fetch Warning]:", err.message);
   }
 };
 

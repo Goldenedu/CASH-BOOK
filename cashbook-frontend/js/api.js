@@ -38,7 +38,7 @@ window.AppState = window.AppState || {
 window.gDataCache = window.gDataCache || {};
 
 // ==============================================================================
-// 💡 OFFLINE SYNC ENGINE & LOCAL QUEUE MANAGER (0 D1 Quota Cost)
+// 💡 OFFLINE SYNC ENGINE & LOCAL QUEUE MANAGER (Universal Module Support)
 // ==============================================================================
 window.OfflineSync = {
   QUEUE_KEY: 'golden_pending_queue',
@@ -55,23 +55,37 @@ window.OfflineSync = {
   enqueue: async function (action, payload, method = 'POST') {
     let queue = this.getQueue();
 
-    const prefix = payload.bookName ? payload.bookName.slice(0, 3).toUpperCase() : 'REC';
+    // Module အလိုက် Prefix ခွဲခြားခြင်း (INC, EXP, SAL, STM, PMC, CAN)
+    let prefix = 'REC';
+    if (action.includes('Payroll') || action.includes('Staff')) prefix = 'SAL';
+    else if (action.includes('StudentMoney')) prefix = 'STM';
+    else if (action.includes('PmCashier')) prefix = 'PMC';
+    else if (action.includes('Canteen')) prefix = 'CAN';
+    else if (action.includes('Income')) prefix = 'INC';
+    else if (payload.bookName) prefix = payload.bookName.slice(0, 3).toUpperCase();
+
     const tempId = payload.uniqueId || `${prefix}_OFF_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    // 🎯 ယာယီဘောင်ချာနံပါတ်အား ရှင်းလင်းစွာ TEMP- ဖြင့် စတင်စေသည်
     const tempVr = `TEMP-${Date.now().toString().slice(-6)}`;
 
+    // Queue ထဲတွင် ဤ ID ဖြင့် ရှိပြီးသားဖြစ်နေပါက ထပ်မံမထည့်ပါ (Duplicate Guard)
     if (queue.some(item => item.id === tempId)) return;
+
+    let bookLabel = 'Main Income Book';
+    if (action.includes('Payroll')) bookLabel = 'HR Payroll Exp Book';
+    else if (action.includes('Expense')) bookLabel = payload.bookName || 'Office Exp Book';
+    else if (action.includes('StudentMoney')) bookLabel = 'Student Money';
+    else if (action.includes('PmCashier')) bookLabel = 'PM Cashier Book';
 
     const entry = {
       id: tempId,
       action: action,
       method: method,
-      // 🎯 isOfflineTempVr: true ဖြင့် အမှတ်အသားပြုပြီး Server သို့ ရောက်ချိန်တွင် ဘောင်ချာအသစ် ထုတ်ယူစေမည်
+      // 🎯 isOfflineTempVr: true ဖြင့် အမှတ်အသားပြုပြီး Server သို့ ရောက်ချိန်တွင် တရားဝင် ဘောင်ချာအသစ် ထုတ်ယူစေမည်
       payload: { ...payload, uniqueId: tempId, vrNo: tempVr, isOfflineTempVr: true },
       timestamp: new Date().toISOString(),
-      bookName: payload.bookName || (action.includes('Income') ? 'Main Income Book' : (action.includes('StudentMoney') ? 'Student Money' : 'Ledger Book')),
-      category: payload.category || payload.accountName || '-',
-      description: payload.description || payload.remark || payload.name || payload.fyidName || 'Entry',
+      bookName: bookLabel,
+      category: payload.category || payload.accountName || payload.entryType || '-',
+      description: payload.description || payload.remark || payload.name || payload.fyidName || 'Offline Entry',
       amount: payload.credit || payload.debit || payload.amount || 0,
       date: payload.date || new Date().toISOString().slice(0, 10),
       vrNo: tempVr
@@ -408,6 +422,21 @@ window.callApi = async function (action, payload = {}, method = 'POST') {
       isOfflineQueued: true,
       message: "စာရင်းအား စက်ထဲတွင် ယာယီသိမ်းဆည်းထားပါသည် (Offline Queue)"
     };
+  }
+
+  // 📶 Offline Read Fallback: အင်တာနက်မရှိချိန်တွင် Pre-cached Data များမှ တိုက်ရိုက်ဖတ်ယူခြင်း
+  if (isReadAction && !navigator.onLine) {
+    const currentFy = typeof window.getCurrentAcademicYear === 'function' ? window.getCurrentAcademicYear() : '2026-2027';
+    if (action === 'getPayrollSettings') {
+      const cachedSettings = localStorage.getItem('golden_master_payroll_settings');
+      if (cachedSettings) return { success: true, data: JSON.parse(cachedSettings) };
+    } else if (action === 'getStaffData') {
+      const cachedStaff = localStorage.getItem('golden_master_staff');
+      if (cachedStaff) return { success: true, data: JSON.parse(cachedStaff), totalRows: JSON.parse(cachedStaff).length };
+    } else if (action === 'getStudentData' || action === 'lookupStudentById') {
+      const cachedStudents = localStorage.getItem(`golden_master_students_${currentFy}`);
+      if (cachedStudents) return { success: true, data: JSON.parse(cachedStudents) };
+    }
   }
 
   try {
