@@ -67,10 +67,10 @@ async function ensureCanteenSchema(db) {
   if (_schemaInitialized || !db || typeof db.prepare !== 'function') return;
   try {
     await db.prepare("ALTER TABLE pos_items_master ADD COLUMN surplus_stock REAL NOT NULL DEFAULT 0").run();
-  } catch (e) {}
+  } catch (e) { }
   try {
     await db.prepare("ALTER TABLE pos_waste_records ADD COLUMN items_json TEXT").run();
-  } catch (e) {}
+  } catch (e) { }
   try {
     await db.prepare(`
       CREATE TABLE IF NOT EXISTS pos_surplus_records (
@@ -88,7 +88,7 @@ async function ensureCanteenSchema(db) {
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       )
     `).run();
-  } catch (e) {}
+  } catch (e) { }
   try {
     await db.prepare(`
       CREATE TABLE IF NOT EXISTS canteen_day_closures (
@@ -105,7 +105,7 @@ async function ensureCanteenSchema(db) {
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       )
     `).run();
-  } catch (e) {}
+  } catch (e) { }
   try {
     await db.prepare(`
       CREATE TABLE IF NOT EXISTS pos_settings (
@@ -120,7 +120,7 @@ async function ensureCanteenSchema(db) {
       VALUES ('daily_spending_cap', '10000', 'ကျောင်းသားတစ်ဦး တစ်ရက် အများဆုံး မုန့်ဖိုးသုံးစွဲခွင့် ကန့်သတ်ငွေ (MMK)')
       ON CONFLICT(setting_key) DO NOTHING
     `).run();
-  } catch (e) {}
+  } catch (e) { }
   _schemaInitialized = true;
 }
 
@@ -132,7 +132,7 @@ export function calculateSmartPrice(costPrice, markupPercent = 8, roundTo = 50) 
   const markup = Math.max(0, Number(markupPercent !== undefined ? markupPercent : 8));
   const rawPrice = cost * (1 + markup / 100);
   if (rawPrice <= 0) return 0;
-  
+
   const step = (roundTo === 100) ? 100 : 50;
   return Math.ceil(rawPrice / step) * step;
 }
@@ -176,12 +176,12 @@ export async function recalculateCanteenBookBalances(db, fy, fromDate) {
       const method = String(r.method || '').trim();
       const debit = safeAmount(r.debit);
       const credit = safeAmount(r.credit);
-      
+
       // ⚖️ မူရင်း စာရင်းကိုင်စံနှုန်းအတိုင်း ၁၀၀% မပြောင်းလဲဘဲ ထိန်းသိမ်းထားပါသည်
       if (method === 'Transfer') {
         runningBalance += (debit - credit);
       } else if (method === 'Cash') {
-        runningBalance -= credit; 
+        runningBalance -= credit;
       } else {
         runningBalance += (debit - credit);
       }
@@ -348,7 +348,7 @@ export async function getCanteenDashboardMetrics(db, body) {
 
     const lowStockCount = Number(stockStats.lowStockCount || 0);
     const totalStockCapital = parseFloat(stockStats.totalStockCapital || 0);
-    
+
     const todayLossCost = parseFloat(wasteStats.todayLossCost || 0);
     const todaySurplusValue = parseFloat(surplusStats.todaySurplusValue || 0);
     const todayNetLoss = Math.round((todayLossCost - todaySurplusValue) * 100) / 100;
@@ -603,7 +603,7 @@ export async function deletePosSurplusEntry(db, session, body) {
             );
           }
         }
-      } catch (jsonErr) {}
+      } catch (jsonErr) { }
     }
 
     await db.batch(batchStatements);
@@ -791,7 +791,7 @@ export async function deletePosWasteEntry(db, session, body) {
             );
           }
         }
-      } catch (jsonErr) {}
+      } catch (jsonErr) { }
     }
 
     await db.batch(batchStatements);
@@ -929,7 +929,18 @@ export async function savePosPurchase(db, session, body) {
     }
 
     const totalCost = Math.round(qty * costPrice * 100) / 100;
-    const purchaseNo = body.purchaseNo || `PO-${entryDate.replace(/-/g, '').slice(0, 6)}-${generateUniqueId('').slice(-4).toUpperCase()}`;
+    const rawCore = body.uniqueId ? String(body.uniqueId).trim().replace(/^(PO_|PUR_)+/i, '') : generateUniqueId('').slice(-4).toUpperCase();
+    const purchaseNo = body.purchaseNo || `PO-${entryDate.replace(/-/g, '').slice(0, 6)}-${rawCore}`;
+
+    // 🛡️ IDEMPOTENCY GUARD: အဝယ်စာရင်း ထပ်မံမဝင်စေရန် စစ်ဆေးခြင်း
+    const existingPo = await db.prepare("SELECT id, purchase_no FROM pos_purchases WHERE purchase_no = ?").bind(purchaseNo).first();
+    if (existingPo) {
+      return {
+        success: true,
+        purchaseNo: existingPo.purchase_no,
+        message: "ဤအဝယ်စာရင်းသည် ရှိနှင့်ပြီးသား ဖြစ်ပါသည်။ (Duplicate Prevented)"
+      };
+    }
 
     const batchStatements = [
       db.prepare(`
@@ -1295,7 +1306,7 @@ export async function getPosItems(db, body) {
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-    
+
     let res;
     try {
       res = await db.prepare(`
@@ -1338,7 +1349,7 @@ export async function savePosItem(db, session, body) {
     const category = String(body.category || 'Snack').trim();
     const costPrice = safeAmount(body.costPrice || body.cost_price);
     const markupPercent = Math.max(0, Number(body.markupPercent !== undefined ? body.markupPercent : (body.markup_percent !== undefined ? body.markup_percent : 8)));
-    
+
     let sellingPrice = safeAmount(body.sellingPrice || body.selling_price);
     if (sellingPrice <= 0 && costPrice > 0) {
       sellingPrice = calculateSmartPrice(costPrice, markupPercent, 50);
@@ -1361,9 +1372,9 @@ export async function savePosItem(db, session, body) {
         updated_at = datetime('now')
     `).bind(barcode, itemName, category, costPrice, markupPercent, sellingPrice, currentStock, isActive).run();
 
-    return { 
-      success: true, 
-      data: { barcode, itemName, category, costPrice, markupPercent, sellingPrice, currentStock, isActive } 
+    return {
+      success: true,
+      data: { barcode, itemName, category, costPrice, markupPercent, sellingPrice, currentStock, isActive }
     };
   } catch (err) {
     return { success: false, message: "ပစ္စည်းသိမ်းဆည်းမှု မအောင်မြင်ပါ: " + err.message };
@@ -1429,15 +1440,15 @@ export async function lookupStudentForPos(db, body) {
 
     return {
       success: true,
-      data: { 
-        studentId: realStudentId, 
-        name: student.name, 
-        studentClass: student.class, 
-        fyid: realFyid, 
-        currentBalance, 
-        todaySpent, 
-        remainingQuota, 
-        dailyCap: dynamicCap 
+      data: {
+        studentId: realStudentId,
+        name: student.name,
+        studentClass: student.class,
+        fyid: realFyid,
+        currentBalance,
+        todaySpent,
+        remainingQuota,
+        dailyCap: dynamicCap
       }
     };
   } catch (err) {
@@ -1509,7 +1520,7 @@ export async function checkoutPosSale(db, session, body) {
       if (closureCheck) {
         return { success: false, message: `ရက်စွဲ (${entryDate}) အတွက် ကန်တင်းဆိုင်ပိတ်ပြီးဖြစ်သဖြင့် အရောင်းအသစ် ဖွင့်၍မရတော့ပါ။` };
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const paymentMethod = String(body.paymentMethod || 'Student Pocket Money').trim();
     const isWallet = (paymentMethod === 'Student Pocket Money');
@@ -1529,7 +1540,14 @@ export async function checkoutPosSale(db, session, body) {
     const stmUniqueId = `STM_${rawCore}`;
 
     const duplicateCheck = await db.prepare("SELECT invoice_no, total_amount FROM pos_sales_orders WHERE uniqueid = ?").bind(posUniqueId).first();
-    if (duplicateCheck) return { success: true, invoiceNo: duplicateCheck.invoice_no, message: "ဤပြေစာအား မှတ်တမ်းတင်ပြီးဖြစ်ပါသည်။ (Duplicate Ignored)" };
+    if (duplicateCheck) {
+      return {
+        success: true,
+        invoiceNo: duplicateCheck.invoice_no,
+        uniqueId: posUniqueId,
+        message: "ဤပြေစာအား မှတ်တမ်းတင်ပြီးဖြစ်ပါသည်။ (Duplicate Ignored)"
+      };
+    }
 
     if (isWallet) {
       if (!studentId || studentId <= 0) return { success: false, message: "မုန့်ဖိုးအကောင့်ဖြင့် ဝယ်ယူရန် ကျောင်းသား ID လိုအပ်ပါသည်။" };
@@ -1601,7 +1619,7 @@ export async function checkoutPosSale(db, session, body) {
     }
 
     await db.batch(batchStatements);
-    
+
     // ⚖️ Strict Clean Balance Recalculation (Only Transfer increases Balance)
     await recalculateCanteenBookBalances(db, fy, entryDate);
     if (isWallet && studentId > 0) {
@@ -1789,7 +1807,7 @@ export async function getCanteenClosureStatus(db, body) {
     let row = null;
     try {
       row = await db.prepare(`SELECT date, closed_at as closedAt, closed_by as closedBy, total_sales as totalSales, cash_sales as cashSales, wallet_sales as walletSales, total_orders as totalOrders, status, remark FROM canteen_day_closures WHERE date = ? LIMIT 1`).bind(targetDate).first();
-    } catch (e) {}
+    } catch (e) { }
 
     return { success: true, isClosed: Boolean(row), data: row || null };
   } catch (err) {
@@ -1900,12 +1918,12 @@ export async function saveCanteenSettlement(db, session, body) {
     try {
       const closureCheck = await db.prepare("SELECT id FROM canteen_day_closures WHERE date = ?").bind(entryDate).first();
       if (!closureCheck) {
-        return { 
-          success: false, 
-          message: `ငွေရှင်းလင်း၍ မရသေးပါ! ရက်စွဲ (${entryDate}) အတွက် ကန်တင်းတာဝန်ခံမှ နေ့စဉ်ဆိုင်ပိတ်သိမ်းမှု (Close Register) အရင်လုပ်ဆောင်ရပါမည်။` 
+        return {
+          success: false,
+          message: `ငွေရှင်းလင်း၍ မရသေးပါ! ရက်စွဲ (${entryDate}) အတွက် ကန်တင်းတာဝန်ခံမှ နေ့စဉ်ဆိုင်ပိတ်သိမ်းမှု (Close Register) အရင်လုပ်ဆောင်ရပါမည်။`
         };
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const rawCore = body.uniqueId ? String(body.uniqueId).trim().replace(/^SETTLE_/i, '') : generateUniqueId('').replace(/^_/, '');
     const settleUniqueId = `SETTLE_${rawCore}`;

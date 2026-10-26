@@ -259,6 +259,16 @@ export async function saveStudentMoneyEntry(db, session, body) {
     const stmUniqueId = `STM_${rawCore}`;
     const pmcUniqueId = `PMC_${rawCore}`;
 
+    // 🛡️ IDEMPOTENCY GUARD: ဤ uniqueid ဖြင့် D1 တွင် စာရင်း ရှိနှင့်ပြီးသားဖြစ်ပါက Duplicate (၂ ကြောင်း) မဖြစ်စေရန် Return ပေးသည်
+    const existingStm = await db.prepare("SELECT id FROM student_money WHERE uniqueid = ?").bind(stmUniqueId).first();
+    if (existingStm && !body.isUpdate) {
+      return {
+        success: true,
+        message: "ဤစာရင်းသည် D1 Database ထဲတွင် ရှိနှင့်ပြီးသား ဖြစ်ပါသည်။ (Duplicate Prevented)",
+        uniqueId: stmUniqueId
+      };
+    }
+
     const rawType = String(body.entryType || 'Deposit').trim();
 
     let debit = safeAmount(body.debit);
@@ -528,6 +538,17 @@ export async function savePmCashierBookEntry(db, session, body) {
     const pmcUniqueId = `PMC_${rawCore}`;
     const stmUniqueId = `STM_${rawCore}`;
 
+    // 🛡️ IDEMPOTENCY GUARD: ဤ uniqueid ဖြင့် D1 တွင် စာရင်း ရှိနှင့်ပြီးသားဖြစ်ပါက Duplicate (၂ ကြောင်း) မဖြစ်စေရန် Return ပေးသည်
+    const existingPmc = await db.prepare("SELECT id, vr_no FROM pm_cashier_book WHERE uniqueid = ?").bind(pmcUniqueId).first();
+    if (existingPmc && !body.isUpdate) {
+      return {
+        success: true,
+        message: "ဤစာရင်းသည် D1 Database ထဲတွင် ရှိနှင့်ပြီးသား ဖြစ်ပါသည်။ (Duplicate Prevented)",
+        uniqueId: pmcUniqueId,
+        vrNo: existingPmc.vr_no || body.vrNo || ''
+      };
+    }
+
     const category = body.category || 'PM Withdraw';
     const credit = safeAmount(body.credit);
     const debit = safeAmount(body.debit);
@@ -719,6 +740,17 @@ export async function saveCanteenBookEntry(db, session, body) {
     const rawCore = body.uniqueId ? String(body.uniqueId).trim().replace(/^(STM_|PMC_|CAN_)+/i, '') : generateUniqueId('').replace(/^_/, '');
     const canUniqueId = `CAN_${rawCore}`;
     const stmUniqueId = `STM_${rawCore}`;
+
+    // 🛡️ IDEMPOTENCY GUARD: ဤ uniqueid ဖြင့် D1 တွင် စာရင်း ရှိနှင့်ပြီးသားဖြစ်ပါက Duplicate (၂ ကြောင်း) မဖြစ်စေရန် Return ပေးသည်
+    const existingCan = await db.prepare("SELECT id, vr_no FROM canteen_book WHERE uniqueid = ?").bind(canUniqueId).first();
+    if (existingCan && !body.isUpdate) {
+      return {
+        success: true,
+        message: "ဤစာရင်းသည် D1 Database ထဲတွင် ရှိနှင့်ပြီးသား ဖြစ်ပါသည်။ (Duplicate Prevented)",
+        uniqueId: canUniqueId,
+        vrNo: existingCan.vr_no || body.vrNo || ''
+      };
+    }
 
     const category = body.category || 'POS Sales';
     const debit = safeAmount(body.debit);

@@ -41,7 +41,7 @@ export async function getStaffData(db, body, userSession) {
     const isPartTime = String(body.category || '').toLowerCase().includes('part');
     const table = isPartTime ? 'staff_parttime' : 'staff_fulltime';
     const searchVal = String(body.searchVal || '').trim();
-    
+
     // Phase 4: Added Join Date Range Support
     const fromJoinDate = String(body.fromDate || body.fromJoinDate || '').trim();
     const toJoinDate = String(body.toDate || body.toJoinDate || '').trim();
@@ -74,7 +74,7 @@ export async function getStaffData(db, body, userSession) {
     // 🚀 ULTRA-OPTIMIZATION: Explicit columns
     let dataQuery = '';
     if (isPartTime) {
-       dataQuery = `
+      dataQuery = `
          SELECT id, no, join_date, category, staff_id, name, staff_idname, education, position, 
                 total_salary, total_net_amt, resigned_date, status, gender, nrc_no, bank_account, phone_no, email, uniqueid 
          FROM ${table} 
@@ -82,7 +82,7 @@ export async function getStaffData(db, body, userSession) {
          ORDER BY id DESC LIMIT 1000
        `;
     } else {
-       dataQuery = `
+      dataQuery = `
          SELECT id, no, join_date, category, staff_id, name, staff_idname, education, position, 
                 salary_grade, working_days, basic_amt, extra_amt, total_salary, bonus, fund, total_net_amt, 
                 resigned_date, status, gender, nrc_no, bank_account, phone_no, email, fund_date, unpaid_bonus, unpaid_fund, uniqueid 
@@ -214,9 +214,21 @@ export async function saveStaffEntry(db, userSession, body) {
     const isPrivilegedAdmin = ['Owner', 'Admin'].includes(userSession?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport);
 
-    const uniqueid = (isMigration && body.uniqueId)
+    // 🎯 FIX: Frontend (Offline Queue သို့မဟုတ် Client Pre-generated) မှ uniqueId ပါလာပါက အတည်ယူသုံးမည်
+    const uniqueid = body.uniqueId
       ? String(body.uniqueId).trim()
       : generateUniqueId('STF');
+
+    // 🛡️ IDEMPOTENCY GUARD: ဤ uniqueid ဖြင့် D1 တွင် စာရင်း ရှိနှင့်ပြီးသားဖြစ်ပါက Duplicate (၂ ကြောင်း) မဖြစ်စေရန် Return ပေးသည်
+    const existingCheck = await db.prepare(`SELECT id, staff_id FROM ${table} WHERE uniqueid = ?`).bind(uniqueid).first();
+    if (existingCheck && !body.isUpdate && !isMigration) {
+      return {
+        success: true,
+        message: "ဤဝန်ထမ်းမှတ်တမ်းသည် D1 Database ထဲတွင် ရှိနှင့်ပြီးသား ဖြစ်ပါသည်။ (Duplicate Prevented)",
+        staffId: existingCheck.staff_id,
+        uniqueId: uniqueid
+      };
+    }
 
     let staffIdNum = parseInt(body.staffId || body.id, 10);
     if (!staffIdNum || isNaN(staffIdNum)) {
@@ -266,12 +278,12 @@ export async function saveStaffEntry(db, userSession, body) {
       ).run();
     }
 
-    return { 
-      success: true, 
-      message: "ဝန်ထမ်း မှတ်တမ်းသစ် အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။", 
-      staffId: staffIdNum, 
-      staffIdName, 
-      uniqueId: uniqueid 
+    return {
+      success: true,
+      message: "ဝန်ထမ်း မှတ်တမ်းသစ် အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။",
+      staffId: staffIdNum,
+      staffIdName,
+      uniqueId: uniqueid
     };
   } catch (err) {
     console.error("Error in saveStaffEntry handler:", err);
@@ -435,11 +447,11 @@ export async function saveHrPayrollForm(db, userSession, body) {
     // ⚡ Quota-Shield Recalculate - Incremental Phase 1
     await recalculateLedgerBalances(db, 'payroll', fy, dateStr);
 
-    return { 
-      success: true, 
-      message: "HR Payroll စာရင်းသစ် အောင်မြင်စွာ သိမ်းဆည်းပြီး ဝန်ထမ်း Balance အား Update ပြုလုပ်ပြီးပါပြီ။", 
-      uniqueId: uniqueid, 
-      vrNo: vrNoVal 
+    return {
+      success: true,
+      message: "HR Payroll စာရင်းသစ် အောင်မြင်စွာ သိမ်းဆည်းပြီး ဝန်ထမ်း Balance အား Update ပြုလုပ်ပြီးပါပြီ။",
+      uniqueId: uniqueid,
+      vrNo: vrNoVal
     };
   } catch (err) {
     console.error("Error in saveHrPayrollForm handler:", err);
@@ -453,12 +465,12 @@ export async function saveHrPayrollForm(db, userSession, body) {
 export async function getPayrollSettings(db, body) {
   try {
     let matrix = await db.prepare("SELECT id, grade_a, grade_b, grade_c, grade_d, grade_e, grade_f, grade_g, grade_h, grade_i, grade_j, grade_k, grade_l, bonus_rate, fund_rate FROM salary_grade_matrix WHERE id = 1").first();
-    
+
     if (!matrix) {
       await db.prepare(`INSERT OR IGNORE INTO salary_grade_matrix (
         id, grade_a, grade_b, grade_c, grade_d, grade_e, grade_f, grade_g, grade_h, grade_i, grade_j, grade_k, grade_l, bonus_rate, fund_rate, updated_at
       ) VALUES (1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.05, datetime('now'))`).run();
-      
+
       matrix = await db.prepare("SELECT id, grade_a, grade_b, grade_c, grade_d, grade_e, grade_f, grade_g, grade_h, grade_i, grade_j, grade_k, grade_l, bonus_rate, fund_rate FROM salary_grade_matrix WHERE id = 1").first();
     }
 

@@ -258,12 +258,25 @@ export async function saveBankCashEntry(db, session, body) {
     const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(session?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport || body.skipAutoPost);
 
-    const uniqueid = (isMigration && body.uniqueId)
+    const prefix = getTablePrefix(tableName);
+
+    // 🎯 FIX 1: Frontend (Offline Queue သို့မဟုတ် Client Pre-generated) မှ uniqueId ပါလာပါက အတည်ယူသုံးမည်
+    const uniqueid = body.uniqueId
       ? String(body.uniqueId).trim()
-      : generateUniqueId('BCK');
+      : generateUniqueId(prefix || 'BCK');
+
+    // 🎯 FIX 2: 🛡️ IDEMPOTENCY GUARD: ဤ uniqueid ဖြင့် စာရင်းရှိပြီးသားဖြစ်ပါက Duplicate မဖြစ်စေရန် Return ပေးသည်
+    const existingCheck = await db.prepare(`SELECT id, vr_no FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    if (existingCheck && !body.isUpdate && !isMigration) {
+      return {
+        success: true,
+        message: "ဤစာရင်းသည် D1 Database ထဲတွင် ရှိနှင့်ပြီးသား ဖြစ်ပါသည်။ (Duplicate Prevented)",
+        uniqueId: uniqueid,
+        vrNo: existingCheck.vr_no || body.vrNo || ''
+      };
+    }
 
     const newNo = (isMigration && body.no) ? parseInt(body.no, 10) : await generateFyNo(db, tableName, fy);
-    const prefix = getTablePrefix(tableName);
     const vrNo = body.vrNo || await generateVoucherNo(db, tableName, prefix, entryDate);
 
     // ⚡ MIGRATION DIRECT IMPORT MODE
