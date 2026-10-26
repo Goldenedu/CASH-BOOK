@@ -20,7 +20,7 @@ function getApiWorkerUrl() {
     if (window.CONFIG?.API_BASE_URL) return window.CONFIG.API_BASE_URL;
     if (window.API_BASE_URL) return window.API_BASE_URL;
   }
-  return "https://cashbook-app-api.goldeneduprivateschool.workers.dev/";
+  return "https://cashbook-app-api-dev.thantoeaung734.workers.dev";
 }
 
 const API_WORKER_URL = getApiWorkerUrl();
