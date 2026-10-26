@@ -681,16 +681,28 @@ function renderStaffFundReportData(list) {
   if (!tbody) return;
 
   const searchVal = (document.getElementById('report-staff-fund-search')?.value || '').toLowerCase().trim();
-  let filtered = list;
+  const statusFilter = (document.getElementById('report-staff-fund-status-filter')?.value || 'all').toLowerCase().trim();
+
+  let filtered = list || [];
+
+  // 🎯 ၁။ Status Filter စစ်ဆေးခြင်း (0 D1 Quota)
+  if (statusFilter === 'active') {
+    filtered = filtered.filter(r => String(r.status || 'Active').toLowerCase() === 'active');
+  } else if (statusFilter === 'inactive') {
+    filtered = filtered.filter(r => String(r.status || '').toLowerCase() !== 'active');
+  }
+
+  // 🎯 ၂။ Search Query စစ်ဆေးခြင်း
   if (searchVal) {
-    filtered = list.filter(r =>
+    filtered = filtered.filter(r =>
       (r.name || '').toLowerCase().includes(searchVal) ||
       cleanIntegerStr(r.staffId).toLowerCase().includes(searchVal)
     );
   }
 
+  // 🎯 ၃။ ရွေးချယ်ထားသော Status အလိုက် ထိပ်ဆုံး KPI Cards များကိုပါ တစ်ပါတည်း ချိန်ညှိတွက်ချက်ပေးခြင်း
   let totBonus = 0, totFund = 0, totAll = 0;
-  list.forEach(r => {
+  filtered.forEach(r => {
     totBonus += r.bonusBalance || 0;
     totFund += r.fundBalance || 0;
     totAll += r.totalBalances || 0;
@@ -704,7 +716,7 @@ function renderStaffFundReportData(list) {
   if (elBonus) elBonus.innerText = formatNumWithCommas(totBonus);
   if (elFund) elFund.innerText = formatNumWithCommas(totFund);
   if (elAll) elAll.innerText = formatNumWithCommas(totAll);
-  if (elCount) elCount.innerText = list.length;
+  if (elCount) elCount.innerText = filtered.length;
 
   if (!filtered || filtered.length === 0) {
     tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-slate-500 font-bold">ရှာဖွေမှုနှင့် ကိုက်ညီသော ရန်ပုံငွေ စာရင်း မရှိပါ။</td></tr>`;
@@ -733,14 +745,40 @@ function onSearchInputReportStaffFund() {
   }
 }
 
+function onFilterChangeReportStaffFund() {
+  if (gStaffFundRawData) {
+    renderStaffFundReportData(gStaffFundRawData);
+  } else {
+    loadReportStaffFundData();
+  }
+}
+
+// 🎯 CSV Export လုပ်ရာတွင်လည်း ရွေးထားသော Status Filter အတိုင်း ထုတ်ပေးသည်
 function exportToCSVReportStaffFund() {
   const list = gStaffFundRawData || [];
   if (!list || list.length === 0) {
     return safeShowToast('ထုတ်ယူရန် ဝန်ထမ်း ရန်ပုံငွေ အချက်အလက် မရှိပါ။', 'warning');
   }
 
+  const searchVal = (document.getElementById('report-staff-fund-search')?.value || '').toLowerCase().trim();
+  const statusFilter = (document.getElementById('report-staff-fund-status-filter')?.value || 'all').toLowerCase().trim();
+
+  let filtered = list;
+  if (statusFilter === 'active') {
+    filtered = filtered.filter(r => String(r.status || 'Active').toLowerCase() === 'active');
+  } else if (statusFilter === 'inactive') {
+    filtered = filtered.filter(r => String(r.status || '').toLowerCase() !== 'active');
+  }
+
+  if (searchVal) {
+    filtered = filtered.filter(r =>
+      (r.name || '').toLowerCase().includes(searchVal) ||
+      cleanIntegerStr(r.staffId).toLowerCase().includes(searchVal)
+    );
+  }
+
   let csv = "NO,FUND DATE,STAFF ID,STAFF NAME,BONUS BALANCE,FUND BALANCE,TOTAL BALANCES,STATUS\n";
-  list.forEach((r, i) => {
+  filtered.forEach((r, i) => {
     csv += `${r.no || i + 1},` +
       `${window.safeCsvCell(r.fundDate || '')},` +
       `${window.safeCsvCell(cleanIntegerStr(r.staffId))},` +
@@ -754,7 +792,7 @@ function exportToCSVReportStaffFund() {
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = `staff_fund_report_${new Date().toISOString().slice(0, 10)}.csv`;
+  link.download = `staff_fund_report_${statusFilter}_${new Date().toISOString().slice(0, 10)}.csv`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -781,3 +819,4 @@ window.exportToCSVReportIncome = exportToCSVReportIncome;
 window.exportToCSVReportGeneral = exportToCSVReportGeneral;
 window.exportToCSVReportStudent = exportToCSVReportStudent;
 window.exportToCSVReportStaffFund = exportToCSVReportStaffFund;
+window.onFilterChangeReportStaffFund = onFilterChangeReportStaffFund;
