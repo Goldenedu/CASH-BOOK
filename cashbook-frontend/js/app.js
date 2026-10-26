@@ -726,20 +726,21 @@ function renderPendingTable() {
 
   const queue = window.OfflineSync ? window.OfflineSync.getQueue() : [];
   if (queue.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-slate-500 font-bold">Pending စာရင်း မရှိပါ။ အားလုံး D1 သို့ ရောက်ရှိပြီးဖြစ်ပါသည်။</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-slate-500 font-bold">Pending စာရင်း မရှိပါ။ အားလုံး D1 သို့ ရောက်ရှိပြီးဖြစ်ပါသည်။</td></tr>`;
     return;
   }
 
   queue.forEach((item, idx) => {
     tbody.innerHTML += `
       <tr class="hover:bg-slate-800/30 text-xs border-b border-slate-800/40">
-        <td class="text-center font-mono py-2.5 px-2 text-slate-400">${idx + 1}</td>
-        <td class="font-mono py-2.5 px-2 text-slate-300">${item.date}</td>
-        <td class="font-mono font-bold text-indigo-400 py-2.5 px-2">${item.studentId}</td>
-        <td class="font-bold text-slate-100 py-2.5 px-2 truncate max-w-[150px]">${item.studentName}</td>
-        <td class="text-right font-mono font-bold text-emerald-400 py-2.5 px-2">${Number(item.amount).toLocaleString('en-US')} MMK</td>
-        <td class="text-center font-mono text-amber-400 text-[11px] py-2.5 px-2 font-bold">${item.vrNo}</td>
-        <td class="text-center py-2.5 px-2">
+        <td class="text-center font-mono py-2.5 px-3 text-slate-400">${idx + 1}</td>
+        <td class="font-mono py-2.5 px-3 text-slate-300">${item.date}</td>
+        <td class="font-bold text-sky-400 py-2.5 px-3 whitespace-nowrap">${window.escapeHtml(item.bookName || '-')}</td>
+        <td class="py-2.5 px-3 font-semibold text-slate-300">${window.escapeHtml(item.category || '-')}</td>
+        <td class="font-bold text-slate-100 py-2.5 px-3 truncate max-w-[220px]" title="${window.escapeHtml(item.description)}">${window.escapeHtml(item.description || '-')}</td>
+        <td class="text-right font-mono font-bold text-emerald-400 py-2.5 px-3">${Number(item.amount).toLocaleString('en-US')} MMK</td>
+        <td class="text-center font-mono text-amber-400 text-[11px] py-2.5 px-3 font-bold">${item.vrNo}</td>
+        <td class="text-center py-2.5 px-3 right-0 sticky bg-[#0c1322]">
           <button onclick="window.OfflineSync.remove('${item.id}'); renderPendingTable();" class="p-1 text-rose-400 hover:text-rose-300 transition" title="Delete">
             <i class="fa-solid fa-trash-can"></i>
           </button>

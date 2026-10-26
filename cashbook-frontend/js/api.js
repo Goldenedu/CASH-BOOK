@@ -53,27 +53,36 @@ window.OfflineSync = {
   },
 
   enqueue: async function (action, payload, method = 'POST') {
-    const queue = this.getQueue();
-    const tempId = payload.uniqueId || `INC_OFF_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    const tempVr = `OFF-${Date.now().toString().slice(-6)}`;
+    let queue = this.getQueue();
+
+    // 🎯 စာရင်းတစ်ခုချင်းစီအတွက် ထပ်တူမကျသော Client-side UUID သတ်မှတ်ခြင်း
+    const prefix = payload.bookName ? payload.bookName.slice(0, 3).toUpperCase() : 'REC';
+    const tempId = payload.uniqueId || `${prefix}_OFF_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const tempVr = payload.vrNo || `OFF-${Date.now().toString().slice(-6)}`;
+
+    // Queue ထဲတွင် ဤ ID ဖြင့် ရှိပြီးသားဖြစ်နေပါက ထပ်မံမထည့်ပါ (Duplicate Guard)
+    if (queue.some(item => item.id === tempId)) {
+      return;
+    }
 
     const entry = {
       id: tempId,
       action: action,
       method: method,
-      payload: { ...payload, uniqueId: tempId, vrNo: payload.vrNo || tempVr },
+      payload: { ...payload, uniqueId: tempId, vrNo: tempVr },
       timestamp: new Date().toISOString(),
-      studentName: payload.name || payload.fyidName || payload.studentName || 'Student',
-      studentId: payload.studentId || payload.id || '-',
+      // စာအုပ်အားလုံးနှင့် ကိုက်ညီသော Title / Details
+      bookName: payload.bookName || (action.includes('Income') ? 'Main Income Book' : (action.includes('StudentMoney') ? 'Student Money' : 'Ledger Book')),
+      category: payload.category || payload.accountName || '-',
+      description: payload.description || payload.remark || payload.name || payload.fyidName || 'Entry',
       amount: payload.credit || payload.debit || payload.amount || 0,
       date: payload.date || new Date().toISOString().slice(0, 10),
-      vrNo: payload.vrNo || tempVr
+      vrNo: tempVr
     };
 
     queue.push(entry);
     localStorage.setItem(this.QUEUE_KEY, JSON.stringify(queue));
 
-    // Header ရှိ Pending Button Badge ကို ချက်ချင်း Update ပြုလုပ်သည်
     if (typeof window.updatePendingUI === 'function') {
       window.updatePendingUI();
     }

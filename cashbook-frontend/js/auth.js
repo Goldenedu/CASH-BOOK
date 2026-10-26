@@ -42,8 +42,8 @@ function onSystemTypeChange() {
 
   const roles = isPos ? posRoleOptions : erpRoleOptions;
   const defaultText = isPos ? '-- POS Role / Counter ရွေးချယ်ပါ --' : '-- Username ရွေးချယ်ပါ --';
-  
-  roleSelect.innerHTML = `<option value="">${defaultText}</option>` + 
+
+  roleSelect.innerHTML = `<option value="">${defaultText}</option>` +
     roles.map(r => `<option value="${r.value}">${r.label}</option>`).join('');
 }
 
@@ -119,7 +119,7 @@ function isTokenExpired(token) {
  */
 function clearAuthStorage() {
   const keys = [
-    'golden_user_name', 'golden_user_role', 'golden_auth_token', 
+    'golden_user_name', 'golden_user_role', 'golden_auth_token',
     'golden_user', 'golden_token_expires_at', 'token', 'user'
   ];
   keys.forEach(k => localStorage.removeItem(k));
@@ -222,6 +222,10 @@ async function handleLoginSubmit(e) {
 
       if (typeof showToast === 'function') {
         showToast("SUCCESS", `မင်္ဂလာပါ ${resName} (${resRole})၊ လော့ဂ်အင် ဝင်ရောက်မှု အောင်မြင်ပါသည်။`);
+      }
+
+      if (typeof window.prefetchOfflineMasterData === 'function') {
+        window.prefetchOfflineMasterData(true);
       }
     } else {
       if (errorBox) {
@@ -380,7 +384,7 @@ function handleLogout() {
 // 💡 AUTO-INITIALIZE ON DOM READY
 // ==============================================================================
 if (typeof document !== 'undefined') {
-  document.addEventListener('DOMContentLoaded', function() {
+  document.addEventListener('DOMContentLoaded', function () {
     if (typeof onSystemTypeChange === 'function' && document.getElementById('login-system-type')) {
       onSystemTypeChange();
     }

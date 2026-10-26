@@ -25,15 +25,15 @@ import {
 } from './utils.js';
 
 const BOOK_TABLE_MAP = {
-  "kitchen": "kitchen", 
-  "kitchen exp book": "kitchen", 
+  "kitchen": "kitchen",
+  "kitchen exp book": "kitchen",
   "kitchen expense book": "kitchen",
-  "office": "office", 
-  "office exp book": "office", 
+  "office": "office",
+  "office exp book": "office",
   "office expense book": "office",
   "payroll": "payroll",
   "hr payroll exp book": "payroll",
-  "caoffice": "ca_office", 
+  "caoffice": "ca_office",
   "cakitchen": "ca_kitchen"
 };
 
@@ -120,7 +120,7 @@ export async function getExpenseData(db, body) {
     const page = parseInt(body.page || 1, 10);
     const limit = parseInt(body.limit || 30, 10);
     const offset = (page - 1) * limit;
-    
+
     const activeFy = normalizeFyStr(body.fy || `FY ${getCurrentAcademicYear()}`);
     const fyClean = activeFy.replace(/^FY\s*/i, '');
     const isAllFy = String(body.fy || '').toLowerCase() === 'all';
@@ -164,7 +164,7 @@ export async function getExpenseData(db, body) {
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-    
+
     const countRow = await db.prepare(`SELECT COUNT(id) as count FROM ${tableName} ${whereSql}`).bind(...params).first();
     const totalRows = countRow ? countRow.count : 0;
 
@@ -201,11 +201,11 @@ export async function getExpenseData(db, body) {
     const formattedRows = rawRows.map(row => {
       const uid = String(row.uniqueid || '');
       const isAutoLocked = Boolean(
-        row.is_locked || 
-        uid.startsWith('UNIPROFIT_') || 
-        uid.startsWith('UNICASHIER_') || 
-        uid.startsWith('TRANS_') || 
-        uid.startsWith('DAILY_INC_') || 
+        row.is_locked ||
+        uid.startsWith('UNIPROFIT_') ||
+        uid.startsWith('UNICASHIER_') ||
+        uid.startsWith('TRANS_') ||
+        uid.startsWith('DAILY_INC_') ||
         uid.startsWith('INCMAIN_')
       );
 
@@ -272,12 +272,26 @@ export async function saveExpenseEntry(db, session, body) {
     const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(session?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport || body.skipAutoPost);
 
-    const uniqueid = (isMigration && body.uniqueId)
+    const bookPrefix = getTablePrefix(tableName);
+
+    // 🎯 FIX 1: Frontend (Offline Queue သို့မဟုတ် Client Pre-generated) မှ uniqueId ပါလာပါက ၎င်းကို အတည်ယူသုံးမည်
+    const uniqueid = body.uniqueId
       ? String(body.uniqueId).trim()
-      : generateUniqueId('EXP');
+      : generateUniqueId(bookPrefix);
+
+    // 🎯 FIX 2: 🛡️ IDEMPOTENCY GUARD (Duplicate Entry ကာကွယ်ခြင်း)
+    // ဤ uniqueid ဖြင့် D1 တွင် စာရင်း ရှိနှင့်ပြီးသားဖြစ်ပါက ၂ ကြောင်း မဝင်စေရန် ချက်ချင်း Return ပေးသည်
+    const existingCheck = await db.prepare(`SELECT id, vr_no FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    if (existingCheck && !body.isUpdate && !isMigration) {
+      return {
+        success: true,
+        message: "ဤစာရင်းသည် D1 Database ထဲတွင် ရှိနှင့်ပြီးသား ဖြစ်ပါသည်။ (Duplicate Prevented)",
+        uniqueId: uniqueid,
+        vrNo: existingCheck.vr_no || body.vrNo || ''
+      };
+    }
 
     const newNo = (isMigration && body.no) ? parseInt(body.no, 10) : await generateFyNo(db, tableName, fy);
-    const bookPrefix = getTablePrefix(tableName);
     const vrNo = body.vrNo || await generateVoucherNo(db, tableName, bookPrefix, entryDate);
 
     // ⚡ DIRECT IMPORT / MIGRATION MODE
@@ -477,9 +491,9 @@ export async function updateExpenseEntry(db, session, body) {
 
     const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(session?.role || '');
     if (isAutoLocked && !isPrivilegedAdmin) {
-      return { 
-        success: false, 
-        message: "ဤစာရင်းသည် စနစ်မှ အလိုအလျောက် သို့မဟုတ် အခြားစာအုပ်မှ ချိတ်ဆက်ထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ပြင်ဆင်နိုင်ပါသည်။" 
+      return {
+        success: false,
+        message: "ဤစာရင်းသည် စနစ်မှ အလိုအလျောက် သို့မဟုတ် အခြားစာအုပ်မှ ချိတ်ဆက်ထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ပြင်ဆင်နိုင်ပါသည်။"
       };
     }
 
@@ -487,7 +501,7 @@ export async function updateExpenseEntry(db, session, body) {
     const oldDate = existing.date || '9999-12-31';
     const oldUnit = parseFloat(existing.unit || 0);
     const oldPid = extractProductId(existing, existing.description, existing.id);
-    
+
     // Uniform check is strictly constrained to Office only
     const wasUniform = (tableName === 'office') && (existing.category === "Advance Uniform" || existing.category === "Advance Unifrom");
     const isUniform = (tableName === 'office') && (body.category === "Advance Uniform" || body.category === "Advance Unifrom");
@@ -656,9 +670,9 @@ export async function deleteExpenseEntry(db, session, body) {
 
     const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(session?.role || '');
     if (isAutoLocked && !isPrivilegedAdmin) {
-      return { 
-        success: false, 
-        message: "ဤစာရင်းသည် စနစ်မှ အလိုအလျောက် သို့မဟုတ် အခြားစာအုပ်မှ ချိတ်ဆက်ထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ဖျက်သိမ်းနိုင်ပါသည်။" 
+      return {
+        success: false,
+        message: "ဤစာရင်းသည် စနစ်မှ အလိုအလျောက် သို့မဟုတ် အခြားစာအုပ်မှ ချိတ်ဆက်ထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ဖျက်သိမ်းနိုင်ပါသည်။"
       };
     }
 
@@ -674,7 +688,7 @@ export async function deleteExpenseEntry(db, session, body) {
     ];
 
     const wasUniform = (tableName === 'office') && (existing.category === "Advance Uniform" || existing.category === "Advance Unifrom");
-    
+
     // Only delete linked uniform records if it actually was uniform
     if (wasUniform) {
       batchStatements.push(

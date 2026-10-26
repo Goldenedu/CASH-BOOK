@@ -189,10 +189,10 @@ export async function getBankCashData(db, body) {
     const formattedRows = rawRows.map(row => {
       const uid = String(row.uniqueid || '');
       const isAutoLocked = Boolean(
-        row.is_locked || 
-        uid.startsWith('UNIPROFIT_') || 
-        uid.startsWith('UNICASHIER_') || 
-        uid.startsWith('TRANS_') || 
+        row.is_locked ||
+        uid.startsWith('UNIPROFIT_') ||
+        uid.startsWith('UNICASHIER_') ||
+        uid.startsWith('TRANS_') ||
         uid.startsWith('DAILY_INC_')
       );
 
@@ -367,9 +367,9 @@ export async function updateBankCashEntry(db, session, body) {
     const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(session?.role || '');
 
     if (isAutoLocked && !isPrivilegedAdmin) {
-      return { 
-        success: false, 
-        message: "ဤစာရင်းသည် စနစ်မှ အလိုအလျောက် သို့မဟုတ် အခြားစာအုပ်မှ လွှဲပြောင်းထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ပြင်ဆင်နိုင်ပါသည်။" 
+      return {
+        success: false,
+        message: "ဤစာရင်းသည် စနစ်မှ အလိုအလျောက် သို့မဟုတ် အခြားစာအုပ်မှ လွှဲပြောင်းထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ပြင်ဆင်နိုင်ပါသည်။"
       };
     }
 
@@ -478,9 +478,9 @@ export async function deleteBankCashEntry(db, session, body) {
     const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(session?.role || '');
 
     if (isAutoLocked && !isPrivilegedAdmin) {
-      return { 
-        success: false, 
-        message: "ဤစာရင်းသည် စနစ်မှ အလိုအလျောက် သို့မဟုတ် အခြားစာအုပ်မှ လွှဲပြောင်းထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ဖျက်သိမ်းနိုင်ပါသည်။" 
+      return {
+        success: false,
+        message: "ဤစာရင်းသည် စနစ်မှ အလိုအလျောက် သို့မဟုတ် အခြားစာအုပ်မှ လွှဲပြောင်းထားသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ဖျက်သိမ်းနိုင်ပါသည်။"
       };
     }
 
