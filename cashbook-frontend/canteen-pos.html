@@ -216,10 +216,10 @@
   <aside id="canteen-sidebar"
     class="w-64 bg-[var(--bg-sidebar)] border-r border-[var(--border-color)] flex flex-col justify-between shrink-0 h-screen z-50 overflow-y-auto custom-scroll shadow-lg">
     <div>
-      <!-- Brand Header (International Standard Fixed Height 64px - h-[64px]) -->
+      <!-- Brand Header (Fixed 64px to match top bar) -->
       <div class="h-[64px] px-4 border-b border-[var(--border-color)] flex items-center gap-3 shrink-0 box-border">
         <div
-          class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-500 font-black text-lg shadow-lg shadow-emerald-950/20 shrink-0">
+          class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-500 font-black text-xl shadow-lg shadow-emerald-950/20 shrink-0">
           <i class="fa-solid fa-utensils"></i>
         </div>
         <div class="min-w-0 flex-1">
@@ -228,122 +228,94 @@
         </div>
       </div>
 
-      <!-- Navigation Links (Standard 14px Title, 12px Subtitle, 16px Icon) -->
-      <nav class="p-3 space-y-1.5 text-xs font-bold">
-        <div class="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-1">
-          OPERATIONS</div>
+      <!-- Navigation Links (Single-Line International POS Standard) -->
+      <nav class="p-3 space-y-1 text-sm font-bold">
+        <div class="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-2">
+          OPERATIONS
+        </div>
 
         <button id="nav-btn-dashboard" onclick="switchCanteenView('dashboard')"
-          class="w-full px-3.5 py-2.5 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
-          <i class="fa-solid fa-chart-pie w-5 text-center text-base text-indigo-400 shrink-0"></i>
-          <div class="flex flex-col text-left leading-tight">
-            <span class="text-sm font-bold">Dashboard</span>
-            <span class="text-xs opacity-75 font-normal">(အရောင်းချုပ်)</span>
-          </div>
+          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
+          <i class="fa-solid fa-chart-pie w-6 text-center text-lg text-indigo-400 shrink-0"></i>
+          <span class="truncate">Dashboard</span>
         </button>
 
         <button id="nav-btn-pos" onclick="switchCanteenView('pos')"
-          class="w-full px-3.5 py-2.5 rounded-xl transition flex items-center gap-3 bg-emerald-600 text-white shadow-lg shadow-emerald-900/30">
-          <i class="fa-solid fa-cash-register w-5 text-center text-base shrink-0"></i>
-          <div class="flex flex-col text-left leading-tight">
-            <span class="text-sm font-bold">POS Register</span>
-            <span class="text-xs opacity-90 font-normal">(အရောင်းကောင်တာ)</span>
-          </div>
+          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 bg-emerald-600 text-white shadow-md shadow-emerald-900/30 text-sm font-extrabold">
+          <i class="fa-solid fa-cash-register w-6 text-center text-lg shrink-0"></i>
+          <span class="truncate">Sale Counter</span>
         </button>
 
         <button id="nav-btn-sales" onclick="switchCanteenView('sales')"
-          class="w-full px-3.5 py-2.5 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
-          <i class="fa-solid fa-receipt w-5 text-center text-base text-sky-400 shrink-0"></i>
-          <div class="flex flex-col text-left leading-tight">
-            <span class="text-sm font-bold">Sales Orders</span>
-            <span class="text-xs opacity-75 font-normal">(အရောင်းစာရင်း)</span>
-          </div>
+          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
+          <i class="fa-solid fa-receipt w-6 text-center text-lg text-sky-400 shrink-0"></i>
+          <span class="truncate">Sales</span>
         </button>
 
-        <div
-          class="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-1 pt-2.5">
-          INVENTORY & AUDIT</div>
+        <div class="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-2 pt-3">
+          INVENTORY & AUDIT
+        </div>
 
         <button id="nav-btn-stock" onclick="switchCanteenView('stock')"
-          class="w-full px-3.5 py-2.5 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
-          <i class="fa-solid fa-boxes-stacked w-5 text-center text-base text-teal-400 shrink-0"></i>
-          <div class="flex flex-col text-left leading-tight">
-            <span class="text-sm font-bold">Stock Inventory</span>
-            <span class="text-xs opacity-75 font-normal">(လက်ကျန်စစ်)</span>
-          </div>
+          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
+          <i class="fa-solid fa-boxes-stacked w-6 text-center text-lg text-teal-400 shrink-0"></i>
+          <span class="truncate">Inventory</span>
         </button>
 
         <button id="nav-btn-purchases" onclick="switchCanteenView('purchases')"
-          class="w-full px-3.5 py-2.5 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
-          <i class="fa-solid fa-truck-ramp-box w-5 text-center text-base text-amber-400 shrink-0"></i>
-          <div class="flex flex-col text-left leading-tight">
-            <span class="text-sm font-bold">Purchases</span>
-            <span class="text-xs opacity-75 font-normal">(အဝယ်စာရင်း)</span>
-          </div>
+          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
+          <i class="fa-solid fa-truck-ramp-box w-6 text-center text-lg text-amber-400 shrink-0"></i>
+          <span class="truncate">Purchases</span>
         </button>
 
         <button id="nav-btn-waste" onclick="switchCanteenView('waste')"
-          class="w-full px-3.5 py-2.5 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
-          <i class="fa-solid fa-dumpster-fire w-5 text-center text-base text-rose-400 shrink-0"></i>
-          <div class="flex flex-col text-left leading-tight">
-            <span class="text-sm font-bold">Waste & Loss</span>
-            <span class="text-xs opacity-75 font-normal">(အပျက်/အပျောက်)</span>
-          </div>
+          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
+          <i class="fa-solid fa-dumpster-fire w-6 text-center text-lg text-rose-400 shrink-0"></i>
+          <span class="truncate">Waste & Loss</span>
         </button>
 
         <button id="nav-btn-surplus" onclick="switchCanteenView('surplus')"
-          class="w-full px-3.5 py-2.5 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
-          <i class="fa-solid fa-layer-group w-5 text-center text-base text-emerald-400 shrink-0"></i>
-          <div class="flex flex-col text-left leading-tight">
-            <span class="text-sm font-bold">Stock Surplus</span>
-            <span class="text-xs opacity-75 font-normal">(အပိုစာရင်း)</span>
-          </div>
+          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
+          <i class="fa-solid fa-layer-group w-6 text-center text-lg text-emerald-400 shrink-0"></i>
+          <span class="truncate">Stock Surplus</span>
         </button>
 
-        <div
-          class="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-1 pt-2.5">
-          CLEARING & CONTROLS</div>
+        <div class="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-2 pt-3">
+          CLEARING & CONTROLS
+        </div>
 
         <button id="nav-btn-close-day" onclick="openDayCloseModal()"
-          class="w-full px-3.5 py-2.5 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-amber-500 dark:text-slate-400 dark:hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20">
-          <i class="fa-solid fa-lock w-5 text-center text-base text-amber-400 shrink-0"></i>
-          <div class="flex flex-col text-left leading-tight">
-            <span class="text-sm font-bold">Close Register</span>
-            <span class="text-xs opacity-75 font-normal">(ဆိုင်ပိတ်မည်)</span>
-          </div>
+          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-amber-500 dark:hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 text-sm font-bold">
+          <i class="fa-solid fa-lock w-6 text-center text-lg text-amber-400 shrink-0"></i>
+          <span class="truncate">Daily Closing</span>
         </button>
 
         <button id="nav-btn-settle" onclick="openSettlementModal()"
-          class="w-full px-3.5 py-2.5 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-amber-500 dark:text-slate-400 dark:hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20">
-          <i class="fa-solid fa-coins w-5 text-center text-base text-amber-400 shrink-0"></i>
-          <div class="flex flex-col text-left leading-tight">
-            <span class="text-sm font-bold">Evening Clearing</span>
-            <span class="text-xs opacity-75 font-normal">(ညနေစာရင်းရှင်း)</span>
-          </div>
+          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-amber-500 dark:hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 text-sm font-bold">
+          <i class="fa-solid fa-coins w-6 text-center text-lg text-amber-400 shrink-0"></i>
+          <span class="truncate">Student Settlement</span>
         </button>
 
         <button id="btn-side-settings" onclick="openSettingsModal()"
-          class="w-full px-3.5 py-2.5 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-sky-500 dark:text-slate-400 dark:hover:text-sky-300 hover:bg-sky-500/10 border border-transparent hover:border-sky-500/20">
-          <i class="fa-solid fa-sliders w-5 text-center text-base text-sky-400 shrink-0"></i>
-          <div class="flex flex-col text-left leading-tight">
-            <span class="text-sm font-bold">POS Settings</span>
-            <span class="text-xs opacity-75 font-normal">(မုန့်ဖိုးကန့်သတ်ငွေ)</span>
-          </div>
+          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-sky-500 dark:hover:text-sky-300 hover:bg-sky-500/10 border border-transparent hover:border-sky-500/20 text-sm font-bold">
+          <i class="fa-solid fa-sliders w-6 text-center text-lg text-sky-400 shrink-0"></i>
+          <span class="truncate">Settings</span>
         </button>
       </nav>
     </div>
 
-    <!-- Sidebar Bottom (Standard 12px Font & 40px Touch Target) -->
+    <!-- Sidebar Bottom (Touch-friendly 44px Target) -->
     <div class="p-3.5 border-t border-[var(--border-color)] bg-[var(--bg-sidebar)] space-y-2 shrink-0">
       <div class="px-2 py-1 flex items-center justify-between text-xs font-mono text-slate-400">
-        <span id="pos-network-status" class="flex items-center gap-1.5 font-bold"><span
-            class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> ONLINE</span>
+        <span id="pos-network-status" class="flex items-center gap-1.5 font-bold">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span> ONLINE
+        </span>
         <span id="side-today-date" title="Myanmar Standard Time (UTC+06:30)" class="font-medium">MMT 2026-10-08</span>
       </div>
       <button onclick="logoutPos()"
-        class="w-full h-10 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 rounded-xl text-xs md:text-sm font-bold transition flex items-center justify-center gap-2 active:scale-95">
-        <i class="fa-solid fa-power-off text-sm"></i>
-        <span>Logout (စနစ်မှထွက်မည်)</span>
+        class="w-full h-11 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 rounded-xl text-sm font-bold transition flex items-center justify-center gap-2 active:scale-95 shadow-sm">
+        <i class="fa-solid fa-power-off text-base"></i>
+        <span>Logout</span>
       </button>
     </div>
   </aside>
