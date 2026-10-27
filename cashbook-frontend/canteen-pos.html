@@ -214,138 +214,123 @@
   <!-- 💡 1. CANTEEN HUB NAVIGATION SIDEBAR (EXACT 64px HEADER LOCK)                  -->
   <!-- ============================================================================== -->
   <aside id="canteen-sidebar"
-    class="w-64 bg-[var(--bg-sidebar)] border-r border-[var(--border-color)] flex flex-col justify-between shrink-0 h-screen z-50 shadow-lg overflow-hidden">
-    <div>
-      <!-- Brand Header (Fixed 64px to match top bar) -->
+    class="w-64 bg-[var(--bg-sidebar)] border-r border-[var(--border-color)] flex flex-col shrink-0 h-screen z-50 shadow-lg overflow-hidden">
+
+    <!-- Brand Header (Fixed 64px to match top bar) -->
+    <div
+      class="h-[64px] px-4 border-b border-[var(--border-color)] flex items-center gap-3 shrink-0 box-border bg-[var(--bg-sidebar)]">
       <div
-        class="h-[64px] px-4 border-b border-[var(--border-color)] flex items-center gap-3 shrink-0 box-border bg-[var(--bg-sidebar)] z-20">
-        <div
-          class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-500 font-black text-xl shadow-lg shadow-emerald-950/20 shrink-0">
-          <i class="fa-solid fa-utensils"></i>
-        </div>
-        <div class="min-w-0 flex-1">
-          <h2 class="text-sm font-black tracking-wider uppercase truncate">CANTEEN SYSTEM</h2>
-          <p id="side-user-role" class="text-xs font-mono text-emerald-500 font-bold truncate">AUTHENTICATING...</p>
-        </div>
+        class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-500 font-black text-xl shadow-lg shadow-emerald-950/20 shrink-0">
+        <i class="fa-solid fa-utensils"></i>
       </div>
-
-      <!-- Navigation Links (Single-Line International POS Standard) -->
-      <nav class="flex-1 overflow-y-auto custom-scroll p-3 space-y-1 text-sm font-bold min-h-0">
-
-        <!-- 1. DASHBOARD -->
-        <button id="nav-btn-dashboard" onclick="switchCanteenView('dashboard')"
-          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
-          <i class="fa-solid fa-chart-pie w-6 text-center text-lg text-indigo-400 shrink-0"></i>
-          <span class="truncate">Dashboard</span>
-        </button>
-
-        <!-- 2. POS CASH MANAGEMENT -->
-        <div class="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-2 pt-3">
-          POS Cash Management
-        </div>
-
-        <button id="nav-btn-cashbook" onclick=""
-          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
-          <i class="fa-solid fa-wallet w-6 text-center text-lg text-emerald-400 shrink-0"></i>
-          <span class="truncate">POS Cash Book</span>
-        </button>
-
-        <!-- 3. SALES, PURCHASES & INVENTORY -->
-        <div class="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-2 pt-3">
-          Sales & Purchases
-        </div>
-
-        <button id="nav-btn-pos" onclick="switchCanteenView('pos')"
-          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 bg-emerald-600 text-white shadow-md shadow-emerald-900/30 text-sm font-extrabold">
-          <i class="fa-solid fa-cash-register w-6 text-center text-lg shrink-0"></i>
-          <span class="truncate">Sale Counter</span>
-        </button>
-
-        <button id="nav-btn-sales" onclick="switchCanteenView('sales')"
-          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
-          <i class="fa-solid fa-receipt w-6 text-center text-lg text-sky-400 shrink-0"></i>
-          <span class="truncate">Sales</span>
-        </button>
-
-        <button id="nav-btn-purchases" onclick="switchCanteenView('purchases')"
-          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
-          <i class="fa-solid fa-truck-ramp-box w-6 text-center text-lg text-amber-400 shrink-0"></i>
-          <span class="truncate">Purchases</span>
-        </button>
-
-        <button id="nav-btn-stock" onclick="switchCanteenView('stock')"
-          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
-          <i class="fa-solid fa-boxes-stacked w-6 text-center text-lg text-teal-400 shrink-0"></i>
-          <span class="truncate">Inventory</span>
-        </button>
-
-        <!-- 4. SURPLUS & WASTE -->
-        <div class="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-2 pt-3">
-          Surplus & Waste
-        </div>
-
-        <button id="nav-btn-surplus" onclick="switchCanteenView('surplus')"
-          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
-          <i class="fa-solid fa-layer-group w-6 text-center text-lg text-emerald-400 shrink-0"></i>
-          <span class="truncate">Stock Surplus</span>
-        </button>
-
-        <button id="nav-btn-waste" onclick="switchCanteenView('waste')"
-          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
-          <i class="fa-solid fa-trash-can w-6 text-center text-lg text-rose-400 shrink-0"></i>
-          <span class="truncate">Waste & Loss</span>
-        </button>
-
-        <!-- 5. CLEARING & CONTROLS -->
-        <div class="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-2 pt-3">
-          CLEARING & CONTROLS
-        </div>
-
-        <button id="nav-btn-close-day" onclick="openDayCloseModal()"
-          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-amber-500 dark:hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 text-sm font-bold">
-          <i class="fa-solid fa-lock w-6 text-center text-lg text-amber-400 shrink-0"></i>
-          <span class="truncate">Daily Closing</span>
-        </button>
-
-        <button id="nav-btn-settle" onclick="openSettlementModal()"
-          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-amber-500 dark:hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 text-sm font-bold">
-          <i class="fa-solid fa-hand-holding-dollar w-6 text-center text-lg text-amber-400 shrink-0"></i>
-          <span class="truncate">Student Settlement</span>
-        </button>
-
-        <!-- 6. REPORTS & SYSTEM -->
-        <div class="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-2 pt-3">
-          Reports & System
-        </div>
-
-        <button id="nav-btn-reports" onclick=""
-          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-purple-500 dark:hover:text-purple-300 hover:bg-purple-500/10 border border-transparent hover:border-purple-500/20 text-sm font-bold">
-          <i class="fa-solid fa-chart-column w-6 text-center text-lg text-purple-400 shrink-0"></i>
-          <span class="truncate">Reports</span>
-        </button>
-
-        <button id="btn-side-settings" onclick="openSettingsModal()"
-          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-sky-500 dark:hover:text-sky-300 hover:bg-sky-500/10 border border-transparent hover:border-sky-500/20 text-sm font-bold">
-          <i class="fa-solid fa-sliders w-6 text-center text-lg text-sky-400 shrink-0"></i>
-          <span class="truncate">Settings</span>
-        </button>
-      </nav>
+      <div class="min-w-0 flex-1">
+        <h2 class="text-sm font-black tracking-wider uppercase truncate">CANTEEN SYSTEM</h2>
+        <p id="side-user-role" class="text-xs font-mono text-emerald-500 font-bold truncate">AUTHENTICATING...</p>
+      </div>
     </div>
 
-    <!-- Sidebar Bottom (Touch-friendly 44px Target) -->
-    <div class="p-3.5 border-t border-[var(--border-color)] bg-[var(--bg-sidebar)] space-y-2 shrink-0 z-20">
-      <div class="px-2 py-1 flex items-center justify-between text-xs font-mono text-slate-400">
-        <span id="pos-network-status" class="flex items-center gap-1.5 font-bold">
-          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span> ONLINE
-        </span>
-        <span id="side-today-date" title="Myanmar Standard Time (UTC+06:30)" class="font-medium">MMT 2026-10-08</span>
-      </div>
-      <button onclick="logoutPos()"
-        class="w-full h-11 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 rounded-xl text-sm font-bold transition flex items-center justify-center gap-2 active:scale-95 shadow-sm">
-        <i class="fa-solid fa-power-off text-base"></i>
-        <span>Logout</span>
+    <!-- Navigation Links (Takes all remaining vertical space & scrolls smoothly) -->
+    <nav class="flex-1 overflow-y-auto custom-scroll p-3 space-y-1 text-sm font-bold min-h-0">
+
+      <!-- 1. DASHBOARD -->
+      <button id="nav-btn-dashboard" onclick="switchCanteenView('dashboard')"
+        class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
+        <i class="fa-solid fa-chart-pie w-6 text-center text-lg text-indigo-400 shrink-0"></i>
+        <span class="truncate">Dashboard</span>
       </button>
-    </div>
+
+      <!-- 2. POS CASH MANAGEMENT -->
+      <div class="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-2 pt-3">
+        POS Cash Management
+      </div>
+
+      <button id="nav-btn-cashbook" onclick="switchCanteenView('cashbook')"
+        class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
+        <i class="fa-solid fa-wallet w-6 text-center text-lg text-emerald-400 shrink-0"></i>
+        <span class="truncate">POS Cash Book</span>
+      </button>
+
+      <!-- 3. SALES, PURCHASES & INVENTORY -->
+      <div class="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-2 pt-3">
+        Sales & Purchases
+      </div>
+
+      <button id="nav-btn-pos" onclick="switchCanteenView('pos')"
+        class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 bg-emerald-600 text-white shadow-md shadow-emerald-900/30 text-sm font-extrabold">
+        <i class="fa-solid fa-cash-register w-6 text-center text-lg shrink-0"></i>
+        <span class="truncate">Sale Counter</span>
+      </button>
+
+      <button id="nav-btn-sales" onclick="switchCanteenView('sales')"
+        class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
+        <i class="fa-solid fa-receipt w-6 text-center text-lg text-sky-400 shrink-0"></i>
+        <span class="truncate">Sales</span>
+      </button>
+
+      <button id="nav-btn-purchases" onclick="switchCanteenView('purchases')"
+        class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
+        <i class="fa-solid fa-truck-ramp-box w-6 text-center text-lg text-amber-400 shrink-0"></i>
+        <span class="truncate">Purchases</span>
+      </button>
+
+      <button id="nav-btn-stock" onclick="switchCanteenView('stock')"
+        class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
+        <i class="fa-solid fa-boxes-stacked w-6 text-center text-lg text-teal-400 shrink-0"></i>
+        <span class="truncate">Inventory</span>
+      </button>
+
+      <!-- 4. SURPLUS & WASTE -->
+      <div class="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-2 pt-3">
+        Surplus & Waste
+      </div>
+
+      <button id="nav-btn-surplus" onclick="switchCanteenView('surplus')"
+        class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
+        <i class="fa-solid fa-layer-group w-6 text-center text-lg text-emerald-400 shrink-0"></i>
+        <span class="truncate">Stock Surplus</span>
+      </button>
+
+      <button id="nav-btn-waste" onclick="switchCanteenView('waste')"
+        class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
+        <i class="fa-solid fa-trash-can w-6 text-center text-lg text-rose-400 shrink-0"></i>
+        <span class="truncate">Waste & Loss</span>
+      </button>
+
+      <!-- 5. CLEARING & CONTROLS -->
+      <div class="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-2 pt-3">
+        CLEARING & CONTROLS
+      </div>
+
+      <button id="nav-btn-close-day" onclick="openDayCloseModal()"
+        class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-amber-500 dark:hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 text-sm font-bold">
+        <i class="fa-solid fa-lock w-6 text-center text-lg text-amber-400 shrink-0"></i>
+        <span class="truncate">Daily Closing</span>
+      </button>
+
+      <button id="nav-btn-settle" onclick="openSettlementModal()"
+        class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-amber-500 dark:hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 text-sm font-bold">
+        <i class="fa-solid fa-hand-holding-dollar w-6 text-center text-lg text-amber-400 shrink-0"></i>
+        <span class="truncate">Student Settlement</span>
+      </button>
+
+      <!-- 6. REPORTS & SYSTEM -->
+      <div class="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-2 pt-3">
+        Reports & System
+      </div>
+
+      <button id="nav-btn-reports" onclick="switchCanteenView('reports')"
+        class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-purple-500 dark:hover:text-purple-300 hover:bg-purple-500/10 border border-transparent hover:border-purple-500/20 text-sm font-bold">
+        <i class="fa-solid fa-chart-column w-6 text-center text-lg text-purple-400 shrink-0"></i>
+        <span class="truncate">Reports</span>
+      </button>
+
+      <button id="btn-side-settings" onclick="openSettingsModal()"
+        class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-sky-500 dark:hover:text-sky-300 hover:bg-sky-500/10 border border-transparent hover:border-sky-500/20 text-sm font-bold">
+        <i class="fa-solid fa-sliders w-6 text-center text-lg text-sky-400 shrink-0"></i>
+        <span class="truncate">Settings</span>
+      </button>
+
+    </nav>
   </aside>
 
   <!-- ============================================================================== -->
