@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="my" class="dark">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -29,6 +30,7 @@
       --text-muted: #64748b;
       --table-header: #f1f5f9;
     }
+
     html.dark {
       --bg-base: #050b14;
       --bg-sidebar: #080f1e;
@@ -39,26 +41,40 @@
       --text-muted: #94a3b8;
       --table-header: #0e172a;
     }
-    body { 
-      background-color: var(--bg-base); 
+
+    body {
+      background-color: var(--bg-base);
       color: var(--text-main);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-      -webkit-tap-highlight-color: transparent; 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
       transition: background-color 0.2s ease, color 0.2s ease;
     }
-    .glass-card { 
-      background: var(--bg-card); 
-      backdrop-filter: blur(12px); 
-      border: 1px solid var(--border-color); 
+
+    .glass-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border-color);
     }
-    input[type=number]::-webkit-inner-spin-button, 
-    input[type=number]::-webkit-outer-spin-button { 
-      -webkit-appearance: none; 
-      margin: 0; 
+
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
     }
-    .custom-scroll::-webkit-scrollbar { width: 5px; height: 5px; }
-    .custom-scroll::-webkit-scrollbar-track { background: transparent; }
-    .custom-scroll::-webkit-scrollbar-thumb { background: #64748b40; border-radius: 4px; }
+
+    .custom-scroll::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+
+    .custom-scroll::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #64748b40;
+      border-radius: 4px;
+    }
 
     /* 🛡️ Strict Role-Based Instant Lockdown CSS */
     html.role-counter #canteen-sidebar,
@@ -78,307 +94,337 @@
 
   <!-- 🕒 MMT Engine, Real-time Clock, Theme & Early Role Initialization -->
   <script>
-    (function() {
-      // 1. Theme Pre-Initialization
-      const savedTheme = localStorage.getItem('canteen_pos_theme') || 'dark';
-      if (savedTheme === 'light') {
-        document.documentElement.classList.remove('dark');
-        document.documentElement.classList.add('light');
-      } else {
-        document.documentElement.classList.remove('light');
-        document.documentElement.classList.add('dark');
-      }
-
-      // 2. Early Role Detection (Zero Flash of Restricted Controls)
-      try {
-        const userStr = localStorage.getItem('golden_user') || localStorage.getItem('user');
-        const user = userStr ? JSON.parse(userStr) : null;
-        const role = user?.role || localStorage.getItem('golden_user_role') || '';
-        const normRole = String(role || '').toLowerCase().replace(/[\s_-]/g, '');
-        if (normRole.includes('counter')) {
-          document.documentElement.classList.add('role-counter');
-        } else if (normRole === 'canteencashier' || normRole === 'cashier') {
-          document.documentElement.classList.add('role-cashier');
-        } else if (normRole === 'canteenadmin' || normRole === 'admin' || normRole === 'owner') {
-          document.documentElement.classList.add('role-admin');
+      (function () {
+        const savedTheme = localStorage.getItem('canteen_pos_theme') || 'dark';
+        if (savedTheme === 'light') {
+          document.documentElement.classList.remove('dark');
+          document.documentElement.classList.add('light');
+        } else {
+          document.documentElement.classList.remove('light');
+          document.documentElement.classList.add('dark');
         }
-      } catch(e) {}
 
-      // 3. Myanmar Standard Time (UTC+06:30) Helpers
-      window.getMMTDateString = function(dInput) {
-        if (dInput && typeof dInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dInput.trim())) {
-          return dInput.trim();
-        }
-        const d = dInput ? new Date(dInput) : new Date();
-        const targetMs = isNaN(d.getTime()) ? Date.now() : d.getTime();
-        const mmt = new Date(targetMs + (6.5 * 60 * 60 * 1000));
-        return mmt.toISOString().slice(0, 10);
-      };
+        try {
+          const userStr = localStorage.getItem('golden_user') || localStorage.getItem('user');
+          const user = userStr ? JSON.parse(userStr) : null;
+          const role = user?.role || localStorage.getItem('golden_user_role') || '';
+          const normRole = String(role || '').toLowerCase().replace(/[\s_-]/g, '');
+          if (normRole.includes('counter')) {
+            document.documentElement.classList.add('role-counter');
+          } else if (normRole === 'canteencashier' || normRole === 'cashier') {
+            document.documentElement.classList.add('role-cashier');
+          } else if (normRole === 'canteenadmin' || normRole === 'admin' || normRole === 'owner') {
+            document.documentElement.classList.add('role-admin');
+          }
+        } catch (e) { }
 
-      window.getMMTFullDateTimeString = function(dInput) {
-        const d = dInput ? new Date(dInput) : new Date();
-        const targetMs = isNaN(d.getTime()) ? Date.now() : d.getTime();
-        const mmt = new Date(targetMs + (6.5 * 60 * 60 * 1000));
-        const y = mmt.getUTCFullYear();
-        const m = String(mmt.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(mmt.getUTCDate()).padStart(2, '0');
-        let hours = mmt.getUTCHours();
-        const minutes = String(mmt.getUTCMinutes()).padStart(2, '0');
-        const seconds = String(mmt.getUTCSeconds()).padStart(2, '0');
-        const ampm = hours >= 12 ? 'PM' : 'AM';
-        hours = hours % 12;
-        hours = hours ? hours : 12;
-        const strHours = String(hours).padStart(2, '0');
-        return `${y}-${m}-${day} | ${strHours}:${minutes}:${seconds} ${ampm} (MMT)`;
-      };
+        window.getMMTDateString = function (dInput) {
+          if (dInput && typeof dInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dInput.trim())) {
+            return dInput.trim();
+          }
+          const d = dInput ? new Date(dInput) : new Date();
+          const targetMs = isNaN(d.getTime()) ? Date.now() : d.getTime();
+          const mmt = new Date(targetMs + (6.5 * 60 * 60 * 1000));
+          return mmt.toISOString().slice(0, 10);
+        };
 
-      // 4. Live Ticking Clock Starter
-      window.startMMTClock = function() {
-        function tick() {
-          const formatted = window.getMMTFullDateTimeString();
-          const todayDateOnly = window.getMMTDateString();
-          const headerDateEl = document.getElementById('pos-today-date');
-          if (headerDateEl) headerDateEl.textContent = formatted;
-          const sideDateEl = document.getElementById('side-today-date');
-          if (sideDateEl) sideDateEl.textContent = `MMT ${todayDateOnly}`;
-        }
-        tick();
-        setInterval(tick, 1000);
-      };
+        window.getMMTFullDateTimeString = function (dInput) {
+          const d = dInput ? new Date(dInput) : new Date();
+          const targetMs = isNaN(d.getTime()) ? Date.now() : d.getTime();
+          const mmt = new Date(targetMs + (6.5 * 60 * 60 * 1000));
+          const y = mmt.getUTCFullYear();
+          const m = String(mmt.getUTCMonth() + 1).padStart(2, '0');
+          const day = String(mmt.getUTCDate()).padStart(2, '0');
+          let hours = mmt.getUTCHours();
+          const minutes = String(mmt.getUTCMinutes()).padStart(2, '0');
+          const seconds = String(mmt.getUTCSeconds()).padStart(2, '0');
+          const ampm = hours >= 12 ? 'PM' : 'AM';
+          hours = hours % 12;
+          hours = hours ? hours : 12;
+          const strHours = String(hours).padStart(2, '0');
+          return `${y}-${m}-${day} | ${strHours}:${minutes}:${seconds} ${ampm} (MMT)`;
+        };
 
-      // 5. Enterprise-Grade Offline-Cached Component Loader (Method B - Recursion-Free)
-      window.loadCanteenComponents = async function() {
-        async function loadPartial(containerId, url, cacheKey) {
-          const container = document.getElementById(containerId);
-          if (!container) return;
-          if (container.children.length > 0) return; // Already rendered
+        window.startMMTClock = function () {
+          function tick() {
+            const formatted = window.getMMTFullDateTimeString();
+            const todayDateOnly = window.getMMTDateString();
+            const headerDateEl = document.getElementById('pos-today-date');
+            if (headerDateEl) headerDateEl.textContent = formatted;
+            const sideDateEl = document.getElementById('side-today-date');
+            if (sideDateEl) sideDateEl.textContent = `MMT ${todayDateOnly}`;
+          }
+          tick();
+          setInterval(tick, 1000);
+        };
 
-          const paths = [
-            url,
-            `/${url}`,
-            `components/${url.split('/').pop()}`,
-            `/components/${url.split('/').pop()}`
-          ];
-          const uniquePaths = [...new Set(paths)];
+        window.loadCanteenComponents = async function () {
+          async function loadPartial(containerId, url, cacheKey) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            if (container.children.length > 0) return;
 
-          let html = null;
-          for (const p of uniquePaths) {
-            try {
-              const res = await fetch(p);
-              if (res.ok) {
-                html = await res.text();
-                if (html && html.trim().length > 0) {
-                  try { localStorage.setItem(cacheKey, html); } catch(e) {}
-                  break;
+            const paths = [
+              url,
+              `/${url}`,
+              `components/${url.split('/').pop()}`,
+              `/components/${url.split('/').pop()}`
+            ];
+            const uniquePaths = [...new Set(paths)];
+
+            let html = null;
+            for (const p of uniquePaths) {
+              try {
+                const res = await fetch(p);
+                if (res.ok) {
+                  html = await res.text();
+                  if (html && html.trim().length > 0) {
+                    try { localStorage.setItem(cacheKey, html); } catch (e) { }
+                    break;
+                  }
                 }
-              }
-            } catch (e) {}
+              } catch (e) { }
+            }
+
+            if (html) {
+              container.innerHTML = html;
+            } else {
+              const cached = localStorage.getItem(cacheKey);
+              if (cached) container.innerHTML = cached;
+            }
           }
 
-          if (html) {
-            container.innerHTML = html;
-          } else {
-            const cached = localStorage.getItem(cacheKey);
-            if (cached) container.innerHTML = cached;
-          }
-        }
-
-        await Promise.allSettled([
-          loadPartial('view-dashboard', 'components/canteen-dashboard.html', 'canteen_tpl_dashboard'),
-          loadPartial('view-purchases', 'components/canteen-purchases.html', 'canteen_tpl_purchases'),
-          loadPartial('canteen-modals-container', 'components/canteen-modals.html', 'canteen_tpl_modals')
-        ]);
-      };
-    })();
+          await Promise.allSettled([
+            loadPartial('view-dashboard', 'components/canteen-dashboard.html', 'canteen_tpl_dashboard'),
+            loadPartial('view-purchases', 'components/canteen-purchases.html', 'canteen_tpl_purchases'),
+            loadPartial('canteen-modals-container', 'components/canteen-modals.html', 'canteen_tpl_modals')
+          ]);
+        };
+      })();
   </script>
 
   <!-- 💡 ပင်မ ERP Config နှင့် API ချိတ်ဆက်ခြင်း -->
   <script src="js/config.js"></script>
   <script src="js/api.js"></script>
 </head>
+
 <body class="h-screen flex overflow-hidden select-none">
 
   <!-- ============================================================================== -->
-  <!-- 💡 1. CANTEEN HUB NAVIGATION SIDEBAR (2-LINE TYPOGRAPHY HIERARCHY)             -->
+  <!-- 💡 1. CANTEEN HUB NAVIGATION SIDEBAR (EXACT 64px HEADER LOCK)                  -->
   <!-- ============================================================================== -->
-  <aside id="canteen-sidebar" class="w-64 bg-[var(--bg-sidebar)] border-r border-[var(--border-color)] flex flex-col justify-between shrink-0 h-screen z-50 overflow-y-auto custom-scroll shadow-lg">
+  <aside id="canteen-sidebar"
+    class="w-64 bg-[var(--bg-sidebar)] border-r border-[var(--border-color)] flex flex-col justify-between shrink-0 h-screen z-50 overflow-y-auto custom-scroll shadow-lg">
     <div>
-      <!-- Brand Header -->
-      <div class="p-4 border-b border-[var(--border-color)] flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-500 font-black text-lg shadow-lg shadow-emerald-950/20">
+      <!-- Brand Header (International Standard Fixed Height 64px - h-[64px]) -->
+      <div class="h-[64px] px-4 border-b border-[var(--border-color)] flex items-center gap-3 shrink-0 box-border">
+        <div
+          class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-500 font-black text-lg shadow-lg shadow-emerald-950/20 shrink-0">
           <i class="fa-solid fa-utensils"></i>
         </div>
-        <div class="min-w-0">
-          <h2 class="text-xs font-black tracking-wider uppercase truncate">CANTEEN SYSTEM</h2>
-          <p id="side-user-role" class="text-[10px] font-mono text-emerald-500 font-bold truncate">AUTHENTICATING...</p>
+        <div class="min-w-0 flex-1">
+          <h2 class="text-sm font-black tracking-wider uppercase truncate">CANTEEN SYSTEM</h2>
+          <p id="side-user-role" class="text-xs font-mono text-emerald-500 font-bold truncate">AUTHENTICATING...</p>
         </div>
       </div>
 
-      <!-- Navigation Links (English on Top, Burmese Subtitle Below) -->
+      <!-- Navigation Links (Standard 14px Title, 12px Subtitle, 16px Icon) -->
       <nav class="p-3 space-y-1.5 text-xs font-bold">
-        <div class="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 px-3 py-0.5">OPERATIONS</div>
-        
-        <button id="nav-btn-dashboard" onclick="switchCanteenView('dashboard')" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
-          <i class="fa-solid fa-chart-pie w-4 text-center text-indigo-400 shrink-0"></i>
+        <div class="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-1">
+          OPERATIONS</div>
+
+        <button id="nav-btn-dashboard" onclick="switchCanteenView('dashboard')"
+          class="w-full px-3.5 py-2.5 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
+          <i class="fa-solid fa-chart-pie w-5 text-center text-base text-indigo-400 shrink-0"></i>
           <div class="flex flex-col text-left leading-tight">
-            <span class="text-xs font-black">Dashboard</span>
-            <span class="text-[10px] opacity-80 font-normal">(အရောင်းချုပ်)</span>
+            <span class="text-sm font-bold">Dashboard</span>
+            <span class="text-xs opacity-75 font-normal">(အရောင်းချုပ်)</span>
           </div>
         </button>
 
-        <button id="nav-btn-pos" onclick="switchCanteenView('pos')" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 bg-emerald-600 text-white shadow-lg shadow-emerald-900/30">
-          <i class="fa-solid fa-cash-register w-4 text-center shrink-0"></i>
+        <button id="nav-btn-pos" onclick="switchCanteenView('pos')"
+          class="w-full px-3.5 py-2.5 rounded-xl transition flex items-center gap-3 bg-emerald-600 text-white shadow-lg shadow-emerald-900/30">
+          <i class="fa-solid fa-cash-register w-5 text-center text-base shrink-0"></i>
           <div class="flex flex-col text-left leading-tight">
-            <span class="text-xs font-black">POS Register</span>
-            <span class="text-[10px] opacity-90 font-normal">(အရောင်းကောင်တာ)</span>
+            <span class="text-sm font-bold">POS Register</span>
+            <span class="text-xs opacity-90 font-normal">(အရောင်းကောင်တာ)</span>
           </div>
         </button>
 
-        <button id="nav-btn-sales" onclick="switchCanteenView('sales')" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
-          <i class="fa-solid fa-receipt w-4 text-center text-sky-400 shrink-0"></i>
+        <button id="nav-btn-sales" onclick="switchCanteenView('sales')"
+          class="w-full px-3.5 py-2.5 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
+          <i class="fa-solid fa-receipt w-5 text-center text-base text-sky-400 shrink-0"></i>
           <div class="flex flex-col text-left leading-tight">
-            <span class="text-xs font-black">Sales Orders</span>
-            <span class="text-[10px] opacity-80 font-normal">(အရောင်းစာရင်း)</span>
+            <span class="text-sm font-bold">Sales Orders</span>
+            <span class="text-xs opacity-75 font-normal">(အရောင်းစာရင်း)</span>
           </div>
         </button>
 
-        <div class="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 px-3 py-1 pt-2">INVENTORY & AUDIT</div>
+        <div
+          class="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-1 pt-2.5">
+          INVENTORY & AUDIT</div>
 
-        <button id="nav-btn-stock" onclick="switchCanteenView('stock')" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
-          <i class="fa-solid fa-boxes-stacked w-4 text-center text-teal-400 shrink-0"></i>
+        <button id="nav-btn-stock" onclick="switchCanteenView('stock')"
+          class="w-full px-3.5 py-2.5 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
+          <i class="fa-solid fa-boxes-stacked w-5 text-center text-base text-teal-400 shrink-0"></i>
           <div class="flex flex-col text-left leading-tight">
-            <span class="text-xs font-black">Stock Inventory</span>
-            <span class="text-[10px] opacity-80 font-normal">(လက်ကျန်စစ်)</span>
+            <span class="text-sm font-bold">Stock Inventory</span>
+            <span class="text-xs opacity-75 font-normal">(လက်ကျန်စစ်)</span>
           </div>
         </button>
 
-        <button id="nav-btn-purchases" onclick="switchCanteenView('purchases')" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
-          <i class="fa-solid fa-truck-ramp-box w-4 text-center text-amber-400 shrink-0"></i>
+        <button id="nav-btn-purchases" onclick="switchCanteenView('purchases')"
+          class="w-full px-3.5 py-2.5 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
+          <i class="fa-solid fa-truck-ramp-box w-5 text-center text-base text-amber-400 shrink-0"></i>
           <div class="flex flex-col text-left leading-tight">
-            <span class="text-xs font-black">Purchases</span>
-            <span class="text-[10px] opacity-80 font-normal">(အဝယ်စာရင်း)</span>
+            <span class="text-sm font-bold">Purchases</span>
+            <span class="text-xs opacity-75 font-normal">(အဝယ်စာရင်း)</span>
           </div>
         </button>
 
-        <button id="nav-btn-waste" onclick="switchCanteenView('waste')" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
-          <i class="fa-solid fa-dumpster-fire w-4 text-center text-rose-400 shrink-0"></i>
+        <button id="nav-btn-waste" onclick="switchCanteenView('waste')"
+          class="w-full px-3.5 py-2.5 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
+          <i class="fa-solid fa-dumpster-fire w-5 text-center text-base text-rose-400 shrink-0"></i>
           <div class="flex flex-col text-left leading-tight">
-            <span class="text-xs font-black">Waste & Loss</span>
-            <span class="text-[10px] opacity-80 font-normal">(အပျက်/အပျောက်)</span>
+            <span class="text-sm font-bold">Waste & Loss</span>
+            <span class="text-xs opacity-75 font-normal">(အပျက်/အပျောက်)</span>
           </div>
         </button>
 
-        <button id="nav-btn-surplus" onclick="switchCanteenView('surplus')" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
-          <i class="fa-solid fa-layer-group w-4 text-center text-emerald-400 shrink-0"></i>
+        <button id="nav-btn-surplus" onclick="switchCanteenView('surplus')"
+          class="w-full px-3.5 py-2.5 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800/50">
+          <i class="fa-solid fa-layer-group w-5 text-center text-base text-emerald-400 shrink-0"></i>
           <div class="flex flex-col text-left leading-tight">
-            <span class="text-xs font-black">Stock Surplus</span>
-            <span class="text-[10px] opacity-80 font-normal">(အပိုစာရင်း)</span>
+            <span class="text-sm font-bold">Stock Surplus</span>
+            <span class="text-xs opacity-75 font-normal">(အပိုစာရင်း)</span>
           </div>
         </button>
 
-        <div class="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 px-3 py-1 pt-2">CLEARING & CONTROLS</div>
+        <div
+          class="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-1 pt-2.5">
+          CLEARING & CONTROLS</div>
 
-        <button id="nav-btn-close-day" onclick="openDayCloseModal()" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-amber-500 dark:text-slate-400 dark:hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20">
-          <i class="fa-solid fa-lock w-4 text-center text-amber-400 shrink-0"></i>
+        <button id="nav-btn-close-day" onclick="openDayCloseModal()"
+          class="w-full px-3.5 py-2.5 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-amber-500 dark:text-slate-400 dark:hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20">
+          <i class="fa-solid fa-lock w-5 text-center text-base text-amber-400 shrink-0"></i>
           <div class="flex flex-col text-left leading-tight">
-            <span class="text-xs font-black">Close Register</span>
-            <span class="text-[10px] opacity-80 font-normal">(ဆိုင်ပိတ်မည်)</span>
+            <span class="text-sm font-bold">Close Register</span>
+            <span class="text-xs opacity-75 font-normal">(ဆိုင်ပိတ်မည်)</span>
           </div>
         </button>
 
-        <button id="nav-btn-settle" onclick="openSettlementModal()" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-amber-500 dark:text-slate-400 dark:hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20">
-          <i class="fa-solid fa-coins w-4 text-center text-amber-400 shrink-0"></i>
+        <button id="nav-btn-settle" onclick="openSettlementModal()"
+          class="w-full px-3.5 py-2.5 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-amber-500 dark:text-slate-400 dark:hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20">
+          <i class="fa-solid fa-coins w-5 text-center text-base text-amber-400 shrink-0"></i>
           <div class="flex flex-col text-left leading-tight">
-            <span class="text-xs font-black">Evening Clearing</span>
-            <span class="text-[10px] opacity-80 font-normal">(ညနေစာရင်းရှင်း)</span>
+            <span class="text-sm font-bold">Evening Clearing</span>
+            <span class="text-xs opacity-75 font-normal">(ညနေစာရင်းရှင်း)</span>
           </div>
         </button>
 
-        <button id="btn-side-settings" onclick="openSettingsModal()" class="w-full px-3 py-2 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-sky-500 dark:text-slate-400 dark:hover:text-sky-300 hover:bg-sky-500/10 border border-transparent hover:border-sky-500/20">
-          <i class="fa-solid fa-sliders w-4 text-center text-sky-400 shrink-0"></i>
+        <button id="btn-side-settings" onclick="openSettingsModal()"
+          class="w-full px-3.5 py-2.5 rounded-xl transition flex items-center gap-3 text-slate-500 hover:text-sky-500 dark:text-slate-400 dark:hover:text-sky-300 hover:bg-sky-500/10 border border-transparent hover:border-sky-500/20">
+          <i class="fa-solid fa-sliders w-5 text-center text-base text-sky-400 shrink-0"></i>
           <div class="flex flex-col text-left leading-tight">
-            <span class="text-xs font-black">POS Settings</span>
-            <span class="text-[10px] opacity-80 font-normal">(မုန့်ဖိုးကန့်သတ်ငွေ)</span>
+            <span class="text-sm font-bold">POS Settings</span>
+            <span class="text-xs opacity-75 font-normal">(မုန့်ဖိုးကန့်သတ်ငွေ)</span>
           </div>
         </button>
       </nav>
     </div>
 
-    <!-- Sidebar Bottom (MMT UTC+06:30 Indicated) -->
-    <div class="p-3 border-t border-[var(--border-color)] bg-[var(--bg-sidebar)] space-y-2">
-      <div class="px-2 py-1 flex items-center justify-between text-[10px] font-mono text-slate-500">
-        <span id="pos-network-status" class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> ONLINE</span>
-        <span id="side-today-date" title="Myanmar Standard Time (UTC+06:30)">MMT 2026-10-08</span>
+    <!-- Sidebar Bottom (Standard 12px Font & 40px Touch Target) -->
+    <div class="p-3.5 border-t border-[var(--border-color)] bg-[var(--bg-sidebar)] space-y-2 shrink-0">
+      <div class="px-2 py-1 flex items-center justify-between text-xs font-mono text-slate-400">
+        <span id="pos-network-status" class="flex items-center gap-1.5 font-bold"><span
+            class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> ONLINE</span>
+        <span id="side-today-date" title="Myanmar Standard Time (UTC+06:30)" class="font-medium">MMT 2026-10-08</span>
       </div>
-      <button onclick="logoutPos()" class="w-full py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2">
-        <i class="fa-solid fa-power-off text-xs"></i>
+      <button onclick="logoutPos()"
+        class="w-full h-10 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 rounded-xl text-xs md:text-sm font-bold transition flex items-center justify-center gap-2 active:scale-95">
+        <i class="fa-solid fa-power-off text-sm"></i>
         <span>Logout (စနစ်မှထွက်မည်)</span>
       </button>
     </div>
   </aside>
 
   <!-- ============================================================================== -->
-  <!-- 💡 2. MAIN APPLICATION WORKSPACE                                              -->
+  <!-- 💡 2. MAIN APPLICATION WORKSPACE (EXACT 64px HEADER LOCK)                      -->
   <!-- ============================================================================== -->
   <div class="flex-1 flex flex-col h-screen min-w-0 overflow-hidden bg-[var(--bg-base)]">
-    
-    <!-- Top Action Bar (Live Ticking MMT Clock) -->
-    <header class="bg-[var(--bg-sidebar)]/95 backdrop-blur-md border-b border-[var(--border-color)] px-4 py-2 flex items-center justify-between shrink-0 z-40">
+
+    <!-- Top Action Bar (International Standard Fixed Height 64px - h-[64px]) -->
+    <header
+      class="bg-[var(--bg-sidebar)]/95 backdrop-blur-md border-b border-[var(--border-color)] px-5 h-[64px] flex items-center justify-between shrink-0 z-40 box-border">
       <div class="flex items-center gap-3">
-        <button id="btn-toggle-sidebar" onclick="toggleCanteenSidebar()" class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center text-xs lg:hidden">
+        <button id="btn-toggle-sidebar" onclick="toggleCanteenSidebar()"
+          class="w-9 h-9 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center text-sm lg:hidden shadow-sm">
           <i class="fa-solid fa-bars"></i>
         </button>
         <div>
-          <h1 id="canteen-view-title" class="text-xs font-black tracking-wider uppercase">CANTEEN POS TERMINAL</h1>
-          <p id="pos-today-date" class="text-[10px] font-mono text-emerald-500 dark:text-emerald-400 font-bold">Initializing MMT Clock...</p>
+          <h1 id="canteen-view-title" class="text-sm md:text-base font-black tracking-wider uppercase">CANTEEN POS
+            TERMINAL</h1>
+          <p id="pos-today-date" class="text-xs font-mono text-emerald-500 dark:text-emerald-400 font-bold">Initializing
+            MMT Clock...</p>
         </div>
       </div>
 
       <div class="flex items-center gap-2">
-        <button id="btn-pending-sync" onclick="openPendingSyncModal()" class="px-3 py-1.5 rounded-lg bg-slate-200/80 dark:bg-slate-800 border border-[var(--border-color)] text-xs font-bold flex items-center gap-1.5 transition active:scale-95 shadow-sm">
-          <i class="fa-solid fa-clock-rotate-left text-amber-500 text-xs"></i>
+        <button id="btn-pending-sync" onclick="openPendingSyncModal()"
+          class="h-9 px-3.5 rounded-xl bg-slate-200/80 dark:bg-slate-800 border border-[var(--border-color)] text-xs md:text-sm font-bold flex items-center gap-2 transition active:scale-95 shadow-sm">
+          <i class="fa-solid fa-clock-rotate-left text-amber-500 text-sm"></i>
           <span>Pending (<span id="pending-count" class="font-mono text-amber-500 font-black">0</span>)</span>
         </button>
 
-        <button id="btn-admin-stock" onclick="openItemModal()" class="px-3 py-1.5 rounded-lg bg-slate-200/80 dark:bg-slate-800 border border-[var(--border-color)] text-xs font-bold flex items-center gap-1.5 transition active:scale-95 shadow-sm">
-          <i class="fa-solid fa-box text-emerald-500 text-xs"></i>
+        <button id="btn-admin-stock" onclick="openItemModal()"
+          class="h-9 px-3.5 rounded-xl bg-slate-200/80 dark:bg-slate-800 border border-[var(--border-color)] text-xs md:text-sm font-bold flex items-center gap-2 transition active:scale-95 shadow-sm">
+          <i class="fa-solid fa-box text-emerald-500 text-sm"></i>
           <span>ပစ္စည်း / အဝယ်သွင်း</span>
         </button>
 
-        <button id="btn-header-waste" onclick="openWasteModal()" class="px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-500 text-xs font-bold flex items-center gap-1.5 transition active:scale-95">
-          <i class="fa-solid fa-dumpster-fire text-rose-500 text-xs"></i>
+        <button id="btn-header-waste" onclick="openWasteModal()"
+          class="h-9 px-3.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-500 text-xs md:text-sm font-bold flex items-center gap-2 transition active:scale-95">
+          <i class="fa-solid fa-dumpster-fire text-rose-500 text-sm"></i>
           <span>အပျက်စာရင်း</span>
         </button>
 
-        <button id="btn-header-surplus" onclick="openSurplusModal()" class="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-500 text-xs font-bold flex items-center gap-1.5 transition active:scale-95">
-          <i class="fa-solid fa-plus-circle text-emerald-500 text-xs"></i>
+        <button id="btn-header-surplus" onclick="openSurplusModal()"
+          class="h-9 px-3.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-500 text-xs md:text-sm font-bold flex items-center gap-2 transition active:scale-95">
+          <i class="fa-solid fa-plus-circle text-emerald-500 text-sm"></i>
           <span>အပိုစာရင်း</span>
         </button>
 
-        <button id="btn-header-close-day" onclick="openDayCloseModal()" class="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-500 text-xs font-bold flex items-center gap-1.5 transition active:scale-95">
-          <i class="fa-solid fa-store-slash text-amber-500 text-xs"></i>
+        <button id="btn-header-close-day" onclick="openDayCloseModal()"
+          class="h-9 px-3.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-500 text-xs md:text-sm font-bold flex items-center gap-2 transition active:scale-95">
+          <i class="fa-solid fa-store-slash text-amber-500 text-sm"></i>
           <span id="header-close-status-text">ဆိုင်ပိတ်မည်</span>
         </button>
 
         <!-- Theme Switcher -->
-        <button id="btn-theme-toggle" onclick="toggleCanteenTheme()" class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-800 border border-[var(--border-color)] text-amber-500 dark:text-sky-300 flex items-center justify-center text-xs transition active:scale-95 shadow-sm" title="Toggle Theme">
+        <button id="btn-theme-toggle" onclick="toggleCanteenTheme()"
+          class="w-9 h-9 rounded-xl bg-slate-200 dark:bg-slate-800 border border-[var(--border-color)] text-amber-500 dark:text-sky-300 flex items-center justify-center text-sm transition active:scale-95 shadow-sm"
+          title="Toggle Theme">
           <i id="theme-toggle-icon" class="fa-solid fa-sun dark:fa-moon"></i>
         </button>
-        
+
         <!-- Universal Robust Refresh -->
-        <button id="btn-global-refresh" onclick="refreshActiveCanteenView()" class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-800 border border-[var(--border-color)] text-slate-600 dark:text-slate-300 flex items-center justify-center text-xs transition active:scale-95" title="Refresh Current View">
+        <button id="btn-global-refresh" onclick="refreshActiveCanteenView()"
+          class="w-9 h-9 rounded-xl bg-slate-200 dark:bg-slate-800 border border-[var(--border-color)] text-slate-600 dark:text-slate-300 flex items-center justify-center text-sm transition active:scale-95 shadow-sm"
+          title="Refresh Current View">
           <i class="fa-solid fa-arrows-rotate"></i>
         </button>
 
-        <button onclick="logoutPos()" class="w-8 h-8 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 flex items-center justify-center text-xs transition active:scale-95" title="Logout">
+        <button onclick="logoutPos()"
+          class="w-9 h-9 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 flex items-center justify-center text-sm transition active:scale-95 shadow-sm"
+          title="Logout">
           <i class="fa-solid fa-power-off"></i>
         </button>
       </div>
     </header>
 
-    <!-- Content Workspace Container -->
-    <div class="flex-1 p-2.5 md:p-3 space-y-3 overflow-y-auto custom-scroll min-h-0 flex flex-col">
-      
+    <!-- Content Workspace Container (Aligned Left Padding px-5 with Header) -->
+    <div class="flex-1 p-4 md:p-5 space-y-4 overflow-y-auto custom-scroll min-h-0 flex flex-col">
+
       <!-- ────────────────────────────────────────────────────────────────────────── -->
       <!-- 📊 VIEW 1: DASHBOARD (INJECTED DYNAMICALLY FROM COMPONENTS)                -->
       <!-- ────────────────────────────────────────────────────────────────────────── -->
@@ -388,41 +434,51 @@
       <!-- ⚡ VIEW 2: POS REGISTER (PERFECT SYMMETRICAL ZERO-DELAY INLINE TERMINAL)   -->
       <!-- ────────────────────────────────────────────────────────────────────────── -->
       <section id="view-pos" class="h-full flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch min-h-0">
-        
+
         <!-- Left Panel: Scanner & Cart -->
         <div class="lg:col-span-7 flex flex-col space-y-2.5 h-full min-h-0">
           <div class="glass-card p-2.5 rounded-2xl flex items-center gap-2.5 shadow-sm relative z-30 shrink-0">
-            <div class="w-8 h-8 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center shrink-0 border border-sky-500/20">
+            <div
+              class="w-8 h-8 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center shrink-0 border border-sky-500/20">
               <i class="fa-solid fa-barcode text-sm"></i>
             </div>
             <div class="relative flex-1">
-              <input type="text" id="pos-barcode-input" placeholder="Barcode Scan ဖတ်ပါ သို့မဟုတ် ပစ္စည်းအမည် ရိုက်ရှာပါ (Enter)..." 
-                     autocomplete="off" autofocus
-                     onkeydown="handleBarcodeInput(event)"
-                     class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-1.5 text-xs placeholder-slate-400 focus:outline-none focus:border-sky-500 transition font-mono font-bold">
-              
-              <div id="pos-search-dropdown" class="absolute left-0 right-0 top-full mt-1 bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-xl shadow-2xl max-h-56 overflow-y-auto hidden z-50 custom-scroll"></div>
+              <input type="text" id="pos-barcode-input"
+                placeholder="Barcode Scan ဖတ်ပါ သို့မဟုတ် ပစ္စည်းအမည် ရိုက်ရှာပါ (Enter)..." autocomplete="off"
+                autofocus onkeydown="handleBarcodeInput(event)"
+                class="w-full bg-[var(--bg-card-inner)] border border-[var(--border-color)] rounded-xl px-3 py-1.5 text-xs placeholder-slate-400 focus:outline-none focus:border-sky-500 transition font-mono font-bold">
+
+              <div id="pos-search-dropdown"
+                class="absolute left-0 right-0 top-full mt-1 bg-[var(--bg-sidebar)] border border-[var(--border-color)] rounded-xl shadow-2xl max-h-56 overflow-y-auto hidden z-50 custom-scroll">
+              </div>
             </div>
-            <button onclick="searchAndAddItem()" class="px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-black shrink-0 transition active:scale-95 shadow flex items-center gap-1">
+            <button onclick="searchAndAddItem()"
+              class="px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-black shrink-0 transition active:scale-95 shadow flex items-center gap-1">
               <i class="fa-solid fa-plus text-[10px]"></i> ထည့်မည်
             </button>
           </div>
 
           <!-- Cart Container (flex-1 fill) -->
-          <div class="glass-card rounded-2xl flex-1 flex flex-col justify-between overflow-hidden shadow-sm relative z-10 min-h-0">
-            <div class="px-3.5 py-2 border-b border-[var(--border-color)] bg-[var(--table-header)] flex justify-between items-center shrink-0 h-[38px]">
+          <div
+            class="glass-card rounded-2xl flex-1 flex flex-col justify-between overflow-hidden shadow-sm relative z-10 min-h-0">
+            <div
+              class="px-3.5 py-2 border-b border-[var(--border-color)] bg-[var(--table-header)] flex justify-between items-center shrink-0 h-[38px]">
               <div class="flex items-center gap-2">
                 <i class="fa-solid fa-cart-shopping text-emerald-500 text-xs"></i>
                 <h3 class="text-xs font-black uppercase tracking-wider">CART ITEMS</h3>
-                <span id="pos-cart-badge" class="px-2 py-0.2 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 font-mono">0 Items</span>
+                <span id="pos-cart-badge"
+                  class="px-2 py-0.2 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 font-mono">0
+                  Items</span>
               </div>
-              <button onclick="clearCart(true)" class="text-[11px] font-bold text-slate-400 hover:text-rose-500 transition flex items-center gap-1">
+              <button onclick="clearCart(true)"
+                class="text-[11px] font-bold text-slate-400 hover:text-rose-500 transition flex items-center gap-1">
                 <i class="fa-solid fa-trash-can text-[10px]"></i> Clear (Esc)
               </button>
             </div>
 
             <div class="flex-1 overflow-y-auto custom-scroll p-2 space-y-1.5 min-h-0" id="pos-cart-list">
-              <div id="pos-cart-empty" class="h-full flex flex-col items-center justify-center p-6 text-slate-400 text-center space-y-1.5">
+              <div id="pos-cart-empty"
+                class="h-full flex flex-col items-center justify-center p-6 text-slate-400 text-center space-y-1.5">
                 <i class="fa-solid fa-basket-shopping text-3xl text-slate-300 dark:text-slate-700"></i>
                 <p class="text-xs font-bold">Cart ထဲတွင် ပစ္စည်း မရှိသေးပါ။</p>
                 <p class="text-[10px] text-slate-400">Barcode Scan ဖတ်၍ ပစ္စည်းများ ထည့်သွင်းပါ။</p>
@@ -430,47 +486,58 @@
             </div>
 
             <!-- Cart Bottom Pinned Bar (Height: 52px exactly) -->
-            <div class="px-4 bg-[var(--table-header)] border-t border-[var(--border-color)] flex items-center justify-between text-xs font-mono shrink-0 h-[52px]">
-              <span class="text-slate-500 dark:text-slate-400 font-sans">အရေအတွက်ပေါင်း: <strong id="pos-cart-total-qty" class="text-slate-900 dark:text-white font-mono font-bold text-sm">0</strong> ခု</span>
-              <span class="text-slate-500 dark:text-slate-400 font-sans">ကျသင့်ငွေပေါင်း: <strong id="pos-cart-subtotal" class="text-emerald-600 dark:text-emerald-400 text-base font-black font-mono">0 MMK</strong></span>
+            <div
+              class="px-4 bg-[var(--table-header)] border-t border-[var(--border-color)] flex items-center justify-between text-xs font-mono shrink-0 h-[52px]">
+              <span class="text-slate-500 dark:text-slate-400 font-sans">အရေအတွက်ပေါင်း: <strong id="pos-cart-total-qty"
+                  class="text-slate-900 dark:text-white font-mono font-bold text-sm">0</strong> ခု</span>
+              <span class="text-slate-500 dark:text-slate-400 font-sans">ကျသင့်ငွေပေါင်း: <strong id="pos-cart-subtotal"
+                  class="text-emerald-600 dark:text-emerald-400 text-base font-black font-mono">0 MMK</strong></span>
             </div>
           </div>
         </div>
 
         <!-- Right Panel: Student Radar & Bill Summary -->
         <div class="lg:col-span-5 flex flex-col space-y-2.5 h-full min-h-0">
-          <div class="grid grid-cols-2 gap-2 bg-[var(--bg-card-inner)] p-1 rounded-2xl border border-[var(--border-color)] shrink-0">
-            <button id="btn-mode-wallet" onclick="setPaymentMode('Student Pocket Money')" class="py-1.5 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
+          <div
+            class="grid grid-cols-2 gap-2 bg-[var(--bg-card-inner)] p-1 rounded-2xl border border-[var(--border-color)] shrink-0">
+            <button id="btn-mode-wallet" onclick="setPaymentMode('Student Pocket Money')"
+              class="py-1.5 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
               <i class="fa-solid fa-wallet text-xs"></i>
               <span>မုန့်ဖိုးကတ် (F2)</span>
             </button>
-            <button id="btn-mode-cash" onclick="setPaymentMode('Cash')" class="py-1.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-[var(--text-main)]">
+            <button id="btn-mode-cash" onclick="setPaymentMode('Cash')"
+              class="py-1.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-[var(--text-main)]">
               <i class="fa-solid fa-money-bill-wave text-xs"></i>
               <span>ငွေသား (F4)</span>
             </button>
           </div>
 
           <!-- Student Radar Card -->
-          <div id="pos-student-radar" class="glass-card p-2.5 rounded-2xl border-indigo-500/30 shadow-sm space-y-2 shrink-0">
+          <div id="pos-student-radar"
+            class="glass-card p-2.5 rounded-2xl border-indigo-500/30 shadow-sm space-y-2 shrink-0">
             <div class="flex items-center gap-2">
               <div class="relative flex-1">
-                <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400"><i class="fa-solid fa-id-card text-xs"></i></span>
+                <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400"><i
+                    class="fa-solid fa-id-card text-xs"></i></span>
                 <input type="text" id="pos-student-input" placeholder="ကျောင်းသား ID / FYID / Barcode (F2)..."
-                       onkeydown="if(event.key==='Enter') lookupStudentRadar()"
-                       class="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-[var(--bg-card-inner)] border border-indigo-500/40 font-mono font-bold focus:outline-none focus:border-indigo-400 transition">
+                  onkeydown="if(event.key==='Enter') lookupStudentRadar()"
+                  class="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-[var(--bg-card-inner)] border border-indigo-500/40 font-mono font-bold focus:outline-none focus:border-indigo-400 transition">
               </div>
-              <button onclick="lookupStudentRadar()" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black shrink-0 transition active:scale-95 shadow">
+              <button onclick="lookupStudentRadar()"
+                class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black shrink-0 transition active:scale-95 shadow">
                 Check
               </button>
             </div>
 
-            <div id="pos-student-card" class="p-2 bg-slate-100 dark:bg-black/40 rounded-xl border border-[var(--border-color)] space-y-1.5">
+            <div id="pos-student-card"
+              class="p-2 bg-slate-100 dark:bg-black/40 rounded-xl border border-[var(--border-color)] space-y-1.5">
               <div class="flex justify-between items-start">
                 <div>
                   <h4 id="radar-student-name" class="text-xs font-black">ကျောင်းသား ရွေးချယ်ပါ</h4>
                   <p id="radar-student-info" class="text-[10px] font-mono text-slate-400">Class: - | ID: -</p>
                 </div>
-                <span id="radar-badge-status" class="px-2 py-0.5 rounded text-[9px] font-black bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700 font-mono">STANDBY</span>
+                <span id="radar-badge-status"
+                  class="px-2 py-0.5 rounded text-[9px] font-black bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-300 dark:border-slate-700 font-mono">STANDBY</span>
               </div>
 
               <div class="grid grid-cols-2 gap-2 pt-1 border-t border-[var(--border-color)] text-xs font-mono">
@@ -490,7 +557,8 @@
                   <span id="radar-cap-text">ကျန်ခွဲတမ်း: 10,000 MMK</span>
                 </div>
                 <div class="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
-                  <div id="radar-progress-bar" class="h-full bg-emerald-500 transition-all duration-300" style="width: 0%;"></div>
+                  <div id="radar-progress-bar" class="h-full bg-emerald-500 transition-all duration-300"
+                    style="width: 0%;"></div>
                 </div>
               </div>
             </div>
@@ -520,14 +588,19 @@
               </div>
 
               <div class="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-center">
-                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block font-sans">TOTAL AMOUNT TO PAY</span>
-                <h2 id="pos-grand-total" class="text-xl md:text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono tracking-tight mt-0.5">0 <span class="text-xs font-bold">MMK</span></h2>
+                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest block font-sans">TOTAL AMOUNT
+                  TO PAY</span>
+                <h2 id="pos-grand-total"
+                  class="text-xl md:text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono tracking-tight mt-0.5">
+                  0 <span class="text-xs font-bold">MMK</span></h2>
               </div>
             </div>
 
             <!-- Pinned Checkout Button Bar (Height: 52px exactly) -->
-            <div class="p-1.5 bg-[var(--table-header)] border-t border-[var(--border-color)] flex items-center shrink-0 h-[52px]">
-              <button id="btn-checkout" onclick="executeCheckout()" class="w-full h-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-black text-xs md:text-sm shadow-md flex items-center justify-center gap-2 active:scale-98 transition disabled:opacity-40 disabled:pointer-events-none">
+            <div
+              class="p-1.5 bg-[var(--table-header)] border-t border-[var(--border-color)] flex items-center shrink-0 h-[52px]">
+              <button id="btn-checkout" onclick="executeCheckout()"
+                class="w-full h-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-black text-xs md:text-sm shadow-md flex items-center justify-center gap-2 active:scale-98 transition disabled:opacity-40 disabled:pointer-events-none">
                 <i class="fa-solid fa-circle-check text-base"></i>
                 <span id="btn-checkout-label">အတည်ပြု ငွေရှင်းမည် (CHECKOUT - F8)</span>
               </button>
@@ -544,22 +617,30 @@
         <div class="flex flex-col lg:flex-row justify-between items-center glass-card p-3 rounded-2xl gap-3 shadow-sm">
           <div class="flex flex-col sm:flex-row items-center gap-2 w-full lg:w-auto">
             <div class="relative w-full sm:w-56">
-              <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
-              <input type="text" id="sales-search" oninput="onSearchSalesDebounced()" placeholder="Invoice No၊ Student ID..." class="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-[var(--bg-card-inner)] border border-[var(--border-color)] outline-none focus:border-sky-500">
+              <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400"><i
+                  class="fa-solid fa-magnifying-glass text-xs"></i></span>
+              <input type="text" id="sales-search" oninput="onSearchSalesDebounced()"
+                placeholder="Invoice No၊ Student ID..."
+                class="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-[var(--bg-card-inner)] border border-[var(--border-color)] outline-none focus:border-sky-500">
             </div>
 
-            <select id="sales-method-filter" onchange="loadSalesOrdersHistory(1)" class="bg-[var(--bg-card-inner)] border border-[var(--border-color)] text-xs rounded-xl px-2.5 py-1.5 outline-none font-bold">
+            <select id="sales-method-filter" onchange="loadSalesOrdersHistory(1)"
+              class="bg-[var(--bg-card-inner)] border border-[var(--border-color)] text-xs rounded-xl px-2.5 py-1.5 outline-none font-bold">
               <option value="">All Methods (ငွေချေမှုအားလုံး)</option>
               <option value="Student Pocket Money">Student Pocket Money (မုန့်ဖိုးကတ်)</option>
               <option value="Cash">Cash (ငွေသား)</option>
             </select>
 
-            <div class="flex items-center gap-1.5 bg-[var(--bg-card-inner)] border border-[var(--border-color)] p-1 rounded-xl text-xs">
+            <div
+              class="flex items-center gap-1.5 bg-[var(--bg-card-inner)] border border-[var(--border-color)] p-1 rounded-xl text-xs">
               <span class="text-[10px] text-slate-400 font-bold px-1 uppercase">From:</span>
-              <input type="date" id="sales-date-from" onchange="loadSalesOrdersHistory(1)" class="bg-transparent text-xs outline-none">
+              <input type="date" id="sales-date-from" onchange="loadSalesOrdersHistory(1)"
+                class="bg-transparent text-xs outline-none">
               <span class="text-[10px] text-slate-400 font-bold px-1 uppercase">To:</span>
-              <input type="date" id="sales-date-to" onchange="loadSalesOrdersHistory(1)" class="bg-transparent text-xs outline-none">
-              <button onclick="clearSalesFilter()" class="p-1 text-slate-400 hover:text-rose-500"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
+              <input type="date" id="sales-date-to" onchange="loadSalesOrdersHistory(1)"
+                class="bg-transparent text-xs outline-none">
+              <button onclick="clearSalesFilter()" class="p-1 text-slate-400 hover:text-rose-500"><i
+                  class="fa-solid fa-circle-xmark text-xs"></i></button>
             </div>
           </div>
 
@@ -590,10 +671,12 @@
         <div class="flex justify-between items-center glass-card px-4 py-2.5 rounded-2xl text-xs shadow-sm">
           <div id="sales-pagination-info" class="text-slate-400 font-mono text-[11px]">Showing 0 entries</div>
           <div class="flex items-center gap-2">
-            <button onclick="changeSalesPage(-1)" id="sales-btn-prev" class="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
+            <button onclick="changeSalesPage(-1)" id="sales-btn-prev"
+              class="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
               <i class="fa-solid fa-chevron-left text-[9px]"></i> Previous
             </button>
-            <button onclick="changeSalesPage(1)" id="sales-btn-next" class="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
+            <button onclick="changeSalesPage(1)" id="sales-btn-next"
+              class="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
               Next <i class="fa-solid fa-chevron-right text-[9px]"></i>
             </button>
           </div>
@@ -613,24 +696,34 @@
             <span class="text-[10px] text-slate-400 font-bold uppercase block">လက်ကျန် စုစုပေါင်းအရေအတွက်</span>
             <strong id="stock-total-qty" class="text-base font-black font-mono mt-0.5 block">0 ခု</strong>
           </div>
-          <div class="glass-card p-3 rounded-2xl border-emerald-300 dark:border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-950/10 shadow-sm">
-            <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase block">လက်ကျန် Stock တန်ဖိုး (ရင်းနှီးငွေ)</span>
-            <strong id="stock-total-val" class="text-base font-black text-emerald-600 dark:text-emerald-400 font-mono mt-0.5 block">0 MMK</strong>
+          <div
+            class="glass-card p-3 rounded-2xl border-emerald-300 dark:border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-950/10 shadow-sm">
+            <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase block">လက်ကျန် Stock
+              တန်ဖိုး (ရင်းနှီးငွေ)</span>
+            <strong id="stock-total-val"
+              class="text-base font-black text-emerald-600 dark:text-emerald-400 font-mono mt-0.5 block">0 MMK</strong>
           </div>
-          <div class="glass-card p-3 rounded-2xl border-rose-300 dark:border-rose-500/20 bg-rose-50/50 dark:bg-rose-950/10 shadow-sm">
-            <span class="text-[10px] text-rose-500 dark:text-rose-400 font-bold uppercase block">လက်ကျန်ပြတ်/နည်းနေသော ပစ္စည်း</span>
-            <strong id="stock-alert-count" class="text-base font-black text-rose-500 dark:text-rose-400 font-mono mt-0.5 block">0 မျိုး</strong>
+          <div
+            class="glass-card p-3 rounded-2xl border-rose-300 dark:border-rose-500/20 bg-rose-50/50 dark:bg-rose-950/10 shadow-sm">
+            <span class="text-[10px] text-rose-500 dark:text-rose-400 font-bold uppercase block">လက်ကျန်ပြတ်/နည်းနေသော
+              ပစ္စည်း</span>
+            <strong id="stock-alert-count"
+              class="text-base font-black text-rose-500 dark:text-rose-400 font-mono mt-0.5 block">0 မျိုး</strong>
           </div>
         </div>
 
         <div class="flex flex-col sm:flex-row justify-between items-center glass-card p-3 rounded-2xl gap-3 shadow-sm">
           <div class="flex items-center gap-2 w-full sm:w-auto">
             <div class="relative w-full sm:w-64">
-              <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
-              <input type="text" id="stock-search" oninput="onSearchStockDebounced()" placeholder="ပစ္စည်းအမည်၊ Barcode ရှာပါ..." class="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-[var(--bg-card-inner)] border border-[var(--border-color)] outline-none focus:border-teal-500">
+              <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400"><i
+                  class="fa-solid fa-magnifying-glass text-xs"></i></span>
+              <input type="text" id="stock-search" oninput="onSearchStockDebounced()"
+                placeholder="ပစ္စည်းအမည်၊ Barcode ရှာပါ..."
+                class="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-[var(--bg-card-inner)] border border-[var(--border-color)] outline-none focus:border-teal-500">
             </div>
 
-            <select id="stock-category-filter" onchange="loadStockInventory(1)" class="bg-[var(--bg-card-inner)] border border-[var(--border-color)] text-xs rounded-xl px-2.5 py-1.5 outline-none font-bold">
+            <select id="stock-category-filter" onchange="loadStockInventory(1)"
+              class="bg-[var(--bg-card-inner)] border border-[var(--border-color)] text-xs rounded-xl px-2.5 py-1.5 outline-none font-bold">
               <option value="">All Categories</option>
               <option value="Snack">မုန့် (Snack)</option>
               <option value="Drink">အအေး (Drink)</option>
@@ -638,7 +731,8 @@
               <option value="Stationery">စာရေးကိရိယာ</option>
             </select>
 
-            <select id="stock-status-filter" onchange="loadStockInventory(1)" class="bg-[var(--bg-card-inner)] border border-[var(--border-color)] text-xs rounded-xl px-2.5 py-1.5 outline-none font-bold">
+            <select id="stock-status-filter" onchange="loadStockInventory(1)"
+              class="bg-[var(--bg-card-inner)] border border-[var(--border-color)] text-xs rounded-xl px-2.5 py-1.5 outline-none font-bold">
               <option value="all">အားလုံး (All Stock)</option>
               <option value="low_stock">လက်ကျန်နည်း (&lt; 10)</option>
               <option value="out_of_stock">လက်ကျန်ပြတ် (0)</option>
@@ -646,10 +740,13 @@
           </div>
 
           <div class="flex items-center gap-2">
-            <button onclick="exportStockInventoryCSV()" class="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 border border-[var(--border-color)] rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Export to CSV">
+            <button onclick="exportStockInventoryCSV()"
+              class="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 border border-[var(--border-color)] rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+              title="Export to CSV">
               <i class="fa-solid fa-file-export text-emerald-500 text-xs"></i> Export CSV
             </button>
-            <button onclick="openItemModal()" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow">
+            <button onclick="openItemModal()"
+              class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow">
               <i class="fa-solid fa-plus text-[10px]"></i> အဝယ်/ပစ္စည်းသစ်သွင်း
             </button>
           </div>
@@ -677,10 +774,12 @@
         <div class="flex justify-between items-center glass-card px-4 py-2.5 rounded-2xl text-xs shadow-sm">
           <div id="stock-pagination-info" class="text-slate-400 font-mono text-[11px]">Showing 0 entries</div>
           <div class="flex items-center gap-2">
-            <button onclick="changeStockPage(-1)" id="stock-btn-prev" class="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
+            <button onclick="changeStockPage(-1)" id="stock-btn-prev"
+              class="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
               <i class="fa-solid fa-chevron-left text-[9px]"></i> Previous
             </button>
-            <button onclick="changeStockPage(1)" id="stock-btn-next" class="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
+            <button onclick="changeStockPage(1)" id="stock-btn-next"
+              class="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
               Next <i class="fa-solid fa-chevron-right text-[9px]"></i>
             </button>
           </div>
@@ -699,11 +798,15 @@
         <div class="flex flex-col lg:flex-row justify-between items-center glass-card p-3 rounded-2xl gap-3 shadow-sm">
           <div class="flex flex-col sm:flex-row items-center gap-2 w-full lg:w-auto">
             <div class="relative w-full sm:w-56">
-              <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
-              <input type="text" id="waste-search" oninput="onSearchWasteDebounced()" placeholder="Waste No၊ ပစ္စည်းအမည်..." class="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-[var(--bg-card-inner)] border border-[var(--border-color)] outline-none focus:border-rose-500">
+              <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400"><i
+                  class="fa-solid fa-magnifying-glass text-xs"></i></span>
+              <input type="text" id="waste-search" oninput="onSearchWasteDebounced()"
+                placeholder="Waste No၊ ပစ္စည်းအမည်..."
+                class="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-[var(--bg-card-inner)] border border-[var(--border-color)] outline-none focus:border-rose-500">
             </div>
 
-            <select id="waste-reason-filter" onchange="loadWasteHistory(1)" class="bg-[var(--bg-card-inner)] border border-[var(--border-color)] text-xs rounded-xl px-2.5 py-1.5 outline-none font-bold">
+            <select id="waste-reason-filter" onchange="loadWasteHistory(1)"
+              class="bg-[var(--bg-card-inner)] border border-[var(--border-color)] text-xs rounded-xl px-2.5 py-1.5 outline-none font-bold">
               <option value="">All Reasons (အကြောင်းပြချက်အားလုံး)</option>
               <option value="သက်တမ်းလွန်">သက်တမ်းလွန် (Expired)</option>
               <option value="ပျက်စီးကွဲရှ">ပျက်စီးကွဲရှ (Damaged/Broken)</option>
@@ -711,12 +814,16 @@
               <option value="အခြား">အခြား (Other)</option>
             </select>
 
-            <div class="flex items-center gap-1.5 bg-[var(--bg-card-inner)] border border-[var(--border-color)] p-1 rounded-xl text-xs">
+            <div
+              class="flex items-center gap-1.5 bg-[var(--bg-card-inner)] border border-[var(--border-color)] p-1 rounded-xl text-xs">
               <span class="text-[10px] text-slate-400 font-bold px-1 uppercase">From:</span>
-              <input type="date" id="waste-date-from" onchange="loadWasteHistory(1)" class="bg-transparent text-xs outline-none">
+              <input type="date" id="waste-date-from" onchange="loadWasteHistory(1)"
+                class="bg-transparent text-xs outline-none">
               <span class="text-[10px] text-slate-400 font-bold px-1 uppercase">To:</span>
-              <input type="date" id="waste-date-to" onchange="loadWasteHistory(1)" class="bg-transparent text-xs outline-none">
-              <button onclick="clearWasteFilter()" class="p-1 text-slate-400 hover:text-rose-500"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
+              <input type="date" id="waste-date-to" onchange="loadWasteHistory(1)"
+                class="bg-transparent text-xs outline-none">
+              <button onclick="clearWasteFilter()" class="p-1 text-slate-400 hover:text-rose-500"><i
+                  class="fa-solid fa-circle-xmark text-xs"></i></button>
             </div>
           </div>
 
@@ -724,7 +831,8 @@
             <div class="text-xs font-mono font-bold text-slate-400">
               Total Loss: <span id="waste-total-loss-badge" class="text-rose-500 font-black">0 MMK</span>
             </div>
-            <button onclick="openWasteModal()" class="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow">
+            <button onclick="openWasteModal()"
+              class="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow">
               <i class="fa-solid fa-plus text-[10px]"></i> အပျက်စာရင်းသစ်သွင်း
             </button>
           </div>
@@ -743,7 +851,9 @@
                 <th class="py-2.5 px-3 text-right w-28 text-rose-500 font-bold">ဆုံးရှုံးငွေ (COST)</th>
                 <th class="py-2.5 px-3 w-28">စာရင်းသွင်းသူ</th>
                 <th class="py-2.5 px-3">မှတ်ချက်</th>
-                <th class="py-2.5 px-3 text-center w-16 right-0 sticky bg-[var(--table-header)] border-l border-[var(--border-color)]">ACTION</th>
+                <th
+                  class="py-2.5 px-3 text-center w-16 right-0 sticky bg-[var(--table-header)] border-l border-[var(--border-color)]">
+                  ACTION</th>
               </tr>
             </thead>
             <tbody id="waste-table-body" class="divide-y divide-[var(--border-color)]"></tbody>
@@ -753,10 +863,12 @@
         <div class="flex justify-between items-center glass-card px-4 py-2.5 rounded-2xl text-xs shadow-sm">
           <div id="waste-pagination-info" class="text-slate-400 font-mono text-[11px]">Showing 0 entries</div>
           <div class="flex items-center gap-2">
-            <button onclick="changeWastePage(-1)" id="waste-btn-prev" class="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
+            <button onclick="changeWastePage(-1)" id="waste-btn-prev"
+              class="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
               <i class="fa-solid fa-chevron-left text-[9px]"></i> Previous
             </button>
-            <button onclick="changeWastePage(1)" id="waste-btn-next" class="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
+            <button onclick="changeWastePage(1)" id="waste-btn-next"
+              class="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
               Next <i class="fa-solid fa-chevron-right text-[9px]"></i>
             </button>
           </div>
@@ -770,23 +882,31 @@
         <div class="flex flex-col lg:flex-row justify-between items-center glass-card p-3 rounded-2xl gap-3 shadow-sm">
           <div class="flex flex-col sm:flex-row items-center gap-2 w-full lg:w-auto">
             <div class="relative w-full sm:w-56">
-              <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
-              <input type="text" id="surplus-search" oninput="onSearchSurplusDebounced()" placeholder="Surplus No၊ ပစ္စည်းအမည်..." class="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-[var(--bg-card-inner)] border border-[var(--border-color)] outline-none focus:border-emerald-500">
+              <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400"><i
+                  class="fa-solid fa-magnifying-glass text-xs"></i></span>
+              <input type="text" id="surplus-search" oninput="onSearchSurplusDebounced()"
+                placeholder="Surplus No၊ ပစ္စည်းအမည်..."
+                class="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-[var(--bg-card-inner)] border border-[var(--border-color)] outline-none focus:border-emerald-500">
             </div>
 
-            <select id="surplus-reason-filter" onchange="loadSurplusHistory(1)" class="bg-[var(--bg-card-inner)] border border-[var(--border-color)] text-xs rounded-xl px-2.5 py-1.5 outline-none font-bold">
+            <select id="surplus-reason-filter" onchange="loadSurplusHistory(1)"
+              class="bg-[var(--bg-card-inner)] border border-[var(--border-color)] text-xs rounded-xl px-2.5 py-1.5 outline-none font-bold">
               <option value="">All Reasons (အကြောင်းပြချက်အားလုံး)</option>
               <option value="ရေတွက်မှုအပို">ရေတွက်မှုအပို (Count Surplus)</option>
               <option value="လက်ကျန်ပို">လက်ကျန်ပို (Inventory Overage)</option>
               <option value="အခြား">အခြား (Other)</option>
             </select>
 
-            <div class="flex items-center gap-1.5 bg-[var(--bg-card-inner)] border border-[var(--border-color)] p-1 rounded-xl text-xs">
+            <div
+              class="flex items-center gap-1.5 bg-[var(--bg-card-inner)] border border-[var(--border-color)] p-1 rounded-xl text-xs">
               <span class="text-[10px] text-slate-400 font-bold px-1 uppercase">From:</span>
-              <input type="date" id="surplus-date-from" onchange="loadSurplusHistory(1)" class="bg-transparent text-xs outline-none">
+              <input type="date" id="surplus-date-from" onchange="loadSurplusHistory(1)"
+                class="bg-transparent text-xs outline-none">
               <span class="text-[10px] text-slate-400 font-bold px-1 uppercase">To:</span>
-              <input type="date" id="surplus-date-to" onchange="loadSurplusHistory(1)" class="bg-transparent text-xs outline-none">
-              <button onclick="clearSurplusFilter()" class="p-1 text-slate-400 hover:text-rose-500"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
+              <input type="date" id="surplus-date-to" onchange="loadSurplusHistory(1)"
+                class="bg-transparent text-xs outline-none">
+              <button onclick="clearSurplusFilter()" class="p-1 text-slate-400 hover:text-rose-500"><i
+                  class="fa-solid fa-circle-xmark text-xs"></i></button>
             </div>
           </div>
 
@@ -794,7 +914,8 @@
             <div class="text-xs font-mono font-bold text-slate-400">
               Total Surplus: <span id="surplus-total-value-badge" class="text-emerald-500 font-black">0 MMK</span>
             </div>
-            <button onclick="openSurplusModal()" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow">
+            <button onclick="openSurplusModal()"
+              class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow">
               <i class="fa-solid fa-plus text-[10px]"></i> အပိုစာရင်းသစ်သွင်း
             </button>
           </div>
@@ -813,7 +934,9 @@
                 <th class="py-2.5 px-3 text-right w-28 text-emerald-500 font-bold">တန်ဖိုး (COST)</th>
                 <th class="py-2.5 px-3 w-28">စာရင်းသွင်းသူ</th>
                 <th class="py-2.5 px-3">မှတ်ချက်</th>
-                <th class="py-2.5 px-3 text-center w-16 right-0 sticky bg-[var(--table-header)] border-l border-[var(--border-color)]">ACTION</th>
+                <th
+                  class="py-2.5 px-3 text-center w-16 right-0 sticky bg-[var(--table-header)] border-l border-[var(--border-color)]">
+                  ACTION</th>
               </tr>
             </thead>
             <tbody id="surplus-table-body" class="divide-y divide-[var(--border-color)]"></tbody>
@@ -823,10 +946,12 @@
         <div class="flex justify-between items-center glass-card px-4 py-2.5 rounded-2xl text-xs shadow-sm">
           <div id="surplus-pagination-info" class="text-slate-400 font-mono text-[11px]">Showing 0 entries</div>
           <div class="flex items-center gap-2">
-            <button onclick="changeSurplusPage(-1)" id="surplus-btn-prev" class="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
+            <button onclick="changeSurplusPage(-1)" id="surplus-btn-prev"
+              class="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
               <i class="fa-solid fa-chevron-left text-[9px]"></i> Previous
             </button>
-            <button onclick="changeSurplusPage(1)" id="surplus-btn-next" class="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
+            <button onclick="changeSurplusPage(1)" id="surplus-btn-next"
+              class="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold transition disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1">
               Next <i class="fa-solid fa-chevron-right text-[9px]"></i>
             </button>
           </div>
@@ -843,7 +968,7 @@
 
   <!-- 💡 Immediate Early Role & Clock Invocator -->
   <script>
-    (function() {
+    (function () {
       try {
         const userStr = localStorage.getItem('golden_user') || localStorage.getItem('user');
         const user = userStr ? JSON.parse(userStr) : null;
@@ -852,7 +977,7 @@
         if (roleEl) {
           roleEl.textContent = String(role).toUpperCase().replace(/_/g, ' ');
         }
-      } catch(e) {}
+      } catch (e) { }
       if (typeof window.startMMTClock === 'function') {
         window.startMMTClock();
       }
@@ -867,4 +992,5 @@
   <script src="js/canteen/canteen-waste.js"></script>
   <script src="js/canteen/canteen-closing.js"></script>
 </body>
+
 </html>
