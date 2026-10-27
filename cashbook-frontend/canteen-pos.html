@@ -230,15 +230,29 @@
 
       <!-- Navigation Links (Single-Line International POS Standard) -->
       <nav class="p-3 space-y-1 text-sm font-bold">
-        <div class="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-2">
-          OPERATIONS
-        </div>
 
+        <!-- 1. DASHBOARD -->
         <button id="nav-btn-dashboard" onclick="switchCanteenView('dashboard')"
           class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
           <i class="fa-solid fa-chart-pie w-6 text-center text-lg text-indigo-400 shrink-0"></i>
           <span class="truncate">Dashboard</span>
         </button>
+
+        <!-- 2. POS CASH MANAGEMENT -->
+        <div class="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-2 pt-3">
+          POS Cash Management
+        </div>
+
+        <button id="nav-btn-cashbook" onclick=""
+          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
+          <i class="fa-solid fa-wallet w-6 text-center text-lg text-emerald-400 shrink-0"></i>
+          <span class="truncate">POS Cash Book</span>
+        </button>
+
+        <!-- 3. SALES, PURCHASES & INVENTORY -->
+        <div class="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-2 pt-3">
+          Sales, Purchases & Inventory
+        </div>
 
         <button id="nav-btn-pos" onclick="switchCanteenView('pos')"
           class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 bg-emerald-600 text-white shadow-md shadow-emerald-900/30 text-sm font-extrabold">
@@ -252,9 +266,11 @@
           <span class="truncate">Sales</span>
         </button>
 
-        <div class="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-2 pt-3">
-          INVENTORY & AUDIT
-        </div>
+        <button id="nav-btn-purchases" onclick="switchCanteenView('purchases')"
+          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
+          <i class="fa-solid fa-truck-ramp-box w-6 text-center text-lg text-amber-400 shrink-0"></i>
+          <span class="truncate">Purchases</span>
+        </button>
 
         <button id="nav-btn-stock" onclick="switchCanteenView('stock')"
           class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
@@ -262,17 +278,10 @@
           <span class="truncate">Inventory</span>
         </button>
 
-        <button id="nav-btn-purchases" onclick="switchCanteenView('purchases')"
-          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
-          <i class="fa-solid fa-truck-ramp-box w-6 text-center text-lg text-amber-400 shrink-0"></i>
-          <span class="truncate">Purchases</span>
-        </button>
-
-        <button id="nav-btn-waste" onclick="switchCanteenView('waste')"
-          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
-          <i class="fa-solid fa-dumpster-fire w-6 text-center text-lg text-rose-400 shrink-0"></i>
-          <span class="truncate">Waste & Loss</span>
-        </button>
+        <!-- 4. SURPLUS & WASTE -->
+        <div class="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-2 pt-3">
+          Surplus & Waste
+        </div>
 
         <button id="nav-btn-surplus" onclick="switchCanteenView('surplus')"
           class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
@@ -280,6 +289,13 @@
           <span class="truncate">Stock Surplus</span>
         </button>
 
+        <button id="nav-btn-waste" onclick="switchCanteenView('waste')"
+          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800/60 text-sm font-bold">
+          <i class="fa-solid fa-trash-can w-6 text-center text-lg text-rose-400 shrink-0"></i>
+          <span class="truncate">Waste & Loss</span>
+        </button>
+
+        <!-- 5. CLEARING & CONTROLS -->
         <div class="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-2 pt-3">
           CLEARING & CONTROLS
         </div>
@@ -292,8 +308,19 @@
 
         <button id="nav-btn-settle" onclick="openSettlementModal()"
           class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-amber-500 dark:hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 text-sm font-bold">
-          <i class="fa-solid fa-coins w-6 text-center text-lg text-amber-400 shrink-0"></i>
+          <i class="fa-solid fa-hand-holding-dollar w-6 text-center text-lg text-amber-400 shrink-0"></i>
           <span class="truncate">Student Settlement</span>
+        </button>
+
+        <!-- 6. REPORTS & SYSTEM -->
+        <div class="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-2 pt-3">
+          Reports & System
+        </div>
+
+        <button id="nav-btn-reports" onclick=""
+          class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-purple-500 dark:hover:text-purple-300 hover:bg-purple-500/10 border border-transparent hover:border-purple-500/20 text-sm font-bold">
+          <i class="fa-solid fa-chart-column w-6 text-center text-lg text-purple-400 shrink-0"></i>
+          <span class="truncate">Reports</span>
         </button>
 
         <button id="btn-side-settings" onclick="openSettingsModal()"
