@@ -783,7 +783,10 @@ window.syncAllPendingNow = async function () {
   for (const item of queue) {
     try {
       const syncPayload = { ...item.payload };
-      if (syncPayload.isOfflineTempVr || (syncPayload.vrNo && (syncPayload.vrNo.startsWith('TEMP-') || /^OFF-\d{6}$/.test(syncPayload.vrNo)))) {
+
+      // 🎯 RULE: Income မဟုတ်သော အခြား Table များမှ TEMP- ဘောင်ချာဖြစ်နေပါက vrNo ကို ဖယ်ထုတ်၍ ပို့မည်
+      // (ဆာဗာက D1 ရှိ နောက်ဆုံးနံပါတ်ကိုစစ်ပြီး တရားဝင်နံပါတ်အသစ် အစဉ်လိုက် ထုတ်ပေးမည်)
+      if (syncPayload.isOfflineTempVr || (syncPayload.vrNo && syncPayload.vrNo.startsWith('TEMP-'))) {
         delete syncPayload.vrNo;
         delete syncPayload.isOfflineTempVr;
       }
