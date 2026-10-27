@@ -839,18 +839,47 @@ window.clearAllPendingQueue = function () {
 
 /**
  * 💡 Pre-fetch Complete Offline Master Dataset (0 D1 Quota Cost when cached)
- * Caches: 1. Students + Wallet Balances, 2. Staff Lists, 3. Salary Grade Matrix
+ * Caches: 
+ *   1. Students Directory (ID, Name, Class, Category, Promo, Wallet Balance)
+ *   2. Promotion Fee Matrix (For offline AUT amount auto-calculation)
+ *   3. Latest Income Voucher Number (For sequential offline voucher generation)
+ *   4. Staff Lists & Salary Grade Matrix
  */
 window.prefetchOfflineMasterData = async function (force = false) {
   if (!navigator.onLine) return;
 
   const currentFy = typeof window.getCurrentAcademicYear === 'function' ? window.getCurrentAcademicYear() : '2026-2027';
   const stuCacheKey = `golden_master_students_${currentFy}`;
+  const promoCacheKey = 'golden_master_promo_matrix';
+  const voucherCacheKey = 'golden_latest_income_voucher';
   const staffCacheKey = 'golden_master_staff';
   const gradeCacheKey = 'golden_master_payroll_settings';
 
   try {
-    // ၁။ Students Directory & Wallet Balances Pre-cache
+    // 🎯 ၁။ Promotion Fee Matrix Pre-cache (Offline တွင် AUT Amount တွက်ချက်နိုင်ရန် မဖြစ်မနေ လိုအပ်သည်)
+    if (force || !localStorage.getItem(promoCacheKey)) {
+      const promoRes = await callApi('getPromotionData', {}, 'GET');
+      if (promoRes && promoRes.success && Array.isArray(promoRes.data)) {
+        localStorage.setItem(promoCacheKey, JSON.stringify(promoRes.data));
+        window.promoMatrixCache = promoRes.data;
+        console.log(`[Offline Sync] Cached Promotion Matrix (${promoRes.data.length} rates).`);
+      }
+    }
+
+    // 🎯 ၂။ Income Table ၏ နောက်ဆုံး Voucher နံပါတ်အား စစ်ဆေးသိမ်းဆည်းခြင်း
+    if (force || !localStorage.getItem(voucherCacheKey)) {
+      const incRes = await callApi('getIncomeData', { page: 1, limit: 10, fy: currentFy }, 'GET');
+      if (incRes && incRes.success && Array.isArray(incRes.data) && incRes.data.length > 0) {
+        // စာရင်းထဲမှ အသစ်ဆုံး INC- voucher နံပါတ်ကို ရှာဖွေမှတ်သားသည်
+        const latestRow = incRes.data.find(r => r.vrNo && String(r.vrNo).startsWith('INC-'));
+        if (latestRow && latestRow.vrNo) {
+          localStorage.setItem(voucherCacheKey, String(latestRow.vrNo));
+          console.log(`[Offline Sync] Cached Latest Income Voucher: ${latestRow.vrNo}`);
+        }
+      }
+    }
+
+    // 🎯 ၃။ Students Directory & Wallet Balances Pre-cache (Class, Category, Promo အပြည့်အစုံ ပါဝင်သည်)
     if (force || !localStorage.getItem(stuCacheKey)) {
       const [stuRes, sumRes] = await Promise.all([
         callApi('getStudentData', { fy: currentFy, limit: 5000 }, 'GET'),
@@ -872,57 +901,32 @@ window.prefetchOfflineMasterData = async function (force = false) {
             name: s.name || s.fyid_name || '',
             fyidName: s.fyidName || s.fyid_name || s.name || '',
             class: s.class || '',
-            category: s.category || '',
-            promo: s.promo || '',
-            balance: balanceMap.get(sId) || 0 // 🎯 Wallet Balance ပါ တစ်ခါတည်း Cache သိမ်းဆည်းသည်
+            category: s.category || 'Boarder',
+            promo: s.promo || 'Original price',
+            balance: balanceMap.get(sId) || 0
           };
         });
         localStorage.setItem(stuCacheKey, JSON.stringify(compactStudents));
-        console.log(`[Offline Sync] Cached ${compactStudents.length} students with wallet balances.`);
+        console.log(`[Offline Sync] Cached ${compactStudents.length} students with full details.`);
       }
     }
 
-    // ၂။ Staff List Pre-cache (Full Time & Part Time)
+    // ၄။ Staff & Salary Grade Pre-cache
     if (force || !localStorage.getItem(staffCacheKey)) {
       const [ftRes, ptRes] = await Promise.all([
         callApi('getStaffData', { category: 'Full Time' }, 'GET'),
         callApi('getStaffData', { category: 'Part Time' }, 'GET')
       ]);
-
       const allStaff = [...(ftRes?.data || []), ...(ptRes?.data || [])];
       if (allStaff.length > 0) {
-        const compactStaff = allStaff.map(st => {
-          // 🎯 FIX: Primary Key (st.id) အစား တကယ့် Staff ID (st.staffId) ကို အဓိက သတ်မှတ်သည်
-          const realStaffId = parseInt(st.staffId || st.staff_id, 10);
-          return {
-            id: realStaffId,
-            staffId: realStaffId,
-            staff_id: realStaffId,
-            name: st.name || '',
-            staffIdName: st.staffIdName || st.staff_idname || `[FID ${String(realStaffId).padStart(3, '0')}] ${st.name || ''}`,
-            category: st.category || 'Full Time',
-            position: st.position || '',
-            salaryGrade: st.salaryGrade || '',
-            basicAmt: st.basicAmt || 0,
-            extraAmt: st.extraAmt || 0,
-            totalSalary: st.totalSalary || 0,
-            bonus: st.bonus || 0,
-            fund: st.fund || 0,
-            unpaidBonus: st.unpaidBonus || 0,
-            unpaidFund: st.unpaidFund || 0
-          };
-        });
-        localStorage.setItem(staffCacheKey, JSON.stringify(compactStaff));
-        console.log(`[Offline Sync] Cached ${compactStaff.length} staff records with exact Staff IDs.`);
+        localStorage.setItem(staffCacheKey, JSON.stringify(allStaff));
       }
     }
 
-    // ၃။ Salary Grade Matrix Settings Pre-cache
     if (force || !localStorage.getItem(gradeCacheKey)) {
       const gradeRes = await callApi('getPayrollSettings', {}, 'GET');
       if (gradeRes && gradeRes.success && gradeRes.data) {
         localStorage.setItem(gradeCacheKey, JSON.stringify(gradeRes.data));
-        console.log(`[Offline Sync] Cached Salary Grade Matrix.`);
       }
     }
 

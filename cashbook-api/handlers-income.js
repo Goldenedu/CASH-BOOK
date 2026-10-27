@@ -546,9 +546,11 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration, re
         }
       }
     } else {
-      // 🎯 FIX: ယာယီဘောင်ချာ မဟုတ်မှသာ လက်ခံပြီး၊ ယာယီဖြစ်နေပါက INC နောက်ဆုံးနံပါတ်ကို စစ်ပြီး အသစ်ထုတ်ပေးသည်
-      const isTempVr = !body.vrNo || body.isOfflineTempVr || String(body.vrNo).startsWith('TEMP-') || String(body.vrNo).startsWith('OFF-');
-      const vrNo = (!isTempVr && body.vrNo) ? body.vrNo : await generateVoucherNo(db, 'income', 'INC', entryDate);
+      // 🎯 FIX: အော့ဖ်လိုင်းမှ စနစ်တကျ ထုတ်ပေးထားသော တရားဝင်ဘောင်ချာ (INC-DDMMYY-xxx) ဖြစ်ပါက ၎င်းအတိုင်း တိုက်ရိုက်သိမ်းမည်
+      const isInvalidTemp = !body.vrNo || String(body.vrNo).startsWith('TEMP-') || /^OFF-\d{6}$/.test(String(body.vrNo));
+      const vrNo = (!isInvalidTemp && body.vrNo)
+        ? body.vrNo
+        : await generateVoucherNo(db, 'income', 'INC', entryDate);
 
       const debit = parseFloat(body.debit || 0);
       const credit = parseFloat(body.credit || 0);

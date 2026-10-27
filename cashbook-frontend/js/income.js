@@ -352,7 +352,7 @@ function resetIncomeAmounts(amount = 0) {
 }
 
 /**
- * 💡 Precision Promotion Matrix Rate Auto-Calculation & 100% Synchronized Credit Engine
+ * 💡 Precision Promotion Matrix Rate Auto-Calculation (Offline-First Supported)
  */
 async function onAccountNameOrCategoryChangeIncome() {
   var fyVal = document.getElementById('inc-fy')?.value || window.getCurrentAcademicYear();
@@ -377,15 +377,25 @@ async function onAccountNameOrCategoryChangeIncome() {
     return;
   }
 
+  // 📶 ၁။ အော့ဖ်လိုင်းအတွက် LocalStorage မှ Pre-cached Promo Matrix အား အရင်ဆုံး ဖတ်ယူသည် (0 D1 Read)
   if (!promoMatrixCache || !Array.isArray(promoMatrixCache) || promoMatrixCache.length === 0) {
+    try {
+      const cachedPromo = localStorage.getItem('golden_master_promo_matrix');
+      if (cachedPromo) {
+        promoMatrixCache = JSON.parse(cachedPromo);
+      }
+    } catch (e) { }
+  }
+
+  // Cache တွင် မရှိသေးဘဲ အွန်လိုင်းဖြစ်နေပါက API လှမ်းခေါ်မည်
+  if ((!promoMatrixCache || promoMatrixCache.length === 0) && navigator.onLine) {
     try {
       var res = await callApi('getPromotionData', {}, 'GET');
       if (res && res.success) {
         promoMatrixCache = res.data || [];
+        localStorage.setItem('golden_master_promo_matrix', JSON.stringify(promoMatrixCache));
       }
-    } catch (e) {
-      console.error("Failed to fetch promo matrix", e);
-    }
+    } catch (e) { }
   }
 
   var calculatedFee = 0;
@@ -398,27 +408,11 @@ async function onAccountNameOrCategoryChangeIncome() {
       var rFy = String(r.fy || '').trim().replace(/^FY\s*/i, '');
       var rClass = String(r.class || '').trim().toLowerCase().replace(/\s+/g, '');
       var rCat = String(r.category || '').trim().toLowerCase().replace(/\s+/g, '');
-
-      var fyMatches = (!rFy || rFy === cleanFy);
-      var classMatches = (rClass === cleanClass);
-      var catMatches = (rCat === cleanCat);
-
-      return classMatches && (catMatches || !categoryVal) && fyMatches;
+      return (!rFy || rFy === cleanFy) && (rClass === cleanClass) && (rCat === cleanCat);
     });
 
     if (!match) {
-      match = promoMatrixCache.find(function (r) {
-        var rClass = String(r.class || '').trim().toLowerCase().replace(/\s+/g, '');
-        var rCat = String(r.category || '').trim().toLowerCase().replace(/\s+/g, '');
-        return (rClass === cleanClass) && (rCat === cleanCat);
-      });
-    }
-
-    if (!match) {
-      match = promoMatrixCache.find(function (r) {
-        var rClass = String(r.class || '').trim().toLowerCase().replace(/\s+/g, '');
-        return (rClass === cleanClass);
-      });
+      match = promoMatrixCache.find(r => r.class && r.class.toLowerCase().replace(/\s+/g, '') === cleanClass);
     }
 
     if (match) {
@@ -426,7 +420,6 @@ async function onAccountNameOrCategoryChangeIncome() {
         calculatedFee = Number(match.registration ?? match.Registration ?? 0);
       } else if (accountName === "Services") {
         var pClean = promoVal.toLowerCase().replace(/[^a-z0-9]/g, '');
-
         if (pClean.includes('proa')) calculatedFee = Number(match.proA ?? match.pro_a ?? 0);
         else if (pClean.includes('prob')) calculatedFee = Number(match.proB ?? match.pro_b ?? 0);
         else if (pClean.includes('proc')) calculatedFee = Number(match.proC ?? match.pro_c ?? 0);
@@ -439,6 +432,7 @@ async function onAccountNameOrCategoryChangeIncome() {
     }
   }
 
+  // 🎯 ရရှိလာသော နှုန်းထားကို Standard AUT Amount နှင့် Credit အကွက်များသို့ အလိုအလျောက် ထည့်သွင်းပေးခြင်း
   if (autAmtEl) autAmtEl.value = calculatedFee;
   if (creditEl) creditEl.value = calculatedFee;
   if (debitEl) debitEl.value = 0;
@@ -803,10 +797,19 @@ function exportToCSVIncome() {
 }
 
 /**
- * 💡 Universal Invoice Printer (With Strict Print Mode Isolation)
+ * 💡 Universal Invoice Printer (Supports Offline Pending Transactions & Shows Real Voucher)
  */
 function printInvoice(uniqueId) {
   var row = incomeActiveData.find(function (item) { return (item.uniqueId === uniqueId || item.uniqueid === uniqueId); });
+
+  // 🎯 FIX: အော့ဖ်လိုင်း Pending စာရင်းဖြစ်နေပါက Offline Queue ထဲမှ ရှာဖွေပေးသည်
+  if (!row && window.OfflineSync) {
+    const queue = window.OfflineSync.getQueue();
+    const qItem = queue.find(item => item.id === uniqueId || item.payload?.uniqueId === uniqueId);
+    if (qItem) {
+      row = { ...qItem.payload, uniqueId: qItem.id };
+    }
+  }
 
   if (!row && window.allCashierData && Array.isArray(window.allCashierData)) {
     row = window.allCashierData.find(function (item) { return (item.uniqueId === uniqueId || item.uniqueid === uniqueId); });
@@ -819,9 +822,9 @@ function printInvoice(uniqueId) {
 
   var nameParts = (row.fyidName || row.name || '').split(" ");
   var studentName = nameParts.length > 3 ? nameParts.slice(3).join(" ") : (row.fyidName || row.name || '-');
-
   var displayAmount = Number(row.credit || 0);
   var displayDesc = row.accountName || row.category || "Tuition & Fees";
+  var officialVrNo = row.vrNo || '-';
 
   if (Number(row.debit || 0) > 0) {
     displayAmount = -Number(row.debit);
@@ -851,6 +854,10 @@ function printInvoice(uniqueId) {
 
     var idEl = document.getElementById(`print-${copy}-id`);
     if (idEl) idEl.textContent = row.fyid || '-';
+
+    // 🎯 ပြေစာပေါ်တွင် တရားဝင် Voucher နံပါတ် အစစ်အမှန်အား ထည့်သွင်းပြသခြင်း
+    var vrEl = document.getElementById(`print-${copy}-vrno`);
+    if (vrEl) vrEl.textContent = officialVrNo;
 
     var bodyEl = document.getElementById(`print-${copy}-table-body`);
     if (bodyEl) {

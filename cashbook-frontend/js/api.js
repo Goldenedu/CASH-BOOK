@@ -38,7 +38,7 @@ window.AppState = window.AppState || {
 window.gDataCache = window.gDataCache || {};
 
 // ==============================================================================
-// 💡 OFFLINE SYNC ENGINE & LOCAL QUEUE MANAGER (Universal Module Support)
+// 💡 OFFLINE SYNC ENGINE & LOCAL QUEUE MANAGER (Universal Module & Real Voucher Parity)
 // ==============================================================================
 window.OfflineSync = {
   QUEUE_KEY: 'golden_pending_queue',
@@ -52,43 +52,186 @@ window.OfflineSync = {
     }
   },
 
+  // 💡 Offline Sequential Voucher Number Generator (100% Matches D1 Format)
+  generateOfflineVoucherNo: function (action, payload, queue) {
+    const entryDate = payload.date || payload.effDate || new Date().toISOString().slice(0, 10);
+    const p = entryDate.split('-');
+    // နေ့စွဲ Format: DDMMYY (ဥပမာ 2026-10-27 -> 271026)
+    const ddmmyy = p.length === 3 ? `${p[2]}${p[1]}${p[0].slice(-2)}` : '000000';
+
+    const rawAction = String(action || '');
+    const rawBook = String(payload.bookName || payload.book || '').toLowerCase();
+
+    // Module / Table အလိုက် Prefix သတ်မှတ်ခြင်း (INC, SAL, OFF, KIT, BNK, CAH, CAB, CAC, CAO, CAK, CAP, STM, PMC, CAN)
+    let prefix = 'INC';
+    if (rawAction.includes('Payroll') || rawAction.includes('Staff') || rawBook.includes('payroll')) {
+      prefix = (rawAction.includes('Cashier') || rawBook.includes('ca')) ? 'CAP' : 'SAL';
+    } else if (rawAction.includes('StudentMoney')) {
+      prefix = 'STM';
+    } else if (rawAction.includes('PmCashier')) {
+      prefix = 'PMC';
+    } else if (rawAction.includes('Canteen')) {
+      prefix = 'CAN';
+    } else if (rawAction.includes('BankCash') || rawBook.includes('bank') || rawBook.includes('cash')) {
+      if (rawBook.includes('ca_bank') || rawBook.includes('cabank')) prefix = 'CAB';
+      else if (rawBook.includes('ca_cash') || rawBook.includes('cacash')) prefix = 'CAC';
+      else if (rawBook.includes('bank')) prefix = 'BNK';
+      else prefix = 'CAH';
+    } else if (rawAction.includes('Cashier') || rawBook.startsWith('ca')) {
+      if (rawBook.includes('office')) prefix = 'CAO';
+      else if (rawBook.includes('kitchen')) prefix = 'CAK';
+      else if (rawBook.includes('payroll')) prefix = 'CAP';
+      else if (rawBook.includes('bank')) prefix = 'CAB';
+      else prefix = 'CAC';
+    } else if (rawAction.includes('Expense')) {
+      if (rawBook.includes('kitchen')) prefix = 'KIT';
+      else if (rawBook.includes('payroll')) prefix = 'SAL';
+      else prefix = 'OFF';
+    } else if (rawAction.includes('Income')) {
+      prefix = 'INC';
+    }
+
+    const targetPrefix = `${prefix}-${ddmmyy}-`;
+
+    // 🎯 တရားဝင်ဘောင်ချာနံပါတ် ပါရှိပြီးသားဖြစ်ပါက (e.g. Edit ပြုလုပ်ချိန်) ထိုနံပါတ်ကိုသာ အတည်ယူမည်
+    const existingVr = String(payload.vrNo || '').trim();
+    if (existingVr && !existingVr.startsWith('TEMP-') && !/^OFF-\d{6}$/.test(existingVr)) {
+      return existingVr;
+    }
+
+    let maxSerial = 0;
+
+    // ၁။ Memory Active Data (ဥပမာ - Income / Cashier / Office data) ထဲမှ စစ်ဆေးခြင်း
+    const activeList = (prefix === 'INC' && Array.isArray(window.incomeActiveData)) ? window.incomeActiveData :
+      (Array.isArray(window.allCashierData) ? window.allCashierData : []);
+    activeList.forEach(r => {
+      const v = String(r.vrNo || r.vr_no || '');
+      if (v.startsWith(targetPrefix)) {
+        const numPart = parseInt(v.replace(targetPrefix, ''), 10);
+        if (!isNaN(numPart) && numPart > maxSerial) maxSerial = numPart;
+      }
+    });
+
+    // ၂။ LocalStorage တွင် Cache လုပ်ထားသော နောက်ဆုံး Voucher ထဲမှ စစ်ဆေးခြင်း
+    const voucherCacheKey = `golden_latest_${prefix.toLowerCase()}_voucher`;
+    const lastCachedVr = localStorage.getItem(voucherCacheKey) || localStorage.getItem('golden_latest_income_voucher') || '';
+    if (lastCachedVr && lastCachedVr.startsWith(targetPrefix)) {
+      const numPart = parseInt(lastCachedVr.replace(targetPrefix, ''), 10);
+      if (!isNaN(numPart) && numPart > maxSerial) maxSerial = numPart;
+    }
+
+    // ၃။ Queue ထဲတွင် ယနေ့ရက်စွဲဖြင့် ထုတ်ယူထားပြီးသော စာရင်းများထဲမှ အမြင့်ဆုံး Serial ကို ရှာဖွေခြင်း
+    queue.forEach(item => {
+      const v = String(item.vrNo || item.payload?.vrNo || '');
+      if (v.startsWith(targetPrefix)) {
+        const numPart = parseInt(v.replace(targetPrefix, ''), 10);
+        if (!isNaN(numPart) && numPart > maxSerial) maxSerial = numPart;
+      }
+    });
+
+    const nextSerial = maxSerial + 1;
+    const finalVrNo = `${targetPrefix}${String(nextSerial).padStart(3, '0')}`;
+
+    // နောက်တစ်ကြိမ် အော့ဖ်လိုင်းသွင်းမည့် စာရင်းများအတွက် Cache တွင် နံပါတ် အဆင့်မြှင့်တင်ခြင်း
+    try {
+      localStorage.setItem(voucherCacheKey, finalVrNo);
+      if (prefix === 'INC') localStorage.setItem('golden_latest_income_voucher', finalVrNo);
+    } catch (e) { }
+
+    return finalVrNo;
+  },
+
   enqueue: async function (action, payload, method = 'POST') {
     let queue = this.getQueue();
 
-    // Module အလိုက် Prefix ခွဲခြားခြင်း (INC, EXP, SAL, STM, PMC, CAN)
-    let prefix = 'REC';
-    if (action.includes('Payroll') || action.includes('Staff')) prefix = 'SAL';
-    else if (action.includes('StudentMoney')) prefix = 'STM';
-    else if (action.includes('PmCashier')) prefix = 'PMC';
-    else if (action.includes('Canteen')) prefix = 'CAN';
-    else if (action.includes('Income')) prefix = 'INC';
-    else if (payload.bookName) prefix = payload.bookName.slice(0, 3).toUpperCase();
+    // 🎯 Module အလိုက် Prefix နှင့် Book Label တိကျစွာ ခွဲခြားခြင်း
+    const rawAction = String(action || '');
+    const rawBook = String(payload.bookName || payload.book || '').trim();
 
-    const tempId = payload.uniqueId || `${prefix}_OFF_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    const tempVr = `TEMP-${Date.now().toString().slice(-6)}`;
+    let prefix = 'REC';
+    let bookLabel = 'Main Income Book';
+
+    if (rawAction.includes('Income')) {
+      prefix = 'INC';
+      bookLabel = 'Main Income Book';
+    } else if (rawAction.includes('Payroll') || rawAction.includes('Staff')) {
+      prefix = 'SAL';
+      bookLabel = 'HR Payroll Exp Book';
+    } else if (rawAction.includes('StudentMoney')) {
+      prefix = 'STM';
+      bookLabel = 'Student Money';
+    } else if (rawAction.includes('PmCashier')) {
+      prefix = 'PMC';
+      bookLabel = 'PM Cashier Book';
+    } else if (rawAction.includes('Canteen')) {
+      prefix = 'CAN';
+      bookLabel = 'Canteen Book';
+    } else if (rawAction.includes('BankCash')) {
+      const isBank = rawBook.toLowerCase().includes('bank');
+      prefix = isBank ? 'BNK' : 'CAH';
+      bookLabel = isBank ? 'Main Bank Book' : 'Main Cash Book';
+    } else if (rawAction.includes('Cashier')) {
+      if (rawBook === 'CABank') { prefix = 'CAB'; bookLabel = 'Cashier Bank Book'; }
+      else if (rawBook === 'CACash') { prefix = 'CAC'; bookLabel = 'Cashier Cash Book'; }
+      else if (rawBook === 'CAOffice') { prefix = 'CAO'; bookLabel = 'CAOffice Book'; }
+      else if (rawBook === 'CAKitchen') { prefix = 'CAK'; bookLabel = 'CAKitchen Book'; }
+      else if (rawBook === 'CAPayroll') { prefix = 'CAP'; bookLabel = 'CAPayroll Book'; }
+      else { prefix = 'CAC'; bookLabel = 'Cashier Cash Book'; }
+    } else if (rawAction.includes('Expense')) {
+      if (rawBook.toLowerCase().includes('kitchen')) {
+        prefix = 'KIT';
+        bookLabel = 'Kitchen Exp Book';
+      } else {
+        prefix = 'OFF';
+        bookLabel = 'Office Exp Book';
+      }
+    } else if (rawBook) {
+      prefix = rawBook.slice(0, 3).toUpperCase();
+      bookLabel = rawBook;
+    }
+
+    // 🎯 ၁။ တရားဝင်ဘောင်ချာနံပါတ် အစဉ်လိုက် ထုတ်ယူခြင်း (e.g. INC-271026-002)
+    const officialVrNo = this.generateOfflineVoucherNo(action, payload, queue);
+
+    // 🎯 ၂။ Client UniqueId ကို တည်ဆောက်ခြင်း (ရှိပြီးသားဖြစ်ပါက မူရင်း ID အား သုံးသည်)
+    const tempId = (payload.uniqueId && String(payload.uniqueId).trim() !== '')
+      ? String(payload.uniqueId).trim()
+      : `${prefix}_OFF_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
     // Queue ထဲတွင် ဤ ID ဖြင့် ရှိပြီးသားဖြစ်နေပါက ထပ်မံမထည့်ပါ (Duplicate Guard)
-    if (queue.some(item => item.id === tempId)) return;
+    const existingIdx = queue.findIndex(item => item.id === tempId);
+    if (existingIdx !== -1) {
+      return queue[existingIdx];
+    }
 
-    let bookLabel = 'Main Income Book';
-    if (action.includes('Payroll')) bookLabel = 'HR Payroll Exp Book';
-    else if (action.includes('Expense')) bookLabel = payload.bookName || 'Office Exp Book';
-    else if (action.includes('StudentMoney')) bookLabel = 'Student Money';
-    else if (action.includes('PmCashier')) bookLabel = 'PM Cashier Book';
+    // 🎯 ၃။ Caller ၏ payload object ကိုပါ တိုက်ရိုက် update လုပ်ပေးခြင်း (Form ထဲတွင်ပါ တရားဝင် vrNo နှင့် uniqueId တန်းဝင်စေသည်)
+    payload.uniqueId = tempId;
+    payload.vrNo = officialVrNo;
+
+    // အခြား table များ သုံးစွဲနိုင်ရန် ဖော်ပြချက် (description) နှင့် ကျောင်းသား/ဝန်ထမ်း အချက်အလက်များကို သန့်စင်ခြင်း
+    const descText = payload.description || payload.remark || payload.name || payload.fyidName || 'Entry';
+    const sId = payload.studentId || payload.id || '-';
+    const sName = payload.fyidName || payload.name || payload.studentName || '-';
 
     const entry = {
       id: tempId,
       action: action,
       method: method,
-      // 🎯 isOfflineTempVr: true ဖြင့် အမှတ်အသားပြုပြီး Server သို့ ရောက်ချိန်တွင် တရားဝင် ဘောင်ချာအသစ် ထုတ်ယူစေမည်
-      payload: { ...payload, uniqueId: tempId, vrNo: tempVr, isOfflineTempVr: true },
+      payload: {
+        ...payload,
+        uniqueId: tempId,
+        vrNo: officialVrNo,
+        isOfflinePending: true
+      },
       timestamp: new Date().toISOString(),
       bookName: bookLabel,
       category: payload.category || payload.accountName || payload.entryType || '-',
-      description: payload.description || payload.remark || payload.name || payload.fyidName || 'Offline Entry',
+      description: descText,
+      studentId: sId,
+      studentName: sName,
       amount: payload.credit || payload.debit || payload.amount || 0,
-      date: payload.date || new Date().toISOString().slice(0, 10),
-      vrNo: tempVr
+      date: payload.date || payload.effDate || new Date().toISOString().slice(0, 10),
+      vrNo: officialVrNo // 🎯 တရားဝင်ဘောင်ချာနံပါတ်ဖြင့် သိမ်းဆည်းသည်
     };
 
     queue.push(entry);
