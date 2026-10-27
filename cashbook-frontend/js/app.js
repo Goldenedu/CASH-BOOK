@@ -755,13 +755,23 @@ function renderPendingTable() {
  * 💡 Sync All Pending Transactions to Cloudflare D1
  * Auto-strips temp vouchers and triggers Auto-Refresh across all modules (including HR Payroll)
  */
+window._isSyncingNow = false;
+
 window.syncAllPendingNow = async function () {
+  // 🎯 MUTEX LOCK: Sync လုပ်ငန်းစဉ် လုပ်ဆောင်နေစဉ် ထပ်မံခေါ်ယူမှုများကို တားဆီးသည်
+  if (window._isSyncingNow) {
+    console.warn("[Sync] Already syncing in progress. Skipping concurrent run.");
+    return;
+  }
+
   if (!navigator.onLine) {
     return showToast("ERROR", "အင်တာနက်လိုင်း ချိတ်ဆက်ထားခြင်း မရှိသေးသဖြင့် Sync မလုပ်နိုင်သေးပါ။");
   }
 
   const queue = window.OfflineSync ? window.OfflineSync.getQueue() : [];
   if (queue.length === 0) return showToast("INFO", "Sync လုပ်ရန် Pending စာရင်း မရှိပါ။");
+
+  window._isSyncingNow = true;
 
   const btnSync = document.getElementById('btn-pending-sync-now');
   if (btnSync) {
@@ -772,7 +782,6 @@ window.syncAllPendingNow = async function () {
   let successCount = 0;
   for (const item of queue) {
     try {
-      // 🎯 FIX: အော့ဖ်လိုင်း ယာယီဘောင်ချာ (TEMP- / OFF-) ဖြစ်နေပါက Server မှ တရားဝင်ဘောင်ချာ ထုတ်ပေးနိုင်ရန် vrNo ကို ဖယ်ထုတ်၍ ပို့သည်
       const syncPayload = { ...item.payload };
       if (syncPayload.isOfflineTempVr || (syncPayload.vrNo && (syncPayload.vrNo.startsWith('TEMP-') || /^OFF-\d{6}$/.test(syncPayload.vrNo)))) {
         delete syncPayload.vrNo;
@@ -789,6 +798,8 @@ window.syncAllPendingNow = async function () {
     }
   }
 
+  window._isSyncingNow = false;
+
   if (btnSync) {
     btnSync.disabled = false;
     btnSync.innerHTML = '<i class="fa-solid fa-cloud-arrow-up text-xs"></i> <span>Sync All to D1 Now</span>';
@@ -800,32 +811,21 @@ window.syncAllPendingNow = async function () {
   if (successCount > 0) {
     showToast("SUCCESS", `Pending စာရင်း (${successCount}) ခုကို Cloudflare D1 သို့ တရားဝင်ဘောင်ချာနံပါတ်များဖြင့် အောင်မြင်စွာ ပို့ဆောင်ပြီးပါပြီ။`);
 
-    // 🎯 AUTO REFRESH: စာရင်း Sync ပြီးသည်နှင့် သက်ဆိုင်ရာ စာမျက်နှာရှိ ဇယားများကို Data အသစ်ဖြင့် Auto-Refresh ပြုလုပ်ပေးခြင်း
-    if (typeof loadHrPayrollData === 'function') loadHrPayrollData(true); // 🎯 HR Payroll Auto Refresh
-    if (typeof loadStaffData === 'function') loadStaffData(false);
+    if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
+
+    // 🎯 Active View Refresh
     if (typeof loadIncomeData === 'function') loadIncomeData(true, true);
     if (typeof loadOfficeData === 'function') loadOfficeData(true, true);
     if (typeof loadBankCashKitData === 'function') loadBankCashKitData(true, true);
     if (typeof loadStudentMoneyData === 'function') loadStudentMoneyData(true, true);
-    if (typeof loadPmCashierBookData === 'function') loadPmCashierBookData(true, true);
+    if (typeof loadHrPayrollData === 'function') loadHrPayrollData(true);
 
-    // 🎯 ၃။ CASHIER CASH BOOK (TABS အားလုံး) အလိုအလျောက် AUTO REFRESH ပြုလုပ်ခြင်း
     if (typeof loadCashierData === 'function') {
-      loadCashierData(true); // forceRefresh = true ဖြင့် D1 သို့ တိုက်ရိုက်ခေါ်ယူသည်
+      loadCashierData(true);
     }
-
-    // လက်ရှိ ဖွင့်ထားသော Cashier Sub-tab (CABank, CACash, CAOffice, CAKitchen, CAPayroll, Today Income) အား Re-render လုပ်သည်
     if (typeof window.initCashierView === 'function') {
       const activeCashierSub = window.gCurrentCashierSubBook || window.currentCashierSubBook || 'CABank';
       window.initCashierView(activeCashierSub, true);
-    }
-    if (typeof window.switchCashierSubBook === 'function' && (window.gCurrentCashierSubBook || window.currentCashierSubBook)) {
-      window.switchCashierSubBook(window.gCurrentCashierSubBook || window.currentCashierSubBook, true);
-    }
-
-    // လက်ရှိ Active Module ပေါ်မူတည်၍ တစ်ပြေးညီ ပြန်လည် Re-render စေခြင်း
-    if (window.AppState && window.AppState.currentModule && typeof triggerModuleInit === 'function') {
-      triggerModuleInit(window.AppState.currentModule);
     }
   }
 };
