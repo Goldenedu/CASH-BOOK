@@ -217,7 +217,8 @@
     class="w-64 bg-[var(--bg-sidebar)] border-r border-[var(--border-color)] flex flex-col justify-between shrink-0 h-screen z-50 overflow-y-auto custom-scroll shadow-lg">
     <div>
       <!-- Brand Header (Fixed 64px to match top bar) -->
-      <div class="h-[64px] px-4 border-b border-[var(--border-color)] flex items-center gap-3 shrink-0 box-border">
+      <div
+        class="h-[64px] px-4 border-b border-[var(--border-color)] flex items-center gap-3 shrink-0 box-border bg-[var(--bg-sidebar)] z-20">
         <div
           class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-500 font-black text-xl shadow-lg shadow-emerald-950/20 shrink-0">
           <i class="fa-solid fa-utensils"></i>
@@ -251,7 +252,7 @@
 
         <!-- 3. SALES, PURCHASES & INVENTORY -->
         <div class="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-2 pt-3">
-          Sales, Purchases & Inventory
+          Sales & Purchases
         </div>
 
         <button id="nav-btn-pos" onclick="switchCanteenView('pos')"
@@ -332,7 +333,7 @@
     </div>
 
     <!-- Sidebar Bottom (Touch-friendly 44px Target) -->
-    <div class="p-3.5 border-t border-[var(--border-color)] bg-[var(--bg-sidebar)] space-y-2 shrink-0">
+    <div class="p-3.5 border-t border-[var(--border-color)] bg-[var(--bg-sidebar)] space-y-2 shrink-0 z-20">
       <div class="px-2 py-1 flex items-center justify-between text-xs font-mono text-slate-400">
         <span id="pos-network-status" class="flex items-center gap-1.5 font-bold">
           <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span> ONLINE
