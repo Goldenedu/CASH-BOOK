@@ -451,7 +451,8 @@ export async function saveIncomeEntry(db, session, body) {
   const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(session?.role || '');
   const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport || body.skipAutoPost);
 
-  const uniqueid = (isMigration && body.uniqueId)
+  // 🎯 FIX: Offline Sync မှ ပါလာသော uniqueId ကို အတည်ယူသုံးရမည်
+  const uniqueid = body.uniqueId
     ? String(body.uniqueId).trim()
     : generateUniqueId('INC');
 

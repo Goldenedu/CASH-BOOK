@@ -171,11 +171,11 @@ export async function getCashierData(db, body) {
     const formattedRows = rawRows.map(row => {
       const uid = String(row.uniqueid || '');
       const isAutoLocked = Boolean(
-        row.is_locked || 
-        uid.startsWith('UNIPROFIT_') || 
-        uid.startsWith('UNICASHIER_') || 
-        uid.startsWith('INCCASHIER_') || 
-        uid.startsWith('TRANS_') || 
+        row.is_locked ||
+        uid.startsWith('UNIPROFIT_') ||
+        uid.startsWith('UNICASHIER_') ||
+        uid.startsWith('INCCASHIER_') ||
+        uid.startsWith('TRANS_') ||
         uid.startsWith('DAILY_INC_')
       );
 
@@ -302,12 +302,29 @@ export async function saveCashierEntry(db, session, body) {
     const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(session?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport || body.skipAutoPost);
 
-    const uniqueid = (isMigration && body.uniqueId)
+    // 🎯 FIX 1: Frontend (Offline Queue) မှ uniqueId ပါလာပါက ၎င်းကို အတည်ယူသုံးမည်
+    const uniqueid = body.uniqueId
       ? String(body.uniqueId).trim()
-      : generateUniqueId('CAS');
+      : generateUniqueId(prefix || 'CAS');
+
+    // 🎯 FIX 2: 🛡️ IDEMPOTENCY GUARD (၂ ကြောင်း ထပ်မဝင်စေရန် စစ်ဆေးခြင်း)
+    const existingCheck = await db.prepare(`SELECT id, vr_no FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    if (existingCheck && !body.isUpdate && !isMigration) {
+      return {
+        success: true,
+        message: "ဤ Cashier စာရင်းသည် D1 Database ထဲတွင် ရှိနှင့်ပြီးသား ဖြစ်ပါသည်။ (Duplicate Prevented)",
+        uniqueId: uniqueid,
+        vrNo: existingCheck.vr_no || body.vrNo || ''
+      };
+    }
 
     const newNo = (isMigration && body.no) ? parseInt(body.no, 10) : await generateFyNo(db, tableName, fy);
-    const vrNo = body.vrNo || await generateVoucherNo(db, tableName, prefix, entryDate);
+
+    // 🎯 FIX 3: ယာယီဘောင်ချာနံပါတ် (TEMP- / OFF-) ဖြစ်နေပါက D1 မှ တရားဝင်ဘောင်ချာ အသစ်ထုတ်ပေးသည်
+    const isTempVr = !body.vrNo || body.isOfflineTempVr || String(body.vrNo).startsWith('TEMP-') || /^OFF-\d{6}$/.test(String(body.vrNo));
+    const vrNo = (!isTempVr && body.vrNo)
+      ? body.vrNo
+      : await generateVoucherNo(db, tableName, prefix, entryDate);
 
     // ⚡ MIGRATION DIRECT IMPORT MODE
     if (isMigration) {
@@ -352,10 +369,15 @@ export async function saveCashierEntry(db, session, body) {
       if (targetTable !== tableName) {
         targetTableName = targetTable;
         const transferUid = `TRANS_${uniqueid}`;
-        const targetStmt = await createTargetCashierTransferStatement(
-          db, body, bookTitle, targetTable, targetPrefix, targetBookTitle, entryDate, my, fy, createdBy, transferUid
-        );
-        batchStatements.push(targetStmt);
+
+        // Target table တွင် ထပ်မံမဝင်စေရန် စစ်ဆေးခြင်း
+        const targetCheck = await db.prepare(`SELECT id FROM ${targetTable} WHERE uniqueid = ?`).bind(transferUid).first();
+        if (!targetCheck) {
+          const targetStmt = await createTargetCashierTransferStatement(
+            db, body, bookTitle, targetTable, targetPrefix, targetBookTitle, entryDate, my, fy, createdBy, transferUid
+          );
+          batchStatements.push(targetStmt);
+        }
       }
     }
 
@@ -411,9 +433,9 @@ export async function updateCashierEntry(db, session, body) {
 
     const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(session?.role || '');
     if (isAutoLocked && !isPrivilegedAdmin) {
-      return { 
-        success: false, 
-        message: "ဤစာရင်းသည် မူရင်းစာအုပ်မှ အလိုအလျောက် ရောက်ရှိလာသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ပြင်ဆင်နိုင်ပါသည်။" 
+      return {
+        success: false,
+        message: "ဤစာရင်းသည် မူရင်းစာအုပ်မှ အလိုအလျောက် ရောက်ရှိလာသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ပြင်ဆင်နိုင်ပါသည်။"
       };
     }
 
@@ -525,9 +547,9 @@ export async function deleteCashierEntry(db, session, body) {
 
     const isPrivilegedAdmin = ['Owner', 'Admin', 'Finance', 'Accountant'].includes(session?.role || '');
     if (isAutoLocked && !isPrivilegedAdmin) {
-      return { 
-        success: false, 
-        message: "ဤစာရင်းသည် မူရင်းစာအုပ်မှ အလိုအလျောက် ရောက်ရှိလာသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ဖျက်သိမ်းနိုင်ပါသည်။" 
+      return {
+        success: false,
+        message: "ဤစာရင်းသည် မူရင်းစာအုပ်မှ အလိုအလျောက် ရောက်ရှိလာသော စာရင်းဖြစ်သဖြင့် မူရင်းစာအုပ်မှသာ ဖျက်သိမ်းနိုင်ပါသည်။"
       };
     }
 
