@@ -485,7 +485,7 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration, re
 
     const entryDate = getMyanmarDateString(body.date);
     const effDate = body.effDate ? getMyanmarDateString(body.effDate) : entryDate;
-    const my = getMonthYearLabel(entryDate);
+    const my = getMonthYearLabel(effDate);
     const fy = normalizeFyStr(body.fy || calculateAcademicFyFromDate(entryDate));
 
     const cleanStudentId = parseCleanIntId(body.id || body.studentId);
