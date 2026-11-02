@@ -342,7 +342,7 @@ function renderHrPayrollTable() {
 
     const isNormal = !rawStaffId || rawStaffId === 'Normal' || rawStaffId === '( Normal )' || ['Bank Interest', 'Other', 'Opening', 'Closing', 'Transfer'].includes(item.category);
     const staffIdHtml = isNormal 
-      ? '<span class="font-mono text-slate-400 font-semibold">( Normal )</span>'
+      ? '<span class="font-mono text-slate-400 font-semibold">Normal</span>'
       : `<span class="font-mono font-bold text-amber-300">${escapeHtml(rawStaffId)}</span>`;
 
     tr.innerHTML = `
@@ -588,7 +588,7 @@ async function onStaffIdChangePayroll() {
   else if (category.toLowerCase().includes('fund')) typeLabel = 'Fund';
 
   if (elDesc) {
-    elDesc.value = `${staffNameOnly}, ${typeLabel} ${myStr}`;
+    elDesc.value = `${staffNameOnly}, ${typeLabel}, ${myStr}`;
   }
 }
 
