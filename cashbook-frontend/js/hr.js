@@ -507,41 +507,52 @@ async function onStaffIdChangePayroll() {
   const myStr = !isNaN(dObj.getTime()) ? `${months[dObj.getMonth()]}-${String(dObj.getFullYear()).slice(-2)}` : fallbackMY;
 
   const totalSalaryVal = Number(matchedStaff.total_salary ?? matchedStaff.totalSalary ?? 0);
-  const bonusAmt = Number(matchedStaff.bonus ?? 0); // ၁ လစာ ရပိုင်ခွင့်နှုန်း
-  const fundAmt = Number(matchedStaff.fund ?? 0);   // ၁ လစာ ရပိုင်ခွင့်နှုန်း
-  const accruedBonus = Number(matchedStaff.unpaid_bonus ?? matchedStaff.unpaidBonus ?? 0); // စုဆောင်းရရှိထားသော စုစုပေါင်း Bonus
-  const accruedFund = Number(matchedStaff.unpaid_fund ?? matchedStaff.unpaidFund ?? 0);   // စုဆောင်းရရှိထားသော စုစုပေါင်း Fund
+  
+  // 🎯 ၁။ ဝန်ထမ်း၏ ၁ လစာ ပုံမှန်ခံစားခွင့် Bonus & Fund နှုန်းထား (မရှိပါက Settings မှ Auto တွက်သည်)
+  let bonusAmt = Number(matchedStaff.bonus ?? 0);
+  let fundAmt = Number(matchedStaff.fund ?? 0);
+
+  if (bonusAmt === 0 && window.gPayrollSettings?.bonus) {
+    bonusAmt = Number(window.gPayrollSettings.bonus || 0);
+  }
+  if (fundAmt === 0 && totalSalaryVal > 0) {
+    const fRate = Number(window.gPayrollSettings?.fundRate || 0.05);
+    fundAmt = Math.round(totalSalaryVal * fRate);
+  }
+
+  // 🎯 ၂။ ဝန်ထမ်း စုဆောင်းရရှိထားသော စုစုပေါင်း လက်ကျန် (Accrued Unpaid Balances)
+  const accruedBonus = Number(matchedStaff.unpaid_bonus ?? matchedStaff.unpaidBonus ?? 0);
+  const accruedFund = Number(matchedStaff.unpaid_fund ?? matchedStaff.unpaidFund ?? 0);
 
   let creditVal = 0;
-  let bonusFieldVal = accruedBonus;
-  let fundFieldVal = accruedFund;
+  let bonusFieldVal = 0;
+  let fundFieldVal = 0;
 
   if (category === 'Full Time Salary' || category === 'Part Time Salary') {
-    // ၁။ လစဉ်လစာ ပေးချေခြင်း (လစာငွေ အပြည့်ပေးသည်)
+    // 💡 က။ လစဉ်လစာ ပေးချေခြင်း: လစာငွေ အပြည့်ပေးပြီး၊ ယခုလအတွက် ရရှိမည့် လစဉ် Bonus & Fund ကို အလိုအလျောက် ပြသပေးသည်
     creditVal = totalSalaryVal;
-    bonusFieldVal = accruedBonus; // လက်ရှိ စုဆောင်းမိထားသော Bonus စုစုပေါင်းကို ပြသသည်
-    fundFieldVal = accruedFund;   // လက်ရှိ စုဆောင်းမိထားသော Fund စုစုပေါင်းကို ပြသသည်
+    bonusFieldVal = bonusAmt; // U Ba ရရှိမည့် လစဉ် Bonus ပမာဏ (Auto ပေါ်လာမည်)
+    fundFieldVal = fundAmt;   // U Ba ရရှိမည့် လစဉ် Fund ပမာဏ (Auto ပေါ်လာမည်)
     if (elCredit) elCredit.readOnly = true;
 
   } else if (category === 'Full Time Bonus' || category === 'Part Time Bonus') {
-    // 🎯 ၂။ Bonus ထုတ်ပေးခြင်း: စုဆောင်းရရှိပြီးသမျှ Bonus အားလုံးကို တစ်ခါတည်း အပြေအကျေ ထုတ်ပေးသည်
-    creditVal = accruedBonus;
-    bonusFieldVal = accruedBonus;
-    fundFieldVal = accruedFund;
+    // 🎯 ခ။ Bonus ထုတ်ပေးခြင်း: စုဆောင်းရရှိပြီးသမျှ Bonus အားလုံးကို တစ်ခါတည်း အပြေအကျေ အကုန်ထုတ်ပေးသည်
+    creditVal = accruedBonus > 0 ? accruedBonus : bonusAmt;
+    bonusFieldVal = creditVal;
+    fundFieldVal = 0; // Bonus သီးသန့် ထုတ်ပေးခြင်းဖြစ်၍ Fund မပါဝင်ပါ
 
-    // အကယ်၍ ရပိုင်ခွင့် Bonus မရှိသေးပါက အသိပေးခြင်း
     if (accruedBonus <= 0) {
       if (typeof showToast === 'function') showToast("WARNING", "ဤဝန်ထမ်းတွင် ထုတ်ယူရန် စုဆောင်းထားသော Bonus လက်ကျန် မရှိသေးပါ။");
     }
 
-    // 💡 အပြေအကျေ မဟုတ်ဘဲ တစ်စိတ်တစ်ပိုင်းသာ ထုတ်ပေးလိုပါကလည်း ပြင်ဆင်ခွင့်ပြုရန် readOnly ဖြုတ်ပေးသည်
+    // လိုအပ်ပါက လက်ကျန်ထဲမှ တစ်စိတ်တစ်ပိုင်းသာ ခွဲထုတ်နိုင်ရန် readOnly ဖြုတ်ပေးသည်
     if (elCredit) elCredit.readOnly = false;
 
   } else if (category === 'Full Time Fund' || category === 'Part Time Fund') {
-    // 🎯 ၃။ Fund ထုတ်ပေးခြင်း: စုဆောင်းရရှိပြီးသမျှ Fund အားလုံးကို တစ်ခါတည်း အပြေအကျေ ထုတ်ပေးသည်
-    creditVal = accruedFund;
-    bonusFieldVal = accruedBonus;
-    fundFieldVal = accruedFund;
+    // 🎯 ဂ။ Fund ထုတ်ပေးခြင်း: စုဆောင်းရရှိပြီးသမျှ Fund အားလုံးကို တစ်ခါတည်း အပြေအကျေ အကုန်ထုတ်ပေးသည်
+    creditVal = accruedFund > 0 ? accruedFund : fundAmt;
+    fundFieldVal = creditVal;
+    bonusFieldVal = 0; // Fund သီးသန့် ထုတ်ပေးခြင်းဖြစ်၍ Bonus မပါဝင်ပါ
 
     if (accruedFund <= 0) {
       if (typeof showToast === 'function') showToast("WARNING", "ဤဝန်ထမ်းတွင် ထုတ်ယူရန် စုဆောင်းထားသော Fund လက်ကျန် မရှိသေးပါ။");
@@ -550,6 +561,7 @@ async function onStaffIdChangePayroll() {
     if (elCredit) elCredit.readOnly = false;
   }
 
+  // Input Field များသို့ တန်ဖိုးများ အသီးသီး ထည့်သွင်းခြင်း
   if (elCredit) elCredit.value = creditVal;
   if (elBonus) elBonus.value = bonusFieldVal;
   if (elFund) elFund.value = fundFieldVal;
@@ -558,15 +570,18 @@ async function onStaffIdChangePayroll() {
   const staffNameOnly = matchedStaff.name || '';
   const displayStaffId = matchedStaff.staff_id || matchedStaff.staffId || matchedStaff.id || targetIdNum;
   const defaultIdStr = `${defaultPrefix} ${String(displayStaffId).padStart(3, '0')} ${staffNameOnly}`;
-  const staffDisplayName = matchedStaff.staff_idname || matchedStaff.staffIdName || defaultIdStr;
+  
+  // 🎯 Bracket နှစ်ထပ် collision [[FID 001] U Ba...] မဖြစ်စေရန် အလယ်က စာသားကို သန့်စင်သည်
+  let rawDisplayName = matchedStaff.staff_idname || matchedStaff.staffIdName || defaultIdStr;
+  const cleanDisplayName = rawDisplayName.replace(/^\[+|\]+$/g, '').trim();
 
-  // 🎯 Description တွင်လည်း တစ်လစာမဟုတ်ဘဲ Payout အဖြစ် စနစ်တကျ ဖော်ပြသည်
+  // Description အား စနစ်တကျ Auto-generate လုပ်ပေးခြင်း
   if (category.includes('Bonus')) {
-    if (elDesc) elDesc.value = `[${staffDisplayName}, Full Time Bonus Payout (All Accrued) ${myStr}]`;
+    if (elDesc) elDesc.value = `[${cleanDisplayName}, Full Time Bonus Payout (All Accrued) ${myStr}]`;
   } else if (category.includes('Fund')) {
-    if (elDesc) elDesc.value = `[${staffDisplayName}, Full Time Fund Payout (All Accrued) ${myStr}]`;
+    if (elDesc) elDesc.value = `[${cleanDisplayName}, Full Time Fund Payout (All Accrued) ${myStr}]`;
   } else {
-    if (elDesc) elDesc.value = `[${staffDisplayName}, ${category} ${myStr}]`;
+    if (elDesc) elDesc.value = `[${cleanDisplayName}, ${category} ${myStr}]`;
   }
 }
 
