@@ -99,6 +99,12 @@
 
     <form id="staff-form" onsubmit="saveStaffForm(event)" class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
       <input type="hidden" id="staff-uniqueId">
+      
+      <!-- 🎯 NEW: Existing Accrued Balances Preservation Fields -->
+      <input type="hidden" id="staff-unpaid-bonus" value="0">
+      <input type="hidden" id="staff-unpaid-fund" value="0">
+      <input type="hidden" id="staff-existing-bonus" value="0">
+      <input type="hidden" id="staff-existing-fund" value="0">
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div class="flex flex-col gap-1">
