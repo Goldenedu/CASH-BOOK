@@ -319,7 +319,7 @@ function renderHrPayrollTable() {
   const pageItems = gHrPayrollFilteredData.slice(startIndex, endIndex);
 
   if (pageItems.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="14" class="text-center py-8 text-slate-500 font-bold">ရှာဖွေမှုနှင့် ကိုက်ညီသော HR Payroll စာရင်း မရှိပါ။</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="15" class="text-center py-8 text-slate-500 font-bold">ရှာဖွေမှုနှင့် ကိုက်ညီသော HR Payroll စာရင်း မရှိပါ။</td></tr>`;
     updateHrPayrollPaginationInfo(0, 0, 0);
     return;
   }
@@ -333,10 +333,23 @@ function renderHrPayrollTable() {
     const unpaidBonus = Number(item.unpaid_bonus ?? item.unpaidBonus ?? 0);
     const unpaidFund = Number(item.unpaid_fund ?? item.unpaidFund ?? 0);
 
+    // 🎯 Staff ID column rendering: Non-staff ဖြစ်ပါက ( Normal ) ပြသပြီး၊ ကျန်သည်များအတွက် FID/PID အတိုင်း ပြသသည်
+    let rawStaffId = String(item.staffId || item.staff_id || '').trim();
+    if (!rawStaffId || rawStaffId === '') {
+      const matchId = String(item.description || '').match(/(?:FID|PID)\s*0*(\d+)/i);
+      rawStaffId = matchId ? `${matchId[0].slice(0, 3).toUpperCase()} ${matchId[1].padStart(3, '0')}` : 'Normal';
+    }
+
+    const isNormal = !rawStaffId || rawStaffId === 'Normal' || rawStaffId === '( Normal )' || ['Bank Interest', 'Other', 'Opening', 'Closing', 'Transfer'].includes(item.category);
+    const staffIdHtml = isNormal 
+      ? '<span class="font-mono text-slate-400 font-semibold">( Normal )</span>'
+      : `<span class="font-mono font-bold text-amber-300">${escapeHtml(rawStaffId)}</span>`;
+
     tr.innerHTML = `
       <td class="text-center font-mono font-semibold text-slate-400 py-3 px-2">${displayNo}</td>
       <td class="font-mono py-3 px-2">${escapeHtml(item.date) || '-'}</td>
       <td class="py-3 px-2">${typeof window.formatCategoryBadgeHtml === 'function' ? window.formatCategoryBadgeHtml(item.category) : escapeHtml(item.category)}</td>
+      <td class="text-center py-3 px-2">${staffIdHtml}</td>
       <td class="font-bold text-slate-100 max-w-xs truncate py-3 px-2" title="${escapeHtml(item.description)}">${escapeHtml(item.description) || '-'}</td>
       <td class="font-semibold py-3 px-2">${escapeHtml(item.method) || '-'}</td>
       <td class="text-right font-mono font-bold text-emerald-400 py-3 px-2">${item.debit > 0 ? Number(item.debit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
@@ -355,7 +368,6 @@ function renderHrPayrollTable() {
         </div>
       </td>
     `;
-
     tbody.appendChild(tr);
   });
 
@@ -567,21 +579,16 @@ async function onStaffIdChangePayroll() {
   if (elFund) elFund.value = fundFieldVal;
 
   const defaultPrefix = isPartTime ? 'PID' : 'FID';
-  const staffNameOnly = matchedStaff.name || '';
+  const staffNameOnly = (matchedStaff.name || '').trim();
   const displayStaffId = matchedStaff.staff_id || matchedStaff.staffId || matchedStaff.id || targetIdNum;
-  const defaultIdStr = `${defaultPrefix} ${String(displayStaffId).padStart(3, '0')} ${staffNameOnly}`;
-  
-  // 🎯 Bracket နှစ်ထပ် collision [[FID 001] U Ba...] မဖြစ်စေရန် အလယ်က စာသားကို သန့်စင်သည်
-  let rawDisplayName = matchedStaff.staff_idname || matchedStaff.staffIdName || defaultIdStr;
-  const cleanDisplayName = rawDisplayName.replace(/^\[+|\]+$/g, '').trim();
 
-  // Description အား စနစ်တကျ Auto-generate လုပ်ပေးခြင်း
-  if (category.includes('Bonus')) {
-    if (elDesc) elDesc.value = `[${cleanDisplayName}, Full Time Bonus Payout (All Accrued) ${myStr}]`;
-  } else if (category.includes('Fund')) {
-    if (elDesc) elDesc.value = `[${cleanDisplayName}, Full Time Fund Payout (All Accrued) ${myStr}]`;
-  } else {
-    if (elDesc) elDesc.value = `[${cleanDisplayName}, ${category} ${myStr}]`;
+  // 🎯 NEW DESCRIPTION FORMAT: Name, Salary month-year (No Staff ID, No Full Time/Part Time)
+  let typeLabel = 'Salary';
+  if (category.toLowerCase().includes('bonus')) typeLabel = 'Bonus';
+  else if (category.toLowerCase().includes('fund')) typeLabel = 'Fund';
+
+  if (elDesc) {
+    elDesc.value = `${staffNameOnly}, ${typeLabel} ${myStr}`;
   }
 }
 
@@ -632,10 +639,12 @@ async function saveHrPayrollForm(e) {
   const isNonStaffCategory = ['Bank Interest', 'Other', 'Opening', 'Closing', 'Transfer'].includes(categoryVal);
 
   // ဝန်ထမ်းလစာ ဖြစ်ပါက Staff ID ကို မဖြစ်မနေ တောင်းခံမည်၊ Category အသစ်များအတွက် မလိုပါ
-  if (!isNonStaffCategory && !staffIdVal) {
-    isHrPayrollSubmitting = false;
-    if (typeof showToast === 'function') showToast("ERROR", "ဝန်ထမ်း ID ဖြည့်သွင်းပါ");
-    return;
+  let formattedStaffId = 'Normal';
+  if (!isNonStaffCategory && staffIdVal) {
+    const isPartTime = categoryVal.toLowerCase().includes('part time');
+    const prefix = isPartTime ? 'PID' : 'FID';
+    const numMatch = staffIdVal.match(/\d+/);
+    formattedStaffId = numMatch ? `${prefix} ${String(numMatch[0]).padStart(3, '0')}` : staffIdVal;
   }
 
   // Bank Interest ဖြစ်ပါက Credit (ထုတ်ပေးငွေ) လုံးဝ မရှိစေရဘဲ Debit သာ ခွင့်ပြုမည်
@@ -654,7 +663,7 @@ async function saveHrPayrollForm(e) {
     uniqueId: document.getElementById('hr-pay-uniqueId')?.value || '',
     date: entryDate,
     category: categoryVal,
-    staffId: isNonStaffCategory ? null : staffIdVal, // Non-staff category များအတွက် ID ကို null ပို့မည်
+    staffId: formattedStaffId, // 🎯 Formatted Staff ID ပို့ပေးသည်
     method: document.getElementById('hr-pay-method')?.value || 'Cash',
     debit: debitVal,
     credit: creditVal,
@@ -829,7 +838,7 @@ function exportToCSVHrPayroll() {
     return;
   }
 
-  let csv = "NO,DATE,CATEGORY,DESCRIPTION,METHOD,DEBIT,CREDIT,BALANCES,UNPAID BONUS,UNPAID FUND,VR NO,MY,FY\n";
+  let csv = "NO,DATE,CATEGORY,STAFF ID,DESCRIPTION,METHOD,DEBIT,CREDIT,BALANCES,UNPAID BONUS,UNPAID FUND,VR NO,MY,FY\n";
   gHrPayrollData.forEach((r, idx) => {
     let unpaidBonus = r.unpaid_bonus ?? r.unpaidBonus ?? 0;
     let unpaidFund = r.unpaid_fund ?? r.unpaidFund ?? 0;
@@ -838,6 +847,7 @@ function exportToCSVHrPayroll() {
     csv += `${r.no || (idx + 1)},` +
       `${safeCsvCell(r.date || '')},` +
       `${safeCsvCell(r.category || '')},` +
+      `${safeCsvCell(r.staffId || r.staff_id || 'Normal')},` +
       `${safeCsvCell(r.description || '')},` +
       `${safeCsvCell(r.method || '')},` +
       `${r.debit || 0},` +

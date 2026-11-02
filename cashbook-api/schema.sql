@@ -146,6 +146,7 @@ CREATE TABLE IF NOT EXISTS payroll (
   no INTEGER DEFAULT 1,
   date TEXT NOT NULL,
   category TEXT DEFAULT 'Full Time Salary',
+  staff_id TEXT DEFAULT 'Normal', -- 🎯 NEW: Staff ID (e.g. FID 001, PID 002 သို့မဟုတ် Normal)
   description TEXT,
   method TEXT DEFAULT 'Cash',
   debit REAL DEFAULT 0,
@@ -164,6 +165,7 @@ CREATE TABLE IF NOT EXISTS payroll (
   is_locked INTEGER DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_payroll_fy_date ON payroll(fy, date);
+CREATE INDEX IF NOT EXISTS idx_payroll_staff_id ON payroll(staff_id);
 
 
 -- ==============================================================================

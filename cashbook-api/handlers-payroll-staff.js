@@ -399,7 +399,24 @@ export async function saveHrPayrollForm(db, userSession, body) {
 
     const dateStr = body.date || new Date().toISOString().split('T')[0];
     const category = body.category || 'Full Time Salary';
-    const staffIdStr = String(body.staffId || '').trim();
+    const rawStaffId = String(body.staffId || '').trim();
+    const isNonStaffCategory = ['Bank Interest', 'Other', 'Opening', 'Closing', 'Transfer'].includes(category);
+
+    // 🎯 STAFF ID & NORMAL TRANSACTION ROUTING
+    let dbStaffId = 'Normal';
+    let targetStaffId = null;
+
+    if (!isNonStaffCategory && rawStaffId && rawStaffId.toLowerCase() !== 'normal') {
+      const numMatch = rawStaffId.match(/\d+/);
+      targetStaffId = numMatch ? parseInt(numMatch[0], 10) : null;
+      const isPartTime = category.toLowerCase().includes('part time');
+      const prefix = isPartTime ? 'PID' : 'FID';
+      if (targetStaffId) {
+        dbStaffId = `${prefix} ${String(targetStaffId).padStart(3, '0')}`;
+      } else {
+        dbStaffId = rawStaffId;
+      }
+    }
 
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const dObj = new Date(dateStr);
@@ -409,7 +426,6 @@ export async function saveHrPayrollForm(db, userSession, body) {
 
     const fy = normalizeFyStr(body.fy, dateStr);
 
-    // 🎯 FIX 3: ယာယီဘောင်ချာ (TEMP- / OFF-) ဖြစ်နေပါက အသုံးမပြုဘဲ D1 မှ နောက်ဆုံးဘောင်ချာကို စစ်၍ SAL-yyMMdd-xxx အသစ် ထုတ်ပေးသည်
     const isTempVr = !body.vrNo || body.isOfflineTempVr || String(body.vrNo).startsWith('TEMP-') || String(body.vrNo).startsWith('OFF-');
     const vrNoVal = (!isTempVr && body.vrNo)
       ? body.vrNo
@@ -423,13 +439,14 @@ export async function saveHrPayrollForm(db, userSession, body) {
     const unpaidBonus = parseFloat(body.unpaidBonus || 0);
     const unpaidFund = parseFloat(body.unpaidFund || 0);
 
+    // 🎯 D1 SCHEMA: staff_id column အသစ် ထည့်သွင်းသိမ်းဆည်းခြင်း
     const sqlVerb = isMigration ? "INSERT OR REPLACE INTO" : "INSERT INTO";
     const expenseStmt = db.prepare(`${sqlVerb} payroll (
-      no, date, category, description, method, debit, credit, balances,
+      no, date, category, staff_id, description, method, debit, credit, balances,
       unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name,
       created_by, created_at, uniqueid
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`).bind(
-      newNo, dateStr, category, body.description || '', body.method || 'Cash',
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`).bind(
+      newNo, dateStr, category, dbStaffId, body.description || '', body.method || 'Cash',
       debitVal, creditVal, unpaidBonus, unpaidFund,
       body.transfer || '', vrNoVal, myVal, fy,
       'HR Payroll Exp Book', userSession?.name || 'Admin', uniqueid
@@ -437,28 +454,24 @@ export async function saveHrPayrollForm(db, userSession, body) {
 
     const batchStatements = [expenseStmt];
 
-    if (!isMigration && staffIdStr) {
-      const targetStaffId = parseInt(staffIdStr, 10);
-      // 🎯 FIX: Primary Key (id) နှင့် မရောထွေးစေရန် staff_id သီးသန့်သာ စစ်ဆေးသည်
+    if (!isMigration && targetStaffId) {
+      // 🎯 Primary Key (id) မဟုတ်ဘဲ ဝန်ထမ်း Staff ID သီးသန့်ဖြင့်သာ ရှာဖွေပြင်ဆင်သည်
       const staffRow = await db.prepare("SELECT id, unpaid_bonus, unpaid_fund, bonus, fund FROM staff_fulltime WHERE staff_id = ? LIMIT 1").bind(targetStaffId).first();
 
       if (staffRow) {
         if (category === 'Full Time Salary') {
-          // ၁။ လစာထုတ်ချိန်: လစဉ်ရပိုင်ခွင့် Bonus & Fund ကို စုဆောင်းငွေထဲ ထပ်ပေါင်းသည်
           const newUnpaidBonus = (parseFloat(staffRow.unpaid_bonus || 0)) + parseFloat(staffRow.bonus || 0);
           const newUnpaidFund = (parseFloat(staffRow.unpaid_fund || 0)) + parseFloat(staffRow.fund || 0);
           batchStatements.push(
             db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ?, unpaid_fund = ? WHERE id = ?`).bind(newUnpaidBonus, newUnpaidFund, staffRow.id)
           );
         } else if (category === 'Full Time Bonus') {
-          // 🎯 ၂။ Bonus အကုန်ထုတ်ပေးချိန်: စုဆောင်းထားသမျှ အားလုံးနုတ်လိုက်သဖြင့် လက်ကျန် 0 ဖြစ်သွားသည်
           const currentBonus = parseFloat(staffRow.unpaid_bonus || 0);
           const newUnpaidBonus = Math.max(0, currentBonus - creditVal);
           batchStatements.push(
             db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ? WHERE id = ?`).bind(newUnpaidBonus, staffRow.id)
           );
         } else if (category === 'Full Time Fund') {
-          // 🎯 ၃။ Fund အကုန်ထုတ်ပေးချိန်: စုဆောင်းထားသမျှ အားလုံးနုတ်လိုက်သဖြင့် လက်ကျန် 0 ဖြစ်သွားသည်
           const currentFund = parseFloat(staffRow.unpaid_fund || 0);
           const newUnpaidFund = Math.max(0, currentFund - creditVal);
           batchStatements.push(
