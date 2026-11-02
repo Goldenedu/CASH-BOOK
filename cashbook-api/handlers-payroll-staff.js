@@ -439,7 +439,8 @@ export async function saveHrPayrollForm(db, userSession, body) {
 
     if (!isMigration && staffIdStr) {
       const targetStaffId = parseInt(staffIdStr, 10);
-      const staffRow = await db.prepare("SELECT id, unpaid_bonus, unpaid_fund, bonus, fund FROM staff_fulltime WHERE staff_id = ? OR id = ? LIMIT 1").bind(targetStaffId, targetStaffId).first();
+      // 🎯 FIX: Primary Key (id) နှင့် မရောထွေးစေရန် staff_id သီးသန့်သာ စစ်ဆေးသည်
+      const staffRow = await db.prepare("SELECT id, unpaid_bonus, unpaid_fund, bonus, fund FROM staff_fulltime WHERE staff_id = ? LIMIT 1").bind(targetStaffId).first();
 
       if (staffRow) {
         if (category === 'Full Time Salary') {

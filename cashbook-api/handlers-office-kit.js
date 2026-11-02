@@ -703,6 +703,35 @@ export async function deleteExpenseEntry(db, session, body) {
       );
     }
 
+    // 🎯 FIX: HR PAYROLL စာရင်း ဖျက်သိမ်းပါက STAFF LIST ၏ BONUS & FUND အား မူလအတိုင်း ပြန်လည် REVERT ပြုလုပ်ခြင်း
+    if (tableName === 'payroll') {
+      const staffIdMatch = String(existing.description || '').match(/(?:FID|PID)\s*0*(\d+)/i);
+      const targetStaffId = staffIdMatch ? parseInt(staffIdMatch[1], 10) : null;
+      const creditVal = parseFloat(existing.credit || 0);
+      const category = String(existing.category || '');
+
+      if (targetStaffId) {
+        const staffRow = await db.prepare("SELECT id, unpaid_bonus, unpaid_fund, bonus, fund FROM staff_fulltime WHERE staff_id = ? LIMIT 1").bind(targetStaffId).first();
+
+        if (staffRow) {
+          if (category === 'Full Time Salary') {
+            // ၁။ လစာစာရင်းကို ဖျက်ပါက ပေါင်းထည့်ထားသော လစဉ် Bonus & Fund ကို ပြန်နုတ်သည်
+            const revBonus = Math.max(0, (parseFloat(staffRow.unpaid_bonus || 0)) - parseFloat(staffRow.bonus || 0));
+            const revFund = Math.max(0, (parseFloat(staffRow.unpaid_fund || 0)) - parseFloat(staffRow.fund || 0));
+            batchStatements.push(db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ?, unpaid_fund = ? WHERE id = ?`).bind(revBonus, revFund, staffRow.id));
+          } else if (category === 'Full Time Bonus') {
+            // ၂။ Bonus ထုတ်ပေးသည့်စာရင်းကို ဖျက်ပါက ထုတ်ယူသွားသော ငွေကို စုဆောင်းငွေထဲ ပြန်ပေါင်းပေးသည်
+            const revBonus = (parseFloat(staffRow.unpaid_bonus || 0)) + creditVal;
+            batchStatements.push(db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ? WHERE id = ?`).bind(revBonus, staffRow.id));
+          } else if (category === 'Full Time Fund') {
+            // ၃။ Fund ထုတ်ပေးသည့်စာရင်းကို ဖျက်ပါက ထုတ်ယူသွားသော ငွေကို စုဆောင်းငွေထဲ ပြန်ပေါင်းပေးသည်
+            const revFund = (parseFloat(staffRow.unpaid_fund || 0)) + creditVal;
+            batchStatements.push(db.prepare(`UPDATE staff_fulltime SET unpaid_fund = ? WHERE id = ?`).bind(revFund, staffRow.id));
+          }
+        }
+      }
+    }
+
     // Only delete linked transfer records if it actually was a transfer
     if (existing.transfer || uid.startsWith('TRANS_')) {
       batchStatements.push(
