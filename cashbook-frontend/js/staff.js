@@ -353,7 +353,7 @@ function renderStaffTable(rawData) {
       let staffIdName = String(item.staff_idname || item.staffIdName || '');
       if (!staffIdName || staffIdName === 'undefined') {
         const pId = String(item.staff_id || item.id || (startIndex + idx + 1)).padStart(3, '0');
-        staffIdName = `[FID ${pId}] ${item.name || ''}`;
+        staffIdName = `FID ${pId} ${item.name || ''}`;
       }
       staffIdName = staffIdName.replace(/\.0/g, '');
 
@@ -422,7 +422,7 @@ function renderStaffTable(rawData) {
       let staffIdName = String(item.staff_idname || item.staffIdName || '');
       if (!staffIdName || staffIdName === 'undefined') {
         const pId = String(item.staff_id || item.id || (startIndex + idx + 1)).padStart(3, '0');
-        staffIdName = `[PID ${pId}] ${item.name || ''}`;
+        staffIdName = `PID ${pId} ${item.name || ''}`;
       }
       staffIdName = staffIdName.replace(/\.0/g, '');
 
@@ -870,7 +870,7 @@ function exportToCSVStaff() {
     gStaffData.forEach((r, idx) => {
       const displayNo = parseInt(r.no, 10) || (idx + 1);
       const rawStaffIdName = r.staff_idname || r.staffIdName || r.name || '';
-      const cleanStaffIdName = rawStaffIdName.replace(/\.0/g, '');
+      const cleanStaffIdName = rawStaffIdName.replace(/\.0/g, '').replace(/[\[\]]/g, '').trim();
 
       csv += `${displayNo},` +
         `${safeCsvCell(r.join_date || r.joinDate || '')},` +

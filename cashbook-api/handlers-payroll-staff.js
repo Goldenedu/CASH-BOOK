@@ -238,7 +238,7 @@ export async function saveStaffEntry(db, userSession, body) {
 
     const paddedId = String(staffIdNum).padStart(3, '0');
     const staffName = body.name || '';
-    const staffIdName = `[${prefix} ${paddedId}] ${staffName}`;
+    const staffIdName = `${prefix} ${paddedId} ${staffName}`;
 
     const joinDateVal = body.joinDate || new Date().toISOString().split('T')[0];
     const computedFundDate = body.fundDate || calculateFundDate(joinDateVal);
@@ -319,7 +319,7 @@ export async function updateStaffEntry(db, userSession, body) {
     const staffIdNum = parseInt(body.staffId || body.id, 10) || existing.staff_id || 1;
     const paddedId = String(staffIdNum).padStart(3, '0');
     const staffName = body.name || '';
-    const staffIdName = `[${prefix} ${paddedId}] ${staffName}`;
+    const staffIdName = `${prefix} ${paddedId} ${staffName}`;
 
     const joinDateVal = body.joinDate || new Date().toISOString().split('T')[0];
     const computedFundDate = body.fundDate || calculateFundDate(joinDateVal);
