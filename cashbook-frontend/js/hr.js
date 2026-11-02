@@ -748,6 +748,17 @@ async function deleteHrPayrollEntry(uniqueId) {
     if (response && response.success) {
       if (typeof showToast === 'function') showToast('SUCCESS', 'HR Payroll စာရင်းအား အောင်မြင်စွာ ဖျက်သိမ်းပြီးပါပြီ။');
       if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
+
+      // 🎯 FIX: စာရင်းဖျက်လိုက်ပါက Staff Directory ၏ Bonus/Fund လက်ကျန်အသစ်များကို ချက်ချင်း အသစ်ဆွဲယူသည်
+      localStorage.removeItem('golden_master_staff');
+      gHrStaffFT = [];
+      gHrStaffPT = [];
+      preloadStaffCacheForPayroll();
+
+      if (typeof window.prefetchOfflineMasterData === 'function') {
+        window.prefetchOfflineMasterData(true);
+      }
+
       loadHrPayrollData(false);
     } else {
       if (typeof showToast === 'function') showToast("ERROR", (response ? response.message : "") || "ဖျက်သိမ်းမှု မအောင်မြင်ပါ။");

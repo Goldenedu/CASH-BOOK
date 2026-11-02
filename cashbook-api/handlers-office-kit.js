@@ -652,9 +652,10 @@ export async function deleteExpenseEntry(db, session, body) {
     if (!uniqueid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
 
     // 🛠️ BUGFIX: Precise existing record query (NO 'unit' on kitchen/payroll)
+    // 🛠️ BUGFIX 1: Payroll Query တွင် debit, credit, unpaid_bonus, unpaid_fund များကို မဖြစ်မနေ ထည့်သွင်းဆွဲယူသည်
     let existingQuery = '';
     if (tableName === 'payroll') {
-      existingQuery = `SELECT fy, date, category, description, id, transfer, is_locked, uniqueid FROM payroll WHERE uniqueid = ?`;
+      existingQuery = `SELECT fy, date, category, description, debit, credit, unpaid_bonus, unpaid_fund, id, transfer, is_locked, uniqueid FROM payroll WHERE uniqueid = ?`;
     } else if (tableName === 'office') {
       existingQuery = `SELECT fy, date, category, unit, description, id, transfer, is_locked, uniqueid FROM office WHERE uniqueid = ?`;
     } else { // kitchen
@@ -686,14 +687,13 @@ export async function deleteExpenseEntry(db, session, body) {
     const cashierUid = `UNICASHIER_${uniqueid}`;
     const transferUid = `TRANS_${uniqueid}`;
 
-    // ⚡ Quota-Shield: Start with ONLY the primary table delete
+    // ⚡ Quota-Shield: Primary Table Delete
     const batchStatements = [
       db.prepare(`DELETE FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid)
     ];
 
     const wasUniform = (tableName === 'office') && (existing.category === "Advance Uniform" || existing.category === "Advance Unifrom");
 
-    // Only delete linked uniform records if it actually was uniform
     if (wasUniform) {
       batchStatements.push(
         db.prepare(`DELETE FROM cash WHERE uniqueid = ?`).bind(profitUid),
@@ -703,31 +703,39 @@ export async function deleteExpenseEntry(db, session, body) {
       );
     }
 
-    // 🎯 FIX: HR PAYROLL စာရင်း ဖျက်သိမ်းပါက STAFF LIST ၏ BONUS & FUND အား မူလအတိုင်း ပြန်လည် REVERT ပြုလုပ်ခြင်း
-    // 🎯 HR PAYROLL စာရင်း ဖျက်သိမ်းပါက STAFF LIST ၏ BONUS & FUND အား မူလအတိုင်း ပြန်လည် REVERT ပြုလုပ်ခြင်း
+    // 🎯 BUGFIX 2: HR PAYROLL စာရင်း ဖျက်သိမ်းပါက STAFF LIST ၏ BONUS & FUND အား မူလအတိုင်း ၁၀၀% တိကျစွာ REVERT ပြုလုပ်ခြင်း
     if (tableName === 'payroll') {
-      const staffIdMatch = String(existing.description || '').match(/(?:FID|PID)\s*0*(\d+)/i);
+      // FID, PID, ID စသည့် format အားလုံးမှ Staff ID ဂဏန်းကို အတိအကျ ထုတ်ယူသည်
+      const staffIdMatch = String(existing.description || '').match(/(?:FID|PID|ID|STF)\s*[-:]*\s*(\d+)/i);
       const targetStaffId = staffIdMatch ? parseInt(staffIdMatch[1], 10) : null;
       const creditVal = parseFloat(existing.credit || 0);
-      const category = String(existing.category || '');
+      const catNorm = String(existing.category || '').trim().toLowerCase();
 
       if (targetStaffId) {
-        const staffRow = await db.prepare("SELECT id, unpaid_bonus, unpaid_fund, bonus, fund FROM staff_fulltime WHERE staff_id = ? LIMIT 1").bind(targetStaffId).first();
+        const staffRow = await db.prepare(
+          "SELECT id, unpaid_bonus, unpaid_fund, bonus, fund FROM staff_fulltime WHERE staff_id = ? OR CAST(staff_id AS TEXT) = ? LIMIT 1"
+        ).bind(targetStaffId, String(targetStaffId)).first();
 
         if (staffRow) {
-          if (category === 'Full Time Salary') {
-            // လစာစာရင်းကို ဖျက်ပါက စုဆောင်းငွေထဲ ပေါင်းထည့်ထားသော ၁ လစာ Bonus/Fund ကို ပြန်နုတ်သည်
+          if (catNorm.includes('salary')) {
+            // ၁။ လစာစာရင်းကို ဖျက်ပါက စုဆောင်းငွေထဲ ပေါင်းထည့်ထားသော ၁ လစာ Bonus/Fund ကို ပြန်နုတ်သည်
             const revBonus = Math.max(0, (parseFloat(staffRow.unpaid_bonus || 0)) - parseFloat(staffRow.bonus || 0));
             const revFund = Math.max(0, (parseFloat(staffRow.unpaid_fund || 0)) - parseFloat(staffRow.fund || 0));
-            batchStatements.push(db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ?, unpaid_fund = ? WHERE id = ?`).bind(revBonus, revFund, staffRow.id));
-          } else if (category === 'Full Time Bonus') {
-            // Bonus ထုတ်ပေးသည့်စာရင်းကို ဖျက်ပါက ထုတ်ယူသွားသော Bonus ငွေအားလုံး ဝန်ထမ်းစာရင်းထဲ အပြည့် ပြန်ပေါင်းထည့်ပေးသည်
+            batchStatements.push(
+              db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ?, unpaid_fund = ? WHERE id = ?`).bind(revBonus, revFund, staffRow.id)
+            );
+          } else if (catNorm.includes('bonus')) {
+            // ၂။ Bonus ထုတ်ပေးသည့်စာရင်းကို ဖျက်ပါက ထုတ်ယူသွားသော Bonus ငွေ (creditVal) အားလုံး ဝန်ထမ်းစာရင်းထဲ အပြည့် ပြန်ပေါင်းထည့်ပေးသည်
             const revBonus = (parseFloat(staffRow.unpaid_bonus || 0)) + creditVal;
-            batchStatements.push(db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ? WHERE id = ?`).bind(revBonus, staffRow.id));
-          } else if (category === 'Full Time Fund') {
-            // Fund ထုတ်ပေးသည့်စာရင်းကို ဖျက်ပါက ထုတ်ယူသွားသော Fund ငွေအားလုံး ဝန်ထမ်းစာရင်းထဲ အပြည့် ပြန်ပေါင်းထည့်ပေးသည်
+            batchStatements.push(
+              db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ? WHERE id = ?`).bind(revBonus, staffRow.id)
+            );
+          } else if (catNorm.includes('fund')) {
+            // ၃။ Fund ထုတ်ပေးသည့်စာရင်းကို ဖျက်ပါက ထုတ်ယူသွားသော Fund ငွေ (creditVal) အားလုံး ဝန်ထမ်းစာရင်းထဲ အပြည့် ပြန်ပေါင်းထည့်ပေးသည်
             const revFund = (parseFloat(staffRow.unpaid_fund || 0)) + creditVal;
-            batchStatements.push(db.prepare(`UPDATE staff_fulltime SET unpaid_fund = ? WHERE id = ?`).bind(revFund, staffRow.id));
+            batchStatements.push(
+              db.prepare(`UPDATE staff_fulltime SET unpaid_fund = ? WHERE id = ?`).bind(revFund, staffRow.id)
+            );
           }
         }
       }
@@ -757,7 +765,6 @@ export async function deleteExpenseEntry(db, session, body) {
     // ⚡ Recalculate target book with incremental date
     await recalculateLedgerBalances(db, tableName, targetFy, oldDate);
 
-    // ⚡ Quota-Shield: Recalculate linked uniform tables ONLY if it was uniform
     if (wasUniform) {
       await recalculateLedgerBalances(db, 'cash', targetFy, oldDate);
       await recalculateLedgerBalances(db, 'bank', targetFy, oldDate);
