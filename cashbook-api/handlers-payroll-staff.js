@@ -444,17 +444,26 @@ export async function saveHrPayrollForm(db, userSession, body) {
 
       if (staffRow) {
         if (category === 'Full Time Salary') {
+          // ၁။ လစာထုတ်ချိန်: လစဉ်ရပိုင်ခွင့် Bonus & Fund ကို စုဆောင်းငွေထဲ ထပ်ပေါင်းသည်
           const newUnpaidBonus = (parseFloat(staffRow.unpaid_bonus || 0)) + parseFloat(staffRow.bonus || 0);
           const newUnpaidFund = (parseFloat(staffRow.unpaid_fund || 0)) + parseFloat(staffRow.fund || 0);
-          batchStatements.push(db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ?, unpaid_fund = ? WHERE id = ?`).bind(newUnpaidBonus, newUnpaidFund, staffRow.id));
+          batchStatements.push(
+            db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ?, unpaid_fund = ? WHERE id = ?`).bind(newUnpaidBonus, newUnpaidFund, staffRow.id)
+          );
         } else if (category === 'Full Time Bonus') {
+          // 🎯 ၂။ Bonus အကုန်ထုတ်ပေးချိန်: စုဆောင်းထားသမျှ အားလုံးနုတ်လိုက်သဖြင့် လက်ကျန် 0 ဖြစ်သွားသည်
           const currentBonus = parseFloat(staffRow.unpaid_bonus || 0);
           const newUnpaidBonus = Math.max(0, currentBonus - creditVal);
-          batchStatements.push(db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ? WHERE id = ?`).bind(newUnpaidBonus, staffRow.id));
+          batchStatements.push(
+            db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ? WHERE id = ?`).bind(newUnpaidBonus, staffRow.id)
+          );
         } else if (category === 'Full Time Fund') {
+          // 🎯 ၃။ Fund အကုန်ထုတ်ပေးချိန်: စုဆောင်းထားသမျှ အားလုံးနုတ်လိုက်သဖြင့် လက်ကျန် 0 ဖြစ်သွားသည်
           const currentFund = parseFloat(staffRow.unpaid_fund || 0);
           const newUnpaidFund = Math.max(0, currentFund - creditVal);
-          batchStatements.push(db.prepare(`UPDATE staff_fulltime SET unpaid_fund = ? WHERE id = ?`).bind(newUnpaidFund, staffRow.id));
+          batchStatements.push(
+            db.prepare(`UPDATE staff_fulltime SET unpaid_fund = ? WHERE id = ?`).bind(newUnpaidFund, staffRow.id)
+          );
         }
       }
     }

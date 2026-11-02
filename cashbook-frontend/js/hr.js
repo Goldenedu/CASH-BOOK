@@ -506,26 +506,48 @@ async function onStaffIdChangePayroll() {
   const fallbackMY = `${months[now.getMonth()]}-${String(now.getFullYear()).slice(-2)}`;
   const myStr = !isNaN(dObj.getTime()) ? `${months[dObj.getMonth()]}-${String(dObj.getFullYear()).slice(-2)}` : fallbackMY;
 
-  let creditVal = 0;
-  let bonusFieldVal = 0;
-  let fundFieldVal = 0;
-
   const totalSalaryVal = Number(matchedStaff.total_salary ?? matchedStaff.totalSalary ?? 0);
-  const bonusAmt = Number(matchedStaff.bonus ?? 0);
-  const fundAmt = Number(matchedStaff.fund ?? 0);
-  const unpaidBonus = Number(matchedStaff.unpaid_bonus ?? matchedStaff.unpaidBonus ?? 0);
-  const unpaidFund = Number(matchedStaff.unpaid_fund ?? matchedStaff.unpaidFund ?? 0);
+  const bonusAmt = Number(matchedStaff.bonus ?? 0); // ၁ လစာ ရပိုင်ခွင့်နှုန်း
+  const fundAmt = Number(matchedStaff.fund ?? 0);   // ၁ လစာ ရပိုင်ခွင့်နှုန်း
+  const accruedBonus = Number(matchedStaff.unpaid_bonus ?? matchedStaff.unpaidBonus ?? 0); // စုဆောင်းရရှိထားသော စုစုပေါင်း Bonus
+  const accruedFund = Number(matchedStaff.unpaid_fund ?? matchedStaff.unpaidFund ?? 0);   // စုဆောင်းရရှိထားသော စုစုပေါင်း Fund
+
+  let creditVal = 0;
+  let bonusFieldVal = accruedBonus;
+  let fundFieldVal = accruedFund;
 
   if (category === 'Full Time Salary' || category === 'Part Time Salary') {
+    // ၁။ လစဉ်လစာ ပေးချေခြင်း (လစာငွေ အပြည့်ပေးသည်)
     creditVal = totalSalaryVal;
-    bonusFieldVal = bonusAmt;
-    fundFieldVal = fundAmt;
+    bonusFieldVal = accruedBonus; // လက်ရှိ စုဆောင်းမိထားသော Bonus စုစုပေါင်းကို ပြသသည်
+    fundFieldVal = accruedFund;   // လက်ရှိ စုဆောင်းမိထားသော Fund စုစုပေါင်းကို ပြသသည်
+    if (elCredit) elCredit.readOnly = true;
+
   } else if (category === 'Full Time Bonus' || category === 'Part Time Bonus') {
-    bonusFieldVal = unpaidBonus || bonusAmt;
-    creditVal = bonusFieldVal;
+    // 🎯 ၂။ Bonus ထုတ်ပေးခြင်း: စုဆောင်းရရှိပြီးသမျှ Bonus အားလုံးကို တစ်ခါတည်း အပြေအကျေ ထုတ်ပေးသည်
+    creditVal = accruedBonus;
+    bonusFieldVal = accruedBonus;
+    fundFieldVal = accruedFund;
+
+    // အကယ်၍ ရပိုင်ခွင့် Bonus မရှိသေးပါက အသိပေးခြင်း
+    if (accruedBonus <= 0) {
+      if (typeof showToast === 'function') showToast("WARNING", "ဤဝန်ထမ်းတွင် ထုတ်ယူရန် စုဆောင်းထားသော Bonus လက်ကျန် မရှိသေးပါ။");
+    }
+
+    // 💡 အပြေအကျေ မဟုတ်ဘဲ တစ်စိတ်တစ်ပိုင်းသာ ထုတ်ပေးလိုပါကလည်း ပြင်ဆင်ခွင့်ပြုရန် readOnly ဖြုတ်ပေးသည်
+    if (elCredit) elCredit.readOnly = false;
+
   } else if (category === 'Full Time Fund' || category === 'Part Time Fund') {
-    fundFieldVal = unpaidFund || fundAmt;
-    creditVal = fundFieldVal;
+    // 🎯 ၃။ Fund ထုတ်ပေးခြင်း: စုဆောင်းရရှိပြီးသမျှ Fund အားလုံးကို တစ်ခါတည်း အပြေအကျေ ထုတ်ပေးသည်
+    creditVal = accruedFund;
+    bonusFieldVal = accruedBonus;
+    fundFieldVal = accruedFund;
+
+    if (accruedFund <= 0) {
+      if (typeof showToast === 'function') showToast("WARNING", "ဤဝန်ထမ်းတွင် ထုတ်ယူရန် စုဆောင်းထားသော Fund လက်ကျန် မရှိသေးပါ။");
+    }
+
+    if (elCredit) elCredit.readOnly = false;
   }
 
   if (elCredit) elCredit.value = creditVal;
@@ -538,7 +560,14 @@ async function onStaffIdChangePayroll() {
   const defaultIdStr = `${defaultPrefix} ${String(displayStaffId).padStart(3, '0')} ${staffNameOnly}`;
   const staffDisplayName = matchedStaff.staff_idname || matchedStaff.staffIdName || defaultIdStr;
 
-  if (elDesc) elDesc.value = `[${staffDisplayName}, ${category} ${myStr}]`;
+  // 🎯 Description တွင်လည်း တစ်လစာမဟုတ်ဘဲ Payout အဖြစ် စနစ်တကျ ဖော်ပြသည်
+  if (category.includes('Bonus')) {
+    if (elDesc) elDesc.value = `[${staffDisplayName}, Full Time Bonus Payout (All Accrued) ${myStr}]`;
+  } else if (category.includes('Fund')) {
+    if (elDesc) elDesc.value = `[${staffDisplayName}, Full Time Fund Payout (All Accrued) ${myStr}]`;
+  } else {
+    if (elDesc) elDesc.value = `[${staffDisplayName}, ${category} ${myStr}]`;
+  }
 }
 
 function openAddModalHrPayroll() {
@@ -630,6 +659,12 @@ async function saveHrPayrollForm(e) {
     if (response && response.success) {
       if (typeof showToast === 'function') showToast('SUCCESS', 'HR Payroll စာရင်း အချက်အလက်များ အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။');
       if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
+      
+      // 🎯 FIX: လစာ/Bonus သွင်းပြီးတိုင်း နောက်ဆုံး Bonus & Fund လက်ကျန် အသစ်များကို Cache တွင် ချက်ချင်း Update ပြုလုပ်သည်
+      gHrStaffFT = [];
+      gHrStaffPT = [];
+      preloadStaffCacheForPayroll();
+
       loadHrPayrollData(false);
     } else {
       if (typeof showToast === 'function') showToast("ERROR", (response ? response.message : "") || "သိမ်းဆည်းမှု မအောင်မြင်ပါ။");
