@@ -340,16 +340,11 @@ export async function updateStaffEntry(db, userSession, body) {
         body.phoneNo || '', body.email || '', uniqueid
       ).run();
     } else {
-      // 🎯 FIX 2: UNPAID BONUS & FUND မပျောက်စေရန် Server-Side Guard
-      const finalUnpaidBonus = (body.unpaidBonus !== undefined && body.unpaidBonus !== null && body.unpaidBonus !== '')
-        ? parseFloat(body.unpaidBonus)
-        : parseFloat(existing.unpaid_bonus || 0);
+      // 🎯 FIX: Staff Profile Edit ပြုလုပ်ရာတွင် စုဆောင်းပြီးသား Unpaid Bonus & Fund လက်ကျန်များ မူလအတိုင်း တည်ရှိစေရန် D1 ရှိ existing တန်ဖိုးကို အမြဲတမ်း ဦးစားပေး ထိန်းသိမ်းသည်
+      const finalUnpaidBonus = parseFloat(existing.unpaid_bonus || 0);
+      const finalUnpaidFund = parseFloat(existing.unpaid_fund || 0);
 
-      const finalUnpaidFund = (body.unpaidFund !== undefined && body.unpaidFund !== null && body.unpaidFund !== '')
-        ? parseFloat(body.unpaidFund)
-        : parseFloat(existing.unpaid_fund || 0);
-
-      // 🎯 FIX 3: လစဉ်ခံစားခွင့် BONUS & FUND မပျောက်စေရန် Guard
+      // လစဉ်ခံစားခွင့် BONUS & FUND မပျောက်စေရန် Guard
       let finalBonus = parseFloat(body.bonus || 0);
       if (finalBonus === 0 && parseFloat(existing.bonus || 0) > 0 && !resignedDateVal) {
         finalBonus = parseFloat(existing.bonus || 0);

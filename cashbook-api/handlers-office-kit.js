@@ -767,8 +767,13 @@ export async function deleteExpenseEntry(db, session, body) {
 
         if (staffRow) {
           if (catNorm.includes('salary')) {
-            const revBonus = Math.max(0, (parseFloat(staffRow.unpaid_bonus || 0)) - parseFloat(staffRow.bonus || 0));
-            const revFund = Math.max(0, (parseFloat(staffRow.unpaid_fund || 0)) - parseFloat(staffRow.fund || 0));
+            // 🎯 FIX: staffRow.bonus အစား ဖျက်လိုက်သော payroll record ထဲက အမှန်တကယ် ပေါင်းခဲ့သည့် unpaid_bonus / unpaid_fund ကိုသာ အတိအကျ ပြန်နုတ်သည်
+            const bonusToDeduct = parseFloat(existing.unpaid_bonus || staffRow.bonus || 0);
+            const fundToDeduct = parseFloat(existing.unpaid_fund || staffRow.fund || 0);
+
+            const revBonus = Math.max(0, (parseFloat(staffRow.unpaid_bonus || 0)) - bonusToDeduct);
+            const revFund = Math.max(0, (parseFloat(staffRow.unpaid_fund || 0)) - fundToDeduct);
+
             batchStatements.push(
               db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ?, unpaid_fund = ? WHERE id = ?`).bind(revBonus, revFund, staffRow.id)
             );

@@ -684,9 +684,11 @@ async function saveHrPayrollForm(e) {
       if (typeof showToast === 'function') showToast('SUCCESS', 'HR Payroll စာရင်း အချက်အလက်များ အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။');
       if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
       
-      // 🎯 FIX: လစာ/Bonus သွင်းပြီးတိုင်း နောက်ဆုံး Bonus & Fund လက်ကျန် အသစ်များကို Cache တွင် ချက်ချင်း Update ပြုလုပ်သည်
+      // 🎯 FIX: လစာထုတ်ပြီးပါက Staff Cache များ အားလုံးကိုပါ ချက်ချင်း ရှင်းလင်းပေးသည်
+      localStorage.removeItem('golden_master_staff');
       gHrStaffFT = [];
       gHrStaffPT = [];
+      window.gStaffData = []; // Staff List ၏ Data အား Reset လုပ်သည်
       preloadStaffCacheForPayroll();
 
       loadHrPayrollData(false);
