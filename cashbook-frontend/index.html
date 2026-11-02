@@ -52,6 +52,18 @@
     html.not-authed #erp-workspace {
       display: none;
     }
+
+    html.role-readonly button[onclick*="openAddModal"],
+    html.role-readonly button[onclick*="openItemModal"],
+    html.role-readonly button[onclick*="openWasteModal"],
+    html.role-readonly button[onclick*="openSurplusModal"],
+    html.role-readonly button[onclick*="save"],
+    html.role-readonly #btn-checkout,
+    html.role-readonly .btn-delete,
+    html.role-readonly button[title*="Delete"],
+html.role-readonly button[title*="Edit"] {
+  display: none !important;
+}
   </style>
 
   <link rel="stylesheet" href="css/tailwind.min.css?v=20260808b">

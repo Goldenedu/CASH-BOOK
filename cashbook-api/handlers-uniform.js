@@ -8,7 +8,7 @@
  * ==============================================================================
  */
 
-import { generateUniqueId } from './utils.js';
+import { generateUniqueId, verifyRecordMutationPolicy } from './utils.js';
 
 /**
  * 💡 Fetch Uniform Inventory Data
@@ -189,6 +189,12 @@ export async function updateUniformEntry(db, userSession, body) {
     const whereClause = uniqueid ? "uniqueid = ?" : "id = ?";
     const whereTarget = uniqueid || rowId;
 
+    const recordDate = existing.created_at ? String(existing.created_at).slice(0, 10) : (existing.join_date || null);
+    const policy = verifyRecordMutationPolicy(userSession, recordDate);
+    if (!policy.allowed) {
+      return { success: false, message: policy.message };
+    }
+
     await db.prepare(`UPDATE uniform_ledger SET 
       product_id = ?, product_name = ?, type = ?, size = ?, opening_stock = ?, unit_price = ?, 
       total_amount = ?, selling_price = ?, profit_amount = ?, selling_unit = ?, 
@@ -219,6 +225,9 @@ export async function updateUniformEntry(db, userSession, body) {
 /**
  * 💡 Bulletproof Delete: Deletes by uniqueid OR D1 Row ID
  */
+/**
+ * 💡 Bulletproof Delete: Deletes by uniqueid OR D1 Row ID (Protected with Mutation Policy)
+ */
 export async function deleteUniformEntry(db, userSession, body) {
   try {
     const uniqueid = body.uniqueId || body.uniqueid;
@@ -226,6 +235,21 @@ export async function deleteUniformEntry(db, userSession, body) {
 
     if (!uniqueid && !rowId) {
       return { success: false, message: "Unique ID သို့မဟုတ် Row ID မပါဝင်ပါ။" };
+    }
+
+    // 🎯 Phase 2: မူလ Record ကို ဦးစွာဆွဲယူ၍ ရက်စွဲစစ်ဆေးခြင်း
+    const existing = uniqueid 
+      ? await db.prepare("SELECT id, created_at FROM uniform_ledger WHERE uniqueid = ?").bind(uniqueid).first()
+      : await db.prepare("SELECT id, created_at FROM uniform_ledger WHERE id = ?").bind(rowId).first();
+
+    if (!existing) {
+      return { success: false, message: "ဖျက်သိမ်းမည့် ယူနီဖောင်းမှတ်တမ်း ရှာမတွေ့ပါ။" };
+    }
+
+    const recordDate = existing.created_at ? String(existing.created_at).slice(0, 10) : null;
+    const policy = verifyRecordMutationPolicy(userSession, recordDate);
+    if (!policy.allowed) {
+      return { success: false, message: policy.message };
     }
 
     if (uniqueid) {

@@ -202,13 +202,19 @@ function renderTableIncome() {
     return;
   }
 
+  // 🎯 Phase 3: Row-Level Central Policy Lock (Daily Lock & Friday Exception)
   var isViewer = (localStorage.getItem('golden_user_role') === "Viewer");
 
   tbody.innerHTML = filteredRows.map(function (row) {
     var isPending = Boolean(row.isOfflinePending);
-    var isLocked = Boolean(row.isLocked || isViewer || isPending);
+    var mutation = typeof window.canUserMutateRecord === 'function'
+      ? window.canUserMutateRecord(row.date || row.effDate)
+      : { allowed: true };
+
+    var isPolicyLocked = !mutation.allowed && !isPending;
+    var isLocked = Boolean(row.isLocked || isViewer || isPending || isPolicyLocked);
     var lockClass = isLocked ? "opacity-30 cursor-not-allowed pointer-events-none" : "hover:text-white";
-    var lockTitle = isPending ? "Pending Offline Sync" : (row.isLocked ? "Older than 7 days (Locked)" : "");
+    var lockTitle = isPending ? "Pending Offline Sync" : (isPolicyLocked ? mutation.reason : (row.isLocked ? "Locked" : ""));
     var disabledAttr = isLocked ? 'disabled' : '';
 
     // 🎯 Offline ပုံမှန်မဟုတ်ဘဲ Pending ဖြစ်နေပါက ရွှေဝါရောင် PENDING Badge ဖြင့် ပြသမည်

@@ -28,79 +28,197 @@ import { validateLedgerInput } from './validation.js';
 import * as CanteenPosHandlers from './handlers-canteen-pos.js';
 
 // ==============================================================================
-// 💡 1. DOMAIN-SPECIFIC SERVER-SIDE RBAC PERMISSION MATRIX
+// 💡 1. DOMAIN-SPECIFIC SERVER-SIDE RBAC PERMISSION MATRIX (PHASE 1 UPDATED)
 // ==============================================================================
 const ROLE_PERMS = {
-  // ပင်မ Finance & Executive Roles
-  Owner: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: true, grade_matrix: true, backup_dispatch: true, pos_read: true, pos_write: true, pos_sell: true, pos_admin: true, pos_purchase: true, pos_waste_read: true, pos_waste_write: true, pos_waste_admin: true, pos_surplus_read: true, pos_surplus_write: true, pos_surplus_admin: true, pos_settings_write: true, pos_close: true, canteen_settle: true },
-  Admin: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: true, grade_matrix: true, backup_dispatch: true, pos_read: true, pos_write: true, pos_sell: true, pos_admin: true, pos_purchase: true, pos_waste_read: true, pos_waste_write: true, pos_waste_admin: true, pos_surplus_read: true, pos_surplus_write: true, pos_surplus_admin: true, pos_settings_write: true, pos_close: true, canteen_settle: true },
-  Finance: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: true, pos_read: true, pos_write: true, pos_sell: true, pos_admin: true, pos_purchase: true, pos_waste_read: true, pos_waste_write: true, pos_waste_admin: true, pos_surplus_read: true, pos_surplus_write: true, pos_surplus_admin: true, pos_settings_write: true, pos_close: false, canteen_settle: true },
-  Accountant: { ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, student_read: true, student_write: true, staff_read: true, staff_write: true, uniform_read: true, uniform_write: true, promo_read: true, promo_write: true, report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: true, pos_read: true, pos_write: true, pos_sell: true, pos_admin: true, pos_purchase: true, pos_waste_read: true, pos_waste_write: true, pos_waste_admin: true, pos_surplus_read: true, pos_surplus_write: true, pos_surplus_admin: true, pos_settings_write: true, pos_close: false, canteen_settle: true },
-  
-  // HR & Cashier Sub-Ledgers
-  HR: { ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false, student_read: false, student_write: false, staff_read: true, staff_write: true, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: true, settings_write: false, grade_matrix: true, backup_dispatch: false },
-  "HR Staff": { ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false, student_read: false, student_write: false, staff_read: true, staff_write: true, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: true, settings_write: false, grade_matrix: true, backup_dispatch: false },
-  Cashier: { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: true, uniform_write: false, promo_read: true, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
-  "Main Cashier": { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: true, uniform_write: false, promo_read: true, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
-  
-  // 🛡️ CANTEEN POS ISOLATED ROLES
+  // 🎯 Owner & Viewer: Pure Read-Only (စနစ်တစ်ခုလုံးကို ကြည့်ရှုခွင့်သာရှိပြီး Write/Mutate အားလုံး False)
+  Owner: { 
+    ledger_read: true, ledger_write: false, cashier_read: true, cashier_write: false, 
+    student_read: true, student_write: false, staff_read: true, staff_write: false, 
+    payroll_read: true, payroll_write: false, uniform_read: true, uniform_write: false, 
+    promo_read: true, promo_write: false, report_read: true, settings_write: false, 
+    grade_matrix: false, backup_dispatch: true, pos_read: true, pos_write: false, 
+    pos_sell: false, pos_admin: false, pos_purchase: false, pos_waste_read: true, 
+    pos_waste_write: false, pos_waste_admin: false, pos_surplus_read: true, 
+    pos_surplus_write: false, pos_surplus_admin: false, pos_settings_write: false, 
+    pos_close: false, canteen_settle: false 
+  },
+  Viewer: { 
+    ledger_read: true, ledger_write: false, cashier_read: true, cashier_write: false, 
+    student_read: true, student_write: false, staff_read: true, staff_write: false, 
+    payroll_read: true, payroll_write: false, uniform_read: true, uniform_write: false, 
+    promo_read: true, promo_write: false, report_read: true, settings_write: false, 
+    grade_matrix: false, backup_dispatch: false, pos_read: true, pos_write: false, 
+    pos_sell: false, pos_admin: false, pos_purchase: false, pos_waste_read: true, 
+    pos_waste_write: false, pos_waste_admin: false, pos_surplus_read: true, 
+    pos_surplus_write: false, pos_surplus_admin: false, pos_settings_write: false, 
+    pos_close: false, canteen_settle: false 
+  },
+
+  // 🎯 Admin: စနစ်တစ်ခုလုံး အသစ်သွင်းခွင့်၊ ပြင်ဆင်ခွင့် အပြည့်အဝရှိသည်
+  Admin: { 
+    ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, 
+    student_read: true, student_write: true, staff_read: true, staff_write: true, 
+    payroll_read: true, payroll_write: true, uniform_read: true, uniform_write: true, 
+    promo_read: true, promo_write: true, report_read: true, settings_write: true, 
+    grade_matrix: true, backup_dispatch: true, pos_read: true, pos_write: true, 
+    pos_sell: true, pos_admin: true, pos_purchase: true, pos_waste_read: true, 
+    pos_waste_write: true, pos_waste_admin: true, pos_surplus_read: true, 
+    pos_surplus_write: true, pos_surplus_admin: true, pos_settings_write: true, 
+    pos_close: true, canteen_settle: true 
+  },
+
+  // 🎯 Finance & HR: စနစ်တစ်ခုလုံးကို Read/Write ခွင့်ရှိသည် (Daily Lock ဖြင့်)
+  Finance: { 
+    ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, 
+    student_read: true, student_write: true, staff_read: true, staff_write: true, 
+    payroll_read: true, payroll_write: true, uniform_read: true, uniform_write: true, 
+    promo_read: true, promo_write: true, report_read: true, settings_write: false, 
+    grade_matrix: true, backup_dispatch: true, pos_read: true, pos_write: true, 
+    pos_sell: true, pos_admin: true, pos_purchase: true, pos_waste_read: true, 
+    pos_waste_write: true, pos_waste_admin: true, pos_surplus_read: true, 
+    pos_surplus_write: true, pos_surplus_admin: true, pos_settings_write: true, 
+    pos_close: true, canteen_settle: true 
+  },
+  HR: { 
+    ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, 
+    student_read: true, student_write: true, staff_read: true, staff_write: true, 
+    payroll_read: true, payroll_write: true, uniform_read: true, uniform_write: true, 
+    promo_read: true, promo_write: true, report_read: true, settings_write: false, 
+    grade_matrix: true, backup_dispatch: false, pos_read: true, pos_write: true, 
+    pos_sell: true, pos_admin: false, pos_purchase: true, pos_waste_read: true, 
+    pos_waste_write: true, pos_waste_admin: false, pos_surplus_read: true, 
+    pos_surplus_write: true, pos_surplus_admin: false, pos_settings_write: false, 
+    pos_close: false, canteen_settle: true 
+  },
+  "HR Staff": { 
+    ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, 
+    student_read: true, student_write: true, staff_read: true, staff_write: true, 
+    payroll_read: true, payroll_write: true, uniform_read: true, uniform_write: true, 
+    promo_read: true, promo_write: true, report_read: true, settings_write: false, 
+    grade_matrix: true, backup_dispatch: false, pos_read: true, pos_write: true, 
+    pos_sell: true, pos_admin: false, pos_purchase: true, pos_waste_read: true, 
+    pos_waste_write: true, pos_waste_admin: false, pos_surplus_read: true, 
+    pos_surplus_write: true, pos_surplus_admin: false, pos_settings_write: false, 
+    pos_close: false, canteen_settle: true 
+  },
+
+  // 🎯 Accountant, Cashier, Staff: HR/Staff မှအပ ကျန်စာရင်းအားလုံး Read/Write ရမည် (HR/Staff ဇယားများ လုံးဝ Blocked)
+  Accountant: { 
+    ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, 
+    student_read: true, student_write: true, staff_read: false, staff_write: false, 
+    payroll_read: false, payroll_write: false, uniform_read: true, uniform_write: true, 
+    promo_read: true, promo_write: true, report_read: true, settings_write: false, 
+    grade_matrix: false, backup_dispatch: true, pos_read: true, pos_write: true, 
+    pos_sell: true, pos_admin: true, pos_purchase: true, pos_waste_read: true, 
+    pos_waste_write: true, pos_waste_admin: true, pos_surplus_read: true, 
+    pos_surplus_write: true, pos_surplus_admin: true, pos_settings_write: true, 
+    pos_close: false, canteen_settle: true 
+  },
+  Cashier: { 
+    ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, 
+    student_read: true, student_write: true, staff_read: false, staff_write: false, 
+    payroll_read: false, payroll_write: false, uniform_read: true, uniform_write: true, 
+    promo_read: true, promo_write: true, report_read: true, settings_write: false, 
+    grade_matrix: false, backup_dispatch: false, pos_read: true, pos_write: true, 
+    pos_sell: true, pos_admin: false, pos_purchase: true, pos_waste_read: true, 
+    pos_waste_write: true, pos_waste_admin: false, pos_surplus_read: true, 
+    pos_surplus_write: true, pos_surplus_admin: false, pos_settings_write: false, 
+    pos_close: false, canteen_settle: false 
+  },
+  "Main Cashier": { 
+    ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, 
+    student_read: true, student_write: true, staff_read: false, staff_write: false, 
+    payroll_read: false, payroll_write: false, uniform_read: true, uniform_write: true, 
+    promo_read: true, promo_write: true, report_read: true, settings_write: false, 
+    grade_matrix: false, backup_dispatch: false, pos_read: true, pos_write: true, 
+    pos_sell: true, pos_admin: false, pos_purchase: true, pos_waste_read: true, 
+    pos_waste_write: true, pos_waste_admin: false, pos_surplus_read: true, 
+    pos_surplus_write: true, pos_surplus_admin: false, pos_settings_write: false, 
+    pos_close: false, canteen_settle: false 
+  },
+  Staff: { 
+    ledger_read: true, ledger_write: true, cashier_read: true, cashier_write: true, 
+    student_read: true, student_write: true, staff_read: false, staff_write: false, 
+    payroll_read: false, payroll_write: false, uniform_read: true, uniform_write: true, 
+    promo_read: true, promo_write: true, report_read: true, settings_write: false, 
+    grade_matrix: false, backup_dispatch: false, pos_read: true, pos_write: true, 
+    pos_sell: true, pos_admin: false, pos_purchase: true, pos_waste_read: true, 
+    pos_waste_write: true, pos_waste_admin: false, pos_surplus_read: true, 
+    pos_surplus_write: true, pos_surplus_admin: false, pos_settings_write: false, 
+    pos_close: false, canteen_settle: false 
+  },
+
+  // 🛡️ CANTEEN POS ISOLATED ROLES (မူလအတိုင်း ၁၀၀% မပြောင်းလဲဘဲ ထိန်းသိမ်းထားသည်)
   canteen_admin: { 
     ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false, 
     student_read: true, student_write: false, staff_read: false, staff_write: false, 
-    uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, 
-    report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false,
-    pos_read: true, pos_write: true, pos_sell: true, pos_admin: true, pos_purchase: true, 
-    pos_waste_read: true, pos_waste_write: true, pos_waste_admin: true,
-    pos_surplus_read: true, pos_surplus_write: true, pos_surplus_admin: true,
-    pos_settings_write: true, pos_close: true, canteen_settle: true 
+    payroll_read: false, payroll_write: false, uniform_read: false, uniform_write: false, 
+    promo_read: false, promo_write: false, report_read: false, settings_write: false, 
+    grade_matrix: false, backup_dispatch: false, pos_read: true, pos_write: true, 
+    pos_sell: true, pos_admin: true, pos_purchase: true, pos_waste_read: true, 
+    pos_waste_write: true, pos_waste_admin: true, pos_surplus_read: true, 
+    pos_surplus_write: true, pos_surplus_admin: true, pos_settings_write: true, 
+    pos_close: true, canteen_settle: true 
   },
   canteen_cashier: { 
     ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false, 
     student_read: true, student_write: false, staff_read: false, staff_write: false, 
-    uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, 
-    report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false,
-    pos_read: true, pos_write: true, pos_sell: true, pos_admin: false, pos_purchase: true, 
-    pos_waste_read: true, pos_waste_write: true, pos_waste_admin: false,
-    pos_surplus_read: true, pos_surplus_write: true, pos_surplus_admin: false,
-    pos_settings_write: false, 
-    pos_close: true,       // 🎯 Cashier ဆိုင်ပိတ်ခွင့် ခွင့်ပြုသည်
-    canteen_settle: true   // 🎯 Cashier ညနေစာရင်းရှင်းခွင့် ခွင့်ပြုသည်
+    payroll_read: false, payroll_write: false, uniform_read: false, uniform_write: false, 
+    promo_read: false, promo_write: false, report_read: false, settings_write: false, 
+    grade_matrix: false, backup_dispatch: false, pos_read: true, pos_write: true, 
+    pos_sell: true, pos_admin: false, pos_purchase: true, pos_waste_read: true, 
+    pos_waste_write: true, pos_waste_admin: false, pos_surplus_read: true, 
+    pos_surplus_write: true, pos_surplus_admin: false, pos_settings_write: false, 
+    pos_close: true, canteen_settle: true 
   },
   counter1: { 
     ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false, 
     student_read: true, student_write: false, staff_read: false, staff_write: false, 
-    uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, 
-    report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false,
-    pos_read: true, pos_write: true, pos_sell: true, pos_admin: false, pos_purchase: false, 
-    pos_waste_read: false, pos_waste_write: false, pos_waste_admin: false,
-    pos_surplus_read: false, pos_surplus_write: false, pos_surplus_admin: false,
-    pos_settings_write: false, pos_close: false, canteen_settle: false 
+    payroll_read: false, payroll_write: false, uniform_read: false, uniform_write: false, 
+    promo_read: false, promo_write: false, report_read: false, settings_write: false, 
+    grade_matrix: false, backup_dispatch: false, pos_read: true, pos_write: true, 
+    pos_sell: true, pos_admin: false, pos_purchase: false, pos_waste_read: false, 
+    pos_waste_write: false, pos_waste_admin: false, pos_surplus_read: false, 
+    pos_surplus_write: false, pos_surplus_admin: false, pos_settings_write: false, 
+    pos_close: false, canteen_settle: false 
   },
   counter2: { 
     ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false, 
     student_read: true, student_write: false, staff_read: false, staff_write: false, 
-    uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, 
-    report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false,
-    pos_read: true, pos_write: true, pos_sell: true, pos_admin: false, pos_purchase: false, 
-    pos_waste_read: false, pos_waste_write: false, pos_waste_admin: false,
-    pos_surplus_read: false, pos_surplus_write: false, pos_surplus_admin: false,
-    pos_settings_write: false, pos_close: false, canteen_settle: false 
+    payroll_read: false, payroll_write: false, uniform_read: false, uniform_write: false, 
+    promo_read: false, promo_write: false, report_read: false, settings_write: false, 
+    grade_matrix: false, backup_dispatch: false, pos_read: true, pos_write: true, 
+    pos_sell: true, pos_admin: false, pos_purchase: false, pos_waste_read: false, 
+    pos_waste_write: false, pos_waste_admin: false, pos_surplus_read: false, 
+    pos_surplus_write: false, pos_surplus_admin: false, pos_settings_write: false, 
+    pos_close: false, canteen_settle: false 
   },
   counter3: { 
     ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false, 
     student_read: true, student_write: false, staff_read: false, staff_write: false, 
-    uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, 
-    report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false,
-    pos_read: true, pos_write: true, pos_sell: true, pos_admin: false, pos_purchase: false, 
-    pos_waste_read: false, pos_waste_write: false, pos_waste_admin: false,
-    pos_surplus_read: false, pos_surplus_write: false, pos_surplus_admin: false,
-    pos_settings_write: false, pos_close: false, canteen_settle: false 
+    payroll_read: false, payroll_write: false, uniform_read: false, uniform_write: false, 
+    promo_read: false, promo_write: false, report_read: false, settings_write: false, 
+    grade_matrix: false, backup_dispatch: false, pos_read: true, pos_write: true, 
+    pos_sell: true, pos_admin: false, pos_purchase: false, pos_waste_read: false, 
+    pos_waste_write: false, pos_waste_admin: false, pos_surplus_read: false, 
+    pos_surplus_write: false, pos_surplus_admin: false, pos_settings_write: false, 
+    pos_close: false, canteen_settle: false 
   },
-
-  pm_cashier1: { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
-  pm_cashier2: { ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: false, uniform_write: false, promo_read: false, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
-  Staff: { ledger_read: false, ledger_write: false, cashier_read: false, cashier_write: false, student_read: true, student_write: false, staff_read: false, staff_write: false, uniform_read: true, uniform_write: false, promo_read: true, promo_write: false, report_read: false, settings_write: false, grade_matrix: false, backup_dispatch: false },
-  Viewer: { ledger_read: true, ledger_write: false, cashier_read: true, cashier_write: false, student_read: true, student_write: false, staff_read: true, staff_write: false, uniform_read: true, uniform_write: false, promo_read: true, promo_write: false, report_read: true, settings_write: false, grade_matrix: false, backup_dispatch: false }
+  pm_cashier1: { 
+    ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, 
+    student_read: true, student_write: false, staff_read: false, staff_write: false, 
+    payroll_read: false, payroll_write: false, uniform_read: false, uniform_write: false, 
+    promo_read: false, promo_write: false, report_read: false, settings_write: false, 
+    grade_matrix: false, backup_dispatch: false 
+  },
+  pm_cashier2: { 
+    ledger_read: false, ledger_write: false, cashier_read: true, cashier_write: true, 
+    student_read: true, student_write: false, staff_read: false, staff_write: false, 
+    payroll_read: false, payroll_write: false, uniform_read: false, uniform_write: false, 
+    promo_read: false, promo_write: false, report_read: false, settings_write: false, 
+    grade_matrix: false, backup_dispatch: false 
+  }
 };
 
 // 🎯 Safe Case-Insensitive Role Normalizer & In-Memory RBAC Evaluator (0 D1 Reads)
@@ -634,20 +752,48 @@ export default {
           if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders, "Income Book မှ စာရင်းဖျက်သိမ်းခွင့် မရှိပါ။");
           result = await IncomeHandlers.deleteIncomeEntry(db, userSession, body); break;
 
-        case 'getExpenseData':
-          if (!can(userSession, 'ledger_read') && !can(userSession, 'staff_read')) return forbidden(corsHeaders);
+        case 'getExpenseData': {
+          const rawBook = String(body.bookName || body.book || '').toLowerCase().trim();
+          const isPayrollBook = rawBook.includes('payroll');
+          if (isPayrollBook) {
+            if (!can(userSession, 'payroll_read')) return forbidden(corsHeaders, "HR Payroll စာရင်းအား ကြည့်ရှုခွင့် မရှိပါ။");
+          } else {
+            if (!can(userSession, 'ledger_read')) return forbidden(corsHeaders, "Expense Book ကြည့်ရှုခွင့် မရှိပါ။");
+          }
           result = await OfficeKitHandlers.getExpenseData(db, body); break;
-        case 'saveExpenseEntry':
-          if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders, "Expense Book တွင် စာရင်းသွင်းခွင့် မရှိပါ။");
+        }
+        case 'saveExpenseEntry': {
+          const rawBook = String(body.bookName || body.book || '').toLowerCase().trim();
+          const isPayrollBook = rawBook.includes('payroll');
+          if (isPayrollBook) {
+            if (!can(userSession, 'payroll_write')) return forbidden(corsHeaders, "HR Payroll စာအုပ်တွင် စာရင်းသွင်းခွင့် မရှိပါ။");
+          } else {
+            if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders, "Expense Book တွင် စာရင်းသွင်းခွင့် မရှိပါ။");
+          }
           result = await OfficeKitHandlers.saveExpenseEntry(db, userSession, body); break;
+        }
         case 'updateExpenseEntry':
-        case 'updatePayrollEntry':
-          if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders, "Expense Book တွင် စာရင်းပြင်ဆင်ခွင့် မရှိပါ။");
+        case 'updatePayrollEntry': {
+          const rawBook = String(body.bookName || body.book || '').toLowerCase().trim();
+          const isPayrollBook = rawBook.includes('payroll') || action === 'updatePayrollEntry';
+          if (isPayrollBook) {
+            if (!can(userSession, 'payroll_write')) return forbidden(corsHeaders, "HR Payroll စာရင်း ပြင်ဆင်ခွင့် မရှိပါ။");
+          } else {
+            if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders, "Expense Book တွင် စာရင်းပြင်ဆင်ခွင့် မရှိပါ။");
+          }
           result = await OfficeKitHandlers.updateExpenseEntry(db, userSession, body); break;
+        }
         case 'deleteExpenseEntry':
-        case 'deletePayrollEntry':
-          if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders, "Expense Book မှ စာရင်းဖျက်သိမ်းခွင့် မရှိပါ။");
+        case 'deletePayrollEntry': {
+          const rawBook = String(body.bookName || body.book || '').toLowerCase().trim();
+          const isPayrollBook = rawBook.includes('payroll') || action === 'deletePayrollEntry';
+          if (isPayrollBook) {
+            if (!can(userSession, 'payroll_write')) return forbidden(corsHeaders, "HR Payroll စာရင်း ဖျက်သိမ်းခွင့် မရှိပါ။");
+          } else {
+            if (!can(userSession, 'ledger_write')) return forbidden(corsHeaders, "Expense Book မှ စာရင်းဖျက်သိမ်းခွင့် မရှိပါ။");
+          }
           result = await OfficeKitHandlers.deleteExpenseEntry(db, userSession, body); break;
+        }
 
         case 'getCashierData':
           if (!can(userSession, 'cashier_read')) return forbidden(corsHeaders);
@@ -875,20 +1021,25 @@ export default {
           result = await StudentHandlers.deleteStudentEntry(db, userSession, body); break;
 
         case 'getStaffData':
-          if (!can(userSession, 'staff_read')) return forbidden(corsHeaders);
+          if (!can(userSession, 'staff_read')) return forbidden(corsHeaders, "Staff စာရင်း ကြည့်ရှုခွင့် မရှိပါ။");
           result = await PayrollStaffHandlers.getStaffData(db, body, userSession); break;
         case 'saveStaffEntry':
-          if (!can(userSession, 'staff_write')) return forbidden(corsHeaders, "ဝန်ထမ်းစာရင်း သွင်းယူခွင့် မရှိပါ။");
+          if (!can(userSession, 'staff_write')) return forbidden(corsHeaders, "Staff စာရင်း သွင်းယူခွင့် မရှိပါ။");
           result = await PayrollStaffHandlers.saveStaffEntry(db, userSession, body); break;
         case 'updateStaffEntry':
-          if (!can(userSession, 'staff_write')) return forbidden(corsHeaders, "ဝန်ထမ်းစာရင်း ပြင်ဆင်ခွင့် မရှိပါ။");
+          if (!can(userSession, 'staff_write')) return forbidden(corsHeaders, "Staff စာရင်း ပြင်ဆင်ခွင့် မရှိပါ။");
           result = await PayrollStaffHandlers.updateStaffEntry(db, userSession, body); break;
         case 'deleteStaffEntry':
-          if (!can(userSession, 'staff_write')) return forbidden(corsHeaders, "ဝန်ထမ်းစာရင်း ဖျက်သိမ်းခွင့် မရှိပါ။");
+          if (!can(userSession, 'staff_write')) return forbidden(corsHeaders, "Staff စာရင်း ဖျက်သိမ်းခွင့် မရှိပါ။");
           result = await PayrollStaffHandlers.deleteStaffEntry(db, userSession, body); break;
         case 'saveHrPayrollForm':
-          if (!can(userSession, 'staff_write') && !can(userSession, 'ledger_write')) return forbidden(corsHeaders);
+          if (!can(userSession, 'payroll_write')) return forbidden(corsHeaders, "HR Payroll စာရင်း သွင်းယူခွင့် မရှိပါ။");
           result = await PayrollStaffHandlers.saveHrPayrollForm(db, userSession, body); break;
+
+        // Reports Route များအနက် Staff Fund Report အား payroll_read ဖြင့် ကာကွယ်ခြင်း
+        case 'getFundReportData':
+          if (!can(userSession, 'payroll_read')) return forbidden(corsHeaders, "Staff Fund Report ကြည့်ရှုခွင့် မရှိပါ။");
+          result = await ReportHandlers.getFundReportData(db, body); break;
         case 'getPayrollSettings':
           if (!can(userSession, 'staff_read') && !can(userSession, 'grade_matrix')) return forbidden(corsHeaders, "Salary Grade Matrix ကြည့်ရှုခွင့် မရှိပါ။");
           result = await PayrollStaffHandlers.getPayrollSettings(db, body); break;

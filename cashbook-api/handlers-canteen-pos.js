@@ -27,7 +27,8 @@ import {
   generateVoucherNo,
   generateFyNo,
   recalculateLedgerBalances,
-  getCurrentAcademicYear
+  getCurrentAcademicYear,
+  verifyRecordMutationPolicy
 } from './utils.js';
 
 // ------------------------------------------------------------------------------
@@ -579,8 +580,12 @@ export async function deletePosSurplusEntry(db, session, body) {
     const surplusNo = String(body.surplusNo || "").trim();
     if (!id && !surplusNo) return { success: false, message: "အပိုစာရင်း အချက်အလက် မပါဝင်ပါ။" };
 
-    const existing = await db.prepare("SELECT id, surplus_no, items_json FROM pos_surplus_records WHERE id = ? OR surplus_no = ?").bind(id || 0, surplusNo || "").first();
+    const existing = await db.prepare("SELECT id, surplus_no, date, items_json FROM pos_surplus_records WHERE id = ? OR surplus_no = ?").bind(id || 0, surplusNo || "").first();
     if (!existing) return { success: false, message: "ဖျက်သိမ်းမည့် အပိုစာရင်း ရှာမတွေ့ပါ။" };
+
+    // 🎯 Phase 2: Mutation Policy Check
+    const policy = verifyRecordMutationPolicy(session, existing.date);
+    if (!policy.allowed) return { success: false, message: policy.message };
 
     const batchStatements = [
       db.prepare("DELETE FROM pos_surplus_records WHERE id = ?").bind(existing.id)
@@ -768,8 +773,12 @@ export async function deletePosWasteEntry(db, session, body) {
     const wasteNo = String(body.wasteNo || "").trim();
     if (!id && !wasteNo) return { success: false, message: "အပျက်စာရင်း အချက်အလက် မပါဝင်ပါ။" };
 
-    const existing = await db.prepare("SELECT id, waste_no, items_json FROM pos_waste_records WHERE id = ? OR waste_no = ?").bind(id || 0, wasteNo || "").first();
+    const existing = await db.prepare("SELECT id, waste_no, date, items_json FROM pos_waste_records WHERE id = ? OR waste_no = ?").bind(id || 0, wasteNo || "").first();
     if (!existing) return { success: false, message: "ဖျက်သိမ်းမည့် အပျက်စာရင်း ရှာမတွေ့ပါ။" };
+
+    // 🎯 Phase 2: Mutation Policy Check
+    const policy = verifyRecordMutationPolicy(session, existing.date);
+    if (!policy.allowed) return { success: false, message: policy.message };
 
     const batchStatements = [
       db.prepare("DELETE FROM pos_waste_records WHERE id = ?").bind(existing.id)
@@ -976,8 +985,12 @@ export async function updatePosPurchase(db, session, body) {
     const purchaseNo = String(body.purchaseNo || "").trim();
     if (!id && !purchaseNo) return { success: false, message: "ပြင်ဆင်မည့် အဝယ်စာရင်း ID သို့မဟုတ် PO Number မပါဝင်ပါ။" };
 
-    const existing = await db.prepare("SELECT id, purchase_no, item_barcode, qty, cost_price, selling_price FROM pos_purchases WHERE id = ? OR purchase_no = ?").bind(id || 0, purchaseNo || "").first();
+    const existing = await db.prepare("SELECT id, purchase_no, item_barcode, qty, cost_price, selling_price, date FROM pos_purchases WHERE id = ? OR purchase_no = ?").bind(id || 0, purchaseNo || "").first();
     if (!existing) return { success: false, message: "ပြင်ဆင်မည့် အဝယ်စာရင်း ရှာမတွေ့ပါ။" };
+
+    // 🎯 Phase 2: Mutation Policy Check
+    const policy = verifyRecordMutationPolicy(session, existing.date);
+    if (!policy.allowed) return { success: false, message: policy.message };
 
     const entryDate = getMyanmarDateString(body.date);
     const supplierId = body.supplierId ? parseInt(body.supplierId, 10) : null;
@@ -1028,8 +1041,12 @@ export async function deletePosPurchase(db, session, body) {
     const purchaseNo = String(body.purchaseNo || "").trim();
     if (!id && !purchaseNo) return { success: false, message: "ဖျက်သိမ်းမည့် အဝယ်စာရင်း ID သို့မဟုတ် PO Number မပါဝင်ပါ။" };
 
-    const existing = await db.prepare("SELECT id, purchase_no, item_barcode, qty FROM pos_purchases WHERE id = ? OR purchase_no = ?").bind(id || 0, purchaseNo || "").first();
+    const existing = await db.prepare("SELECT id, purchase_no, item_barcode, qty, date FROM pos_purchases WHERE id = ? OR purchase_no = ?").bind(id || 0, purchaseNo || "").first();
     if (!existing) return { success: false, message: "ဖျက်သိမ်းမည့် အဝယ်စာရင်း ရှာမတွေ့ပါ။" };
+
+    // 🎯 Phase 2: Mutation Policy Check
+    const policy = verifyRecordMutationPolicy(session, existing.date);
+    if (!policy.allowed) return { success: false, message: policy.message };
 
     const rollbackQty = safeAmount(existing.qty);
     const batchStatements = [

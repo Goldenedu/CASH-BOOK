@@ -15,7 +15,8 @@ import {
   getFyShortCode,
   sanitizeFyidStr,
   autoDetectGender,
-  generateUniqueId
+  generateUniqueId,
+  verifyRecordMutationPolicy
 } from './utils.js';
 
 async function generateFyNo(db, tableName, fy) {
@@ -294,6 +295,18 @@ export async function deleteStudentEntry(db, userSession, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
+    // 🎯 Phase 2: မူလရက်စွဲကို ဆွဲယူပြီး Mutation Policy (Daily Lock) စစ်ဆေးခြင်း
+    const existing = await db.prepare("SELECT date FROM student WHERE uniqueid = ?").bind(uniqueid).first();
+    if (!existing) {
+      return { success: false, message: "ဖျက်သိမ်းမည့် ကျောင်းသားမှတ်တမ်း ရှာမတွေ့ပါ။" };
+    }
+
+    const policy = verifyRecordMutationPolicy(userSession, existing.date);
+    if (!policy.allowed) {
+      return { success: false, message: policy.message };
+    }
+
+    // စစ်ဆေးချက် အောင်မြင်မှသာ အမှန်တကယ် ဖျက်သိမ်းမည်
     await db.prepare("DELETE FROM student WHERE uniqueid = ?").bind(uniqueid).run();
 
     return {

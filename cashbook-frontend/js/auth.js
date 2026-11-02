@@ -47,8 +47,9 @@ function onSystemTypeChange() {
     roles.map(r => `<option value="${r.value}">${r.label}</option>`).join('');
 }
 
+
 /**
- * 💡 Central Role-Based Access Control (RBAC) Permission Verifier
+ * 💡 Central Role-Based Access Control (RBAC) Permission Verifier (Phase 3 Updated)
  */
 function hasPermission(permissionName) {
   const role = (window.AppState?.currentUserRole || localStorage.getItem('golden_user_role') || 'Viewer')
@@ -56,31 +57,29 @@ function hasPermission(permissionName) {
     .replace(/\s+/g, ' ');
 
   const PERM_GROUPS = {
-    FULL_ACCESS: ['can_view', 'can_add', 'can_edit', 'can_delete', 'can_manage_grades', 'can_backup', 'pos_admin', 'pos_sell'],
-    FINANCE: ['can_view', 'can_add', 'can_edit', 'can_delete', 'can_backup', 'canteen_settle'],
-    HR: ['can_view', 'can_add', 'can_edit', 'can_delete', 'can_manage_grades'],
-    POS_OPERATOR: ['can_view', 'can_add', 'pos_sell'], // Canteen POS Counters
-    CASHIER_OPERATOR: ['can_view', 'can_add', 'can_edit', 'can_delete'], // PM Cashiers
-    STAFF: ['can_view', 'can_add'],
+    // 🎯 Admin & Full Managers
+    ADMIN_FULL: ['can_view', 'can_add', 'can_edit', 'can_delete', 'can_manage_grades', 'can_backup', 'can_access_hr', 'pos_admin', 'pos_sell', 'canteen_settle'],
+    
+    // 🎯 Finance & HR: စနစ်တစ်ခုလုံး Read/Write (Daily Lock ဖြင့်)
+    ALL_LEDGERS_RW: ['can_view', 'can_add', 'can_edit', 'can_delete', 'can_manage_grades', 'can_access_hr', 'can_backup', 'canteen_settle', 'pos_sell'],
+    
+    // 🎯 Accountant, Cashier, Staff: HR/Staff မှအပ ကျန်စာရင်းအားလုံး Read/Write
+    GENERAL_LEDGERS_RW: ['can_view', 'can_add', 'can_edit', 'can_delete', 'pos_sell'],
+
+    // 🎯 Owner & Viewer: Pure Read-Only
     VIEW_ONLY: ['can_view']
   };
 
   const ROLE_MAP = {
-    'Owner': PERM_GROUPS.FULL_ACCESS,
-    'Admin': PERM_GROUPS.FULL_ACCESS,
-    'canteen_admin': PERM_GROUPS.FULL_ACCESS,
-    'Finance': PERM_GROUPS.FINANCE,
-    'Accountant': PERM_GROUPS.FINANCE,
-    'HR': PERM_GROUPS.HR,
-    'HR Staff': PERM_GROUPS.HR,
-    'Cashier': PERM_GROUPS.CASHIER_OPERATOR,
-    'pm_cashier1': PERM_GROUPS.CASHIER_OPERATOR,
-    'pm_cashier2': PERM_GROUPS.CASHIER_OPERATOR,
-    'canteen_cashier': PERM_GROUPS.POS_OPERATOR,
-    'counter1': PERM_GROUPS.POS_OPERATOR,
-    'counter2': PERM_GROUPS.POS_OPERATOR,
-    'counter3': PERM_GROUPS.POS_OPERATOR,
-    'Staff': PERM_GROUPS.STAFF,
+    'Admin': PERM_GROUPS.ADMIN_FULL,
+    'Finance': PERM_GROUPS.ALL_LEDGERS_RW,
+    'HR': PERM_GROUPS.ALL_LEDGERS_RW,
+    'HR Staff': PERM_GROUPS.ALL_LEDGERS_RW,
+    'Accountant': PERM_GROUPS.GENERAL_LEDGERS_RW,
+    'Cashier': PERM_GROUPS.GENERAL_LEDGERS_RW,
+    'Main Cashier': PERM_GROUPS.GENERAL_LEDGERS_RW,
+    'Staff': PERM_GROUPS.GENERAL_LEDGERS_RW,
+    'Owner': PERM_GROUPS.VIEW_ONLY,
     'Viewer': PERM_GROUPS.VIEW_ONLY
   };
 
@@ -294,32 +293,36 @@ function checkExistingSession() {
 }
 
 /**
- * 💡 Apply Navigation & Button Level Permissions by User Role
+ * 💡 Apply Navigation & Button Level Permissions by User Role (Phase 3 Updated)
  */
 function applyRoleRestrictions() {
   const role = (window.AppState?.currentUserRole || localStorage.getItem('golden_user_role') || 'Viewer').trim();
+  const normRole = role.toLowerCase().replace(/[\s_-]/g, '');
+
   const hrSection = document.getElementById('nav-hr-section');
-  const settingsSection = document.getElementById('nav-settings-section');
+  const btnHr = document.getElementById('btn-hr');
+  const btnStaff = document.getElementById('btn-staff');
 
-  if (settingsSection) {
-    settingsSection.classList.remove('hidden');
-    settingsSection.style.removeProperty('display');
+  // 🎯 ၁။ Accountant, Cashier, Staff များအတွက် HR/Staff Menu များကို လုံးဝ ဖျောက်ချခြင်း
+  const isHrBlocked = ['accountant', 'cashier', 'maincashier', 'staff'].includes(normRole);
+  const isHrAllowed = ['admin', 'owner', 'viewer', 'finance', 'hr', 'hrstaff'].includes(normRole);
+
+  if (isHrBlocked) {
+    if (hrSection) hrSection.classList.add('hidden');
+    if (btnHr) btnHr.classList.add('hidden');
+    if (btnStaff) btnStaff.classList.add('hidden');
+  } else if (isHrAllowed) {
+    if (hrSection) hrSection.classList.remove('hidden');
+    if (btnHr) btnHr.classList.remove('hidden');
+    if (btnStaff) btnStaff.classList.remove('hidden');
   }
 
-  const allowedHrRoles = ["Owner", "Admin", "Finance", "HR", "HR Staff", "HRStaff"];
-  if (hrSection) {
-    if (allowedHrRoles.includes(role)) {
-      hrSection.classList.remove('hidden');
-      hrSection.style.removeProperty('display');
-    } else {
-      hrSection.classList.add('hidden');
-    }
-  }
-
-  const canDelete = hasPermission('can_delete');
-  if (!canDelete) {
+  // 🎯 ၂။ Owner နှင့် Viewer အား Pure Read-Only Mode အဖြစ် Root Class သတ်မှတ်ခြင်း
+  if (normRole === 'owner' || normRole === 'viewer') {
+    document.documentElement.classList.add('role-readonly');
     document.body.classList.add('hide-delete-btn');
   } else {
+    document.documentElement.classList.remove('role-readonly');
     document.body.classList.remove('hide-delete-btn');
   }
 }

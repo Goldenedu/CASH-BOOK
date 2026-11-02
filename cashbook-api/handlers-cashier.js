@@ -17,7 +17,8 @@ import {
   generateFyNo,
   recalculateLedgerBalances,
   generateUniqueId,
-  getCurrentAcademicYear
+  getCurrentAcademicYear,
+  verifyRecordMutationPolicy
 } from './utils.js';
 
 const CASHIER_TABLE_MAP = {
@@ -423,6 +424,12 @@ export async function updateCashierEntry(db, session, body) {
       return { success: false, message: "ပြင်ဆင်မည့် စာရင်း ရှာမတွေ့ပါ။" };
     }
 
+    // 🎯 Phase 2: Mutation Policy Check
+    const policy = verifyRecordMutationPolicy(session, existing.date);
+    if (!policy.allowed) {
+      return { success: false, message: policy.message };
+    }
+
     const uid = String(existing.uniqueid || '');
     const isAutoLocked = Boolean(existing.is_locked) ||
       uid.startsWith('TRANS_') ||
@@ -535,6 +542,12 @@ export async function deleteCashierEntry(db, session, body) {
     const existing = await db.prepare(`SELECT fy, date, transfer, is_locked, uniqueid FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ဖျက်သိမ်းမည့် စာရင်း ရှာမတွေ့ပါ။" };
+    }
+
+    // 🎯 Phase 2: Mutation Policy Check
+    const policy = verifyRecordMutationPolicy(session, existing.date);
+    if (!policy.allowed) {
+      return { success: false, message: policy.message };
     }
 
     const uid = String(existing.uniqueid || '');

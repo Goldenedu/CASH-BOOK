@@ -333,6 +333,15 @@ function renderHrPayrollTable() {
     const unpaidBonus = Number(item.unpaid_bonus ?? item.unpaidBonus ?? 0);
     const unpaidFund = Number(item.unpaid_fund ?? item.unpaidFund ?? 0);
 
+    const mutation = typeof window.canUserMutateRecord === 'function'
+      ? window.canUserMutateRecord(item.date)
+      : { allowed: true };
+
+    const isLocked = !mutation.allowed;
+    const lockClass = isLocked ? "opacity-30 cursor-not-allowed pointer-events-none" : "hover:text-white";
+    const lockTitle = isLocked ? mutation.reason : "";
+    const disabledAttr = isLocked ? 'disabled' : '';
+
     // 🎯 Staff ID column rendering: Non-staff ဖြစ်ပါက ( Normal ) ပြသပြီး၊ ကျန်သည်များအတွက် FID/PID အတိုင်း ပြသသည်
     let rawStaffId = String(item.staffId || item.staff_id || '').trim();
     if (!rawStaffId || rawStaffId === '') {
@@ -363,8 +372,8 @@ function renderHrPayrollTable() {
       <td class="text-center right-0 sticky bg-[#0c1322] border-l border-slate-800 shadow-lg py-3 px-2">
         <div class="flex items-center justify-center gap-2">
           <button onclick="printPayslip('${escapeJsAttr(uid)}')" class="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition" title="Print Payslip"><i class="fa-solid fa-print"></i></button>
-          <button onclick="editHrPayrollEntry('${escapeJsAttr(uid)}')" class="p-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-lg transition" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>
-          <button onclick="deleteHrPayrollEntry('${escapeJsAttr(uid)}')" class="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg transition btn-delete" title="Delete"><i class="fa-solid fa-trash"></i></button>
+          <button onclick="editHrPayrollEntry('${escapeJsAttr(uid)}')" class="p-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-lg transition ${lockClass}" title="Edit ${lockTitle}" ${disabledAttr}><i class="fa-solid fa-pen-to-square"></i></button>
+          <button onclick="deleteHrPayrollEntry('${escapeJsAttr(uid)}')" class="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg transition btn-delete ${lockClass}" title="Delete ${lockTitle}" ${disabledAttr}><i class="fa-solid fa-trash"></i></button>
         </div>
       </td>
     `;

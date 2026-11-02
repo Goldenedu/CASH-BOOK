@@ -155,6 +155,19 @@ async function switchTab(tabId) {
     return;
   }
 
+  // 🎯 Phase 3 Security Guard: Accountant / Cashier / Staff များ HR/Staff သို့ ဝင်ခွင့်မပြုပါ
+  const role = (localStorage.getItem('golden_user_role') || window.AppState?.currentUserRole || '').trim();
+  const normRole = role.toLowerCase().replace(/[\s_-]/g, '');
+  const blockedForGeneral = ['hr', 'staff', 'report-staff-fund'];
+
+  if (['accountant', 'cashier', 'maincashier', 'staff'].includes(normRole) && blockedForGeneral.includes(tabId)) {
+    if (typeof showToast === 'function') {
+      showToast("ERROR", "HR Payroll နှင့် Staff စာရင်းများအား ဝင်ရောက်ကြည့်ရှုခွင့် မရှိပါ။");
+    }
+    switchTab('dashboard');
+    return;
+  }
+
   // 🎯 လက်ရှိ Module ပေါ် ရောက်နေပြီးသားဖြစ်ပါက DOM ကို ဖျက်ချပြီး ပြန်မထည့်စေရ
   if (window.AppState && window.AppState.currentModule === tabId && document.getElementById('view-container')?.firstElementChild) {
     updateSidebarHighlight(tabId);
@@ -936,6 +949,57 @@ window.prefetchOfflineMasterData = async function (force = false) {
   } catch (err) {
     console.warn("[Offline Sync Pre-fetch Warning]:", err.message);
   }
+};
+
+/**
+ * 💡 Central UI Mutation Policy Helper (Phase 3)
+ * Returns { allowed: boolean, reason: string } for row-level Action Buttons
+ */
+window.canUserMutateRecord = function (recordDateStr) {
+  const role = (localStorage.getItem('golden_user_role') || window.AppState?.currentUserRole || 'Viewer').trim();
+  const normRole = role.toLowerCase().replace(/[\s_-]/g, '');
+
+  // ၁။ Owner / Viewer သည် မည်သည့်အခါမျှ ပြင်/ဖျက်ခွင့် မရှိပါ
+  if (normRole === 'owner' || normRole === 'viewer') {
+    return { allowed: false, reason: "Owner နှင့် Viewer သည် Read-Only ဖြစ်သဖြင့် ပြင်ဆင်/ဖျက်သိမ်းခွင့် မရှိပါ" };
+  }
+
+  const todayMmt = typeof window.getMMTDateString === 'function'
+    ? window.getMMTDateString()
+    : new Date(Date.now() + (6.5 * 3600 * 1000)).toISOString().slice(0, 10);
+
+  const cleanDate = recordDateStr ? String(recordDateStr).split('T')[0].trim() : '';
+
+  // ၂။ ယနေ့စာရင်းဖြစ်ပါက ပြင်/ဖျက် ခွင့်ပြုသည်
+  if (cleanDate === todayMmt) {
+    return { allowed: true };
+  }
+
+  // ၃။ Admin အတွက် သောကြာနေ့ ၃၀ ရက် စည်းမျဉ်း
+  if (normRole === 'admin') {
+    const nowMmt = new Date(Date.now() + (6.5 * 3600 * 1000));
+    const isFriday = nowMmt.getUTCDay() === 5; // 5 = Friday
+
+    if (isFriday) {
+      if (cleanDate) {
+        const recTime = new Date(`${cleanDate}T00:00:00Z`).getTime();
+        const todayTime = new Date(`${todayMmt}T00:00:00Z`).getTime();
+        const diffDays = Math.round((todayTime - recTime) / (24 * 3600 * 1000));
+
+        if (diffDays >= 0 && diffDays <= 30) {
+          return { allowed: true };
+        } else if (diffDays > 30) {
+          return { allowed: false, reason: "ရက်ပေါင်း ၃၀ (၁ လ) ကျော်လွန်သွားသဖြင့် ပြင်ဆင်/ဖျက်သိမ်းခွင့် မရှိပါ" };
+        }
+      }
+      return { allowed: true };
+    } else {
+      return { allowed: false, reason: "Admin သည် ရက်စွဲဟောင်းစာရင်းများကို သောကြာနေ့များတွင်သာ ပြင်ဆင်/ဖျက်သိမ်းခွင့် ရှိပါသည် (၁ လအတွင်း)" };
+    }
+  }
+
+  // ၄။ ကျန် Role အားလုံး (Finance, HR, Accountant, Cashier, Staff) သည် Daily Lock ဖြစ်သည်
+  return { allowed: false, reason: "ယနေ့ရက်စွဲမဟုတ်သော စာရင်းဟောင်းများကို ပြင်ဆင်/ဖျက်သိမ်းခွင့် မရှိပါ (Daily Lock)" };
 };
 
 // 💡 EXPOSE GLOBALLY TO WINDOW

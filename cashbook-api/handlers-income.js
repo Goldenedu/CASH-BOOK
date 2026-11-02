@@ -21,7 +21,8 @@ import {
   generateVoucherNo,
   generateFyNo,
   recalculateLedgerBalances,
-  generateUniqueId
+  generateUniqueId,
+  verifyRecordMutationPolicy
 } from './utils.js';
 
 // ==========================================
@@ -612,6 +613,12 @@ export async function updateIncomeEntry(db, session, body) {
       return { success: false, message: "ပြင်ဆင်မည့် ဝင်ငွေစာရင်း ရှာမတွေ့ပါ။" };
     }
 
+    // 🎯 Phase 2: Mutation Policy Check
+    const policy = verifyRecordMutationPolicy(session, existing.date);
+    if (!policy.allowed) {
+      return { success: false, message: policy.message };
+    }
+
     const uid = String(existing.uniqueid || '');
     const isAutoLocked = Boolean(existing.is_locked || existing.isLocked) ||
       uid.startsWith('INCMAIN_') ||
@@ -678,6 +685,12 @@ export async function deleteIncomeEntry(db, session, body) {
     const existing = await db.prepare(`SELECT fy, date, is_locked, uniqueid FROM income WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ပြင်ဆင်မည့် ဝင်ငွေစာရင်း ရှာမတွေ့ပါ။" };
+    }
+
+    // 🎯 Phase 2: Mutation Policy Check
+    const policy = verifyRecordMutationPolicy(session, existing.date);
+    if (!policy.allowed) {
+      return { success: false, message: policy.message };
     }
 
     const uid = String(existing.uniqueid || '');
