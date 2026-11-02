@@ -5,7 +5,8 @@
  * 💡 Features: Safe Standalone Pure Escapers, 1-Row 4-KPI Grid Enforcer,
  *              Precision Gender Counting (Daw/ဒေါ် -> Female),
  *              🎯 2-Line TOTAL NET AMT Table Head (Main Bank Book Style),
- *              🎯 Uniform Add New Entry & Toolbar Buttons Integration
+ *              🎯 Uniform Add New Entry & Toolbar Buttons Integration,
+ *              🛡️ Accrued Unpaid Bonus & Fund Preservation Engine
  * ==============================================================================
  */
 
@@ -183,7 +184,6 @@ function renderStaffTableHead() {
         <th scope="col" class="w-32 text-right py-3 px-2">TOTAL SALARY</th>
         <th scope="col" class="w-24 text-right text-emerald-400 py-3 px-2">BONUS</th>
         <th scope="col" class="w-24 text-right text-teal-400 py-3 px-2">FUND</th>
-        <!-- 🎯 TOTAL NET AMT အား ၂ ကြောင်း အတိအကျ သတ်မှတ်ထားသည် -->
         <th scope="col" class="w-32 text-right text-indigo-400 py-3 px-2 leading-tight min-w-[120px]">TOTAL<br>NET AMT</th>
         <th scope="col" class="w-24 text-center py-3 px-2">STATUS</th>
         <th scope="col" class="w-24 py-3 px-2">GENDER</th>
@@ -205,7 +205,6 @@ function renderStaffTableHead() {
         <th scope="col" class="w-28 py-3 px-2">EDUCATION</th>
         <th scope="col" class="w-36 py-3 px-2">POSITION</th>
         <th scope="col" class="w-32 text-right text-indigo-400 py-3 px-2">TOTAL SALARY</th>
-        <!-- 🎯 TOTAL NET AMT အား ၂ ကြောင်း အတိအကျ သတ်မှတ်ထားသည် -->
         <th scope="col" class="w-36 text-right text-indigo-400 py-3 px-2 leading-tight min-w-[120px]">TOTAL<br>NET AMT</th>
         <th scope="col" class="w-24 text-center py-3 px-2">STATUS</th>
         <th scope="col" class="w-24 py-3 px-2">GENDER</th>
@@ -238,7 +237,6 @@ async function loadStaffData(useCache = false) {
       let femaleCount = 0;
       let netPayroll = 0;
 
-      // 💡 Gender Precision: Daw/ဒေါ် ပါဝင်သော အမည်များကို Female အဖြစ် တိကျစွာ ရေတွက်ခြင်း
       gStaffData.forEach(item => {
         const isResigned = Boolean(item.resigned_date || item.resignedDate);
         const isInactive = String(item.status || '').toLowerCase() === 'inactive' || isResigned;
@@ -525,25 +523,45 @@ function renderGradeDropdownOptions(selectedValue = 'Non') {
   gradeSelect.value = currentVal;
 }
 
-async function populateDropdownsStaff(selectedValue = 'Non') {
+async function populateDropdownsStaff(selectedValue = 'Non', selectedEdu = '', selectedPos = '') {
   await fetchPayrollSettings();
   renderGradeDropdownOptions(selectedValue);
 
   const eduSelect = document.getElementById('staff-education');
   if (eduSelect) {
-    const edus = window.DROPDOWNS?.staffCommon?.education || ["Non", "Phd", "Master", "Degree", "High Graduate", "Middle", "Primary", "High School"];
-    eduSelect.innerHTML = edus.map(e => `<option value="${e}">${e}</option>`).join('');
+    let edus = [...(window.DROPDOWNS?.staffCommon?.education || ["Non", "Phd", "Master", "Degree", "High Graduate", "Middle", "Primary", "High School"])];
+    const cleanEdu = String(selectedEdu || '').trim();
+    if (cleanEdu && cleanEdu !== 'Non' && !edus.some(e => e.toLowerCase() === cleanEdu.toLowerCase())) {
+      edus.push(cleanEdu);
+    }
+    eduSelect.innerHTML = edus.map(e => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`).join('');
+    if (cleanEdu) {
+      const match = edus.find(e => e.toLowerCase() === cleanEdu.toLowerCase());
+      eduSelect.value = match || cleanEdu;
+    } else {
+      eduSelect.value = 'Non';
+    }
   }
 
   const posSelect = document.getElementById('staff-position');
   if (posSelect) {
     let positions = [];
     if (gStaffCategory === 'Full Time') {
-      positions = window.DROPDOWNS?.staffCommon?.fullTimePositions || ["Non", "Admin", "Teacher", "Finance", "Chef"];
+      positions = [...(window.DROPDOWNS?.staffCommon?.fullTimePositions || ["Non", "Admin", "Teacher", "Finance", "Chef"])];
     } else {
-      positions = window.DROPDOWNS?.staffCommon?.partTimePositions || ["Non", "သင်ကြားရေး", "အခြား နည်းပြဆရာ"];
+      positions = [...(window.DROPDOWNS?.staffCommon?.partTimePositions || ["Non", "သင်ကြားရေး", "အခြား နည်းပြဆရာ"])];
     }
-    posSelect.innerHTML = positions.map(p => `<option value="${p}">${p}</option>`).join('');
+    const cleanPos = String(selectedPos || '').trim();
+    if (cleanPos && cleanPos !== 'Non' && !positions.some(p => p.toLowerCase() === cleanPos.toLowerCase())) {
+      positions.push(cleanPos);
+    }
+    posSelect.innerHTML = positions.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+    if (cleanPos) {
+      const match = positions.find(p => p.toLowerCase() === cleanPos.toLowerCase());
+      posSelect.value = match || cleanPos;
+    } else {
+      posSelect.value = 'Non';
+    }
   }
 }
 
@@ -608,6 +626,12 @@ async function openAddModalStaff() {
   const uid = document.getElementById('staff-uniqueId');
   if (uid) uid.value = '';
 
+  // 🎯 Hidden Fields Reset
+  if (document.getElementById('staff-unpaid-bonus')) document.getElementById('staff-unpaid-bonus').value = 0;
+  if (document.getElementById('staff-unpaid-fund')) document.getElementById('staff-unpaid-fund').value = 0;
+  if (document.getElementById('staff-existing-bonus')) document.getElementById('staff-existing-bonus').value = 0;
+  if (document.getElementById('staff-existing-fund')) document.getElementById('staff-existing-fund').value = 0;
+
   const joinDate = document.getElementById('staff-joindate');
   if (joinDate) joinDate.value = new Date().toISOString().slice(0, 10);
 
@@ -665,12 +689,24 @@ async function editStaffEntry(uniqueId) {
   if (document.getElementById('staff-uniqueId')) document.getElementById('staff-uniqueId').value = item.uniqueid || item.uniqueId || '';
   if (document.getElementById('staff-joindate')) document.getElementById('staff-joindate').value = item.join_date || item.joinDate || '';
   if (document.getElementById('staff-name')) document.getElementById('staff-name').value = item.name || '';
-  if (document.getElementById('staff-education')) document.getElementById('staff-education').value = item.education || '';
-  if (document.getElementById('staff-position')) document.getElementById('staff-position').value = item.position || '';
+
+  // 🎯 Accrued Balances & Existing Bonus/Fund Preservation
+  if (document.getElementById('staff-unpaid-bonus')) document.getElementById('staff-unpaid-bonus').value = Number(item.unpaid_bonus ?? item.unpaidBonus ?? 0);
+  if (document.getElementById('staff-unpaid-fund')) document.getElementById('staff-unpaid-fund').value = Number(item.unpaid_fund ?? item.unpaidFund ?? 0);
+  if (document.getElementById('staff-existing-bonus')) document.getElementById('staff-existing-bonus').value = Number(item.bonus ?? 0);
+  if (document.getElementById('staff-existing-fund')) document.getElementById('staff-existing-fund').value = Number(item.fund ?? 0);
+
+  const gradeVal = item.salary_grade || item.salaryGrade || 'Non';
+  const eduVal = item.education || '';
+  const posVal = item.position || '';
+
+  // 🎯 FIX: Dropdown များကို Database ရှိ မူလတန်ဖိုးများအတိုင်း ဦးစွာ Populate လုပ်ပြီး ရွေးချယ်စေသည်
+  await populateDropdownsStaff(gradeVal, eduVal, posVal);
+
+  if (document.getElementById('staff-education')) document.getElementById('staff-education').value = eduVal || 'Non';
+  if (document.getElementById('staff-position')) document.getElementById('staff-position').value = posVal || 'Non';
 
   if (gStaffCategory === 'Full Time') {
-    const gradeVal = item.salary_grade || item.salaryGrade || 'Non';
-    await populateDropdownsStaff(gradeVal);
     if (document.getElementById('staff-grade')) document.getElementById('staff-grade').value = gradeVal;
     if (document.getElementById('staff-working-days')) document.getElementById('staff-working-days').value = item.working_days ?? item.workingDays ?? 26;
     if (document.getElementById('staff-basic')) document.getElementById('staff-basic').value = item.basic_amt ?? item.basicAmt ?? 0;
@@ -701,11 +737,10 @@ async function saveStaffForm(event) {
     return;
   }
 
-  // 💡 အသစ်ထပ်ထည့်ထားသော Salary Grade Validation (Full Time အတွက်သာ)
   if (gStaffCategory === 'Full Time') {
     const gradeVal = document.getElementById('staff-grade')?.value || 'Non';
     if (gradeVal === 'Non') {
-      isStaffSubmitting = false; // Submit လုပ်ခြင်းကို ရပ်တန့်မည်
+      isStaffSubmitting = false;
       if (typeof showToast === 'function') showToast("ERROR", "Salary Grade (လစာအဆင့်) ရွေးချယ်ရန် လိုအပ်ပါသည်။");
       return;
     }
@@ -741,12 +776,21 @@ async function saveStaffForm(event) {
     totalNetAmt = totalSalary;
   }
 
+  const existingUnpaidBonus = parseFloat(document.getElementById('staff-unpaid-bonus')?.value || 0);
+  const existingUnpaidFund = parseFloat(document.getElementById('staff-unpaid-fund')?.value || 0);
+  const existingBonus = parseFloat(document.getElementById('staff-existing-bonus')?.value || 0);
+  const existingFund = parseFloat(document.getElementById('staff-existing-fund')?.value || 0);
+
+  if (bonus === 0 && existingBonus > 0 && !isResigned) bonus = existingBonus;
+  if (fund === 0 && existingFund > 0 && !isResigned) fund = existingFund;
+  totalNetAmt = totalSalary + bonus + fund;
+
   const payload = {
     category: gStaffCategory,
     uniqueId: uid,
     joinDate: document.getElementById('staff-joindate')?.value || '',
     name: staffName,
-    gender: autoDetectGender(staffName), // 👈 ယခင် gender ပြဿနာအတွက် ပြင်ဆင်ချက်
+    gender: autoDetectGender(staffName),
     education: document.getElementById('staff-education')?.value || '',
     position: document.getElementById('staff-position')?.value || '',
     salaryGrade: (gStaffCategory === 'Full Time') ? (document.getElementById('staff-grade')?.value || 'Non') : 'Non',
@@ -757,6 +801,8 @@ async function saveStaffForm(event) {
     bonus: bonus,
     fund: fund,
     totalNetAmt: totalNetAmt,
+    unpaidBonus: existingUnpaidBonus,
+    unpaidFund: existingUnpaidFund,
     nrcNo: document.getElementById('staff-nrc')?.value?.trim() || '',
     bankAccount: document.getElementById('staff-bank')?.value?.trim() || '',
     phoneNo: document.getElementById('staff-phone')?.value?.trim() || '',
@@ -772,6 +818,7 @@ async function saveStaffForm(event) {
       if (typeof showToast === 'function') showToast("SUCCESS", "ဝန်ထမ်း အချက်အလက်များ အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။");
       closeStaffModal();
       if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
+      localStorage.removeItem('golden_master_staff');
       loadStaffData(false);
     } else {
       if (typeof showToast === 'function') showToast("ERROR", res?.message || "သိမ်းဆည်းမှု မအောင်မြင်ပါ။");
@@ -797,6 +844,7 @@ async function deleteStaffEntry(uniqueId) {
     if (res && res.success) {
       if (typeof showToast === 'function') showToast("SUCCESS", "ဝန်ထမ်း မှတ်တမ်းအား အောင်မြင်စွာ ဖျက်သိမ်းပြီးပါပြီ။");
       if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
+      localStorage.removeItem('golden_master_staff');
       loadStaffData(false);
     } else {
       if (typeof showToast === 'function') showToast("ERROR", res?.message || "ဖျက်သိမ်းမှု မအောင်မြင်ပါ။");

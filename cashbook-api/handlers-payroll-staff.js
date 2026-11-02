@@ -7,6 +7,7 @@
  *              🚀 OPTIMIZED: Avoided SELECT *, switched to COUNT(id) for faster scan
  *              🚀 ULTRA-OPTIMIZED: Explicit Column Selects and targeted index lookups
  *              🚀 PHASE 1 (INCREMENTAL RECALC): Passed fromDate to cut 95% of row reads
+ *              🛡️ ACCRUED BONUS & FUND PRESERVATION: Dual-lock preservation on staff update
  * ==============================================================================
  */
 
@@ -214,12 +215,10 @@ export async function saveStaffEntry(db, userSession, body) {
     const isPrivilegedAdmin = ['Owner', 'Admin'].includes(userSession?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport);
 
-    // 🎯 FIX: Frontend (Offline Queue သို့မဟုတ် Client Pre-generated) မှ uniqueId ပါလာပါက အတည်ယူသုံးမည်
     const uniqueid = body.uniqueId
       ? String(body.uniqueId).trim()
       : generateUniqueId('STF');
 
-    // 🛡️ IDEMPOTENCY GUARD: ဤ uniqueid ဖြင့် D1 တွင် စာရင်း ရှိနှင့်ပြီးသားဖြစ်ပါက Duplicate (၂ ကြောင်း) မဖြစ်စေရန် Return ပေးသည်
     const existingCheck = await db.prepare(`SELECT id, staff_id FROM ${table} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (existingCheck && !body.isUpdate && !isMigration) {
       return {
@@ -292,7 +291,7 @@ export async function saveStaffEntry(db, userSession, body) {
 }
 
 /**
- * 💡 Update Staff Record
+ * 💡 Update Staff Record (With Accrued Bonus & Fund Preservation Guard)
  */
 export async function updateStaffEntry(db, userSession, body) {
   try {
@@ -305,7 +304,14 @@ export async function updateStaffEntry(db, userSession, body) {
     const table = isPartTime ? 'staff_parttime' : 'staff_fulltime';
     const prefix = isPartTime ? 'PID' : 'FID';
 
-    const existing = await db.prepare(`SELECT id, staff_id FROM ${table} WHERE uniqueid = ?`).bind(uniqueid).first();
+    // 🎯 FIX 1: မူလရှိပြီးသား bonus, fund, unpaid_bonus, unpaid_fund များကို D1 မှ အတိအကျ ကြိုတင်ဆွဲယူစစ်ဆေးသည်
+    let existing;
+    if (isPartTime) {
+      existing = await db.prepare(`SELECT id, staff_id FROM staff_parttime WHERE uniqueid = ?`).bind(uniqueid).first();
+    } else {
+      existing = await db.prepare(`SELECT id, staff_id, bonus, fund, unpaid_bonus, unpaid_fund FROM staff_fulltime WHERE uniqueid = ?`).bind(uniqueid).first();
+    }
+
     if (!existing) {
       return { success: false, message: "ပြင်ဆင်မည့် ဝန်ထမ်းမှတ်တမ်း ရှာမတွေ့ပါ။" };
     }
@@ -334,6 +340,21 @@ export async function updateStaffEntry(db, userSession, body) {
         body.phoneNo || '', body.email || '', uniqueid
       ).run();
     } else {
+      // 🎯 FIX: Staff Profile Edit ပြုလုပ်ရာတွင် စုဆောင်းပြီးသား Unpaid Bonus & Fund လက်ကျန်များ မူလအတိုင်း တည်ရှိစေရန် D1 ရှိ existing တန်ဖိုးကို အမြဲတမ်း ဦးစားပေး ထိန်းသိမ်းသည်
+      const finalUnpaidBonus = parseFloat(existing.unpaid_bonus || 0);
+      const finalUnpaidFund = parseFloat(existing.unpaid_fund || 0);
+
+      // လစဉ်ခံစားခွင့် BONUS & FUND မပျောက်စေရန် Guard
+      let finalBonus = parseFloat(body.bonus || 0);
+      if (finalBonus === 0 && parseFloat(existing.bonus || 0) > 0 && !resignedDateVal) {
+        finalBonus = parseFloat(existing.bonus || 0);
+      }
+
+      let finalFund = parseFloat(body.fund || 0);
+      if (finalFund === 0 && parseFloat(existing.fund || 0) > 0 && !resignedDateVal) {
+        finalFund = parseFloat(existing.fund || 0);
+      }
+
       await db.prepare(`UPDATE staff_fulltime SET
         join_date = ?, category = ?, staff_id = ?, name = ?, staff_idname = ?,
         education = ?, position = ?, salary_grade = ?, working_days = ?,
@@ -344,9 +365,9 @@ export async function updateStaffEntry(db, userSession, body) {
         joinDateVal, 'Full Time', staffIdNum, staffName, staffIdName,
         body.education || '', body.position || '', body.salaryGrade || '', parseFloat(body.workingDays || 26),
         parseFloat(body.basicAmt || 0), parseFloat(body.extraAmt || 0), parseFloat(body.totalSalary || 0),
-        parseFloat(body.bonus || 0), parseFloat(body.fund || 0), parseFloat(body.totalNetAmt || 0),
+        finalBonus, finalFund, parseFloat(body.totalNetAmt || 0),
         resignedDateVal, computedStatus, body.gender || 'Male', body.nrcNo || '', body.bankAccount || '',
-        body.phoneNo || '', body.email || '', computedFundDate, parseFloat(body.unpaidBonus || 0), parseFloat(body.unpaidFund || 0),
+        body.phoneNo || '', body.email || '', computedFundDate, finalUnpaidBonus, finalUnpaidFund,
         uniqueid
       ).run();
     }
@@ -374,19 +395,17 @@ export async function deleteStaffEntry(db, userSession, body) {
 }
 
 /**
- * 💡 Save HR Payroll Entry (With Atomic Batch Rollback Guard & March Boundary)
+ * 💡 Save HR Payroll Entry (With Atomic Batch Rollback Guard & Staff ID Integration)
  */
 export async function saveHrPayrollForm(db, userSession, body) {
   try {
     const isPrivilegedAdmin = ['Owner', 'Admin'].includes(userSession?.role || '');
     const isMigration = isPrivilegedAdmin && Boolean(body.isMigration || body.directImport);
 
-    // 🎯 FIX 1: Frontend မှ uniqueId ကို အတည်ယူသုံးမည်
     const uniqueid = body.uniqueId
       ? String(body.uniqueId).trim()
       : generateUniqueId('SAL');
 
-    // 🎯 FIX 2: 🛡️ IDEMPOTENCY GUARD: ဤ uniqueid ဖြင့် D1 တွင် စာရင်း ရှိနှင့်ပြီးသားဖြစ်ပါက Duplicate မဖြစ်စေရန် Return ပေးသည်
     const existingCheck = await db.prepare("SELECT id, vr_no FROM payroll WHERE uniqueid = ?").bind(uniqueid).first();
     if (existingCheck && !body.isUpdate && !isMigration) {
       return {
@@ -399,7 +418,24 @@ export async function saveHrPayrollForm(db, userSession, body) {
 
     const dateStr = body.date || new Date().toISOString().split('T')[0];
     const category = body.category || 'Full Time Salary';
-    const staffIdStr = String(body.staffId || '').trim();
+    const rawStaffId = String(body.staffId || '').trim();
+    const isNonStaffCategory = ['Bank Interest', 'Other', 'Opening', 'Closing', 'Transfer'].includes(category);
+
+    // 🎯 STAFF ID & NORMAL TRANSACTION ROUTING
+    let dbStaffId = 'Normal';
+    let targetStaffId = null;
+
+    if (!isNonStaffCategory && rawStaffId && rawStaffId.toLowerCase() !== 'normal') {
+      const numMatch = rawStaffId.match(/\d+/);
+      targetStaffId = numMatch ? parseInt(numMatch[0], 10) : null;
+      const isPartTime = category.toLowerCase().includes('part time');
+      const prefix = isPartTime ? 'PID' : 'FID';
+      if (targetStaffId) {
+        dbStaffId = `${prefix} ${String(targetStaffId).padStart(3, '0')}`;
+      } else {
+        dbStaffId = rawStaffId;
+      }
+    }
 
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const dObj = new Date(dateStr);
@@ -409,7 +445,6 @@ export async function saveHrPayrollForm(db, userSession, body) {
 
     const fy = normalizeFyStr(body.fy, dateStr);
 
-    // 🎯 FIX 3: ယာယီဘောင်ချာ (TEMP- / OFF-) ဖြစ်နေပါက အသုံးမပြုဘဲ D1 မှ နောက်ဆုံးဘောင်ချာကို စစ်၍ SAL-yyMMdd-xxx အသစ် ထုတ်ပေးသည်
     const isTempVr = !body.vrNo || body.isOfflineTempVr || String(body.vrNo).startsWith('TEMP-') || String(body.vrNo).startsWith('OFF-');
     const vrNoVal = (!isTempVr && body.vrNo)
       ? body.vrNo
@@ -423,13 +458,14 @@ export async function saveHrPayrollForm(db, userSession, body) {
     const unpaidBonus = parseFloat(body.unpaidBonus || 0);
     const unpaidFund = parseFloat(body.unpaidFund || 0);
 
+    // 🎯 D1 SCHEMA: staff_id column အသစ် ထည့်သွင်းသိမ်းဆည်းခြင်း (17 Question Marks)
     const sqlVerb = isMigration ? "INSERT OR REPLACE INTO" : "INSERT INTO";
     const expenseStmt = db.prepare(`${sqlVerb} payroll (
-      no, date, category, description, method, debit, credit, balances,
+      no, date, category, staff_id, description, method, debit, credit, balances,
       unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name,
       created_by, created_at, uniqueid
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`).bind(
-      newNo, dateStr, category, body.description || '', body.method || 'Cash',
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`).bind(
+      newNo, dateStr, category, dbStaffId, body.description || '', body.method || 'Cash',
       debitVal, creditVal, unpaidBonus, unpaidFund,
       body.transfer || '', vrNoVal, myVal, fy,
       'HR Payroll Exp Book', userSession?.name || 'Admin', uniqueid
@@ -437,30 +473,34 @@ export async function saveHrPayrollForm(db, userSession, body) {
 
     const batchStatements = [expenseStmt];
 
-    if (!isMigration && staffIdStr) {
-      const targetStaffId = parseInt(staffIdStr, 10);
-      const staffRow = await db.prepare("SELECT id, unpaid_bonus, unpaid_fund, bonus, fund FROM staff_fulltime WHERE staff_id = ? OR id = ? LIMIT 1").bind(targetStaffId, targetStaffId).first();
+    if (!isMigration && targetStaffId) {
+      const staffRow = await db.prepare("SELECT id, unpaid_bonus, unpaid_fund, bonus, fund FROM staff_fulltime WHERE staff_id = ? LIMIT 1").bind(targetStaffId).first();
 
       if (staffRow) {
         if (category === 'Full Time Salary') {
           const newUnpaidBonus = (parseFloat(staffRow.unpaid_bonus || 0)) + parseFloat(staffRow.bonus || 0);
           const newUnpaidFund = (parseFloat(staffRow.unpaid_fund || 0)) + parseFloat(staffRow.fund || 0);
-          batchStatements.push(db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ?, unpaid_fund = ? WHERE id = ?`).bind(newUnpaidBonus, newUnpaidFund, staffRow.id));
+          batchStatements.push(
+            db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ?, unpaid_fund = ? WHERE id = ?`).bind(newUnpaidBonus, newUnpaidFund, staffRow.id)
+          );
         } else if (category === 'Full Time Bonus') {
           const currentBonus = parseFloat(staffRow.unpaid_bonus || 0);
           const newUnpaidBonus = Math.max(0, currentBonus - creditVal);
-          batchStatements.push(db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ? WHERE id = ?`).bind(newUnpaidBonus, staffRow.id));
+          batchStatements.push(
+            db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ? WHERE id = ?`).bind(newUnpaidBonus, staffRow.id)
+          );
         } else if (category === 'Full Time Fund') {
           const currentFund = parseFloat(staffRow.unpaid_fund || 0);
           const newUnpaidFund = Math.max(0, currentFund - creditVal);
-          batchStatements.push(db.prepare(`UPDATE staff_fulltime SET unpaid_fund = ? WHERE id = ?`).bind(newUnpaidFund, staffRow.id));
+          batchStatements.push(
+            db.prepare(`UPDATE staff_fulltime SET unpaid_fund = ? WHERE id = ?`).bind(newUnpaidFund, staffRow.id)
+          );
         }
       }
     }
 
     await db.batch(batchStatements);
 
-    // ⚡ Quota-Shield Recalculate - Incremental Phase 1
     await recalculateLedgerBalances(db, 'payroll', fy, dateStr);
 
     return {

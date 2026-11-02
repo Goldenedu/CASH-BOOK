@@ -319,7 +319,7 @@ function renderHrPayrollTable() {
   const pageItems = gHrPayrollFilteredData.slice(startIndex, endIndex);
 
   if (pageItems.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="14" class="text-center py-8 text-slate-500 font-bold">ရှာဖွေမှုနှင့် ကိုက်ညီသော HR Payroll စာရင်း မရှိပါ။</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="15" class="text-center py-8 text-slate-500 font-bold">ရှာဖွေမှုနှင့် ကိုက်ညီသော HR Payroll စာရင်း မရှိပါ။</td></tr>`;
     updateHrPayrollPaginationInfo(0, 0, 0);
     return;
   }
@@ -333,10 +333,23 @@ function renderHrPayrollTable() {
     const unpaidBonus = Number(item.unpaid_bonus ?? item.unpaidBonus ?? 0);
     const unpaidFund = Number(item.unpaid_fund ?? item.unpaidFund ?? 0);
 
+    // 🎯 Staff ID column rendering: Non-staff ဖြစ်ပါက ( Normal ) ပြသပြီး၊ ကျန်သည်များအတွက် FID/PID အတိုင်း ပြသသည်
+    let rawStaffId = String(item.staffId || item.staff_id || '').trim();
+    if (!rawStaffId || rawStaffId === '') {
+      const matchId = String(item.description || '').match(/(?:FID|PID)\s*0*(\d+)/i);
+      rawStaffId = matchId ? `${matchId[0].slice(0, 3).toUpperCase()} ${matchId[1].padStart(3, '0')}` : 'Normal';
+    }
+
+    const isNormal = !rawStaffId || rawStaffId === 'Normal' || rawStaffId === '( Normal )' || ['Bank Interest', 'Other', 'Opening', 'Closing', 'Transfer'].includes(item.category);
+    const staffIdHtml = isNormal 
+      ? '<span class="font-mono text-slate-400 font-semibold">Normal</span>'
+      : `<span class="font-mono font-bold text-amber-300">${escapeHtml(rawStaffId)}</span>`;
+
     tr.innerHTML = `
       <td class="text-center font-mono font-semibold text-slate-400 py-3 px-2">${displayNo}</td>
       <td class="font-mono py-3 px-2">${escapeHtml(item.date) || '-'}</td>
       <td class="py-3 px-2">${typeof window.formatCategoryBadgeHtml === 'function' ? window.formatCategoryBadgeHtml(item.category) : escapeHtml(item.category)}</td>
+      <td class="text-center py-3 px-2">${staffIdHtml}</td>
       <td class="font-bold text-slate-100 max-w-xs truncate py-3 px-2" title="${escapeHtml(item.description)}">${escapeHtml(item.description) || '-'}</td>
       <td class="font-semibold py-3 px-2">${escapeHtml(item.method) || '-'}</td>
       <td class="text-right font-mono font-bold text-emerald-400 py-3 px-2">${item.debit > 0 ? Number(item.debit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
@@ -355,7 +368,6 @@ function renderHrPayrollTable() {
         </div>
       </td>
     `;
-
     tbody.appendChild(tr);
   });
 
@@ -506,39 +518,78 @@ async function onStaffIdChangePayroll() {
   const fallbackMY = `${months[now.getMonth()]}-${String(now.getFullYear()).slice(-2)}`;
   const myStr = !isNaN(dObj.getTime()) ? `${months[dObj.getMonth()]}-${String(dObj.getFullYear()).slice(-2)}` : fallbackMY;
 
+  const totalSalaryVal = Number(matchedStaff.total_salary ?? matchedStaff.totalSalary ?? 0);
+  
+  // 🎯 ၁။ ဝန်ထမ်း၏ ၁ လစာ ပုံမှန်ခံစားခွင့် Bonus & Fund နှုန်းထား (မရှိပါက Settings မှ Auto တွက်သည်)
+  let bonusAmt = Number(matchedStaff.bonus ?? 0);
+  let fundAmt = Number(matchedStaff.fund ?? 0);
+
+  if (bonusAmt === 0 && window.gPayrollSettings?.bonus) {
+    bonusAmt = Number(window.gPayrollSettings.bonus || 0);
+  }
+  if (fundAmt === 0 && totalSalaryVal > 0) {
+    const fRate = Number(window.gPayrollSettings?.fundRate || 0.05);
+    fundAmt = Math.round(totalSalaryVal * fRate);
+  }
+
+  // 🎯 ၂။ ဝန်ထမ်း စုဆောင်းရရှိထားသော စုစုပေါင်း လက်ကျန် (Accrued Unpaid Balances)
+  const accruedBonus = Number(matchedStaff.unpaid_bonus ?? matchedStaff.unpaidBonus ?? 0);
+  const accruedFund = Number(matchedStaff.unpaid_fund ?? matchedStaff.unpaidFund ?? 0);
+
   let creditVal = 0;
   let bonusFieldVal = 0;
   let fundFieldVal = 0;
 
-  const totalSalaryVal = Number(matchedStaff.total_salary ?? matchedStaff.totalSalary ?? 0);
-  const bonusAmt = Number(matchedStaff.bonus ?? 0);
-  const fundAmt = Number(matchedStaff.fund ?? 0);
-  const unpaidBonus = Number(matchedStaff.unpaid_bonus ?? matchedStaff.unpaidBonus ?? 0);
-  const unpaidFund = Number(matchedStaff.unpaid_fund ?? matchedStaff.unpaidFund ?? 0);
-
   if (category === 'Full Time Salary' || category === 'Part Time Salary') {
+    // 💡 က။ လစဉ်လစာ ပေးချေခြင်း: လစာငွေ အပြည့်ပေးပြီး၊ ယခုလအတွက် ရရှိမည့် လစဉ် Bonus & Fund ကို အလိုအလျောက် ပြသပေးသည်
     creditVal = totalSalaryVal;
-    bonusFieldVal = bonusAmt;
-    fundFieldVal = fundAmt;
+    bonusFieldVal = bonusAmt; // U Ba ရရှိမည့် လစဉ် Bonus ပမာဏ (Auto ပေါ်လာမည်)
+    fundFieldVal = fundAmt;   // U Ba ရရှိမည့် လစဉ် Fund ပမာဏ (Auto ပေါ်လာမည်)
+    if (elCredit) elCredit.readOnly = true;
+
   } else if (category === 'Full Time Bonus' || category === 'Part Time Bonus') {
-    bonusFieldVal = unpaidBonus || bonusAmt;
-    creditVal = bonusFieldVal;
+    // 🎯 ခ။ Bonus ထုတ်ပေးခြင်း: စုဆောင်းရရှိပြီးသမျှ Bonus အားလုံးကို တစ်ခါတည်း အပြေအကျေ အကုန်ထုတ်ပေးသည်
+    creditVal = accruedBonus > 0 ? accruedBonus : bonusAmt;
+    bonusFieldVal = creditVal;
+    fundFieldVal = 0; // Bonus သီးသန့် ထုတ်ပေးခြင်းဖြစ်၍ Fund မပါဝင်ပါ
+
+    if (accruedBonus <= 0) {
+      if (typeof showToast === 'function') showToast("WARNING", "ဤဝန်ထမ်းတွင် ထုတ်ယူရန် စုဆောင်းထားသော Bonus လက်ကျန် မရှိသေးပါ။");
+    }
+
+    // လိုအပ်ပါက လက်ကျန်ထဲမှ တစ်စိတ်တစ်ပိုင်းသာ ခွဲထုတ်နိုင်ရန် readOnly ဖြုတ်ပေးသည်
+    if (elCredit) elCredit.readOnly = false;
+
   } else if (category === 'Full Time Fund' || category === 'Part Time Fund') {
-    fundFieldVal = unpaidFund || fundAmt;
-    creditVal = fundFieldVal;
+    // 🎯 ဂ။ Fund ထုတ်ပေးခြင်း: စုဆောင်းရရှိပြီးသမျှ Fund အားလုံးကို တစ်ခါတည်း အပြေအကျေ အကုန်ထုတ်ပေးသည်
+    creditVal = accruedFund > 0 ? accruedFund : fundAmt;
+    fundFieldVal = creditVal;
+    bonusFieldVal = 0; // Fund သီးသန့် ထုတ်ပေးခြင်းဖြစ်၍ Bonus မပါဝင်ပါ
+
+    if (accruedFund <= 0) {
+      if (typeof showToast === 'function') showToast("WARNING", "ဤဝန်ထမ်းတွင် ထုတ်ယူရန် စုဆောင်းထားသော Fund လက်ကျန် မရှိသေးပါ။");
+    }
+
+    if (elCredit) elCredit.readOnly = false;
   }
 
+  // Input Field များသို့ တန်ဖိုးများ အသီးသီး ထည့်သွင်းခြင်း
   if (elCredit) elCredit.value = creditVal;
   if (elBonus) elBonus.value = bonusFieldVal;
   if (elFund) elFund.value = fundFieldVal;
 
   const defaultPrefix = isPartTime ? 'PID' : 'FID';
-  const staffNameOnly = matchedStaff.name || '';
+  const staffNameOnly = (matchedStaff.name || '').trim();
   const displayStaffId = matchedStaff.staff_id || matchedStaff.staffId || matchedStaff.id || targetIdNum;
-  const defaultIdStr = `${defaultPrefix} ${String(displayStaffId).padStart(3, '0')} ${staffNameOnly}`;
-  const staffDisplayName = matchedStaff.staff_idname || matchedStaff.staffIdName || defaultIdStr;
 
-  if (elDesc) elDesc.value = `[${staffDisplayName}, ${category} ${myStr}]`;
+  // 🎯 NEW DESCRIPTION FORMAT: Name, Salary month-year (No Staff ID, No Full Time/Part Time)
+  let typeLabel = 'Salary';
+  if (category.toLowerCase().includes('bonus')) typeLabel = 'Bonus';
+  else if (category.toLowerCase().includes('fund')) typeLabel = 'Fund';
+
+  if (elDesc) {
+    elDesc.value = `${staffNameOnly}, ${typeLabel}, ${myStr}`;
+  }
 }
 
 function openAddModalHrPayroll() {
@@ -588,10 +639,12 @@ async function saveHrPayrollForm(e) {
   const isNonStaffCategory = ['Bank Interest', 'Other', 'Opening', 'Closing', 'Transfer'].includes(categoryVal);
 
   // ဝန်ထမ်းလစာ ဖြစ်ပါက Staff ID ကို မဖြစ်မနေ တောင်းခံမည်၊ Category အသစ်များအတွက် မလိုပါ
-  if (!isNonStaffCategory && !staffIdVal) {
-    isHrPayrollSubmitting = false;
-    if (typeof showToast === 'function') showToast("ERROR", "ဝန်ထမ်း ID ဖြည့်သွင်းပါ");
-    return;
+  let formattedStaffId = 'Normal';
+  if (!isNonStaffCategory && staffIdVal) {
+    const isPartTime = categoryVal.toLowerCase().includes('part time');
+    const prefix = isPartTime ? 'PID' : 'FID';
+    const numMatch = staffIdVal.match(/\d+/);
+    formattedStaffId = numMatch ? `${prefix} ${String(numMatch[0]).padStart(3, '0')}` : staffIdVal;
   }
 
   // Bank Interest ဖြစ်ပါက Credit (ထုတ်ပေးငွေ) လုံးဝ မရှိစေရဘဲ Debit သာ ခွင့်ပြုမည်
@@ -610,7 +663,7 @@ async function saveHrPayrollForm(e) {
     uniqueId: document.getElementById('hr-pay-uniqueId')?.value || '',
     date: entryDate,
     category: categoryVal,
-    staffId: isNonStaffCategory ? null : staffIdVal, // Non-staff category များအတွက် ID ကို null ပို့မည်
+    staffId: formattedStaffId, // 🎯 Formatted Staff ID ပို့ပေးသည်
     method: document.getElementById('hr-pay-method')?.value || 'Cash',
     debit: debitVal,
     credit: creditVal,
@@ -630,6 +683,14 @@ async function saveHrPayrollForm(e) {
     if (response && response.success) {
       if (typeof showToast === 'function') showToast('SUCCESS', 'HR Payroll စာရင်း အချက်အလက်များ အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။');
       if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
+      
+      // 🎯 FIX: လစာထုတ်ပြီးပါက Staff Cache များ အားလုံးကိုပါ ချက်ချင်း ရှင်းလင်းပေးသည်
+      localStorage.removeItem('golden_master_staff');
+      gHrStaffFT = [];
+      gHrStaffPT = [];
+      window.gStaffData = []; // Staff List ၏ Data အား Reset လုပ်သည်
+      preloadStaffCacheForPayroll();
+
       loadHrPayrollData(false);
     } else {
       if (typeof showToast === 'function') showToast("ERROR", (response ? response.message : "") || "သိမ်းဆည်းမှု မအောင်မြင်ပါ။");
@@ -698,6 +759,17 @@ async function deleteHrPayrollEntry(uniqueId) {
     if (response && response.success) {
       if (typeof showToast === 'function') showToast('SUCCESS', 'HR Payroll စာရင်းအား အောင်မြင်စွာ ဖျက်သိမ်းပြီးပါပြီ။');
       if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
+
+      // 🎯 FIX: စာရင်းဖျက်လိုက်ပါက Staff Directory ၏ Bonus/Fund လက်ကျန်အသစ်များကို ချက်ချင်း အသစ်ဆွဲယူသည်
+      localStorage.removeItem('golden_master_staff');
+      gHrStaffFT = [];
+      gHrStaffPT = [];
+      preloadStaffCacheForPayroll();
+
+      if (typeof window.prefetchOfflineMasterData === 'function') {
+        window.prefetchOfflineMasterData(true);
+      }
+
       loadHrPayrollData(false);
     } else {
       if (typeof showToast === 'function') showToast("ERROR", (response ? response.message : "") || "ဖျက်သိမ်းမှု မအောင်မြင်ပါ။");
@@ -768,7 +840,7 @@ function exportToCSVHrPayroll() {
     return;
   }
 
-  let csv = "NO,DATE,CATEGORY,DESCRIPTION,METHOD,DEBIT,CREDIT,BALANCES,UNPAID BONUS,UNPAID FUND,VR NO,MY,FY\n";
+  let csv = "NO,DATE,CATEGORY,STAFF ID,DESCRIPTION,METHOD,DEBIT,CREDIT,BALANCES,UNPAID BONUS,UNPAID FUND,VR NO,MY,FY\n";
   gHrPayrollData.forEach((r, idx) => {
     let unpaidBonus = r.unpaid_bonus ?? r.unpaidBonus ?? 0;
     let unpaidFund = r.unpaid_fund ?? r.unpaidFund ?? 0;
@@ -777,6 +849,7 @@ function exportToCSVHrPayroll() {
     csv += `${r.no || (idx + 1)},` +
       `${safeCsvCell(r.date || '')},` +
       `${safeCsvCell(r.category || '')},` +
+      `${safeCsvCell(r.staffId || r.staff_id || 'Normal')},` +
       `${safeCsvCell(r.description || '')},` +
       `${safeCsvCell(r.method || '')},` +
       `${r.debit || 0},` +

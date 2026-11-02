@@ -1,5 +1,5 @@
 <!-- views/staff.html (Staff Lists - Full Time / Part Time) -->
-<div class="space-y-4 max-w-[1920px] mx-auto">
+<div class="space-y-2 max-w-[1920px] mx-auto">
 
   <!-- 💡 ၁။ Top KPI Stats Cards Grid (၁ တန်းတည်း ၄ ကွက်) -->
   <div id="staff-kpi-grid" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;"></div>
@@ -99,6 +99,12 @@
 
     <form id="staff-form" onsubmit="saveStaffForm(event)" class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
       <input type="hidden" id="staff-uniqueId">
+      
+      <!-- 🎯 NEW: Existing Accrued Balances Preservation Fields -->
+      <input type="hidden" id="staff-unpaid-bonus" value="0">
+      <input type="hidden" id="staff-unpaid-fund" value="0">
+      <input type="hidden" id="staff-existing-bonus" value="0">
+      <input type="hidden" id="staff-existing-fund" value="0">
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div class="flex flex-col gap-1">

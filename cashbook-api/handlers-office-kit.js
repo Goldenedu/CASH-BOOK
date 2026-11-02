@@ -171,7 +171,7 @@ export async function getExpenseData(db, body) {
     let dataQuery = '';
     if (tableName === 'payroll') {
       dataQuery = `
-        SELECT id, no, date, category, description, method, debit, credit, balances, unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name, is_locked, uniqueid 
+        SELECT id, no, date, category, staff_id, description, method, debit, credit, balances, unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name, is_locked, uniqueid 
         FROM payroll 
         ${whereSql} 
         ORDER BY id DESC 
@@ -209,11 +209,19 @@ export async function getExpenseData(db, body) {
         uid.startsWith('INCMAIN_')
       );
 
+      // 🎯 Staff ID Field Mapping (Legacy fallback ပါ ထည့်သွင်းထားသည်)
+      let staffIdVal = String(row.staff_id || '').trim();
+      if (!staffIdVal || staffIdVal === '') {
+        const descMatch = String(row.description || '').match(/(?:FID|PID)\s*0*(\d+)/i);
+        staffIdVal = descMatch ? `${descMatch[0].slice(0, 3).toUpperCase()} ${descMatch[1].padStart(3, '0')}` : 'Normal';
+      }
+
       return {
         id: row.id,
         no: Math.floor(parseFloat(row.no || row.id || 1)),
         date: row.date || '',
         category: row.category || '',
+        staffId: staffIdVal, // 🎯 Staff ID column ပါဝင်လာမည်
         description: row.description || '',
         unit: parseFloat(row.unit || 0),
         unitPrice: parseFloat(row.unit_price || 0),
@@ -311,12 +319,24 @@ export async function saveExpenseEntry(db, session, body) {
           vrNo, my, fy, rawBook, createdBy, uniqueid
         ).run();
       } else if (tableName === 'payroll') {
+        // 🎯 FIX: batchStatements မဟုတ်ဘဲ တိုက်ရိုက် INSERT OR REPLACE ဖြင့် D1 သို့ Run မည်
+        const staffIdStr = String(body.staffId || '').trim();
+        const isNonStaffCategory = ['Bank Interest', 'Other', 'Opening', 'Closing', 'Transfer'].includes(body.category);
+        let dbStaffId = 'Normal';
+        if (!isNonStaffCategory && staffIdStr && staffIdStr.toLowerCase() !== 'normal') {
+          const numMatch = staffIdStr.match(/\d+/);
+          const targetStaffId = numMatch ? parseInt(numMatch[0], 10) : null;
+          const isPartTime = String(body.category || '').toLowerCase().includes('part time');
+          const prefix = isPartTime ? 'PID' : 'FID';
+          dbStaffId = targetStaffId ? `${prefix} ${String(targetStaffId).padStart(3, '0')}` : staffIdStr;
+        }
+
         await db.prepare(`
           INSERT OR REPLACE INTO payroll (
-            no, date, category, description, method, debit, credit, balances, unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
+            no, date, category, staff_id, description, method, debit, credit, balances, unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
         `).bind(
-          newNo, entryDate, body.category || 'Full Time Salary', body.description || '',
+          newNo, entryDate, body.category || 'Full Time Salary', dbStaffId, body.description || '',
           body.method || 'Cash', debit, credit, parseFloat(body.unpaidBonus || 0), parseFloat(body.unpaidFund || 0),
           body.transfer || '', vrNo, my, fy, rawBook, createdBy, uniqueid
         ).run();
@@ -356,13 +376,25 @@ export async function saveExpenseEntry(db, session, body) {
         )
       );
     } else if (tableName === 'payroll') {
+      // 🎯 FIX: Live Mode တွင်လည်း staff_id ကော်လံ ထည့်သွင်းပေးခြင်း
+      const staffIdStr = String(body.staffId || '').trim();
+      const isNonStaffCategory = ['Bank Interest', 'Other', 'Opening', 'Closing', 'Transfer'].includes(body.category);
+      let dbStaffId = 'Normal';
+      if (!isNonStaffCategory && staffIdStr && staffIdStr.toLowerCase() !== 'normal') {
+        const numMatch = staffIdStr.match(/\d+/);
+        const targetStaffId = numMatch ? parseInt(numMatch[0], 10) : null;
+        const isPartTime = String(body.category || '').toLowerCase().includes('part time');
+        const prefix = isPartTime ? 'PID' : 'FID';
+        dbStaffId = targetStaffId ? `${prefix} ${String(targetStaffId).padStart(3, '0')}` : staffIdStr;
+      }
+
       batchStatements.push(
         db.prepare(`
           INSERT INTO payroll (
-            no, date, category, description, method, debit, credit, balances, unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
+            no, date, category, staff_id, description, method, debit, credit, balances, unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
         `).bind(
-          newNo, entryDate, body.category || 'Full Time Salary', body.description || '',
+          newNo, entryDate, body.category || 'Full Time Salary', dbStaffId, body.description || '',
           body.method || 'Cash', debit, credit, parseFloat(body.unpaidBonus || 0), parseFloat(body.unpaidFund || 0),
           body.transfer || '', vrNo, my, fy, rawBook, createdBy, uniqueid
         )
@@ -553,10 +585,21 @@ export async function updateExpenseEntry(db, session, body) {
         `).bind(entryDate, body.category || 'General', body.description || '', body.method || 'Cash', debit, credit, body.transfer || '', my, fy, uniqueid)
       );
     } else if (tableName === 'payroll') {
+      const staffIdStr = String(body.staffId || '').trim();
+      const isNonStaffCategory = ['Bank Interest', 'Other', 'Opening', 'Closing', 'Transfer'].includes(body.category);
+      let dbStaffId = 'Normal';
+      if (!isNonStaffCategory && staffIdStr && staffIdStr.toLowerCase() !== 'normal') {
+        const numMatch = staffIdStr.match(/\d+/);
+        const targetStaffId = numMatch ? parseInt(numMatch[0], 10) : null;
+        const isPartTime = String(body.category || '').toLowerCase().includes('part time');
+        const prefix = isPartTime ? 'PID' : 'FID';
+        dbStaffId = targetStaffId ? `${prefix} ${String(targetStaffId).padStart(3, '0')}` : staffIdStr;
+      }
+
       batchStatements.push(
         db.prepare(`
-          UPDATE payroll SET date=?, category=?, description=?, method=?, debit=?, credit=?, unpaid_bonus=?, unpaid_fund=?, transfer=?, my=?, fy=? WHERE uniqueid=?
-        `).bind(entryDate, body.category || 'Full Time Salary', body.description || '', body.method || 'Cash', debit, credit, parseFloat(body.unpaidBonus || 0), parseFloat(body.unpaidFund || 0), body.transfer || '', my, fy, uniqueid)
+          UPDATE payroll SET date=?, category=?, staff_id=?, description=?, method=?, debit=?, credit=?, unpaid_bonus=?, unpaid_fund=?, transfer=?, my=?, fy=? WHERE uniqueid=?
+        `).bind(entryDate, body.category || 'Full Time Salary', dbStaffId, body.description || '', body.method || 'Cash', debit, credit, parseFloat(body.unpaidBonus || 0), parseFloat(body.unpaidFund || 0), body.transfer || '', my, fy, uniqueid)
       );
     } else { // office
       batchStatements.push(
@@ -651,10 +694,10 @@ export async function deleteExpenseEntry(db, session, body) {
 
     if (!uniqueid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
 
-    // 🛠️ BUGFIX: Precise existing record query (NO 'unit' on kitchen/payroll)
+    // 🛠️ BUGFIX 1: Payroll Query တွင် debit, credit, unpaid_bonus, unpaid_fund များကို မဖြစ်မနေ ထည့်သွင်းဆွဲယူသည်
     let existingQuery = '';
     if (tableName === 'payroll') {
-      existingQuery = `SELECT fy, date, category, description, id, transfer, is_locked, uniqueid FROM payroll WHERE uniqueid = ?`;
+      existingQuery = `SELECT fy, date, category, staff_id, description, debit, credit, unpaid_bonus, unpaid_fund, id, transfer, is_locked, uniqueid FROM payroll WHERE uniqueid = ?`;
     } else if (tableName === 'office') {
       existingQuery = `SELECT fy, date, category, unit, description, id, transfer, is_locked, uniqueid FROM office WHERE uniqueid = ?`;
     } else { // kitchen
@@ -686,14 +729,13 @@ export async function deleteExpenseEntry(db, session, body) {
     const cashierUid = `UNICASHIER_${uniqueid}`;
     const transferUid = `TRANS_${uniqueid}`;
 
-    // ⚡ Quota-Shield: Start with ONLY the primary table delete
+    // ⚡ Quota-Shield: Primary Table Delete
     const batchStatements = [
       db.prepare(`DELETE FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid)
     ];
 
     const wasUniform = (tableName === 'office') && (existing.category === "Advance Uniform" || existing.category === "Advance Unifrom");
 
-    // Only delete linked uniform records if it actually was uniform
     if (wasUniform) {
       batchStatements.push(
         db.prepare(`DELETE FROM cash WHERE uniqueid = ?`).bind(profitUid),
@@ -701,6 +743,53 @@ export async function deleteExpenseEntry(db, session, body) {
         db.prepare(`DELETE FROM ca_cash WHERE uniqueid = ?`).bind(cashierUid),
         db.prepare(`DELETE FROM ca_bank WHERE uniqueid = ?`).bind(cashierUid)
       );
+    }
+
+    // 🎯 BUGFIX 2: HR PAYROLL စာရင်း ဖျက်သိမ်းပါက STAFF LIST ၏ BONUS & FUND အား မူလအတိုင်း ၁၀၀% တိကျစွာ REVERT ပြုလုပ်ခြင်း
+    if (tableName === 'payroll') {
+      let targetStaffId = null;
+      if (existing.staff_id && existing.staff_id !== 'Normal') {
+        const numMatch = String(existing.staff_id).match(/\d+/);
+        if (numMatch) targetStaffId = parseInt(numMatch[0], 10);
+      }
+      if (!targetStaffId) {
+        const staffIdMatch = String(existing.description || '').match(/(?:FID|PID|ID|STF)\s*[-:]*\s*(\d+)/i);
+        if (staffIdMatch) targetStaffId = parseInt(staffIdMatch[1], 10);
+      }
+
+      const creditVal = parseFloat(existing.credit || 0);
+      const catNorm = String(existing.category || '').trim().toLowerCase();
+
+      if (targetStaffId) {
+        const staffRow = await db.prepare(
+          "SELECT id, unpaid_bonus, unpaid_fund, bonus, fund FROM staff_fulltime WHERE staff_id = ? OR CAST(staff_id AS TEXT) = ? LIMIT 1"
+        ).bind(targetStaffId, String(targetStaffId)).first();
+
+        if (staffRow) {
+          if (catNorm.includes('salary')) {
+            // 🎯 FIX: staffRow.bonus အစား ဖျက်လိုက်သော payroll record ထဲက အမှန်တကယ် ပေါင်းခဲ့သည့် unpaid_bonus / unpaid_fund ကိုသာ အတိအကျ ပြန်နုတ်သည်
+            const bonusToDeduct = parseFloat(existing.unpaid_bonus || staffRow.bonus || 0);
+            const fundToDeduct = parseFloat(existing.unpaid_fund || staffRow.fund || 0);
+
+            const revBonus = Math.max(0, (parseFloat(staffRow.unpaid_bonus || 0)) - bonusToDeduct);
+            const revFund = Math.max(0, (parseFloat(staffRow.unpaid_fund || 0)) - fundToDeduct);
+
+            batchStatements.push(
+              db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ?, unpaid_fund = ? WHERE id = ?`).bind(revBonus, revFund, staffRow.id)
+            );
+          } else if (catNorm.includes('bonus')) {
+            const revBonus = (parseFloat(staffRow.unpaid_bonus || 0)) + creditVal;
+            batchStatements.push(
+              db.prepare(`UPDATE staff_fulltime SET unpaid_bonus = ? WHERE id = ?`).bind(revBonus, staffRow.id)
+            );
+          } else if (catNorm.includes('fund')) {
+            const revFund = (parseFloat(staffRow.unpaid_fund || 0)) + creditVal;
+            batchStatements.push(
+              db.prepare(`UPDATE staff_fulltime SET unpaid_fund = ? WHERE id = ?`).bind(revFund, staffRow.id)
+            );
+          }
+        }
+      }
     }
 
     // Only delete linked transfer records if it actually was a transfer
@@ -727,7 +816,6 @@ export async function deleteExpenseEntry(db, session, body) {
     // ⚡ Recalculate target book with incremental date
     await recalculateLedgerBalances(db, tableName, targetFy, oldDate);
 
-    // ⚡ Quota-Shield: Recalculate linked uniform tables ONLY if it was uniform
     if (wasUniform) {
       await recalculateLedgerBalances(db, 'cash', targetFy, oldDate);
       await recalculateLedgerBalances(db, 'bank', targetFy, oldDate);
