@@ -191,11 +191,7 @@ function renderTableIncome() {
   var fromDate = fromEl ? fromEl.value : '';
   var toDate = toEl ? toEl.value : '';
 
-  // 📶 Merge D1 Active Data with Local Offline Pending Queue
-  var pendingQueue = window.OfflineSync ? window.OfflineSync.getQueue() : [];
-  var combinedData = [...pendingQueue.map(item => ({ ...item.payload, isOfflinePending: true })), ...incomeActiveData];
-
-  var filteredRows = filterIncomeData(combinedData, searchVal, fromDate, toDate);
+  var filteredRows = filterIncomeData(incomeActiveData, searchVal, fromDate, toDate);
 
   if (!filteredRows || filteredRows.length === 0) {
     tbody.innerHTML = '<tr><td colspan="19" class="text-center py-8 text-slate-500 font-bold">ရှာဖွေမှုနှင့် ကိုက်ညီသော ဝင်ငွေစာရင်း မရှိပါ။</td></tr>';
@@ -619,18 +615,6 @@ async function saveIncomeForm(e) {
 
   try {
     closeIncomeModal();
-
-    // 📶 OFFLINE INTERCEPTOR: အင်တာနက်လိုင်း မရှိပါက D1 သို့ မပို့ဘဲ Offline Queue သို့ ချက်ချင်းသိမ်းဆည်းသည်
-    if (!navigator.onLine && window.OfflineSync) {
-      await window.OfflineSync.enqueue('saveIncomeEntry', payload, 'POST');
-      if (typeof showToast === 'function') {
-        showToast("SUCCESS", "📶 အင်တာနက်လိုင်း မရှိသေးသဖြင့် စက်ထဲတွင် ယာယီသိမ်းဆည်းထားပါသည် (Offline Queue)။");
-      }
-      renderTableIncome();
-      isIncomeSubmitting = false;
-      return;
-    }
-
     if (typeof toggleLoading === 'function') toggleLoading(true);
 
     var actionName = payload.uniqueId ? 'updateIncomeEntry' : 'saveIncomeEntry';
@@ -643,14 +627,7 @@ async function saveIncomeForm(e) {
       throw new Error(res?.message || "သိမ်းဆည်းမှု မအောင်မြင်ပါ။");
     }
   } catch (err) {
-    // Network Error ကြောင့် ကျရှုံးပါကလည်း Offline Queue သို့ အလိုအလျောက် ပို့ဆောင်ပေးမည်
-    if (window.OfflineSync) {
-      await window.OfflineSync.enqueue('saveIncomeEntry', payload, 'POST');
-      if (typeof showToast === 'function') {
-        showToast("SUCCESS", "📶 ဆာဗာချိတ်ဆက်၍ မရသဖြင့် စက်ထဲတွင် ယာယီသိမ်းဆည်းထားပါသည် (Offline Mode)။");
-      }
-      renderTableIncome();
-    } else if (typeof showToast === 'function') {
+    if (typeof showToast === 'function') {
       showToast("ERROR", "မအောင်မြင်ပါ: " + err.message);
     }
   } finally {

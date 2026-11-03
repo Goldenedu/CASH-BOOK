@@ -313,15 +313,15 @@ export async function updateStaffEntry(db, userSession, body) {
       existing = await db.prepare(`SELECT id, staff_id, bonus, fund, unpaid_bonus, unpaid_fund FROM staff_fulltime WHERE uniqueid = ?`).bind(uniqueid).first();
     }
 
+    if (!existing) {
+      return { success: false, message: "ပြင်ဆင်မည့် ဝန်ထမ်းမှတ်တမ်း ရှာမတွေ့ပါ။" };
+    }
+
     const recordDate = existing.created_at ? String(existing.created_at).slice(0, 10) : (existing.join_date || null);
     // 🎯 Master Directory အဖြစ် true ထည့်သွင်းခြင်း (Admin, Finance, HR တို့အတွက် Daily Lock ကင်းလွတ်သည်)
     const policy = verifyRecordMutationPolicy(userSession, recordDate, true);
     if (!policy.allowed) {
       return { success: false, message: policy.message };
-    }
-
-    if (!existing) {
-      return { success: false, message: "ပြင်ဆင်မည့် ဝန်ထမ်းမှတ်တမ်း ရှာမတွေ့ပါ။" };
     }
 
     const staffIdNum = parseInt(body.staffId || body.id, 10) || existing.staff_id || 1;

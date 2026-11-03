@@ -159,16 +159,30 @@ export async function updateUniformEntry(db, userSession, body) {
       return { success: false, message: "Unique ID သို့မဟုတ် Row ID မပါဝင်ပါ။" };
     }
 
-    // 1. Fetch Existing Record to prevent wiping selling_unit
+    // 1. Fetch Existing Record (created_at ပါ မဖြစ်မနေ ထည့်သွင်းဆွဲယူသည်)
     // 🚀 Separate Exact Index Lookups (No OR scanning)
+    const selectCols = "opening_stock, selling_unit, unit_price, selling_price, product_id, product_name, type, size, created_at";
     const existing = uniqueid
-      ? await db.prepare(`SELECT opening_stock, selling_unit, unit_price, selling_price, product_id, product_name, type, size FROM uniform_ledger WHERE uniqueid = ? LIMIT 1`).bind(uniqueid).first()
-      : await db.prepare(`SELECT opening_stock, selling_unit, unit_price, selling_price, product_id, product_name, type, size FROM uniform_ledger WHERE id = ? LIMIT 1`).bind(rowId).first();
+      ? await db.prepare(`SELECT ${selectCols} FROM uniform_ledger WHERE uniqueid = ? LIMIT 1`).bind(uniqueid).first()
+      : await db.prepare(`SELECT ${selectCols} FROM uniform_ledger WHERE id = ? LIMIT 1`).bind(rowId).first();
 
-    const existingSellingUnit = existing ? parseFloat(existing.selling_unit || 0) : 0;
-    const openingStock = parseFloat(body.openingStock ?? body.opening_stock ?? (existing ? existing.opening_stock : 0));
-    const unitPrice = parseFloat(body.unitPrice ?? body.unit_price ?? (existing ? existing.unit_price : 0));
-    const sellingPrice = parseFloat(body.sellingPrice ?? body.selling_price ?? (existing ? existing.selling_price : 0));
+    // 2. 🛡️ Record မရှိပါက ချက်ချင်း တန်းထွက်မည် (Early Return)
+    if (!existing) {
+      return { success: false, message: "ပြင်ဆင်မည့် ယူနီဖောင်းမှတ်တမ်း ရှာမတွေ့ပါ။" };
+    }
+
+    // 3. 🎯 Mutation Policy စစ်ဆေးခြင်း (Master Directory အဖြစ် true ထည့်ထားသည်)
+    const recordDate = existing.created_at ? String(existing.created_at).slice(0, 10) : null;
+    const policy = verifyRecordMutationPolicy(userSession, recordDate, true);
+    if (!policy.allowed) {
+      return { success: false, message: policy.message };
+    }
+
+    // 4. လက်ကျန်တန်ဖိုးများနှင့် ဈေးနှုန်းများ ပြန်လည်တွက်ချက်ခြင်း
+    const existingSellingUnit = parseFloat(existing.selling_unit || 0);
+    const openingStock = parseFloat(body.openingStock ?? body.opening_stock ?? existing.opening_stock ?? 0);
+    const unitPrice = parseFloat(body.unitPrice ?? body.unit_price ?? existing.unit_price ?? 0);
+    const sellingPrice = parseFloat(body.sellingPrice ?? body.selling_price ?? existing.selling_price ?? 0);
 
     // Preserve selling_unit if not explicitly provided in update payload
     let sellingUnit = existingSellingUnit;
@@ -184,26 +198,21 @@ export async function updateUniformEntry(db, userSession, body) {
     const totalStockValue = currentQty * unitPrice;
 
     const rawPid = body.productId || body.product_id;
-    const productIdVal = rawPid ? String(rawPid).trim() : (existing ? existing.product_id : '');
+    const productIdVal = rawPid ? String(rawPid).trim() : (existing.product_id || '');
 
     const whereClause = uniqueid ? "uniqueid = ?" : "id = ?";
     const whereTarget = uniqueid || rowId;
 
-    const recordDate = existing.created_at ? String(existing.created_at).slice(0, 10) : null;
-    const policy = verifyRecordMutationPolicy(userSession, recordDate, true);
-    if (!policy.allowed) {
-      return { success: false, message: policy.message };
-    }
-
+    // 5. UPDATE Run ခြင်း
     await db.prepare(`UPDATE uniform_ledger SET 
       product_id = ?, product_name = ?, type = ?, size = ?, opening_stock = ?, unit_price = ?, 
       total_amount = ?, selling_price = ?, profit_amount = ?, selling_unit = ?, 
       current_qty = ?, total_stock_value = ? 
       WHERE ${whereClause}`).bind(
       productIdVal,
-      body.productName || body.product_name || (existing ? existing.product_name : ''),
-      body.type || (existing ? existing.type : ''),
-      body.size || (existing ? existing.size : ''),
+      body.productName || body.product_name || existing.product_name || '',
+      body.type || existing.type || '',
+      body.size || existing.size || '',
       openingStock,
       unitPrice,
       totalAmount,

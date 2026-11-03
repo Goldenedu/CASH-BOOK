@@ -992,6 +992,13 @@
   <script src="js/canteen/canteen-inventory.js"></script>
   <script src="js/canteen/canteen-waste.js"></script>
   <script src="js/canteen/canteen-closing.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('./sw.js').catch(function () { });
+      });
+    }
+  </script>
 </body>
 
 </html>

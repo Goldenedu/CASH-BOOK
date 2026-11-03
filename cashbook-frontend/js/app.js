@@ -79,15 +79,6 @@ function initApp() {
     window.prefetchCoreModules();
   }
 
-  // 🎯 FORCE PREFETCH MASTER DATA: Login ဝင်ချိန်တွင် Offline အတွက် ကျောင်းသားစာရင်းကို နောက်ခံတွင် အတင်းအကျပ် ဆွဲယူသိမ်းဆည်းပေးသည်
-  if (navigator.onLine && typeof window.prefetchOfflineMasterData === 'function') {
-    window.prefetchOfflineMasterData(true); // force = true ဖြင့် ခေါ်မည်
-  }
-
-  if (typeof window.updatePendingUI === 'function') {
-    window.updatePendingUI();
-  }
-
   let currentTab = window.AppState ? window.AppState.currentModule : null;
 
   if (!currentTab) {
