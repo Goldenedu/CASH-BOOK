@@ -1,18 +1,17 @@
 /**
  * ==============================================================================
  * GOLDEN ERP SYSTEM - PROGRESSIVE WEB APP (PWA) SERVICE WORKER
- * File: sw.js (Location: cashbook-frontend/sw.js - Enterprise V9.7 Bulletproof Edition)
+ * File: sw.js (Location: cashbook-frontend/sw.js - Enterprise V9.8 Cloudflare Pages Fix)
  * 💡 Features:
- *   1. 🔄 AUTO CACHE PURGE: Bumped to v2026.11.03-fix to purge broken navigation caches
- *   2. 🚀 REDIRECT-SAFE NAVIGATION: Passes request.url to follow Cloudflare redirects cleanly
- *   3. 🎯 PAGE-SPECIFIC OFFLINE FALLBACK: No infinite loop (canteen-pos and pm-cashier have isolated fallbacks)
- *   4. 🛡️ ZERO ERR_FAILED CRASH: Opaque redirects are never returned to navigation requests
- *   5. ⚡ STALE-WHILE-REVALIDATE: 0ms Instant offline access for static assets
+ *   1. 🛡️ CLOUDFLARE PAGES 308 REDIRECT UNWRAPPER: Strips response.redirected flag
+ *      via cleanRedirectResponse() to permanently eliminate Chrome ERR_FAILED!
+ *   2. 🔄 AUTO CACHE PURGE: Bumped to v2026.11.04-cf-fix to clear old redirected caches
+ *   3. 🎯 PAGE-SPECIFIC OFFLINE FALLBACK: Supports canteen-pos, pm-cashier & index
+ *   4. ⚡ STALE-WHILE-REVALIDATE: 0ms Instant offline access for all static assets
  * ==============================================================================
  */
 
-// 🎯 Version Bump: Cache အသစ်ပြောင်းလဲပြီး Chrome ရှိ မူလ Error ဖြစ်နေသော Cache အဟောင်းများကို ချက်ချင်း အပြီးတိုင်ရှင်းထုတ်မည်
-const CACHE_NAME = 'golden-erp-cache-v2026.11.03-fix';
+const CACHE_NAME = 'golden-erp-cache-v2026.11.04-cf-fix';
 
 // 💡 အော့ဖ်လိုင်းသုံးနိုင်ရန် စက်ထဲ ကြိုတင်သိမ်းဆည်းမည့် ဖိုင်များအားလုံး
 const PRECACHE_ASSETS = [
@@ -34,7 +33,6 @@ const PRECACHE_ASSETS = [
 
   // 💡 3. CORE APPLICATION SCRIPTS
   './js/config.js',
-  './js/offline-sync.js',
   './js/api.js',
   './js/auth.js',
   './js/bank-cash.js',
@@ -59,8 +57,8 @@ const PRECACHE_ASSETS = [
   './views/office-kit.html',
   './views/cashier.html',
   './views/hr.html',
-  './views/staff.html',
   './views/student.html',
+  './views/staff.html',
   './views/student-money.html',
   './views/uniform.html',
   './views/promotion.html',
@@ -80,16 +78,39 @@ const PRECACHE_ASSETS = [
 ];
 
 /**
- * 💡 1. Install Event - Parallel Fault-Tolerant Pre-caching
+ * 🛡️ CRITICAL HELPER: Cloudflare Pages ၏ 308 Redirect ကြောင့် ကပ်ပါလာသော
+ * `response.redirected = true` အား Chrome က ERR_FAILED မပစ်စေရန် အသစ်ပြန်ထုပ်ပိုးပေးခြင်း
+ */
+async function cleanRedirectResponse(response) {
+  if (!response) return response;
+  if (!response.redirected) return response;
+
+  const body = await response.blob();
+  const headers = new Headers(response.headers);
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: headers
+  });
+}
+
+/**
+ * 💡 1. Install Event - Redirect-Safe Pre-caching
  */
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return Promise.all(
-        PRECACHE_ASSETS.map(asset => {
-          return cache.add(asset).catch(err => {
+        PRECACHE_ASSETS.map(async (asset) => {
+          try {
+            const res = await fetch(asset, { redirect: 'follow' });
+            if (res && res.status === 200) {
+              const cleanRes = await cleanRedirectResponse(res);
+              await cache.put(asset, cleanRes);
+            }
+          } catch (err) {
             console.warn(`[Service Worker] Warning caching ${asset}:`, err.message);
-          });
+          }
         })
       );
     }).then(() => self.skipWaiting())
@@ -143,44 +164,41 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       (async () => {
         const pathname = url.pathname.toLowerCase();
+        const cache = await caches.open(CACHE_NAME);
 
-        // ၁။ Network-First: request အစား request.url (String) ဖြင့် fetch ခေါ်ယူပါသည်
-        // (ထိုမှသာ Cloudflare Pages ၏ 308/301 Redirect များကို အမှားမဖြစ်ဘဲ ချောမွေ့စွာ follow သွားနိုင်ပါမည်)
+        // ၁။ Network-First with Redirect Unwrapping
         try {
-          const networkResponse = await fetch(request.url);
+          const networkResponse = await fetch(request.url, { redirect: 'follow' });
           if (networkResponse && networkResponse.status === 200) {
-            const cache = await caches.open(CACHE_NAME);
-            cache.put(request, networkResponse.clone()).catch(() => { });
-            return networkResponse;
+            const cleanRes = await cleanRedirectResponse(networkResponse);
+            cache.put(request, cleanRes.clone()).catch(() => { });
+            return cleanRes;
           }
         } catch (netErr) {
           console.warn('[Service Worker] Network navigation failed, using offline fallback:', netErr.message);
         }
 
-        // ၂။ အင်တာနက်မရှိချိန် (Offline) ဖြစ်ပါက သက်ဆိုင်ရာ စာမျက်နှာအလိုက် သီးခြား Cache မှ ထုတ်ပေးခြင်း
-        const cache = await caches.open(CACHE_NAME);
-
-        // 🎯 Canteen POS ဖြစ်ပါက canteen-pos.html သီးသန့် ပြန်ထုတ်ပေးမည် (index.html သို့ လုံးဝ မလွှဲပါ)
+        // ၂။ Offline Fallback (သက်ဆိုင်ရာ စာမျက်နှာအလိုက် သီးခြား Cache မှ ထုတ်ပေးခြင်း)
         if (pathname.includes('canteen-pos')) {
-          const posMatch = (await cache.match('./canteen-pos.html')) ||
-            (await cache.match('/canteen-pos.html')) ||
-            (await cache.match('canteen-pos.html'));
-          if (posMatch) return posMatch;
+          const posMatch = (await cache.match('./canteen-pos.html', { ignoreSearch: true })) ||
+            (await cache.match('/canteen-pos.html', { ignoreSearch: true })) ||
+            (await cache.match('/canteen-pos', { ignoreSearch: true })) ||
+            (await cache.match(request, { ignoreSearch: true }));
+          if (posMatch) return await cleanRedirectResponse(posMatch);
         }
 
-        // 🎯 PM Cashier ဖြစ်ပါက pm-cashier.html သီးသန့် ပြန်ထုတ်ပေးမည်
         if (pathname.includes('pm-cashier')) {
-          const pmMatch = (await cache.match('./pm-cashier.html')) ||
-            (await cache.match('/pm-cashier.html')) ||
-            (await cache.match('pm-cashier.html'));
-          if (pmMatch) return pmMatch;
+          const pmMatch = (await cache.match('./pm-cashier.html', { ignoreSearch: true })) ||
+            (await cache.match('/pm-cashier.html', { ignoreSearch: true })) ||
+            (await cache.match('/pm-cashier', { ignoreSearch: true })) ||
+            (await cache.match(request, { ignoreSearch: true }));
+          if (pmMatch) return await cleanRedirectResponse(pmMatch);
         }
 
-        // 🎯 ပင်မ ERP စာမျက်နှာ ဖြစ်ပါက index.html ပြန်ထုတ်ပေးမည်
-        const indexMatch = (await cache.match('./index.html')) ||
-          (await cache.match('/index.html')) ||
-          (await cache.match('./'));
-        if (indexMatch) return indexMatch;
+        const indexMatch = (await cache.match('./index.html', { ignoreSearch: true })) ||
+          (await cache.match('/index.html', { ignoreSearch: true })) ||
+          (await cache.match('./', { ignoreSearch: true }));
+        if (indexMatch) return await cleanRedirectResponse(indexMatch);
 
         return new Response('Offline - Page not found in cache', {
           status: 503,
@@ -199,14 +217,16 @@ self.addEventListener('fetch', (event) => {
       const cache = await caches.open(CACHE_NAME);
       const cachedResponse = await cache.match(request, { ignoreSearch: true });
 
-      const fetchPromise = fetch(request)
-        .then((networkResponse) => {
+      const fetchPromise = fetch(request, { redirect: 'follow' })
+        .then(async (networkResponse) => {
           if (
             networkResponse &&
             networkResponse.status === 200 &&
             (networkResponse.type === 'basic' || networkResponse.type === 'cors')
           ) {
-            cache.put(request, networkResponse.clone()).catch(() => { });
+            const cleanRes = await cleanRedirectResponse(networkResponse);
+            cache.put(request, cleanRes.clone()).catch(() => { });
+            return cleanRes;
           }
           return networkResponse;
         })
@@ -214,7 +234,7 @@ self.addEventListener('fetch', (event) => {
 
       if (cachedResponse) {
         event.waitUntil(fetchPromise);
-        return cachedResponse;
+        return await cleanRedirectResponse(cachedResponse);
       }
 
       const networkResponse = await fetchPromise;
