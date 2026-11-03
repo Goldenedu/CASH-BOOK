@@ -3,16 +3,16 @@
  * GOLDEN ERP SYSTEM - PROGRESSIVE WEB APP (PWA) SERVICE WORKER
  * File: sw.js (Location: cashbook-frontend/sw.js - Enterprise V9.7 Bulletproof Edition)
  * 💡 Features:
- *   1. 🔄 AUTO CACHE PURGE: Bumped to v2026.11.03 to purge broken navigation caches
- *   2. 🚀 REDIRECT-SAFE NAVIGATION: Passes request.url to follow Cloudflare 308 redirects cleanly
- *   3. 🎯 PAGE-SPECIFIC OFFLINE FALLBACK: No infinite loop (canteen-pos and pm-cashier have own fallbacks)
+ *   1. 🔄 AUTO CACHE PURGE: Bumped to v2026.11.03-fix to purge broken navigation caches
+ *   2. 🚀 REDIRECT-SAFE NAVIGATION: Passes request.url to follow Cloudflare redirects cleanly
+ *   3. 🎯 PAGE-SPECIFIC OFFLINE FALLBACK: No infinite loop (canteen-pos and pm-cashier have isolated fallbacks)
  *   4. 🛡️ ZERO ERR_FAILED CRASH: Opaque redirects are never returned to navigation requests
  *   5. ⚡ STALE-WHILE-REVALIDATE: 0ms Instant offline access for static assets
  * ==============================================================================
  */
 
-// 🎯 Version Bump: Cache အသစ်ပြောင်းပြီး Chrome ရှိ မူလ Error ဖြစ်နေသော Cache အဟောင်းများကို ချက်ချင်း အပြီးတိုင်ရှင်းထုတ်မည်
-const CACHE_NAME = 'golden-erp-cache-v2026.11.03';
+// 🎯 Version Bump: Cache အသစ်ပြောင်းလဲပြီး Chrome ရှိ မူလ Error ဖြစ်နေသော Cache အဟောင်းများကို ချက်ချင်း အပြီးတိုင်ရှင်းထုတ်မည်
+const CACHE_NAME = 'golden-erp-cache-v2026.11.03-fix';
 
 // 💡 အော့ဖ်လိုင်းသုံးနိုင်ရန် စက်ထဲ ကြိုတင်သိမ်းဆည်းမည့် ဖိုင်များအားလုံး
 const PRECACHE_ASSETS = [
@@ -83,7 +83,6 @@ const PRECACHE_ASSETS = [
  * 💡 1. Install Event - Parallel Fault-Tolerant Pre-caching
  */
 self.addEventListener('install', (event) => {
-  console.log('[Service Worker] Installing & Pre-caching All Assets...');
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return Promise.all(
@@ -101,7 +100,6 @@ self.addEventListener('install', (event) => {
  * 💡 2. Activate Event - Clean Old Cache Versions & Claim Clients Instantly
  */
 self.addEventListener('activate', (event) => {
-  console.log('[Service Worker] Activating & Purging Stale Caches...');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -162,7 +160,7 @@ self.addEventListener('fetch', (event) => {
         // ၂။ အင်တာနက်မရှိချိန် (Offline) ဖြစ်ပါက သက်ဆိုင်ရာ စာမျက်နှာအလိုက် သီးခြား Cache မှ ထုတ်ပေးခြင်း
         const cache = await caches.open(CACHE_NAME);
 
-        // 🎯 Canteen POS ဖြစ်ပါက canteen-pos.html သီးသန့် ပြန်ထုတ်ပေးမည် (index.html သို့ မလွှဲပါ)
+        // 🎯 Canteen POS ဖြစ်ပါက canteen-pos.html သီးသန့် ပြန်ထုတ်ပေးမည် (index.html သို့ လုံးဝ မလွှဲပါ)
         if (pathname.includes('canteen-pos')) {
           const posMatch = (await cache.match('./canteen-pos.html')) ||
             (await cache.match('/canteen-pos.html')) ||
