@@ -1542,11 +1542,48 @@ export async function checkoutPosSale(db, session, body) {
     const paymentMethod = String(body.paymentMethod || 'Student Pocket Money').trim();
     const isWallet = (paymentMethod === 'Student Pocket Money');
     const studentId = parseInt(body.studentId, 10) || null;
-    const totalAmount = safeAmount(body.totalAmount);
-    const totalCost = safeAmount(body.totalCost);
-    const netProfit = Math.round((totalAmount - totalCost) * 100) / 100;
-    const itemsSummary = String(body.itemsSummary || "").trim();
     const stockDeductions = Array.isArray(body.stockDeductions) ? body.stockDeductions : [];
+
+    // 🛡️ SERVER-SIDE PRICE & STOCK VERIFICATION
+    let totalAmount = 0;
+    let totalCost = 0;
+    const verifiedSummaryParts = [];
+
+    if (stockDeductions.length > 0) {
+      const barcodes = stockDeductions.map(i => String(i.barcode || "").trim()).filter(Boolean);
+      if (barcodes.length > 0) {
+        const placeholders = barcodes.map(() => '?').join(',');
+        const dbItemsRes = await db.prepare(
+          `SELECT barcode, item_name, selling_price, cost_price, current_stock FROM pos_items_master WHERE barcode IN (${placeholders})`
+        ).bind(...barcodes).all();
+        const itemMap = new Map((dbItemsRes.results || []).map(r => [r.barcode, r]));
+
+        for (const reqItem of stockDeductions) {
+          const bCode = String(reqItem.barcode || "").trim();
+          const q = safeAmount(reqItem.qty);
+          if (!bCode || q <= 0) continue;
+
+          const dbItem = itemMap.get(bCode);
+          if (!dbItem) {
+            return { success: false, message: `ပစ္စည်း Barcode (${bCode}) အား Database တွင် ရှာမတွေ့ပါ။` };
+          }
+          if (Number(dbItem.current_stock || 0) < q) {
+            return { success: false, message: `"${dbItem.item_name}" လက်ကျန် မလုံလောက်ပါ! (လက်ကျန်: ${dbItem.current_stock} ခုသာ ရှိပါသည်)` };
+          }
+          totalAmount += q * safeAmount(dbItem.selling_price);
+          totalCost += q * safeAmount(dbItem.cost_price);
+          verifiedSummaryParts.push(`${dbItem.item_name} x ${q}`);
+        }
+      }
+      totalAmount = Math.round(totalAmount * 100) / 100;
+      totalCost = Math.round(totalCost * 100) / 100;
+    } else {
+      totalAmount = safeAmount(body.totalAmount);
+      totalCost = safeAmount(body.totalCost);
+    }
+
+    const netProfit = Math.round((totalAmount - totalCost) * 100) / 100;
+    const itemsSummary = verifiedSummaryParts.length > 0 ? verifiedSummaryParts.join(', ') : String(body.itemsSummary || "").trim();
 
     if (totalAmount <= 0) return { success: false, message: "ကျသင့်ငွေ ပမာဏ မရှိပါ။ Cart ထဲ ပစ္စည်းထည့်ပါ။" };
     if (!itemsSummary) return { success: false, message: "ပစ္စည်းစာရင်း အကျဉ်းချုပ် မပါဝင်ပါ။" };

@@ -40,9 +40,9 @@ export async function getUniformData(db, body) {
         COALESCE(SUM(total_stock_value), 0) as totalStockValue
       FROM uniform_ledger ${whereSql}
     `;
-    
+
     // 🚀 ULTRA-OPTIMIZATION: Conditional binding based on search to speed up direct queries
-    const statsRow = params.length > 0 
+    const statsRow = params.length > 0
       ? await db.prepare(statsRowQuery).bind(...params).first()
       : await db.prepare(statsRowQuery).first();
 
@@ -63,7 +63,7 @@ export async function getUniformData(db, body) {
     const rows = params.length > 0
       ? await db.prepare(query).bind(...params, limit, offset).all()
       : await db.prepare(query).bind(limit, offset).all();
-      
+
     const list = rows.results || [];
 
     return {
@@ -101,7 +101,7 @@ export async function saveUniformEntry(db, userSession, body) {
     const unitPrice = parseFloat(body.unitPrice ?? body.unit_price ?? 0);
     const sellingPrice = parseFloat(body.sellingPrice ?? body.selling_price ?? 0);
     const sellingUnit = parseFloat(body.sellingUnit ?? body.selling_unit ?? 0);
-    
+
     const totalAmount = openingStock * unitPrice;
     const profitAmount = sellingPrice - unitPrice;
     const currentQty = Math.max(0, openingStock - sellingUnit);
@@ -135,9 +135,9 @@ export async function saveUniformEntry(db, userSession, body) {
       uniqueid
     ).run();
 
-    return { 
-      success: true, 
-      message: "ယူနီဖောင်း ကုန်ပစ္စည်း အသစ် အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။", 
+    return {
+      success: true,
+      message: "ယူနီဖောင်း ကုန်ပစ္စည်း အသစ် အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။",
       uniqueId: uniqueid,
       productId: productIdVal
     };
@@ -161,7 +161,7 @@ export async function updateUniformEntry(db, userSession, body) {
 
     // 1. Fetch Existing Record to prevent wiping selling_unit
     // 🚀 Separate Exact Index Lookups (No OR scanning)
-    const existing = uniqueid 
+    const existing = uniqueid
       ? await db.prepare(`SELECT opening_stock, selling_unit, unit_price, selling_price, product_id, product_name, type, size FROM uniform_ledger WHERE uniqueid = ? LIMIT 1`).bind(uniqueid).first()
       : await db.prepare(`SELECT opening_stock, selling_unit, unit_price, selling_price, product_id, product_name, type, size FROM uniform_ledger WHERE id = ? LIMIT 1`).bind(rowId).first();
 
@@ -189,8 +189,8 @@ export async function updateUniformEntry(db, userSession, body) {
     const whereClause = uniqueid ? "uniqueid = ?" : "id = ?";
     const whereTarget = uniqueid || rowId;
 
-    const recordDate = existing.created_at ? String(existing.created_at).slice(0, 10) : (existing.join_date || null);
-    const policy = verifyRecordMutationPolicy(userSession, recordDate);
+    const recordDate = existing.created_at ? String(existing.created_at).slice(0, 10) : null;
+    const policy = verifyRecordMutationPolicy(userSession, recordDate, true);
     if (!policy.allowed) {
       return { success: false, message: policy.message };
     }
@@ -238,7 +238,7 @@ export async function deleteUniformEntry(db, userSession, body) {
     }
 
     // 🎯 Phase 2: မူလ Record ကို ဦးစွာဆွဲယူ၍ ရက်စွဲစစ်ဆေးခြင်း
-    const existing = uniqueid 
+    const existing = uniqueid
       ? await db.prepare("SELECT id, created_at FROM uniform_ledger WHERE uniqueid = ?").bind(uniqueid).first()
       : await db.prepare("SELECT id, created_at FROM uniform_ledger WHERE id = ?").bind(rowId).first();
 
@@ -247,7 +247,7 @@ export async function deleteUniformEntry(db, userSession, body) {
     }
 
     const recordDate = existing.created_at ? String(existing.created_at).slice(0, 10) : null;
-    const policy = verifyRecordMutationPolicy(userSession, recordDate);
+    const policy = verifyRecordMutationPolicy(userSession, recordDate, true);
     if (!policy.allowed) {
       return { success: false, message: policy.message };
     }

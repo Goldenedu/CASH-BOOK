@@ -122,7 +122,7 @@ function updateHeaderMetadata(username) {
     currentFyStr = `FY ${window.getCurrentAcademicYear()}`;
   } else {
     let fyYear = d.getFullYear();
-    if (d.getMonth() < 3) fyYear -= 1; // ဇန်နဝါရီ၊ ဖေဖော်ဝါရီ၊ မတ်လ (0, 1, 2) သည် ယခင်ပညာသင်နှစ်ထဲတွင် ရှိဆဲဖြစ်သည်
+    if (d.getMonth() < 2) fyYear -= 1; // ဇန်နဝါရီ၊ ဖေဖော်ဝါရီ၊ မတ်လ (0, 1, 2) သည် ယခင်ပညာသင်နှစ်ထဲတွင် ရှိဆဲဖြစ်သည်
     currentFyStr = `FY ${fyYear}-${fyYear + 1}`;
   }
 
@@ -955,13 +955,22 @@ window.prefetchOfflineMasterData = async function (force = false) {
  * 💡 Central UI Mutation Policy Helper (Phase 3)
  * Returns { allowed: boolean, reason: string } for row-level Action Buttons
  */
-window.canUserMutateRecord = function (recordDateStr) {
+/**
+ * 💡 Central UI Mutation Policy Helper
+ */
+window.canUserMutateRecord = function (recordDateStr, isMasterDirectory = false) {
   const role = (localStorage.getItem('golden_user_role') || window.AppState?.currentUserRole || 'Viewer').trim();
   const normRole = role.toLowerCase().replace(/[\s_-]/g, '');
 
-  // ၁။ Owner / Viewer သည် မည်သည့်အခါမျှ ပြင်/ဖျက်ခွင့် မရှိပါ
   if (normRole === 'owner' || normRole === 'viewer') {
     return { allowed: false, reason: "Owner နှင့် Viewer သည် Read-Only ဖြစ်သဖြင့် ပြင်ဆင်/ဖျက်သိမ်းခွင့် မရှိပါ" };
+  }
+
+  // 🎯 Master Directory ဖြစ်ပြီး Admin, Finance, HR ဖြစ်ပါက UI ခလုတ်များကို အမြဲ Active ပေးထားသည်
+  if (isMasterDirectory) {
+    if (['admin', 'finance', 'hr', 'hrstaff'].includes(normRole)) {
+      return { allowed: true };
+    }
   }
 
   const todayMmt = typeof window.getMMTDateString === 'function'
@@ -970,15 +979,13 @@ window.canUserMutateRecord = function (recordDateStr) {
 
   const cleanDate = recordDateStr ? String(recordDateStr).split('T')[0].trim() : '';
 
-  // ၂။ ယနေ့စာရင်းဖြစ်ပါက ပြင်/ဖျက် ခွင့်ပြုသည်
   if (cleanDate === todayMmt) {
     return { allowed: true };
   }
 
-  // ၃။ Admin အတွက် သောကြာနေ့ ၃၀ ရက် စည်းမျဉ်း
   if (normRole === 'admin') {
     const nowMmt = new Date(Date.now() + (6.5 * 3600 * 1000));
-    const isFriday = nowMmt.getUTCDay() === 5; // 5 = Friday
+    const isFriday = nowMmt.getUTCDay() === 5;
 
     if (isFriday) {
       if (cleanDate) {
@@ -998,7 +1005,6 @@ window.canUserMutateRecord = function (recordDateStr) {
     }
   }
 
-  // ၄။ ကျန် Role အားလုံး (Finance, HR, Accountant, Cashier, Staff) သည် Daily Lock ဖြစ်သည်
   return { allowed: false, reason: "ယနေ့ရက်စွဲမဟုတ်သော စာရင်းဟောင်းများကို ပြင်ဆင်/ဖျက်သိမ်းခွင့် မရှိပါ (Daily Lock)" };
 };
 

@@ -314,7 +314,8 @@ export async function updateStaffEntry(db, userSession, body) {
     }
 
     const recordDate = existing.created_at ? String(existing.created_at).slice(0, 10) : (existing.join_date || null);
-    const policy = verifyRecordMutationPolicy(userSession, recordDate);
+    // 🎯 Master Directory အဖြစ် true ထည့်သွင်းခြင်း (Admin, Finance, HR တို့အတွက် Daily Lock ကင်းလွတ်သည်)
+    const policy = verifyRecordMutationPolicy(userSession, recordDate, true);
     if (!policy.allowed) {
       return { success: false, message: policy.message };
     }
@@ -413,7 +414,8 @@ export async function deleteStaffEntry(db, userSession, body) {
 
     // မှတ်တမ်းသွင်းခဲ့သည့် နေ့စွဲ (created_at) သို့မဟုတ် join_date ဖြင့် Daily Policy စစ်ဆေးသည်
     const recordDate = existing.created_at ? String(existing.created_at).slice(0, 10) : existing.join_date;
-    const policy = verifyRecordMutationPolicy(userSession, recordDate);
+    // 🎯 Master Directory အဖြစ် true ထည့်သွင်းခြင်း
+    const policy = verifyRecordMutationPolicy(userSession, recordDate, true);
     if (!policy.allowed) {
       return { success: false, message: policy.message };
     }

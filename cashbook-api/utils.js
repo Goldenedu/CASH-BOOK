@@ -406,14 +406,15 @@ export async function recalculateCanteenBookBalances(db, fy, fromDate = null) {
 }
 
 /**
- * 💡 Phase 1: Record Mutation Policy Engine (Daily Lock & Friday 30-Day Exception)
+ * 💡 Phase 2/3: Record Mutation Policy Engine (Daily Lock, Friday & Master Directory Policy)
  * 🛡️ Enforces Strict Edit / Delete Window:
  *    - Owner / Viewer: 100% Read-Only (Forbidden)
- *    - Today's MMT Records: Allowed for all authenticated mutating roles
- *    - Past Records (Admin): Allowed ONLY on Fridays within 30 days
- *    - Past Records (Finance, HR, Accountant, Cashier, Staff): Strictly Denied (Daily Lock)
+ *    - 🎯 Master Directories: Admin, Finance, HR, HR Staff can ALWAYS edit/delete (No Daily Lock)
+ *    - Today's MMT Records: Allowed for all mutating roles
+ *    - Past Records (Admin): Allowed ONLY on Fridays within 30 days (for Daily Ledgers)
+ *    - Past Records (Other Roles): Strictly Denied (Daily Lock)
  */
-export function verifyRecordMutationPolicy(userSession, existingRecordDate) {
+export function verifyRecordMutationPolicy(userSession, existingRecordDate, isMasterDirectory = false) {
   if (!userSession) {
     return { allowed: false, message: "အသုံးပြုသူ စစ်မှန်ကြောင်း အတည်မပြုနိုင်ပါ။" };
   }
@@ -421,7 +422,7 @@ export function verifyRecordMutationPolicy(userSession, existingRecordDate) {
   const rawRole = String(userSession?.role || 'Viewer').trim();
   const normRole = rawRole.toLowerCase().replace(/[\s_-]/g, '');
 
-  // ၁။ Owner နှင့် Viewer အား Pure Read-Only သတ်မှတ်ခြင်း
+  // ၁။ Owner နှင့် Viewer အား Pure Read-Only အဖြစ် အမြဲ ပိတ်ပင်သည်
   if (normRole === 'owner' || normRole === 'viewer') {
     return {
       allowed: false,
@@ -429,29 +430,34 @@ export function verifyRecordMutationPolicy(userSession, existingRecordDate) {
     };
   }
 
-  // ၂။ မြန်မာစံတော်ချိန် (MMT UTC+06:30) တွက်ချက်ခြင်း
+  // 🎯 ၂။ Master Directory ခြွင်းချက်: Admin, Finance, HR, HR Staff ဖြစ်ပါက Daily Lock မလိုဘဲ အမြဲ ခွင့်ပြုသည်
+  if (isMasterDirectory) {
+    if (['admin', 'finance', 'hr', 'hrstaff'].includes(normRole)) {
+      return { allowed: true };
+    }
+  }
+
+  // ၃။ မြန်မာစံတော်ချိန် (MMT UTC+06:30) တွက်ချက်ခြင်း
   const nowMs = Date.now();
   const mmtDate = new Date(nowMs + (6.5 * 3600 * 1000));
   const todayMmt = mmtDate.toISOString().slice(0, 10);
-  const dayOfWeek = mmtDate.getUTCDay(); // 0 = Sun, 1 = Mon, 2 = Tue, 3 = Wed, 4 = Thu, 5 = Fri, 6 = Sat
+  const dayOfWeek = mmtDate.getUTCDay(); // 0 = Sun, ..., 5 = Fri, 6 = Sat
 
   const cleanRecordDate = existingRecordDate ? String(existingRecordDate).split('T')[0].trim() : '';
 
-  // ၃။ ယနေ့ရက်စွဲ (Today) စာရင်းဖြစ်ပါက သက်ဆိုင်ရာ Role အားလုံးကို ချက်ချင်း ခွင့်ပြုသည်
+  // ၄။ ယနေ့ရက်စွဲ (Today) စာရင်းဖြစ်ပါက သက်ဆိုင်ရာ Role အားလုံးကို ပြင်/ဖျက် ခွင့်ပြုသည်
   if (cleanRecordDate === todayMmt) {
     return { allowed: true };
   }
 
-  // ၄။ ယနေ့ရက်စွဲ မဟုတ်သော စာရင်းဟောင်းများအတွက် စစ်ဆေးချက်
+  // ၅။ ယနေ့ရက်စွဲ မဟုတ်သော စာရင်းဟောင်းများအတွက် စစ်ဆေးချက်
   if (normRole === 'admin') {
-    // သောကြာနေ့ (Friday = 5) ဖြစ်မှသာ စစ်ဆေးမည်
     if (dayOfWeek === 5) {
       if (cleanRecordDate) {
         const recordTime = new Date(`${cleanRecordDate}T00:00:00Z`).getTime();
         const todayTime = new Date(`${todayMmt}T00:00:00Z`).getTime();
         const diffDays = Math.round((todayTime - recordTime) / (24 * 3600 * 1000));
 
-        // လွန်ခဲ့သော ရက်ပေါင်း ၃၀ အတွင်းဖြစ်ပါက ခွင့်ပြုသည်
         if (diffDays >= 0 && diffDays <= 30) {
           return { allowed: true };
         } else if (diffDays > 30) {
@@ -475,7 +481,7 @@ export function verifyRecordMutationPolicy(userSession, existingRecordDate) {
     }
   }
 
-  // ၅။ Finance, HR, Accountant, Cashier, Staff အားလုံးအတွက် Daily Lock စစ်ဆေးချက်
+  // ၆။ Daily Lock: သတ်မှတ်ရက်စွဲမဟုတ်ပါက ကျန် Role များကို တားမြစ်သည်
   return {
     allowed: false,
     message: "ယနေ့ရက်စွဲမဟုတ်သော စာရင်းဟောင်းများကို ပြင်ဆင်/ဖျက်သိမ်းခွင့် မရှိပါ (Daily Lock)။"

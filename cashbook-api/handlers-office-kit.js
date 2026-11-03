@@ -161,7 +161,7 @@ export async function getExpenseData(db, body) {
     if (searchVal) {
       whereClauses.push(`(description LIKE ? OR category LIKE ? OR vr_no LIKE ? OR method LIKE ? OR transfer LIKE ? OR CAST(debit AS TEXT) LIKE ? OR CAST(credit AS TEXT) LIKE ?)`);
       const p = `%${searchVal}%`;
-      params.push(p, p, p, p, p);
+      params.push(p, p, p, p, p, p, p);
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';

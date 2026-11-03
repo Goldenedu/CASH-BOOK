@@ -196,8 +196,16 @@ export async function updatePromotionEntry(db, userSession, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    const recordDate = existing.created_at ? String(existing.created_at).slice(0, 10) : (existing.join_date || null);
-    const policy = verifyRecordMutationPolicy(userSession, recordDate);
+    const existing = await db.prepare(
+      "SELECT id, created_at FROM promotion WHERE uniqueid = ?"
+    ).bind(uniqueid).first();
+
+    if (!existing) {
+      return { success: false, message: "ပြင်ဆင်မည့် Promotion Rate ရှာမတွေ့ပါ။" };
+    }
+
+    const recordDate = existing.created_at ? String(existing.created_at).slice(0, 10) : null;
+    const policy = verifyRecordMutationPolicy(userSession, recordDate, true);
     if (!policy.allowed) {
       return { success: false, message: policy.message };
     }
@@ -253,7 +261,6 @@ export async function deletePromotionEntry(db, userSession, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    // 🎯 Phase 2: မူလ Record ကို ဦးစွာဆွဲယူ၍ ရက်စွဲစစ်ဆေးခြင်း
     const existing = await db.prepare(
       "SELECT id, created_at FROM promotion WHERE uniqueid = ?"
     ).bind(uniqueid).first();
@@ -263,7 +270,7 @@ export async function deletePromotionEntry(db, userSession, body) {
     }
 
     const recordDate = existing.created_at ? String(existing.created_at).slice(0, 10) : null;
-    const policy = verifyRecordMutationPolicy(userSession, recordDate);
+    const policy = verifyRecordMutationPolicy(userSession, recordDate, true);
     if (!policy.allowed) {
       return { success: false, message: policy.message };
     }

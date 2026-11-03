@@ -250,6 +250,18 @@ export async function updateStudentEntry(db, userSession, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
+    // 🎯 မူလ Record ကို ဆွဲယူ၍ စစ်ဆေးခြင်း
+    const existing = await db.prepare("SELECT date, created_at FROM student WHERE uniqueid = ?").bind(uniqueid).first();
+    if (!existing) {
+      return { success: false, message: "ပြင်ဆင်မည့် ကျောင်းသားမှတ်တမ်း ရှာမတွေ့ပါ။" };
+    }
+
+    const recordDate = existing.created_at ? String(existing.created_at).slice(0, 10) : existing.date;
+    const policy = verifyRecordMutationPolicy(userSession, recordDate, true);
+    if (!policy.allowed) {
+      return { success: false, message: policy.message };
+    }
+
     const entryDate = body.date || '';
     const cleanFy = normalizeFyClean(body.fy, entryDate);
     const studentId = parseInt(body.studentId || body.id, 10);
@@ -295,13 +307,13 @@ export async function deleteStudentEntry(db, userSession, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    // 🎯 Phase 2: မူလရက်စွဲကို ဆွဲယူပြီး Mutation Policy (Daily Lock) စစ်ဆေးခြင်း
-    const existing = await db.prepare("SELECT date FROM student WHERE uniqueid = ?").bind(uniqueid).first();
+    const existing = await db.prepare("SELECT date, created_at FROM student WHERE uniqueid = ?").bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ဖျက်သိမ်းမည့် ကျောင်းသားမှတ်တမ်း ရှာမတွေ့ပါ။" };
     }
 
-    const policy = verifyRecordMutationPolicy(userSession, existing.date);
+    const recordDate = existing.created_at ? String(existing.created_at).slice(0, 10) : existing.date;
+    const policy = verifyRecordMutationPolicy(userSession, recordDate, true);
     if (!policy.allowed) {
       return { success: false, message: policy.message };
     }

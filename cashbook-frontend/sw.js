@@ -19,7 +19,7 @@ const CACHE_NAME = 'golden-erp-cache-v2026.10.10';
 const PRECACHE_ASSETS = [
   './',
   './index.html',
-  
+
   // 💡 1. CORE STYLES
   './css/tailwind.min.css',
   './css/fontawesome.min.css',
@@ -64,7 +64,20 @@ const PRECACHE_ASSETS = [
   './views/uniform.html',
   './views/promotion.html',
   './views/reports.html',
-  './views/settings.html'
+  './views/settings.html',
+
+  // 💡 4. CANTEEN POS & PM CASHIER OFFLINE ASSETS
+  './canteen-pos.html',
+  './pm-cashier.html',
+  './components/canteen-dashboard.html',
+  './components/canteen-purchases.html',
+  './components/canteen-modals.html',
+  './js/canteen/canteen-db.js',
+  './js/canteen/canteen-state.js',
+  './js/canteen/canteen-pos.js',
+  './js/canteen/canteen-inventory.js',
+  './js/canteen/canteen-waste.js',
+  './js/canteen/canteen-closing.js'
 ];
 
 /**
@@ -124,7 +137,7 @@ self.addEventListener('fetch', (event) => {
     url.hostname.includes('workers.dev') ||
     url.searchParams.has('action')
   ) {
-    return; 
+    return;
   }
 
   // Stale-While-Revalidate Engine with Native ignoreSearch
@@ -136,8 +149,8 @@ self.addEventListener('fetch', (event) => {
       const fetchPromise = fetch(request)
         .then((networkResponse) => {
           if (
-            networkResponse && 
-            networkResponse.status === 200 && 
+            networkResponse &&
+            networkResponse.status === 200 &&
             (networkResponse.type === 'basic' || networkResponse.type === 'cors')
           ) {
             cache.put(request, networkResponse.clone());
