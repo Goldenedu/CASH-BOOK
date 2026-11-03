@@ -126,8 +126,8 @@ export function autoDetectGender(nameStr) {
   }
 
   if (
-    clean.startsWith('မေ') || clean.startsWith('ဒေါ်') || clean.startsWith('နန်း') || 
-    clean.startsWith('နော်') || clean.startsWith('ဆရာမ') || clean.startsWith('တီချာ') || 
+    clean.startsWith('မေ') || clean.startsWith('ဒေါ်') || clean.startsWith('နန်း') ||
+    clean.startsWith('နော်') || clean.startsWith('ဆရာမ') || clean.startsWith('တီချာ') ||
     clean.startsWith('ခင်') || clean.startsWith('နှင်း') || clean.startsWith('နွယ်') ||
     /^(May|Daw|Nang|Naw|Khin|Hnin|Nwe|Miss|Mrs|Teacher|Sayama)\b/i.test(clean)
   ) {
@@ -162,7 +162,7 @@ export async function generateVoucherNo(db, tableName, prefix, entryDate) {
   }
 
   const pattern = `${prefix}-${ddmmyy}-%`;
-  
+
   // 🚀 OPTIMIZATION: Use COUNT(id) instead of COUNT(*)
   const countRow = await db.prepare(
     `SELECT COUNT(id) as cnt FROM ${tableName} WHERE vr_no LIKE ? OR date = ?`
@@ -175,7 +175,7 @@ export async function generateVoucherNo(db, tableName, prefix, entryDate) {
 export async function generateFyNo(db, tableName, fy) {
   const normFy = normalizeFyStr(fy);
   const cleanFy = normFy.replace(/^FY\s*/i, '');
-  
+
   // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)`
   const lastNoRow = await db.prepare(
     `SELECT MAX(CAST(no AS INTEGER)) as maxNo FROM ${tableName} WHERE fy IN (?, ?)`
@@ -432,7 +432,7 @@ export function verifyRecordMutationPolicy(userSession, existingRecordDate, isMa
 
   // 🎯 ၂။ Master Directory ခြွင်းချက်: Admin, Finance, HR, HR Staff ဖြစ်ပါက Daily Lock မလိုဘဲ အမြဲ ခွင့်ပြုသည်
   if (isMasterDirectory) {
-    if (['admin', 'finance', 'hr', 'hrstaff'].includes(normRole)) {
+    if (['admin', 'finance', 'hr', 'hrstaff', 'accountant', 'cashier', 'maincashier'].includes(normRole)) {
       return { allowed: true };
     }
   }

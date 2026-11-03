@@ -40,6 +40,13 @@ function calculateFundDate(joinDateStr) {
  */
 export async function getStaffData(db, body, userSession) {
   try {
+
+    // 🛡️ Strict Guard: Accountant, Cashier, Staff တို့အား Staff List လုံးဝ ကြည့်ရှုခွင့်မပြုပါ
+    const normRole = String(userSession?.role || 'Viewer').trim().toLowerCase().replace(/[\s_-]/g, '');
+    if (!['owner', 'viewer', 'admin', 'finance', 'hr', 'hrstaff'].includes(normRole)) {
+      return { success: false, message: "Staff စာရင်း ကြည့်ရှုခွင့် မရှိပါ။" };
+    }
+
     const isPartTime = String(body.category || '').toLowerCase().includes('part');
     const table = isPartTime ? 'staff_parttime' : 'staff_fulltime';
     const searchVal = String(body.searchVal || '').trim();
@@ -97,9 +104,9 @@ export async function getStaffData(db, body, userSession) {
     const rows = await db.prepare(dataQuery).bind(...params).all();
     const rawStaffList = rows.results || [];
 
-    // 💡 1. ROLE-BASED PII ACCESS CHECK
+    // 💡 1. ROLE-BASED PII ACCESS CHECK (Accountant မပါဝင်ရပါ)
     const role = userSession?.role || 'Viewer';
-    const canSeeSensitive = ['Owner', 'Admin', 'Finance', 'HR', 'HR Staff', 'HRStaff', 'Accountant'].includes(role);
+    const canSeeSensitive = ['Owner', 'Admin', 'Finance', 'HR', 'HR Staff', 'HRStaff'].includes(role);
 
     let activeCount = 0;
     let maleCount = 0;
@@ -296,6 +303,11 @@ export async function saveStaffEntry(db, userSession, body) {
  */
 export async function updateStaffEntry(db, userSession, body) {
   try {
+    const normRole = String(userSession?.role || 'Viewer').trim().toLowerCase().replace(/[\s_-]/g, '');
+    if (!['admin', 'finance', 'hr', 'hrstaff'].includes(normRole)) {
+      return { success: false, message: "ဝန်ထမ်းမှတ်တမ်း ပြင်ဆင်ခွင့် မရှိပါ။" };
+    }
+
     const uniqueid = body.uniqueId || body.uniqueid;
     if (!uniqueid) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
@@ -305,12 +317,12 @@ export async function updateStaffEntry(db, userSession, body) {
     const table = isPartTime ? 'staff_parttime' : 'staff_fulltime';
     const prefix = isPartTime ? 'PID' : 'FID';
 
-    // 🎯 FIX 1: မူလရှိပြီးသား bonus, fund, unpaid_bonus, unpaid_fund များကို D1 မှ အတိအကျ ကြိုတင်ဆွဲယူစစ်ဆေးသည်
+    // 🎯 FIX: join_date နှင့် created_at ပါ ထည့်သွင်းဆွဲယူသည်
     let existing;
     if (isPartTime) {
-      existing = await db.prepare(`SELECT id, staff_id FROM staff_parttime WHERE uniqueid = ?`).bind(uniqueid).first();
+      existing = await db.prepare(`SELECT id, staff_id, join_date, created_at FROM staff_parttime WHERE uniqueid = ?`).bind(uniqueid).first();
     } else {
-      existing = await db.prepare(`SELECT id, staff_id, bonus, fund, unpaid_bonus, unpaid_fund FROM staff_fulltime WHERE uniqueid = ?`).bind(uniqueid).first();
+      existing = await db.prepare(`SELECT id, staff_id, bonus, fund, unpaid_bonus, unpaid_fund, join_date, created_at FROM staff_fulltime WHERE uniqueid = ?`).bind(uniqueid).first();
     }
 
     if (!existing) {
@@ -318,7 +330,6 @@ export async function updateStaffEntry(db, userSession, body) {
     }
 
     const recordDate = existing.created_at ? String(existing.created_at).slice(0, 10) : (existing.join_date || null);
-    // 🎯 Master Directory အဖြစ် true ထည့်သွင်းခြင်း (Admin, Finance, HR တို့အတွက် Daily Lock ကင်းလွတ်သည်)
     const policy = verifyRecordMutationPolicy(userSession, recordDate, true);
     if (!policy.allowed) {
       return { success: false, message: policy.message };
@@ -395,6 +406,12 @@ export async function updateStaffEntry(db, userSession, body) {
  */
 export async function deleteStaffEntry(db, userSession, body) {
   try {
+
+    const normRole = String(userSession?.role || 'Viewer').trim().toLowerCase().replace(/[\s_-]/g, '');
+    if (!['admin', 'finance', 'hr', 'hrstaff'].includes(normRole)) {
+      return { success: false, message: "ဝန်ထမ်းမှတ်တမ်း ဖျက်သိမ်းခွင့် မရှိပါ။" };
+    }
+
     const uniqueid = body.uniqueId || body.uniqueid;
     if (!uniqueid) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
