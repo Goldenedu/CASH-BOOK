@@ -1077,13 +1077,11 @@ export default {
         case 'getIncomeDetailReportData':
         case 'getMonthlyIncomeReportData':
         case 'getStudentReportDetails':
-        case 'getFundReportData':
           if (!can(userSession, 'report_read')) return forbidden(corsHeaders);
           if (action === 'getFinancialReportData') result = await ReportHandlers.getFinancialReportData(db, body);
           else if (action === 'getIncomeDetailReportData') result = await ReportHandlers.getIncomeDetailReportData(db, body);
           else if (action === 'getMonthlyIncomeReportData') result = await ReportHandlers.getMonthlyIncomeReportData(db, body);
           else if (action === 'getStudentReportDetails') result = await ReportHandlers.getStudentReportDetails(db, body);
-          else if (action === 'getFundReportData') result = await ReportHandlers.getFundReportData(db, body);
           break;
 
         case 'getSettingsData':

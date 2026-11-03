@@ -72,6 +72,9 @@ function initApp() {
   }
 
   document.documentElement.className = 'dark is-authed';
+  if (typeof window.applyRoleRestrictions === 'function') {
+    window.applyRoleRestrictions();
+  }
   updateHeaderMetadata(user);
   initNetworkStatusWatcher(); // ⚡ Real-Time Online/Offline Status Initializer
 
@@ -918,23 +921,33 @@ window.prefetchOfflineMasterData = async function (force = false) {
       }
     }
 
-    // ၄။ Staff & Salary Grade Pre-cache
-    if (force || !localStorage.getItem(staffCacheKey)) {
-      const [ftRes, ptRes] = await Promise.all([
-        callApi('getStaffData', { category: 'Full Time' }, 'GET'),
-        callApi('getStaffData', { category: 'Part Time' }, 'GET')
-      ]);
-      const allStaff = [...(ftRes?.data || []), ...(ptRes?.data || [])];
-      if (allStaff.length > 0) {
-        localStorage.setItem(staffCacheKey, JSON.stringify(allStaff));
-      }
-    }
+    // ၄။ Staff & Salary Grade Pre-cache (HR/Staff ကြည့်ရှုခွင့်ရှိသော Role များသာ ခေါ်ယူမည်)
+    const activeRole = (localStorage.getItem('golden_user_role') || window.AppState?.currentUserRole || '').trim();
+    const normActiveRole = activeRole.toLowerCase().replace(/[\s_-]/g, '');
+    const canReadHrStaff = ['owner', 'viewer', 'admin', 'finance', 'hr', 'hrstaff'].includes(normActiveRole);
 
-    if (force || !localStorage.getItem(gradeCacheKey)) {
-      const gradeRes = await callApi('getPayrollSettings', {}, 'GET');
-      if (gradeRes && gradeRes.success && gradeRes.data) {
-        localStorage.setItem(gradeCacheKey, JSON.stringify(gradeRes.data));
+    if (canReadHrStaff) {
+      if (force || !localStorage.getItem(staffCacheKey)) {
+        const [ftRes, ptRes] = await Promise.all([
+          callApi('getStaffData', { category: 'Full Time' }, 'GET'),
+          callApi('getStaffData', { category: 'Part Time' }, 'GET')
+        ]);
+        const allStaff = [...(ftRes?.data || []), ...(ptRes?.data || [])];
+        if (allStaff.length > 0) {
+          localStorage.setItem(staffCacheKey, JSON.stringify(allStaff));
+        }
       }
+
+      if (force || !localStorage.getItem(gradeCacheKey)) {
+        const gradeRes = await callApi('getPayrollSettings', {}, 'GET');
+        if (gradeRes && gradeRes.success && gradeRes.data) {
+          localStorage.setItem(gradeCacheKey, JSON.stringify(gradeRes.data));
+        }
+      }
+    } else {
+      // 🛡️ Accountant / Cashier / Staff ဖြစ်ပါက စက်ထဲရှိ Staff Cache အဟောင်းများကိုပါ ရှင်းထုတ်သည်
+      localStorage.removeItem(staffCacheKey);
+      localStorage.removeItem(gradeCacheKey);
     }
 
   } catch (err) {
@@ -957,9 +970,9 @@ window.canUserMutateRecord = function (recordDateStr, isMasterDirectory = false)
     return { allowed: false, reason: "Owner နှင့် Viewer သည် Read-Only ဖြစ်သဖြင့် ပြင်ဆင်/ဖျက်သိမ်းခွင့် မရှိပါ" };
   }
 
-  // 🎯 Master Directory ဖြစ်ပြီး Admin, Finance, HR ဖြစ်ပါက UI ခလုတ်များကို အမြဲ Active ပေးထားသည်
+  // 🎯 Master Directory ဖြစ်ပြီး Admin, Finance, HR, Accountant, Cashier ဖြစ်ပါက UI ခလုတ်များကို အမြဲ Active ပေးထားသည်
   if (isMasterDirectory) {
-    if (['admin', 'finance', 'hr', 'hrstaff'].includes(normRole)) {
+    if (['admin', 'finance', 'hr', 'hrstaff', 'accountant', 'cashier', 'maincashier'].includes(normRole)) {
       return { allowed: true };
     }
   }
