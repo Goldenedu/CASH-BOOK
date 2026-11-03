@@ -16,7 +16,7 @@
 
 import {
   getMyanmarDateString, normalizeFyStr, sanitizeFyidStr, generateUniqueId,
-  generateVoucherNo, generateFyNo, recalculateLedgerBalances, getCurrentAcademicYear
+  generateVoucherNo, generateFyNo, recalculateLedgerBalances, getCurrentAcademicYear, verifyRecordMutationPolicy
 } from './utils.js';
 
 function computeAcademicFy(dateStr) {
@@ -259,14 +259,24 @@ export async function saveStudentMoneyEntry(db, session, body) {
     const stmUniqueId = `STM_${rawCore}`;
     const pmcUniqueId = `PMC_${rawCore}`;
 
-    // 🛡️ IDEMPOTENCY GUARD: ဤ uniqueid ဖြင့် D1 တွင် စာရင်း ရှိနှင့်ပြီးသားဖြစ်ပါက Duplicate (၂ ကြောင်း) မဖြစ်စေရန် Return ပေးသည်
-    const existingStm = await db.prepare("SELECT id FROM student_money WHERE uniqueid = ?").bind(stmUniqueId).first();
-    if (existingStm && !body.isUpdate) {
-      return {
-        success: true,
-        message: "ဤစာရင်းသည် D1 Database ထဲတွင် ရှိနှင့်ပြီးသား ဖြစ်ပါသည်။ (Duplicate Prevented)",
-        uniqueId: stmUniqueId
-      };
+    // 🛡️ IDEMPOTENCY GUARD & UPDATE CLEANUP
+    const existingStm = await db.prepare("SELECT id, date FROM student_money WHERE uniqueid = ?").bind(stmUniqueId).first();
+    if (existingStm) {
+      if (!body.isUpdate) {
+        return {
+          success: true,
+          message: "ဤစာရင်းသည် D1 Database ထဲတွင် ရှိနှင့်ပြီးသား ဖြစ်ပါသည်။ (Duplicate Prevented)",
+          uniqueId: stmUniqueId
+        };
+      }
+      // Update ဖြစ်ပါက Mutation Policy စစ်ဆေးပြီး အဟောင်းကို ဦးစွာ ရှင်းလင်းမည်
+      const policy = verifyRecordMutationPolicy(session, existingStm.date);
+      if (!policy.allowed) return { success: false, message: policy.message };
+
+      await db.batch([
+        db.prepare("DELETE FROM student_money WHERE uniqueid IN (?, ?)").bind(stmUniqueId, pmcUniqueId),
+        db.prepare("DELETE FROM pm_cashier_book WHERE uniqueid IN (?, ?)").bind(pmcUniqueId, stmUniqueId)
+      ]);
     }
 
     const rawType = String(body.entryType || 'Deposit').trim();
@@ -373,6 +383,12 @@ export async function deleteStudentMoneyEntry(db, session, body) {
 
     const existing = await db.prepare("SELECT fy, date, student_id, remark, created_by, uniqueid FROM student_money WHERE uniqueid = ?").bind(uid).first();
     if (!existing) return { success: false, message: "ဖျက်မည့် စာရင်း ရှာမတွေ့ပါ။" };
+
+    // 🎯 Phase 2: Mutation Policy Check
+    const policy = verifyRecordMutationPolicy(session, existing.date);
+    if (!policy.allowed) {
+      return { success: false, message: policy.message };
+    }
 
     // 🎯 BULLETPROOF SECURITY: PM Cashier မှ သွင်းထားသော စာရင်းများ ဖြစ်ပါက Student Money စာအုပ်မှ လုံးဝ ဖျက်ခွင့် မပြုပါ
     const isPmCashierTransaction = (existing.remark && existing.remark.includes('PM Cashier')) ||
@@ -811,6 +827,12 @@ export async function deleteCanteenBookEntry(db, session, body) {
 
     const existing = await db.prepare("SELECT fy, date, category, description, uniqueid FROM canteen_book WHERE uniqueid = ?").bind(uid).first();
     if (!existing) return { success: false, message: "ဖျက်မည့် စာရင်း ရှာမတွေ့ပါ။" };
+
+    // 🎯 Phase 2: Mutation Policy Check
+    const policy = verifyRecordMutationPolicy(session, existing.date);
+    if (!policy.allowed) {
+      return { success: false, message: policy.message };
+    }
 
     const coreId = uid.replace(/^(STM_|PMC_|CAN_|POS_|SETTLE_|CAN_SETTLE_)+/i, '');
     const exactKeys = [

@@ -616,8 +616,10 @@ async function saveStudentMoneyForm(e) {
   closeStudentMoneyModal();
   if (typeof toggleLoading === 'function') toggleLoading(true);
 
+  const existingUid = document.getElementById('stm-uniqueId')?.value || '';
   const payload = {
-    uniqueId: document.getElementById('stm-uniqueId')?.value || '',
+    uniqueId: existingUid,
+    isUpdate: Boolean(existingUid),
     date: document.getElementById('stm-date')?.value || getMMTDateString(),
     fy: document.getElementById('stm-fy')?.value || (typeof window.getCurrentAcademicYear === 'function' ? window.getCurrentAcademicYear() : '2026-2027'),
     entryType: isTransfer ? 'Transfer to PM Cashier' : entryType,

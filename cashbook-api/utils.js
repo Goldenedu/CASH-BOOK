@@ -404,3 +404,86 @@ export async function recalculateLedgerBalances(db, tableName, targetFy = null, 
 export async function recalculateCanteenBookBalances(db, fy, fromDate = null) {
   return recalculateLedgerBalances(db, 'canteen_book', fy, fromDate);
 }
+
+/**
+ * 💡 Phase 2/3: Record Mutation Policy Engine (Daily Lock, Friday & Master Directory Policy)
+ * 🛡️ Enforces Strict Edit / Delete Window:
+ *    - Owner / Viewer: 100% Read-Only (Forbidden)
+ *    - 🎯 Master Directories: Admin, Finance, HR, HR Staff can ALWAYS edit/delete (No Daily Lock)
+ *    - Today's MMT Records: Allowed for all mutating roles
+ *    - Past Records (Admin): Allowed ONLY on Fridays within 30 days (for Daily Ledgers)
+ *    - Past Records (Other Roles): Strictly Denied (Daily Lock)
+ */
+export function verifyRecordMutationPolicy(userSession, existingRecordDate, isMasterDirectory = false) {
+  if (!userSession) {
+    return { allowed: false, message: "အသုံးပြုသူ စစ်မှန်ကြောင်း အတည်မပြုနိုင်ပါ။" };
+  }
+
+  const rawRole = String(userSession?.role || 'Viewer').trim();
+  const normRole = rawRole.toLowerCase().replace(/[\s_-]/g, '');
+
+  // ၁။ Owner နှင့် Viewer အား Pure Read-Only အဖြစ် အမြဲ ပိတ်ပင်သည်
+  if (normRole === 'owner' || normRole === 'viewer') {
+    return {
+      allowed: false,
+      message: "Owner နှင့် Viewer သည် ကြည့်ရှုခွင့် (Read-Only) သာ ရှိသဖြင့် ပြင်ဆင်/ဖျက်သိမ်းခွင့် မရှိပါ။"
+    };
+  }
+
+  // 🎯 ၂။ Master Directory ခြွင်းချက်: Admin, Finance, HR, HR Staff ဖြစ်ပါက Daily Lock မလိုဘဲ အမြဲ ခွင့်ပြုသည်
+  if (isMasterDirectory) {
+    if (['admin', 'finance', 'hr', 'hrstaff'].includes(normRole)) {
+      return { allowed: true };
+    }
+  }
+
+  // ၃။ မြန်မာစံတော်ချိန် (MMT UTC+06:30) တွက်ချက်ခြင်း
+  const nowMs = Date.now();
+  const mmtDate = new Date(nowMs + (6.5 * 3600 * 1000));
+  const todayMmt = mmtDate.toISOString().slice(0, 10);
+  const dayOfWeek = mmtDate.getUTCDay(); // 0 = Sun, ..., 5 = Fri, 6 = Sat
+
+  const cleanRecordDate = existingRecordDate ? String(existingRecordDate).split('T')[0].trim() : '';
+
+  // ၄။ ယနေ့ရက်စွဲ (Today) စာရင်းဖြစ်ပါက သက်ဆိုင်ရာ Role အားလုံးကို ပြင်/ဖျက် ခွင့်ပြုသည်
+  if (cleanRecordDate === todayMmt) {
+    return { allowed: true };
+  }
+
+  // ၅။ ယနေ့ရက်စွဲ မဟုတ်သော စာရင်းဟောင်းများအတွက် စစ်ဆေးချက်
+  if (normRole === 'admin') {
+    if (dayOfWeek === 5) {
+      if (cleanRecordDate) {
+        const recordTime = new Date(`${cleanRecordDate}T00:00:00Z`).getTime();
+        const todayTime = new Date(`${todayMmt}T00:00:00Z`).getTime();
+        const diffDays = Math.round((todayTime - recordTime) / (24 * 3600 * 1000));
+
+        if (diffDays >= 0 && diffDays <= 30) {
+          return { allowed: true };
+        } else if (diffDays > 30) {
+          return {
+            allowed: false,
+            message: "ရက်ပေါင်း ၃၀ (၁ လ) ကျော်လွန်သွားသော စာရင်းဟောင်းများကို ပြင်ဆင်/ဖျက်သိမ်းခွင့် မရှိပါ။"
+          };
+        } else {
+          return {
+            allowed: false,
+            message: "အနာဂတ်ရက်စွဲဖြင့် သွင်းထားသော စာရင်းများကို ပြင်ဆင်/ဖျက်သိမ်းခွင့် မရှိပါ။"
+          };
+        }
+      }
+      return { allowed: true };
+    } else {
+      return {
+        allowed: false,
+        message: "Admin သည် ရက်စွဲဟောင်း စာရင်းများကို သောကြာနေ့များတွင်သာ ပြင်ဆင်/ဖျက်သိမ်းခွင့် ရှိပါသည် (၁ လအတွင်း)။"
+      };
+    }
+  }
+
+  // ၆။ Daily Lock: သတ်မှတ်ရက်စွဲမဟုတ်ပါက ကျန် Role များကို တားမြစ်သည်
+  return {
+    allowed: false,
+    message: "ယနေ့ရက်စွဲမဟုတ်သော စာရင်းဟောင်းများကို ပြင်ဆင်/ဖျက်သိမ်းခွင့် မရှိပါ (Daily Lock)။"
+  };
+}

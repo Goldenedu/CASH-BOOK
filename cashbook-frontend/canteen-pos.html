@@ -317,13 +317,13 @@
         Orders
       </div>
 
-      <button id="nav-btn-reports" onclick=""
+      <button id="nav-btn-sales-orders" onclick="switchCanteenView('sales')"
         class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-purple-500 dark:hover:text-purple-300 hover:bg-purple-500/10 border border-transparent hover:border-purple-500/20 text-sm font-bold">
         <i class="fa-solid fa-chart-column w-6 text-center text-lg text-purple-400 shrink-0"></i>
         <span class="truncate">Sales Orders</span>
       </button>
 
-      <button id="btn-side-settings" onclick=""
+      <button id="nav-btn-purchase-orders" onclick="switchCanteenView('purchases')"
         class="w-full h-11 px-3.5 rounded-xl transition flex items-center gap-3 text-slate-600 dark:text-slate-300 hover:text-sky-500 dark:hover:text-sky-300 hover:bg-sky-500/10 border border-transparent hover:border-sky-500/20 text-sm font-bold">
         <i class="fa-solid fa-sliders w-6 text-center text-lg text-sky-400 shrink-0"></i>
         <span class="truncate">Purchase Orders</span>
@@ -992,6 +992,13 @@
   <script src="js/canteen/canteen-inventory.js"></script>
   <script src="js/canteen/canteen-waste.js"></script>
   <script src="js/canteen/canteen-closing.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('./sw.js').catch(function () { });
+      });
+    }
+  </script>
 </body>
 
 </html>

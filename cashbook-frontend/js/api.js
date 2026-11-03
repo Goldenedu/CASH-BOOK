@@ -504,48 +504,6 @@ window.callApi = async function (action, payload = {}, method = 'POST') {
 
   const cacheKey = `${action}_${JSON.stringify(serverPayload)}`;
 
-  // 📶 Offline Interceptor: Enqueue to IndexedDB when offline
-  if (isActualMutation && !navigator.onLine && window.OfflineSync) {
-    console.warn(`[OfflineSync] Offline detected. Enqueueing ${action} immediately...`);
-    await window.OfflineSync.enqueue(action, serverPayload, method);
-    window.clearAllApiCache();
-    window.showToast("SUCCESS", "📶 အင်တာနက်လိုင်း မရှိသေးသဖြင့် စက်ထဲတွင် ယာယီသိမ်းထားပါသည် (Offline Queue)။ လိုင်းရသည်နှင့် အလိုအလျောက် ပို့ပေးပါမည်။");
-    return {
-      success: true,
-      isOfflineQueued: true,
-      message: "စာရင်းအား စက်ထဲတွင် ယာယီသိမ်းဆည်းထားပါသည် (Offline Queue)"
-    };
-  }
-
-  // 📶 Offline Read Fallback: အင်တာနက်မရှိချိန်တွင် Pre-cached Data များမှ တိုက်ရိုက်ဖတ်ယူခြင်း
-  if (isReadAction && !navigator.onLine) {
-    const currentFy = typeof window.getCurrentAcademicYear === 'function' ? window.getCurrentAcademicYear() : '2026-2027';
-
-    if (action === 'getPayrollSettings') {
-      const cached = localStorage.getItem('golden_master_payroll_settings');
-      if (cached) return { success: true, data: JSON.parse(cached) };
-    } else if (action === 'getStaffData') {
-      const cached = localStorage.getItem('golden_master_staff');
-      if (cached) return { success: true, data: JSON.parse(cached), totalRows: JSON.parse(cached).length };
-    } else if (action === 'getStudentData' || action === 'lookupStudentById') {
-      const cached = localStorage.getItem(`golden_master_students_${currentFy}`);
-      if (cached) return { success: true, data: JSON.parse(cached) };
-    } else if (action === 'getStudentMoneySummary') {
-      const cached = localStorage.getItem(`golden_master_students_${currentFy}`);
-      if (cached) {
-        const list = JSON.parse(cached);
-        const summaryData = list.map(s => ({
-          studentId: s.id || s.studentId,
-          fyid: s.fyid,
-          fyidName: s.name || s.fyidName,
-          class: s.class,
-          netBalance: s.balance || 0
-        }));
-        return { success: true, data: summaryData };
-      }
-    }
-  }
-
   try {
     const currentToken = getFreshAuthToken();
     const currentRole = localStorage.getItem('golden_user_role') || (window.AppState ? window.AppState.currentUserRole : '') || '';
@@ -677,20 +635,6 @@ window.callApi = async function (action, payload = {}, method = 'POST') {
         err.message.includes('Load failed') ||
         err.message.includes('network')
       ));
-
-    if (isActualMutation && isNetworkErr && window.OfflineSync) {
-      console.warn(`[OfflineSync Interceptor] Network error during ${action}. Diverting to IndexedDB Outbox...`);
-      await window.OfflineSync.enqueue(action, serverPayload, method);
-      window.clearAllApiCache();
-
-      window.showToast("SUCCESS", "📶 အင်တာနက်လိုင်း နှေးကွေး/ပြတ်တောက်နေသဖြင့် စက်ထဲတွင် ယာယီသိမ်းထားပါသည် (Offline Mode)။ လိုင်းရသည်နှင့် အလိုအလျောက် ပို့ပေးပါမည်။");
-
-      return {
-        success: true,
-        isOfflineQueued: true,
-        message: "စာရင်းအား စက်ထဲတွင် ယာယီသိမ်းဆည်းထားပါသည် (Offline Queue)"
-      };
-    }
 
     if (isReadAction && isNetworkErr) {
       const staleCache = window.getApiCache(cacheKey);

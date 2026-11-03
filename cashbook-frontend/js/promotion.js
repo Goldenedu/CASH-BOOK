@@ -21,7 +21,7 @@ function getDynamicFiscalYears() {
   const d = new Date();
   const year = d.getFullYear();
   const month = d.getMonth() + 1;
-  const currentStart = (month >= 4) ? year : year - 1;
+  const currentStart = (month >= 3) ? year : year - 1;
 
   const prevFY = `${currentStart - 1}-${currentStart}`;
   const currFY = `${currentStart}-${currentStart + 1}`;

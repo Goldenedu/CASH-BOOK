@@ -17,7 +17,8 @@ import {
   generateVoucherNo,
   generateFyNo,
   recalculateLedgerBalances,
-  generateUniqueId
+  generateUniqueId,
+  verifyRecordMutationPolicy
 } from './utils.js';
 
 /**
@@ -316,6 +317,13 @@ export async function updateStaffEntry(db, userSession, body) {
       return { success: false, message: "ပြင်ဆင်မည့် ဝန်ထမ်းမှတ်တမ်း ရှာမတွေ့ပါ။" };
     }
 
+    const recordDate = existing.created_at ? String(existing.created_at).slice(0, 10) : (existing.join_date || null);
+    // 🎯 Master Directory အဖြစ် true ထည့်သွင်းခြင်း (Admin, Finance, HR တို့အတွက် Daily Lock ကင်းလွတ်သည်)
+    const policy = verifyRecordMutationPolicy(userSession, recordDate, true);
+    if (!policy.allowed) {
+      return { success: false, message: policy.message };
+    }
+
     const staffIdNum = parseInt(body.staffId || body.id, 10) || existing.staff_id || 1;
     const paddedId = String(staffIdNum).padStart(3, '0');
     const staffName = body.name || '';
@@ -382,11 +390,37 @@ export async function updateStaffEntry(db, userSession, body) {
 /**
  * 💡 Delete Staff Entry
  */
+/**
+ * 💡 Delete Staff Entry (Protected with Mutation Policy)
+ */
 export async function deleteStaffEntry(db, userSession, body) {
   try {
+    const uniqueid = body.uniqueId || body.uniqueid;
+    if (!uniqueid) {
+      return { success: false, message: "Unique ID မပါဝင်ပါ။" };
+    }
+
     const isPartTime = String(body.category || '').toLowerCase().includes('part');
     const table = isPartTime ? 'staff_parttime' : 'staff_fulltime';
-    await db.prepare(`DELETE FROM ${table} WHERE uniqueid = ?`).bind(body.uniqueId || body.uniqueid).run();
+
+    // 🎯 Phase 2: မူလ Record ကို ဦးစွာဆွဲယူ၍ ရက်စွဲစစ်ဆေးခြင်း
+    const existing = await db.prepare(
+      `SELECT id, join_date, created_at FROM ${table} WHERE uniqueid = ?`
+    ).bind(uniqueid).first();
+
+    if (!existing) {
+      return { success: false, message: "ဖျက်သိမ်းမည့် ဝန်ထမ်းမှတ်တမ်း ရှာမတွေ့ပါ။" };
+    }
+
+    // မှတ်တမ်းသွင်းခဲ့သည့် နေ့စွဲ (created_at) သို့မဟုတ် join_date ဖြင့် Daily Policy စစ်ဆေးသည်
+    const recordDate = existing.created_at ? String(existing.created_at).slice(0, 10) : existing.join_date;
+    // 🎯 Master Directory အဖြစ် true ထည့်သွင်းခြင်း
+    const policy = verifyRecordMutationPolicy(userSession, recordDate, true);
+    if (!policy.allowed) {
+      return { success: false, message: policy.message };
+    }
+
+    await db.prepare(`DELETE FROM ${table} WHERE uniqueid = ?`).bind(uniqueid).run();
     return { success: true, message: "ဝန်ထမ်း မှတ်တမ်း အောင်မြင်စွာ ဖျက်သိမ်းပြီးပါပြီ။" };
   } catch (err) {
     console.error("Error in deleteStaffEntry handler:", err);

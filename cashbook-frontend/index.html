@@ -52,6 +52,18 @@
     html.not-authed #erp-workspace {
       display: none;
     }
+
+    html.role-readonly button[onclick*="openAddModal"],
+    html.role-readonly button[onclick*="openItemModal"],
+    html.role-readonly button[onclick*="openWasteModal"],
+    html.role-readonly button[onclick*="openSurplusModal"],
+    html.role-readonly button[onclick*="save"],
+    html.role-readonly #btn-checkout,
+    html.role-readonly .btn-delete,
+    html.role-readonly button[title*="Delete"],
+    html.role-readonly button[title*="Edit"] {
+      display: none !important;
+    }
   </style>
 
   <link rel="stylesheet" href="css/tailwind.min.css?v=20260808b">
@@ -258,14 +270,6 @@
 
         <!-- 3. Right: Symmetrical Status Capsule & Pending Queue Action Button -->
         <div class="flex items-center gap-2.5 shrink-0">
-          <!-- 💡 PENDING SYNC QUEUE BUTTON (Status Capsule နှင့် Design အတိအကျတူညီသည်) -->
-          <button id="header-pending-btn" onclick="openPendingSyncModal()" type="button"
-            class="inline-flex items-center text-xs font-bold px-3.5 py-1.5 rounded-full gap-2 transition-all duration-300 shadow-sm cursor-pointer select-none active:scale-95"
-            style="background-color: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399;"
-            title="Click to view pending offline records">
-            <i id="pending-sync-icon" class="fa-solid fa-cloud-arrow-up text-[11px]"></i>
-            <span id="pending-count-label">Pending: 0</span>
-          </button>
 
           <!-- Symmetrical Status Capsule -->
           <div id="header-status-capsule"
@@ -686,7 +690,6 @@
 
   <!-- ==================== 6. CORE APPLICATION SCRIPTS ==================== -->
   <script src="js/config.js?v=20260808b" defer></script>
-  <script src="js/offline-sync.js?v=20260808b" defer></script>
   <script src="js/api.js?v=20260808b" defer></script>
   <script src="js/auth.js?v=20260808b" defer></script>
   <script src="js/bank-cash.js?v=20260808b" defer></script>
@@ -704,20 +707,6 @@
   <script src="js/dashboard.js?v=20260808b" defer></script>
   <script src="js/app.js?v=20260808b" defer></script>
 
-  <!-- 💡 Service Worker Registration for 0ms Offline Navigation -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function () {
-        navigator.serviceWorker.register('./sw.js')
-          .then(function (reg) {
-            console.log('✅ ServiceWorker Registered Successfully for Offline Mode:', reg.scope);
-          })
-          .catch(function (err) {
-            console.warn('ServiceWorker Registration Error:', err);
-          });
-      });
-    }
-  </script>
 </body>
 
 </html>

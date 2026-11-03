@@ -79,15 +79,6 @@ function initApp() {
     window.prefetchCoreModules();
   }
 
-  // 🎯 FORCE PREFETCH MASTER DATA: Login ဝင်ချိန်တွင် Offline အတွက် ကျောင်းသားစာရင်းကို နောက်ခံတွင် အတင်းအကျပ် ဆွဲယူသိမ်းဆည်းပေးသည်
-  if (navigator.onLine && typeof window.prefetchOfflineMasterData === 'function') {
-    window.prefetchOfflineMasterData(true); // force = true ဖြင့် ခေါ်မည်
-  }
-
-  if (typeof window.updatePendingUI === 'function') {
-    window.updatePendingUI();
-  }
-
   let currentTab = window.AppState ? window.AppState.currentModule : null;
 
   if (!currentTab) {
@@ -122,7 +113,7 @@ function updateHeaderMetadata(username) {
     currentFyStr = `FY ${window.getCurrentAcademicYear()}`;
   } else {
     let fyYear = d.getFullYear();
-    if (d.getMonth() < 3) fyYear -= 1; // ဇန်နဝါရီ၊ ဖေဖော်ဝါရီ၊ မတ်လ (0, 1, 2) သည် ယခင်ပညာသင်နှစ်ထဲတွင် ရှိဆဲဖြစ်သည်
+    if (d.getMonth() < 2) fyYear -= 1; // ဇန်နဝါရီ၊ ဖေဖော်ဝါရီ၊ မတ်လ (0, 1, 2) သည် ယခင်ပညာသင်နှစ်ထဲတွင် ရှိဆဲဖြစ်သည်
     currentFyStr = `FY ${fyYear}-${fyYear + 1}`;
   }
 
@@ -152,6 +143,19 @@ async function switchTab(tabId) {
 
   if (!token) {
     document.documentElement.className = 'dark not-authed';
+    return;
+  }
+
+  // 🎯 Phase 3 Security Guard: Accountant / Cashier / Staff များ HR/Staff သို့ ဝင်ခွင့်မပြုပါ
+  const role = (localStorage.getItem('golden_user_role') || window.AppState?.currentUserRole || '').trim();
+  const normRole = role.toLowerCase().replace(/[\s_-]/g, '');
+  const blockedForGeneral = ['hr', 'staff', 'report-staff-fund'];
+
+  if (['accountant', 'cashier', 'maincashier', 'staff'].includes(normRole) && blockedForGeneral.includes(tabId)) {
+    if (typeof showToast === 'function') {
+      showToast("ERROR", "HR Payroll နှင့် Staff စာရင်းများအား ဝင်ရောက်ကြည့်ရှုခွင့် မရှိပါ။");
+    }
+    switchTab('dashboard');
     return;
   }
 
@@ -936,6 +940,63 @@ window.prefetchOfflineMasterData = async function (force = false) {
   } catch (err) {
     console.warn("[Offline Sync Pre-fetch Warning]:", err.message);
   }
+};
+
+/**
+ * 💡 Central UI Mutation Policy Helper (Phase 3)
+ * Returns { allowed: boolean, reason: string } for row-level Action Buttons
+ */
+/**
+ * 💡 Central UI Mutation Policy Helper
+ */
+window.canUserMutateRecord = function (recordDateStr, isMasterDirectory = false) {
+  const role = (localStorage.getItem('golden_user_role') || window.AppState?.currentUserRole || 'Viewer').trim();
+  const normRole = role.toLowerCase().replace(/[\s_-]/g, '');
+
+  if (normRole === 'owner' || normRole === 'viewer') {
+    return { allowed: false, reason: "Owner နှင့် Viewer သည် Read-Only ဖြစ်သဖြင့် ပြင်ဆင်/ဖျက်သိမ်းခွင့် မရှိပါ" };
+  }
+
+  // 🎯 Master Directory ဖြစ်ပြီး Admin, Finance, HR ဖြစ်ပါက UI ခလုတ်များကို အမြဲ Active ပေးထားသည်
+  if (isMasterDirectory) {
+    if (['admin', 'finance', 'hr', 'hrstaff'].includes(normRole)) {
+      return { allowed: true };
+    }
+  }
+
+  const todayMmt = typeof window.getMMTDateString === 'function'
+    ? window.getMMTDateString()
+    : new Date(Date.now() + (6.5 * 3600 * 1000)).toISOString().slice(0, 10);
+
+  const cleanDate = recordDateStr ? String(recordDateStr).split('T')[0].trim() : '';
+
+  if (cleanDate === todayMmt) {
+    return { allowed: true };
+  }
+
+  if (normRole === 'admin') {
+    const nowMmt = new Date(Date.now() + (6.5 * 3600 * 1000));
+    const isFriday = nowMmt.getUTCDay() === 5;
+
+    if (isFriday) {
+      if (cleanDate) {
+        const recTime = new Date(`${cleanDate}T00:00:00Z`).getTime();
+        const todayTime = new Date(`${todayMmt}T00:00:00Z`).getTime();
+        const diffDays = Math.round((todayTime - recTime) / (24 * 3600 * 1000));
+
+        if (diffDays >= 0 && diffDays <= 30) {
+          return { allowed: true };
+        } else if (diffDays > 30) {
+          return { allowed: false, reason: "ရက်ပေါင်း ၃၀ (၁ လ) ကျော်လွန်သွားသဖြင့် ပြင်ဆင်/ဖျက်သိမ်းခွင့် မရှိပါ" };
+        }
+      }
+      return { allowed: true };
+    } else {
+      return { allowed: false, reason: "Admin သည် ရက်စွဲဟောင်းစာရင်းများကို သောကြာနေ့များတွင်သာ ပြင်ဆင်/ဖျက်သိမ်းခွင့် ရှိပါသည် (၁ လအတွင်း)" };
+    }
+  }
+
+  return { allowed: false, reason: "ယနေ့ရက်စွဲမဟုတ်သော စာရင်းဟောင်းများကို ပြင်ဆင်/ဖျက်သိမ်းခွင့် မရှိပါ (Daily Lock)" };
 };
 
 // 💡 EXPOSE GLOBALLY TO WINDOW

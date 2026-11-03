@@ -218,9 +218,14 @@ function renderTableBankCashKit() {
   var isViewer = (window.AppState ? window.AppState.currentUserRole : '') === "Viewer";
 
   tbody.innerHTML = pageItems.map(function(row) {
-    var isLocked = Boolean(row.isLocked || isViewer);
+    var mutation = typeof window.canUserMutateRecord === 'function'
+      ? window.canUserMutateRecord(row.date)
+      : { allowed: true };
+
+    var isPolicyLocked = !mutation.allowed;
+    var isLocked = Boolean(row.isLocked || isViewer || isPolicyLocked);
     var lockClass = isLocked ? "opacity-30 cursor-not-allowed pointer-events-none" : "hover:text-white";
-    var lockTitle = row.isLocked ? "Locked (Must be edited from Source Book)" : "";
+    var lockTitle = isPolicyLocked ? mutation.reason : (row.isLocked ? "Locked (Must be edited from Source Book)" : "");
     var disabledAttr = isLocked ? 'disabled' : '';
 
     var catBadge = typeof window.formatCategoryBadgeHtml === 'function' ? window.formatCategoryBadgeHtml(row.category) : window.escapeHtml(row.category);

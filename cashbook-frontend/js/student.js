@@ -76,7 +76,7 @@ function getCurrentAcademicYear(dateInput) {
   const d = dateInput ? new Date(dateInput) : new Date();
   const validDate = isNaN(d.getTime()) ? new Date() : d;
   let y = validDate.getFullYear();
-  if (validDate.getMonth() < 3) {
+  if (validDate.getMonth() < 2) {
     y -= 1;
   }
   return `${y}-${y + 1}`;

@@ -8,7 +8,7 @@
  * ==============================================================================
  */
 
-import { normalizeFyClean, generateUniqueId, getCurrentAcademicYear } from './utils.js';
+import { normalizeFyClean, generateUniqueId, getCurrentAcademicYear, verifyRecordMutationPolicy } from './utils.js';
 
 /**
  * 💡 Fetch Promotion Fee Rates Matrix Data
@@ -196,6 +196,20 @@ export async function updatePromotionEntry(db, userSession, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
+    const existing = await db.prepare(
+      "SELECT id, created_at FROM promotion WHERE uniqueid = ?"
+    ).bind(uniqueid).first();
+
+    if (!existing) {
+      return { success: false, message: "ပြင်ဆင်မည့် Promotion Rate ရှာမတွေ့ပါ။" };
+    }
+
+    const recordDate = existing.created_at ? String(existing.created_at).slice(0, 10) : null;
+    const policy = verifyRecordMutationPolicy(userSession, recordDate, true);
+    if (!policy.allowed) {
+      return { success: false, message: policy.message };
+    }
+
     const fy = normalizeFyClean(body.fy || "2026-2027");
 
     const stmt = `
@@ -236,14 +250,29 @@ export async function updatePromotionEntry(db, userSession, body) {
   }
 }
 
+
 /**
- * 💡 Delete Promotion Rate Entry
+ * 💡 Delete Promotion Rate Entry (Protected with Mutation Policy)
  */
 export async function deletePromotionEntry(db, userSession, body) {
   try {
     const uniqueid = body.uniqueId || body.uniqueid;
     if (!uniqueid) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
+    }
+
+    const existing = await db.prepare(
+      "SELECT id, created_at FROM promotion WHERE uniqueid = ?"
+    ).bind(uniqueid).first();
+
+    if (!existing) {
+      return { success: false, message: "ဖျက်သိမ်းမည့် Promotion Rate ရှာမတွေ့ပါ။" };
+    }
+
+    const recordDate = existing.created_at ? String(existing.created_at).slice(0, 10) : null;
+    const policy = verifyRecordMutationPolicy(userSession, recordDate, true);
+    if (!policy.allowed) {
+      return { success: false, message: policy.message };
     }
 
     await db.prepare("DELETE FROM promotion WHERE uniqueid = ?").bind(uniqueid).run();

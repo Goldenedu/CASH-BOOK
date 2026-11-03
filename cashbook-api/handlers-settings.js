@@ -62,11 +62,11 @@ async function safeCountTable(db, tbl) {
     return parseInt(val || 0, 10);
   } catch (e) {
     try {
-       const altRes = await db.prepare(`SELECT COUNT(*) as cnt FROM ${tbl}`).first();
-       const altVal = altRes ? (altRes.cnt !== undefined ? altRes.cnt : Object.values(altRes)[0]) : 0;
-       return parseInt(altVal || 0, 10);
-    } catch(e2) {
-       return 0;
+      const altRes = await db.prepare(`SELECT COUNT(*) as cnt FROM ${tbl}`).first();
+      const altVal = altRes ? (altRes.cnt !== undefined ? altRes.cnt : Object.values(altRes)[0]) : 0;
+      return parseInt(altVal || 0, 10);
+    } catch (e2) {
+      return 0;
     }
   }
 }
@@ -88,7 +88,7 @@ async function getAvailableFysFromD1(db) {
   ]);
 
   const tables = ['bank', 'cash', 'office', 'kitchen', 'payroll', 'income', 'student', 'student_money'];
-  
+
   // 🚀 Parallel Concurrent Seeks (Zero Sequential Latency)
   await Promise.all(tables.map(async (tbl) => {
     try {
@@ -101,7 +101,7 @@ async function getAvailableFysFromD1(db) {
           }
         });
       }
-    } catch (e) {}
+    } catch (e) { }
   }));
   return Array.from(fys).sort().reverse();
 }
@@ -139,7 +139,7 @@ export async function getD1DatabaseUsage(db) {
         const psRes = await db.prepare("PRAGMA page_size").first();
         pageCount = pcRes ? Number(Object.values(pcRes)[0] || 0) : 0;
         pageSize = psRes ? Number(Object.values(psRes)[0] || 4096) : 4096;
-      } catch (e2) {}
+      } catch (e2) { }
     }
 
     let exactBytes = pageCount * pageSize;
@@ -185,7 +185,7 @@ export async function getD1DatabaseUsage(db) {
 
     const sizeKB = Number((exactBytes / 1024).toFixed(2));
     const sizeMB = Number((exactBytes / (1024 * 1024)).toFixed(2));
-    
+
     const MAX_STORAGE_MB = 5000;
     const MAX_STORAGE_GB = 5.0;
     const DAILY_READS_LIMIT = 5000000;
@@ -310,11 +310,11 @@ export async function exportGroupDataByFy(db, body, userSession = null) {
         { key: 'cash', columns: 'no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid', altKey: 'cash', tabName: 'cash', title: 'MAIN CASH BOOK', hasFy: true, headers: ["NO", "DATE", "CATEGORY", "DESCRIPTION", "METHOD", "DEBIT", "CREDIT", "BALANCES", "TRANSFER", "VR NO", "MY", "FY", "BOOK NAME", "CREATED BY", "CREATED AT", "UNIQUEID"] },
         { key: 'office', columns: 'no, date, category, description, unit, unit_price, method, debit, credit, balances, liabilities, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid', altKey: 'office', tabName: 'office', title: 'OFFICE EXP BOOK', hasFy: true, headers: ["NO", "DATE", "CATEGORY", "DESCRIPTION", "UNIT", "UNIT PRICE", "METHOD", "DEBIT", "CREDIT", "BALANCES", "LIABILITIES", "TRANSFER", "VR NO", "MY", "FY", "BOOK NAME", "CREATED BY", "CREATED AT", "UNIQUEID"] },
         { key: 'kitchen', columns: 'no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid', altKey: 'kitchen', tabName: 'kitchen', title: 'KITCHEN EXP BOOK', hasFy: true, headers: ["NO", "DATE", "CATEGORY", "DESCRIPTION", "METHOD", "DEBIT", "CREDIT", "BALANCES", "TRANSFER", "VR NO", "MY", "FY", "BOOK NAME", "CREATED BY", "CREATED AT", "UNIQUEID"] },
-        { key: 'payroll', columns: 'no, date, category, description, method, debit, credit, balances, unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid', altKey: 'payroll', tabName: 'payroll', title: 'HR PAYROLL EXP BOOK', hasFy: true, headers: ["NO", "DATE", "CATEGORY", "DESCRIPTION", "METHOD", "DEBIT", "CREDIT", "BALANCES", "UNPAID BONUS", "UNPAID FUND", "TRANSFER", "VR NO", "MY", "FY", "BOOK NAME", "CREATED BY", "CREATED AT", "UNIQUEID"] },
-        { key: 'income', columns: 'no, effect_date, date, fy, id, fyid, fyid_name, class, category, account_name, method, debit, credit, aut_amount, promo, my, vr_no, remark, created_by, created_at, uniqueid', altKey: 'income', tabName: 'income', title: 'MAIN INCOME BOOK', hasFy: true, headers: ["NO", "EFFECT DATE", "DATE", "FY", "ID", "FYID", "FYID NAME", "CLASS", "CATEGORY", "ACCOUNT NAME", "METHOD", "DEBIT", "CREDIT", "AUT AMOUNT", "PROMO", "MY", "VR NO", "REMARK", "CREATED BY", "CREATED AT", "UNIQUEID"] },
-        { key: 'student', columns: 'no, stu_status, date, fy, id, fyid, name, gender, class, category, promo, status, transfer_date, parents_name, phone_no, address, created_by, created_at, uniqueid', altKey: 'student', tabName: 'student', title: 'STUDENT LIST', hasFy: true, headers: ["NO", "STU STATUS", "DATE", "FY", "ID", "FYID", "NAME", "GENDER", "CLASS", "CATEGORY", "PROMO", "STATUS", "TRANSFER DATE", "PARENTS NAME", "PHONE NO", "ADDRESS", "CREATED BY", "CREATED AT", "UNIQUEID"] },
-        { key: 'student_money', columns: 'no, date, fy, id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, created_at, uniqueid', altKey: 'studentmoney', tabName: 'student_money', title: 'STUDENT MONEY LEDGER', hasFy: true, headers: ["NO", "DATE", "FY", "ID", "FYID", "FYID NAME", "CLASS", "METHOD", "DEBIT", "CREDIT", "BALANCES", "REMARK", "CREATED BY", "CREATED AT", "UNIQUEID"] },
-        { key: 'uniform_ledger', columns: 'no, product_id, product_name, type, size, opening_stock, unit_price, total_stock_value, selling_price, profit_amount, selling_unit, current_qty, total_stock_value, created_by, created_at, uniqueid', altKey: 'uniform', tabName: 'uniform', title: 'UNIFORM LEDGER', hasFy: false, headers: ["NO", "PRODUCT ID", "PRODUCT NAME", "TYPE", "SIZE", "OPENING STOCK", "UNIT PRICE", "TOTAL AMOUNT", "SELLING PRICE", "PROFIT AMOUNT", "SELLING UNIT", "CURRENT QTY", "TOTAL STOCK VALUE", "CREATED BY", "CREATED AT", "UNIQUEID"] },
+        { key: 'payroll', columns: 'no, date, category, staff_id, description, method, debit, credit, balances, unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid', altKey: 'payroll', tabName: 'payroll', title: 'HR PAYROLL EXP BOOK', hasFy: true, headers: ["NO", "DATE", "CATEGORY", "STAFF ID", "DESCRIPTION", "METHOD", "DEBIT", "CREDIT", "BALANCES", "UNPAID BONUS", "UNPAID FUND", "TRANSFER", "VR NO", "MY", "FY", "BOOK NAME", "CREATED BY", "CREATED AT", "UNIQUEID"] },
+        { key: 'income', columns: 'no, effect_date, date, fy, student_id as id, fyid, fyid_name, class, category, account_name, method, debit, credit, aut_amount, promo, my, vr_no, remark, created_by, created_at, uniqueid', altKey: 'income', tabName: 'income', title: 'MAIN INCOME BOOK', hasFy: true, headers: ["NO", "EFFECT DATE", "DATE", "FY", "ID", "FYID", "FYID NAME", "CLASS", "CATEGORY", "ACCOUNT NAME", "METHOD", "DEBIT", "CREDIT", "AUT AMOUNT", "PROMO", "MY", "VR NO", "REMARK", "CREATED BY", "CREATED AT", "UNIQUEID"] },
+        { key: 'student', columns: 'no, stu_status, date, fy, student_id as id, fyid, name, gender, class, category, promo, status, transfer_date, parents_name, phone_no, address, created_by, created_at, uniqueid', altKey: 'student', tabName: 'student', title: 'STUDENT LIST', hasFy: true, headers: ["NO", "STU STATUS", "DATE", "FY", "ID", "FYID", "NAME", "GENDER", "CLASS", "CATEGORY", "PROMO", "STATUS", "TRANSFER DATE", "PARENTS NAME", "PHONE NO", "ADDRESS", "CREATED BY", "CREATED AT", "UNIQUEID"] },
+        { key: 'student_money', columns: 'no, date, fy, student_id as id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, created_at, uniqueid', altKey: 'studentmoney', tabName: 'student_money', title: 'STUDENT MONEY LEDGER', hasFy: true, headers: ["NO", "DATE", "FY", "ID", "FYID", "FYID NAME", "CLASS", "METHOD", "DEBIT", "CREDIT", "BALANCES", "REMARK", "CREATED BY", "CREATED AT", "UNIQUEID"] },
+        { key: 'uniform_ledger', columns: 'no, product_id, product_name, type, size, opening_stock, unit_price, total_amount, selling_price, profit_amount, selling_unit, current_qty, total_stock_value, created_by, created_at, uniqueid', altKey: 'uniform', tabName: 'uniform', title: 'UNIFORM LEDGER', hasFy: false, headers: ["NO", "PRODUCT ID", "PRODUCT NAME", "TYPE", "SIZE", "OPENING STOCK", "UNIT PRICE", "TOTAL AMOUNT", "SELLING PRICE", "PROFIT AMOUNT", "SELLING UNIT", "CURRENT QTY", "TOTAL STOCK VALUE", "CREATED BY", "CREATED AT", "UNIQUEID"] },
         { key: 'promotion', columns: 'no, fy, class, category, registration, original_price, pro_a, pro_b, pro_c, pro_d, pro_e, half_scholar, full_scholar, remark, created_by, created_at, uniqueid', altKey: 'promo', tabName: 'promotion', title: 'PROMOTION LIST', hasFy: true, headers: ["NO", "FY", "CLASS", "CATEGORY", "Registration", "Original price", "Pro A", "Pro B", "Pro C", "Pro D", "Pro E", "Half scholar", "Full scholar", "Remark", "CREATED BY", "CREATED AT", "UNIQUEID"] },
         { key: 'staff_fulltime', columns: 'no, join_date, category, staff_id, name, staff_idname, education, position, salary_grade, working_days, basic_amt, extra_amt, total_salary, bonus, fund, total_net_amt, resigned_date, status, gender, nrc_no, bank_account, phone_no, email, fund_date, unpaid_bonus, unpaid_fund, created_by, created_at, uniqueid', altKey: 'fulltime', tabName: 'staff_fulltime', title: 'FULL TIME STAFF LIST', hasFy: false, headers: ["NO", "JOIN DATE", "CATEGORY", "STAFF ID", "NAME", "STAFF IDNAME", "EDUCATION", "POSITION", "SALARY GRADE", "WORKING DAYS", "BASIC AMT", "EXTRA AMT", "TOTAL SALARY", "BONUS", "FUND", "TOTAL NET AMT", "RESIGNED DATE", "STATUS", "GENDER", "NRC NO", "BANK ACCOUNT", "PHONE NO", "EMAIL", "FUND DATE", "UNPAID BONUS", "UNPAID FUND", "CREATED BY", "CREATED AT", "UNIQUEID"] },
         { key: 'staff_parttime', columns: 'no, join_date, category, staff_id, name, staff_idname, education, position, total_salary, total_net_amt, resigned_date, status, gender, nrc_no, bank_account, phone_no, email, created_by, created_at, uniqueid', altKey: 'parttime', tabName: 'staff_parttime', title: 'PART TIME STAFF LIST', hasFy: false, headers: ["NO", "JOIN DATE", "CATEGORY", "STAFF ID", "NAME", "STAFF IDNAME", "EDUCATION", "POSITION", "TOTAL SALARY", "TOTAL NET AMT", "RESIGNED DATE", "STATUS", "GENDER", "NRC NO", "BANK ACCOUNT", "PHONE NO", "EMAIL", "CREATED BY", "CREATED AT", "UNIQUEID"] },
@@ -368,7 +368,7 @@ export async function exportGroupDataByFy(db, body, userSession = null) {
           q += ` WHERE ` + conditions.join(' AND ');
         }
         q += ` ORDER BY id ASC`;
-        
+
         const res = await db.prepare(q).bind(...params).all();
         return (res && res.results) ? res.results : [];
       };
@@ -379,7 +379,7 @@ export async function exportGroupDataByFy(db, body, userSession = null) {
         try {
           const alt = tDef.altKey || tDef.key.replace('_', '');
           rows = await fetchTableRows(alt);
-        } catch (e2) {}
+        } catch (e2) { }
       }
 
       grandTotalRecords += rows.length;

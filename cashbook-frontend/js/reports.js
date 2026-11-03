@@ -16,7 +16,7 @@ function getDynamicReportFiscalYears() {
   if (window.gAvailableFys && Array.isArray(window.gAvailableFys) && window.gAvailableFys.length > 0) return window.gAvailableFys;
   const d = new Date();
   let y = d.getFullYear();
-  if (d.getMonth() < 3) y -= 1;
+  if (d.getMonth() < 2) y -= 1
   return [`${y - 1}-${y}`, `${y}-${y + 1}`, `${y + 1}-${y + 2}`];
 }
 
@@ -24,7 +24,7 @@ function populateReportFyDropdowns() {
   const options = getDynamicReportFiscalYears();
   const d = new Date();
   let currentStartYear = d.getFullYear();
-  if (d.getMonth() < 3) currentStartYear -= 1;
+  if (d.getMonth() < 2) currentStartYear -= 1;
   const currentFyStr = `${currentStartYear}-${currentStartYear + 1}`;
 
   const dropdownIds = ['report-fin-fy', 'report-income-fy', 'report-general-fy', 'report-student-fy', 'report-staff-fund-fy'];
