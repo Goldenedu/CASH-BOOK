@@ -1,37 +1,38 @@
 /**
  * ==============================================================================
  * GOLDEN ERP SYSTEM - PROGRESSIVE WEB APP (PWA) SERVICE WORKER
- * File: sw.js (Location: cashbook-frontend/sw.js - Enterprise V9.6 Full Edition)
+ * File: sw.js (Location: cashbook-frontend/sw.js - Enterprise V9.7 Bulletproof Edition)
  * 💡 Features:
- *   1. 🔄 INSTANT CACHE INVALIDATION: Bumped to v2026.10.10 to purge legacy UTC scripts
- *   2. ⚡ FAULT-TOLERANT PRE-CACHING: Parallel caching with zero install bottlenecks
- *   3. 🔀 NATIVE ROUTE RECONCILIATION: URL normalization via ignoreSearch
- *   4. 🚀 0MS OFFLINE NAVIGATION: Resilient Stale-While-Revalidate caching engine
- *   5. 🎨 WEBFONTS OFFLINE READY: Pre-caches FontAwesome for zero broken icons
- *   6. 🛡️ BYPASS API TRAFFIC: Completely bypasses /api, workers.dev & actions
+ *   1. 🔄 AUTO CACHE PURGE: Bumped to v2026.11.03 to purge broken navigation caches
+ *   2. 🚀 REDIRECT-SAFE NAVIGATION: Passes request.url to follow Cloudflare 308 redirects cleanly
+ *   3. 🎯 PAGE-SPECIFIC OFFLINE FALLBACK: No infinite loop (canteen-pos and pm-cashier have own fallbacks)
+ *   4. 🛡️ ZERO ERR_FAILED CRASH: Opaque redirects are never returned to navigation requests
+ *   5. ⚡ STALE-WHILE-REVALIDATE: 0ms Instant offline access for static assets
  * ==============================================================================
  */
 
-// 🎯 Version Bump: Forces client browsers to drop legacy cache and fetch fresh MMT scripts
-const CACHE_NAME = 'golden-erp-cache-v2026.10.10';
+// 🎯 Version Bump: Cache အသစ်ပြောင်းပြီး Chrome ရှိ မူလ Error ဖြစ်နေသော Cache အဟောင်းများကို ချက်ချင်း အပြီးတိုင်ရှင်းထုတ်မည်
+const CACHE_NAME = 'golden-erp-cache-v2026.11.03';
 
-// 💡 အော့ဖ်လိုင်းသုံးနိုင်ရန် စက်ထဲ ကြိုတင်သိမ်းဆည်းမည့် ဖိုင်များအားလုံး (CSS + JS + HTML Views + WebFonts)
+// 💡 အော့ဖ်လိုင်းသုံးနိုင်ရန် စက်ထဲ ကြိုတင်သိမ်းဆည်းမည့် ဖိုင်များအားလုံး
 const PRECACHE_ASSETS = [
   './',
   './index.html',
+  './canteen-pos.html',
+  './pm-cashier.html',
 
   // 💡 1. CORE STYLES
   './css/tailwind.min.css',
   './css/fontawesome.min.css',
   './css/style.css',
 
-  // 🎯 Phase 4.1 Fix: Offline Font Icons Pre-caching (အော့ဖ်လိုင်းတွင် icon များ အပြည့်အဝ ပေါ်စေရန်)
+  // 💡 2. WEBFONTS
   './webfonts/fa-solid-900.woff2',
   './webfonts/fa-regular-400.woff2',
   './webfonts/fa-brands-400.woff2',
   './webfonts/fa-v4compatibility.woff2',
 
-  // 💡 2. CORE APPLICATION SCRIPTS
+  // 💡 3. CORE APPLICATION SCRIPTS
   './js/config.js',
   './js/offline-sync.js',
   './js/api.js',
@@ -51,7 +52,7 @@ const PRECACHE_ASSETS = [
   './js/dashboard.js',
   './js/app.js',
 
-  // 💡 3. ALL 13 RECONCILED HTML VIEWS (Offline SPA View Routes)
+  // 💡 4. ALL 13 HTML VIEWS
   './views/dashboard.html',
   './views/bank-cash.html',
   './views/income.html',
@@ -66,9 +67,7 @@ const PRECACHE_ASSETS = [
   './views/reports.html',
   './views/settings.html',
 
-  // 💡 4. CANTEEN POS & PM CASHIER OFFLINE ASSETS
-  './canteen-pos.html',
-  './pm-cashier.html',
+  // 💡 5. CANTEEN POS & PM CASHIER COMPONENTS
   './components/canteen-dashboard.html',
   './components/canteen-purchases.html',
   './components/canteen-modals.html',
@@ -84,7 +83,7 @@ const PRECACHE_ASSETS = [
  * 💡 1. Install Event - Parallel Fault-Tolerant Pre-caching
  */
 self.addEventListener('install', (event) => {
-  console.log('[Service Worker] Installing & Pre-caching All Styles, Scripts, Fonts & Views...');
+  console.log('[Service Worker] Installing & Pre-caching All Assets...');
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return Promise.all(
@@ -102,7 +101,7 @@ self.addEventListener('install', (event) => {
  * 💡 2. Activate Event - Clean Old Cache Versions & Claim Clients Instantly
  */
 self.addEventListener('activate', (event) => {
-  console.log('[Service Worker] Activating & Cleaning Old Caches...');
+  console.log('[Service Worker] Activating & Purging Stale Caches...');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -118,19 +117,18 @@ self.addEventListener('activate', (event) => {
 });
 
 /**
- * 💡 3. Crash-Proof Fetch Interceptor & Route Reconciler
+ * 💡 3. Crash-Proof Fetch Interceptor (Zero ERR_FAILED Guarantee)
  */
 self.addEventListener('fetch', (event) => {
   const request = event.request;
 
-  // Ignore non-HTTP/HTTPS requests
   if (!request.url.startsWith('http')) {
     return;
   }
 
   const url = new URL(request.url);
 
-  // Bypass API calls & Cloudflare Worker endpoints (Handled by offline-sync.js / api.js)
+  // API နှင့် Cloudflare Workers သို့ သွားသော Data များအား Service Worker က လုံးဝ မထိတွေ့ဘဲ ကျော်လွှားမည်
   if (
     request.method !== 'GET' ||
     url.pathname.startsWith('/api') ||
@@ -140,7 +138,64 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Stale-While-Revalidate Engine with Native ignoreSearch
+  // =========================================================================
+  // 🎯 A. NAVIGATION REQUESTS (canteen-pos.html, pm-cashier.html, index.html)
+  // =========================================================================
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      (async () => {
+        const pathname = url.pathname.toLowerCase();
+
+        // ၁။ Network-First: request အစား request.url (String) ဖြင့် fetch ခေါ်ယူပါသည်
+        // (ထိုမှသာ Cloudflare Pages ၏ 308/301 Redirect များကို အမှားမဖြစ်ဘဲ ချောမွေ့စွာ follow သွားနိုင်ပါမည်)
+        try {
+          const networkResponse = await fetch(request.url);
+          if (networkResponse && networkResponse.status === 200) {
+            const cache = await caches.open(CACHE_NAME);
+            cache.put(request, networkResponse.clone()).catch(() => { });
+            return networkResponse;
+          }
+        } catch (netErr) {
+          console.warn('[Service Worker] Network navigation failed, using offline fallback:', netErr.message);
+        }
+
+        // ၂။ အင်တာနက်မရှိချိန် (Offline) ဖြစ်ပါက သက်ဆိုင်ရာ စာမျက်နှာအလိုက် သီးခြား Cache မှ ထုတ်ပေးခြင်း
+        const cache = await caches.open(CACHE_NAME);
+
+        // 🎯 Canteen POS ဖြစ်ပါက canteen-pos.html သီးသန့် ပြန်ထုတ်ပေးမည် (index.html သို့ မလွှဲပါ)
+        if (pathname.includes('canteen-pos')) {
+          const posMatch = (await cache.match('./canteen-pos.html')) ||
+            (await cache.match('/canteen-pos.html')) ||
+            (await cache.match('canteen-pos.html'));
+          if (posMatch) return posMatch;
+        }
+
+        // 🎯 PM Cashier ဖြစ်ပါက pm-cashier.html သီးသန့် ပြန်ထုတ်ပေးမည်
+        if (pathname.includes('pm-cashier')) {
+          const pmMatch = (await cache.match('./pm-cashier.html')) ||
+            (await cache.match('/pm-cashier.html')) ||
+            (await cache.match('pm-cashier.html'));
+          if (pmMatch) return pmMatch;
+        }
+
+        // 🎯 ပင်မ ERP စာမျက်နှာ ဖြစ်ပါက index.html ပြန်ထုတ်ပေးမည်
+        const indexMatch = (await cache.match('./index.html')) ||
+          (await cache.match('/index.html')) ||
+          (await cache.match('./'));
+        if (indexMatch) return indexMatch;
+
+        return new Response('Offline - Page not found in cache', {
+          status: 503,
+          headers: { 'Content-Type': 'text/html; charset=utf-8' }
+        });
+      })()
+    );
+    return;
+  }
+
+  // =========================================================================
+  // 🎯 B. STATIC ASSETS (JS, CSS, Images, Components, Fonts)
+  // =========================================================================
   event.respondWith(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
@@ -153,7 +208,7 @@ self.addEventListener('fetch', (event) => {
             networkResponse.status === 200 &&
             (networkResponse.type === 'basic' || networkResponse.type === 'cors')
           ) {
-            cache.put(request, networkResponse.clone());
+            cache.put(request, networkResponse.clone()).catch(() => { });
           }
           return networkResponse;
         })
@@ -169,14 +224,9 @@ self.addEventListener('fetch', (event) => {
         return networkResponse;
       }
 
-      if (request.mode === 'navigate') {
-        const indexFallback = await cache.match('./index.html', { ignoreSearch: true });
-        if (indexFallback) return indexFallback;
-      }
-
       return new Response('', {
         status: 503,
-        statusText: 'Service Unavailable (Offline)'
+        statusText: 'Service Unavailable (Offline Asset)'
       });
     })()
   );
