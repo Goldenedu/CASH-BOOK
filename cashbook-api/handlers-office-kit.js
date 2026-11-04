@@ -418,15 +418,17 @@ export async function saveExpenseEntry(db, session, body) {
     const isUniform = (tableName === 'office') && (body.category === "Advance Uniform" || body.category === "Advance Unifrom");
     const method = String(body.method || 'Cash').toLowerCase();
     const profit = parseFloat(body.profit || 0);
-    // 🎯 FIX: CAOffice တွင် အရင်း (costDebit) ဝင်ပြီးဖြစ်သဖြင့် CACash/CABank တွင်လည်း Main Cash/Bank အတိုင်း အမြတ် (profit) သာ ဝင်ရမည်
-    const totalCashierIncome = profit;
+    const costDebit = parseFloat(body.debit || 0);
+    const totalCashierIncome = profit; // 🎯 CACash/CABank တွင် အမြတ် (profit) သီးသန့်သာ ဝင်မည်
 
     let hasLinkedMain = false;
     let hasLinkedCashier = false;
+    let hasLinkedCaOffice = false;
     const mainTable = (method === 'bank') ? 'bank' : 'cash';
     const caTable = (method === 'bank') ? 'ca_bank' : 'ca_cash';
 
     if (isUniform) {
+      // ၁။ Main Cash/Bank Book သို့ အမြတ် (Profit) သွင်းခြင်း
       if (profit > 0) {
         hasLinkedMain = true;
         const mainPrefix = (method === 'bank') ? 'BNK' : 'CAH';
@@ -447,6 +449,7 @@ export async function saveExpenseEntry(db, session, body) {
         );
       }
 
+      // ၂။ Cashier Cash/Bank Book (CACash / CABank) သို့ အမြတ် (Profit) သွင်းခြင်း
       if (totalCashierIncome > 0) {
         hasLinkedCashier = true;
         const caPrefix = (method === 'bank') ? 'CAB' : 'CAC';
@@ -459,10 +462,30 @@ export async function saveExpenseEntry(db, session, body) {
           db.prepare(`
             INSERT INTO ${caTable} (
               no, date, responsibility_person, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-            ) VALUES (?, ?, '', 'Income Uniform', ?, ?, ?, 0, 0, '', ?, ?, ?, 'Office Exp Book', ?, datetime('now'), ?)
+            ) VALUES (?, ?, ?, 'Income Uniform', ?, ?, ?, 0, 0, '', ?, ?, ?, 'Office Exp Book', ?, datetime('now'), ?)
           `).bind(
-            caNo, entryDate, caDesc, body.method || 'Cash', totalCashierIncome,
+            caNo, entryDate, createdBy, caDesc, body.method || 'Cash', totalCashierIncome,
             caVrNo, my, fy, createdBy, caUid
+          )
+        );
+      }
+
+      // 🎯 ၃။ Cashier Office Book (CAOffice) သို့ အရင်းငွေ (Debit/Credit) အလိုအလျောက် သွင်းခြင်း
+      if (costDebit > 0 || credit > 0) {
+        hasLinkedCaOffice = true;
+        const caOffVrNo = await generateVoucherNo(db, 'ca_office', 'CAO', entryDate);
+        const caOffNo = await generateFyNo(db, 'ca_office', fy);
+        const caOffUid = `UNICASHIER_OFF_${uniqueid}`;
+        const caOffDesc = String(body.description || '').trim();
+
+        batchStatements.push(
+          db.prepare(`
+            INSERT INTO ca_office (
+              no, date, responsibility_person, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, '', ?, ?, ?, 'Office Exp Book', ?, datetime('now'), ?)
+          `).bind(
+            caOffNo, entryDate, createdBy, body.category || 'Advance Uniform', caOffDesc,
+            body.method || 'Cash', costDebit, credit, caOffVrNo, my, fy, createdBy, caOffUid
           )
         );
       }
@@ -481,6 +504,7 @@ export async function saveExpenseEntry(db, session, body) {
     await recalculateLedgerBalances(db, tableName, fy, entryDate);
     if (hasLinkedMain) await recalculateLedgerBalances(db, mainTable, fy, entryDate);
     if (hasLinkedCashier) await recalculateLedgerBalances(db, caTable, fy, entryDate);
+    if (hasLinkedCaOffice) await recalculateLedgerBalances(db, 'ca_office', fy, entryDate);
 
     return {
       success: true,
@@ -495,7 +519,7 @@ export async function saveExpenseEntry(db, session, body) {
 }
 
 /**
- * 💡 Update Expense Entry (Strict Table Audit, Minimal Quota Writes & Linked Uniform `no`/`vr_no` Preservation)
+ * 💡 Update Expense Entry (Syncs Main Book, CACash/CABank & CAOffice with `no`/`vr_no` Preservation)
  */
 export async function updateExpenseEntry(db, session, body) {
   try {
@@ -562,21 +586,25 @@ export async function updateExpenseEntry(db, session, body) {
 
     const method = String(body.method || 'Cash').toLowerCase();
     const profit = parseFloat(body.profit || 0);
-    // 🎯 FIX: Edit/Update လုပ်ချိန်တွင်လည်း CACash/CABank သို့ အမြတ် (profit) သီးသန့်သာ ပို့ဆောင်မည်
-    const totalCashierIncome = profit;
+    const costDebit = parseFloat(body.debit || 0);
+    const totalCashierIncome = profit; // 🎯 CACash/CABank တွင် အမြတ် (profit) သာ ဝင်မည်
 
     const profitUid = `UNIPROFIT_${uniqueid}`;
     const cashierUid = `UNICASHIER_${uniqueid}`;
+    const caOfficeUid = `UNICASHIER_OFF_${uniqueid}`;
     const mainTable = (method === 'bank') ? 'bank' : 'cash';
     const caTable = (method === 'bank') ? 'ca_bank' : 'ca_cash';
+    const createdBy = session?.name || 'Admin';
 
-    // 🛡️ Preserve existing `no` & `vr_no` for Linked Uniform Profit & Cashier entries
+    // 🛡️ Preserve existing `no` & `vr_no` for Linked Uniform Profit, Cashier & CAOffice entries
     let exMainMeta = null;
     let exCaMeta = null;
+    let exCaOffMeta = null;
     if (wasUniform && isUniform) {
-      const [mRow, cRow] = await db.batch([
+      const [mRow, cRow, coRow] = await db.batch([
         db.prepare(`SELECT no, vr_no, fy FROM ${mainTable} WHERE uniqueid = ?`).bind(profitUid),
-        db.prepare(`SELECT no, vr_no, fy FROM ${caTable} WHERE uniqueid = ?`).bind(cashierUid)
+        db.prepare(`SELECT no, vr_no, fy FROM ${caTable} WHERE uniqueid = ?`).bind(cashierUid),
+        db.prepare(`SELECT no, vr_no, fy FROM ca_office WHERE uniqueid = ?`).bind(caOfficeUid)
       ]);
       const mData = mRow?.results?.[0];
       if (mData) {
@@ -592,6 +620,13 @@ export async function updateExpenseEntry(db, session, body) {
           vrNo: cData.vr_no || null
         };
       }
+      const coData = coRow?.results?.[0];
+      if (coData) {
+        exCaOffMeta = {
+          no: (normalizeFyStr(coData.fy || fy) === fy) ? coData.no : null,
+          vrNo: coData.vr_no || null
+        };
+      }
     }
 
     const batchStatements = [];
@@ -601,7 +636,8 @@ export async function updateExpenseEntry(db, session, body) {
         db.prepare(`DELETE FROM cash WHERE uniqueid = ?`).bind(profitUid),
         db.prepare(`DELETE FROM bank WHERE uniqueid = ?`).bind(profitUid),
         db.prepare(`DELETE FROM ca_cash WHERE uniqueid = ?`).bind(cashierUid),
-        db.prepare(`DELETE FROM ca_bank WHERE uniqueid = ?`).bind(cashierUid)
+        db.prepare(`DELETE FROM ca_bank WHERE uniqueid = ?`).bind(cashierUid),
+        db.prepare(`DELETE FROM ca_office WHERE uniqueid = ?`).bind(caOfficeUid)
       );
     }
 
@@ -638,8 +674,10 @@ export async function updateExpenseEntry(db, session, body) {
 
     let hasLinkedMain = false;
     let hasLinkedCashier = false;
+    let hasLinkedCaOffice = false;
 
     if (isUniform) {
+      // ၁။ Main Cash/Bank Book (Profit)
       if (profit > 0) {
         hasLinkedMain = true;
         const mainPrefix = (method === 'bank') ? 'BNK' : 'CAH';
@@ -654,11 +692,12 @@ export async function updateExpenseEntry(db, session, body) {
             ) VALUES (?, ?, 'Uniform Profit', ?, ?, ?, 0, 0, '', ?, ?, ?, 'Office Exp Book', ?, datetime('now'), ?)
           `).bind(
             mainNo, entryDate, mainDesc, body.method || 'Cash', profit,
-            mainVrNo, my, fy, session?.name || 'Admin', profitUid
+            mainVrNo, my, fy, createdBy, profitUid
           )
         );
       }
 
+      // ၂။ Cashier Cash/Bank Book (Profit)
       if (totalCashierIncome > 0) {
         hasLinkedCashier = true;
         const caPrefix = (method === 'bank') ? 'CAB' : 'CAC';
@@ -670,10 +709,29 @@ export async function updateExpenseEntry(db, session, body) {
           db.prepare(`
             INSERT INTO ${caTable} (
               no, date, responsibility_person, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
-            ) VALUES (?, ?, '', 'Income Uniform', ?, ?, ?, 0, 0, '', ?, ?, ?, 'Office Exp Book', ?, datetime('now'), ?)
+            ) VALUES (?, ?, ?, 'Income Uniform', ?, ?, ?, 0, 0, '', ?, ?, ?, 'Office Exp Book', ?, datetime('now'), ?)
           `).bind(
-            caNo, entryDate, caDesc, body.method || 'Cash', totalCashierIncome,
-            caVrNo, my, fy, session?.name || 'Admin', cashierUid
+            caNo, entryDate, createdBy, caDesc, body.method || 'Cash', totalCashierIncome,
+            caVrNo, my, fy, createdBy, cashierUid
+          )
+        );
+      }
+
+      // 🎯 ၃။ Cashier Office Book (CAOffice) သို့ အရင်းငွေ (Debit/Credit) အလိုအလျောက် သွင်းခြင်း
+      if (costDebit > 0 || credit > 0) {
+        hasLinkedCaOffice = true;
+        const caOffVrNo = exCaOffMeta?.vrNo || await generateVoucherNo(db, 'ca_office', 'CAO', entryDate);
+        const caOffNo = exCaOffMeta?.no || await generateFyNo(db, 'ca_office', fy);
+        const caOffDesc = String(body.description || '').trim();
+
+        batchStatements.push(
+          db.prepare(`
+            INSERT INTO ca_office (
+              no, date, responsibility_person, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, '', ?, ?, ?, 'Office Exp Book', ?, datetime('now'), ?)
+          `).bind(
+            caOffNo, entryDate, createdBy, body.category || 'Advance Uniform', caOffDesc,
+            body.method || 'Cash', costDebit, credit, caOffVrNo, my, fy, createdBy, caOfficeUid
           )
         );
       }
@@ -704,6 +762,12 @@ export async function updateExpenseEntry(db, session, body) {
       if (hasLinkedCashier || wasUniform) {
         await recalculateLedgerBalances(db, 'ca_cash', fy, recalcDate);
         await recalculateLedgerBalances(db, 'ca_bank', fy, recalcDate);
+      }
+      if (hasLinkedCaOffice || wasUniform) {
+        await recalculateLedgerBalances(db, 'ca_office', fy, recalcDate);
+        if (oldFy && oldFy !== fy) {
+          await recalculateLedgerBalances(db, 'ca_office', oldFy, oldDate);
+        }
       }
     }
 
@@ -764,6 +828,7 @@ export async function deleteExpenseEntry(db, session, body) {
     const oldDate = existing.date || null;
     const profitUid = `UNIPROFIT_${uniqueid}`;
     const cashierUid = `UNICASHIER_${uniqueid}`;
+    const caOfficeUid = `UNICASHIER_OFF_${uniqueid}`; // 🎯 CAOffice Linked UID
     const transferUid = `TRANS_${uniqueid}`;
 
     // ⚡ Quota-Shield: Primary Table Delete
@@ -778,7 +843,8 @@ export async function deleteExpenseEntry(db, session, body) {
         db.prepare(`DELETE FROM cash WHERE uniqueid = ?`).bind(profitUid),
         db.prepare(`DELETE FROM bank WHERE uniqueid = ?`).bind(profitUid),
         db.prepare(`DELETE FROM ca_cash WHERE uniqueid = ?`).bind(cashierUid),
-        db.prepare(`DELETE FROM ca_bank WHERE uniqueid = ?`).bind(cashierUid)
+        db.prepare(`DELETE FROM ca_bank WHERE uniqueid = ?`).bind(cashierUid),
+        db.prepare(`DELETE FROM ca_office WHERE uniqueid = ?`).bind(caOfficeUid) // 🎯 CAOffice မှပါ ဖျက်သိမ်းမည်
       );
     }
 
@@ -858,6 +924,7 @@ export async function deleteExpenseEntry(db, session, body) {
       await recalculateLedgerBalances(db, 'bank', targetFy, oldDate);
       await recalculateLedgerBalances(db, 'ca_cash', targetFy, oldDate);
       await recalculateLedgerBalances(db, 'ca_bank', targetFy, oldDate);
+      await recalculateLedgerBalances(db, 'ca_office', targetFy, oldDate); // 🎯 CAOffice Balance & NO ပြန်ညှိမည်
     }
 
     return { success: true, message: "စာရင်း အောင်မြင်စွာ ဖျက်သိမ်းပြီးပါပြီ။" };
