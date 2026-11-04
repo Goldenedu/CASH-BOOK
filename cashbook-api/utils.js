@@ -177,89 +177,66 @@ export async function generateFyNo(db, tableName, fy) {
   const normFy = normalizeFyStr(fy);
   const cleanFy = normFy.replace(/^FY\s*/i, '');
 
-  // 🚀 ULTRA-OPTIMIZATION: `fy IN (?, ?)`
+  // 🚀 MAX(no) နှင့် COUNT(id) နှစ်ခုလုံးကို စစ်ဆေးသဖြင့် NULL ရှိနေသော်လည်း 1 က ပြန်မစတော့ပါ
   const lastNoRow = await db.prepare(
-    `SELECT MAX(CAST(no AS INTEGER)) as maxNo FROM ${tableName} WHERE fy IN (?, ?)`
+    `SELECT MAX(CAST(no AS INTEGER)) as maxNo, COUNT(id) as cnt FROM ${tableName} WHERE fy IN (?, ?)`
   ).bind(normFy, cleanFy).first();
-  return (lastNoRow && lastNoRow.maxNo ? parseInt(lastNoRow.maxNo, 10) : 0) + 1;
+  const maxNo = lastNoRow && lastNoRow.maxNo ? parseInt(lastNoRow.maxNo, 10) : 0;
+  const cnt = lastNoRow && lastNoRow.cnt ? parseInt(lastNoRow.cnt, 10) : 0;
+  return Math.max(maxNo, cnt) + 1;
 }
 
 /**
  * ⚡ QUOTA-SHIELD: O(1) Differential D1 Window Function Recalculation Engine
- * 🎯 METHOD (B): Sequence-Based Running Balance (ORDER BY CAST(no AS INTEGER) ASC, id ASC)
- * 🛡️ IMMUTABLE NO: Never overwrites `no`. Preserves 100% of existing transaction numbers.
+ * 🎯 Features:
+ *    - Edit Date: Keeps `no` 100% fixed in place (ordered by CAST(no AS INTEGER) ASC, id ASC)
+ *    - Delete Row: Automatically closes gaps (e.g. 17, 18, 20 -> 17, 18, 19) writing ONLY affected rows
+ *    - Auto-Heal: Fixes any NULL `no` rows in `student_money` seamlessly
  */
 export async function recalculateLedgerBalances(db, tableName, targetFy = null, fromDate = null) {
-  if (!tableName || tableName === 'income') return;
+  if (!tableName) return;
 
   try {
     if (targetFy) {
       const normFy = normalizeFyStr(targetFy);
       const cleanFy = normFy.replace(/^FY\s*/i, '');
 
-      // 💡 INCREMENTAL PATH: fromDate ပါလာပါက ထိုရက်စွဲနှင့် သက်ဆိုင်သော အငယ်ဆုံး `no` (startNo) မှစ၍ တွက်ချက်သည်
-      if (fromDate && tableName !== 'student_money') {
-        const minNoRow = await db.prepare(
-          `SELECT MIN(CAST(no AS INTEGER)) as startNo FROM ${tableName} WHERE fy IN (?, ?) AND date >= ?`
-        ).bind(normFy, cleanFy, fromDate).first();
-
-        const startNo = minNoRow && minNoRow.startNo ? parseInt(minNoRow.startNo, 10) : null;
-
-        if (startNo !== null && startNo > 1) {
-          const baseRow = await db.prepare(
-            `SELECT balances FROM ${tableName} WHERE fy IN (?, ?) AND CAST(no AS INTEGER) < ? ORDER BY CAST(no AS INTEGER) DESC, id DESC LIMIT 1`
-          ).bind(normFy, cleanFy, startNo).first();
-          const baseBal = baseRow ? (parseFloat(baseRow.balances) || 0) : 0;
-
-          if (tableName === 'canteen_book') {
-            await db.prepare(`
-              WITH calculated AS (
-                SELECT id,
-                       ? + SUM(CASE WHEN method = 'Cash' THEN 0 ELSE debit END - credit) OVER (
-                             ORDER BY CAST(no AS INTEGER) ASC, id ASC
-                             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                           ) as calc_bal
-                FROM canteen_book
-                WHERE fy IN (?, ?) AND CAST(no AS INTEGER) >= ?
-              )
-              UPDATE canteen_book
-              SET balances = calculated.calc_bal
-              FROM calculated
-              WHERE canteen_book.id = calculated.id
-                AND ROUND(canteen_book.balances, 2) IS NOT ROUND(calculated.calc_bal, 2);
-            `).bind(baseBal, normFy, cleanFy, startNo).run();
-          } else {
-            await db.prepare(`
-              WITH calculated AS (
-                SELECT id,
-                       ? + SUM(debit - credit) OVER (
-                             ORDER BY CAST(no AS INTEGER) ASC, id ASC
-                             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                           ) as calc_bal
-                FROM ${tableName}
-                WHERE fy IN (?, ?) AND CAST(no AS INTEGER) >= ?
-              )
-              UPDATE ${tableName}
-              SET balances = calculated.calc_bal
-              FROM calculated
-              WHERE ${tableName}.id = calculated.id
-                AND ROUND(${tableName}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2);
-            `).bind(baseBal, normFy, cleanFy, startNo).run();
-          }
-          return;
-        }
+      // ၁။ Income Table (Balances မရှိပါ၊ Delete လုပ်ချိန်တွင်သာ ကွက်လပ်ဖြစ်သွားသော no ကို ပြန်စီပေးမည်)
+      if (tableName === 'income') {
+        await db.prepare(`
+          WITH calculated AS (
+            SELECT id,
+                   ROW_NUMBER() OVER (
+                     ORDER BY CASE WHEN no IS NULL OR CAST(no AS INTEGER) <= 0 THEN 0 ELSE 1 END ASC,
+                              CAST(no AS INTEGER) ASC, id ASC
+                   ) as calc_no
+            FROM income
+            WHERE fy IN (?, ?)
+          )
+          UPDATE income
+          SET no = calculated.calc_no
+          FROM calculated
+          WHERE income.id = calculated.id
+            AND income.no IS NOT calculated.calc_no;
+        `).bind(normFy, cleanFy).run();
+        return;
       }
 
-      // 💡 FULL FY RECALCULATE (Ordered strictly by CAST(no AS INTEGER) ASC, id ASC)
+      // ၂။ Student Money Table (NULL no အဟောင်းများကို Auto-Heal လုပ်ပြီး Delete လုပ်လျှင် no ပြန်စီပေးမည်)
       if (tableName === 'student_money') {
         await db.prepare(`
           WITH calculated AS (
             SELECT id,
+                   ROW_NUMBER() OVER (
+                     ORDER BY CASE WHEN no IS NULL OR CAST(no AS INTEGER) <= 0 THEN 0 ELSE 1 END ASC,
+                              CAST(no AS INTEGER) ASC, id ASC
+                   ) as calc_no,
                    CASE 
                      WHEN student_id IS NOT NULL THEN
                        SUM(debit - credit) OVER (
                          PARTITION BY student_id 
-                         ORDER BY CAST(no AS INTEGER) ASC, id ASC 
+                         ORDER BY CASE WHEN no IS NULL OR CAST(no AS INTEGER) <= 0 THEN 0 ELSE 1 END ASC,
+                                  CAST(no AS INTEGER) ASC, id ASC 
                          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
                        )
                      ELSE 0
@@ -268,57 +245,101 @@ export async function recalculateLedgerBalances(db, tableName, targetFy = null, 
             WHERE fy IN (?, ?)
           )
           UPDATE student_money 
-          SET balances = calculated.calc_bal 
+          SET no = calculated.calc_no,
+              balances = calculated.calc_bal 
           FROM calculated 
           WHERE student_money.id = calculated.id 
-            AND ROUND(student_money.balances, 2) IS NOT ROUND(calculated.calc_bal, 2);
+            AND (student_money.no IS NOT calculated.calc_no 
+                 OR ROUND(student_money.balances, 2) IS NOT ROUND(calculated.calc_bal, 2));
         `).bind(normFy, cleanFy).run();
-      } else if (tableName === 'canteen_book') {
+        return;
+      }
+
+      // ၃။ Canteen Book Table
+      if (tableName === 'canteen_book') {
         await db.prepare(`
           WITH calculated AS (
             SELECT id,
+                   ROW_NUMBER() OVER (
+                     ORDER BY CASE WHEN no IS NULL OR CAST(no AS INTEGER) <= 0 THEN 0 ELSE 1 END ASC,
+                              CAST(no AS INTEGER) ASC, id ASC
+                   ) as calc_no,
                    SUM(CASE WHEN method = 'Cash' THEN 0 ELSE debit END - credit) OVER (
-                     ORDER BY CAST(no AS INTEGER) ASC, id ASC 
+                     ORDER BY CASE WHEN no IS NULL OR CAST(no AS INTEGER) <= 0 THEN 0 ELSE 1 END ASC,
+                              CAST(no AS INTEGER) ASC, id ASC 
                      ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
                    ) as calc_bal
             FROM canteen_book
             WHERE fy IN (?, ?)
           )
           UPDATE canteen_book 
-          SET balances = calculated.calc_bal 
+          SET no = calculated.calc_no,
+              balances = calculated.calc_bal 
           FROM calculated 
           WHERE canteen_book.id = calculated.id 
-            AND ROUND(canteen_book.balances, 2) IS NOT ROUND(calculated.calc_bal, 2);
+            AND (canteen_book.no IS NOT calculated.calc_no 
+                 OR ROUND(canteen_book.balances, 2) IS NOT ROUND(calculated.calc_bal, 2));
         `).bind(normFy, cleanFy).run();
-      } else {
-        await db.prepare(`
-          WITH calculated AS (
-            SELECT id,
-                   SUM(debit - credit) OVER (
-                     ORDER BY CAST(no AS INTEGER) ASC, id ASC 
-                     ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                   ) as calc_bal
-            FROM ${tableName}
-            WHERE fy IN (?, ?)
-          )
-          UPDATE ${tableName} 
-          SET balances = calculated.calc_bal 
-          FROM calculated 
-          WHERE ${tableName}.id = calculated.id 
-            AND ROUND(${tableName}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2);
-        `).bind(normFy, cleanFy).run();
+        return;
       }
+
+      // ၄။ Main & Cashier Ledgers (bank, cash, office, kitchen, payroll, ca_*, pm_cashier_book)
+      // 💡 WHERE (no IS NOT calc_no OR balances IS NOT calc_bal) ပါသဖြင့် ပြောင်းလဲသွားသော Row များကိုသာ D1 က Write လုပ်ပါသည်
+      await db.prepare(`
+        WITH calculated AS (
+          SELECT id,
+                 ROW_NUMBER() OVER (
+                   ORDER BY CASE WHEN no IS NULL OR CAST(no AS INTEGER) <= 0 THEN 0 ELSE 1 END ASC,
+                            CAST(no AS INTEGER) ASC, id ASC
+                 ) as calc_no,
+                 SUM(debit - credit) OVER (
+                   ORDER BY CASE WHEN no IS NULL OR CAST(no AS INTEGER) <= 0 THEN 0 ELSE 1 END ASC,
+                            CAST(no AS INTEGER) ASC, id ASC 
+                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                 ) as calc_bal
+          FROM ${tableName}
+          WHERE fy IN (?, ?)
+        )
+        UPDATE ${tableName} 
+        SET no = calculated.calc_no,
+            balances = calculated.calc_bal 
+        FROM calculated 
+        WHERE ${tableName}.id = calculated.id 
+          AND (${tableName}.no IS NOT calculated.calc_no 
+               OR ROUND(${tableName}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2));
+      `).bind(normFy, cleanFy).run();
+
     } else {
-      // 💡 FULL RECALCULATE ACROSS ALL FYs (Ordered by CAST(no AS INTEGER) ASC, id ASC)
-      if (tableName === 'student_money') {
+      // 💡 FULL RECALCULATE ACROSS ALL FYs
+      if (tableName === 'income') {
         await db.prepare(`
           WITH calculated AS (
             SELECT id,
+                   ROW_NUMBER() OVER (
+                     PARTITION BY fy
+                     ORDER BY CASE WHEN no IS NULL OR CAST(no AS INTEGER) <= 0 THEN 0 ELSE 1 END ASC,
+                              CAST(no AS INTEGER) ASC, id ASC
+                   ) as calc_no
+            FROM income
+          )
+          UPDATE income SET no = calculated.calc_no FROM calculated
+          WHERE income.id = calculated.id AND income.no IS NOT calculated.calc_no;
+        `).run();
+      } else if (tableName === 'student_money') {
+        await db.prepare(`
+          WITH calculated AS (
+            SELECT id,
+                   ROW_NUMBER() OVER (
+                     PARTITION BY fy
+                     ORDER BY CASE WHEN no IS NULL OR CAST(no AS INTEGER) <= 0 THEN 0 ELSE 1 END ASC,
+                              CAST(no AS INTEGER) ASC, id ASC
+                   ) as calc_no,
                    CASE 
                      WHEN student_id IS NOT NULL THEN
                        SUM(debit - credit) OVER (
                          PARTITION BY fy, student_id 
-                         ORDER BY CAST(no AS INTEGER) ASC, id ASC 
+                         ORDER BY CASE WHEN no IS NULL OR CAST(no AS INTEGER) <= 0 THEN 0 ELSE 1 END ASC,
+                                  CAST(no AS INTEGER) ASC, id ASC 
                          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
                        )
                      ELSE 0
@@ -326,44 +347,56 @@ export async function recalculateLedgerBalances(db, tableName, targetFy = null, 
             FROM student_money
           )
           UPDATE student_money 
-          SET balances = calculated.calc_bal 
+          SET no = calculated.calc_no, balances = calculated.calc_bal 
           FROM calculated 
           WHERE student_money.id = calculated.id 
-            AND ROUND(student_money.balances, 2) IS NOT ROUND(calculated.calc_bal, 2);
+            AND (student_money.no IS NOT calculated.calc_no OR ROUND(student_money.balances, 2) IS NOT ROUND(calculated.calc_bal, 2));
         `).run();
       } else if (tableName === 'canteen_book') {
         await db.prepare(`
           WITH calculated AS (
             SELECT id,
+                   ROW_NUMBER() OVER (
+                     PARTITION BY fy
+                     ORDER BY CASE WHEN no IS NULL OR CAST(no AS INTEGER) <= 0 THEN 0 ELSE 1 END ASC,
+                              CAST(no AS INTEGER) ASC, id ASC
+                   ) as calc_no,
                    SUM(CASE WHEN method = 'Cash' THEN 0 ELSE debit END - credit) OVER (
                      PARTITION BY fy 
-                     ORDER BY CAST(no AS INTEGER) ASC, id ASC 
+                     ORDER BY CASE WHEN no IS NULL OR CAST(no AS INTEGER) <= 0 THEN 0 ELSE 1 END ASC,
+                              CAST(no AS INTEGER) ASC, id ASC 
                      ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
                    ) as calc_bal
             FROM canteen_book
           )
           UPDATE canteen_book 
-          SET balances = calculated.calc_bal 
+          SET no = calculated.calc_no, balances = calculated.calc_bal 
           FROM calculated 
           WHERE canteen_book.id = calculated.id 
-            AND ROUND(canteen_book.balances, 2) IS NOT ROUND(calculated.calc_bal, 2);
+            AND (canteen_book.no IS NOT calculated.calc_no OR ROUND(canteen_book.balances, 2) IS NOT ROUND(calculated.calc_bal, 2));
         `).run();
       } else {
         await db.prepare(`
           WITH calculated AS (
             SELECT id,
+                   ROW_NUMBER() OVER (
+                     PARTITION BY fy
+                     ORDER BY CASE WHEN no IS NULL OR CAST(no AS INTEGER) <= 0 THEN 0 ELSE 1 END ASC,
+                              CAST(no AS INTEGER) ASC, id ASC
+                   ) as calc_no,
                    SUM(debit - credit) OVER (
                      PARTITION BY fy 
-                     ORDER BY CAST(no AS INTEGER) ASC, id ASC 
+                     ORDER BY CASE WHEN no IS NULL OR CAST(no AS INTEGER) <= 0 THEN 0 ELSE 1 END ASC,
+                              CAST(no AS INTEGER) ASC, id ASC 
                      ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
                    ) as calc_bal
             FROM ${tableName}
           )
           UPDATE ${tableName} 
-          SET balances = calculated.calc_bal 
+          SET no = calculated.calc_no, balances = calculated.calc_bal 
           FROM calculated 
           WHERE ${tableName}.id = calculated.id 
-            AND ROUND(${tableName}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2);
+            AND (${tableName}.no IS NOT calculated.calc_no OR ROUND(${tableName}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2));
         `).run();
       }
     }

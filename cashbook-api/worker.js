@@ -430,9 +430,9 @@ async function executeAutoRecalculateAll(db, body = {}) {
 
   const updatedTables = [];
   for (const tbl of targetTables) {
-    if (tbl !== 'income') {
-      await recalculateLedgerBalances(db, tbl, targetFy, fromDate);
-    }
+
+    await recalculateLedgerBalances(db, tbl, targetFy, fromDate);
+
     updatedTables.push(tbl);
   }
   return { success: true, message: `စာရင်းအုပ် (${updatedTables.length}) ခု၏ Balances ကို နံပါတ်စဉ် (NO) အလိုက် လုံခြုံစွာ ညှိယူပြီးပါပြီ။`, updatedTables };

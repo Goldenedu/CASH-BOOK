@@ -353,6 +353,10 @@ async function savePromotionForm(event) {
     if (res && res.success) {
       if (typeof showToast === 'function') showToast("SUCCESS", "Promotion Rate နှုန်းထားများ အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။");
       closePromotionModal();
+      if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
+      if (typeof window.invalidateIncomeMasterCache === 'function') {
+        await window.invalidateIncomeMasterCache(true, false);
+      }
       loadPromotionData(false);
     } else {
       if (typeof showToast === 'function') showToast("ERROR", res?.message || "သိမ်းဆည်းမှု မအောင်မြင်ပါ။");
@@ -373,6 +377,10 @@ async function deletePromotionEntry(uniqueId) {
 
     if (res && res.success) {
       if (typeof showToast === 'function') showToast("SUCCESS", "Promotion Rate နှုန်းထားအား အောင်မြင်စွာ ဖျက်သိမ်းပြီးပါပြီ။");
+      if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
+      if (typeof window.invalidateIncomeMasterCache === 'function') {
+        await window.invalidateIncomeMasterCache(true, false);
+      }
       loadPromotionData(false);
     } else {
       if (typeof showToast === 'function') showToast("ERROR", res?.message || "ဖျက်သိမ်းမှု မအောင်မြင်ပါ။");
