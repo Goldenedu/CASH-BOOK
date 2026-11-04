@@ -827,12 +827,12 @@ function exportToCSVIncome() {
 }
 
 /**
- * 💡 Universal Invoice Printer (Supports Offline Pending Transactions & Shows Real Voucher)
+ * 💡 Universal Invoice Printer (A4 Landscape -> Dual A5 Portrait Side-by-Side)
  */
 function printInvoice(uniqueId) {
   var row = incomeActiveData.find(function (item) { return (item.uniqueId === uniqueId || item.uniqueid === uniqueId); });
 
-  // 🎯 FIX: အော့ဖ်လိုင်း Pending စာရင်းဖြစ်နေပါက Offline Queue ထဲမှ ရှာဖွေပေးသည်
+  // အော့ဖ်လိုင်း Pending စာရင်းဖြစ်နေပါက Offline Queue ထဲမှ ရှာဖွေပေးသည်
   if (!row && window.OfflineSync) {
     const queue = window.OfflineSync.getQueue();
     const qItem = queue.find(item => item.id === uniqueId || item.payload?.uniqueId === uniqueId);
@@ -850,18 +850,29 @@ function printInvoice(uniqueId) {
     return;
   }
 
-  var nameParts = (row.fyidName || row.name || '').split(" ");
-  var studentName = nameParts.length > 3 ? nameParts.slice(3).join(" ") : (row.fyidName || row.name || '-');
+  // ကျောင်းသားအမည်ရှေ့ရှိ [2627-STU-0001] အား ဖယ်ရှား၍ အမည်သန့်သန့် ရယူခြင်း
+  var rawFullName = String(row.fyidName || row.name || '').trim();
+  var studentName = rawFullName.replace(/^\[.*?\]\s*/, '').trim() || rawFullName || '-';
+
   var displayAmount = Number(row.credit || 0);
-  var displayDesc = row.accountName || row.category || "Tuition & Fees";
+  var displayDesc = row.accountName || row.category || "Services";
   var officialVrNo = row.vrNo || '-';
 
   if (Number(row.debit || 0) > 0) {
     displayAmount = -Number(row.debit);
-    displayDesc = (row.accountName || row.category || 'Fee') + " (Student Refund)";
+    displayDesc = (row.accountName || row.category || 'Fee') + " (Refund)";
   }
 
-  var copies = ['customer', 'received'];
+  // Month (e.g. Nov-26 -> Nov-2026 သို့မဟုတ် မူလအတိုင်း)
+  var displayMonth = String(row.my || '-').trim();
+  if (/^[A-Za-z]{3}-\d{2}$/.test(displayMonth)) {
+    var mParts = displayMonth.split('-');
+    displayMonth = mParts[0] + '-20' + mParts[1];
+  }
+
+  var formattedAmount = Number(displayAmount).toLocaleString('en-US') + " MMK";
+
+  var copies = ['received', 'customer'];
   copies.forEach(function (copy) {
     var nameEl = document.getElementById(`print-${copy}-name`);
     if (nameEl) nameEl.textContent = studentName;
@@ -871,7 +882,7 @@ function printInvoice(uniqueId) {
       var rawDate = row.date || row.effDate || '';
       if (rawDate && rawDate.includes('-')) {
         var p = rawDate.split('-');
-        if (p.length === 3) rawDate = `${p[2]}-${p[1]}-${p[0]}`;
+        if (p.length === 3 && p[0].length === 4) rawDate = `${p[2]}-${p[1]}-${p[0]}`;
       }
       dateEl.textContent = rawDate || '-';
     }
@@ -883,27 +894,34 @@ function printInvoice(uniqueId) {
     if (catEl) catEl.textContent = row.category || '-';
 
     var idEl = document.getElementById(`print-${copy}-id`);
-    if (idEl) idEl.textContent = row.fyid || '-';
+    if (idEl) idEl.textContent = row.fyid || row.id || '-';
 
-    // 🎯 ပြေစာပေါ်တွင် တရားဝင် Voucher နံပါတ် အစစ်အမှန်အား ထည့်သွင်းပြသခြင်း
     var vrEl = document.getElementById(`print-${copy}-vrno`);
     if (vrEl) vrEl.textContent = officialVrNo;
 
     var bodyEl = document.getElementById(`print-${copy}-table-body`);
     if (bodyEl) {
       bodyEl.innerHTML =
-        '<tr class="border-b border-black">' +
-        '<td class="border border-black p-1 text-center font-bold text-[10px]">1</td>' +
-        '<td class="border border-black p-1 font-semibold text-[10px]">' + window.escapeHtml(displayDesc) + '</td>' +
-        '<td class="border border-black p-1 text-center text-[10px]">' + window.escapeHtml(row.my || '-') + '</td>' +
-        '<td class="border border-black p-1 text-center font-bold text-[10px]">' + window.escapeHtml(row.method || '-') + '</td>' +
-        '<td class="border border-black p-1 text-right font-bold text-[10px]">' + Number(displayAmount).toLocaleString('en-US') + ' MMK</td>' +
+        '<tr>' +
+        '<td style="padding: 8px 8px; text-align: left; color: #000;">' + window.escapeHtml(displayDesc) + '</td>' +
+        '<td style="padding: 8px 8px; text-align: center; color: #000;">' + window.escapeHtml(displayMonth) + '</td>' +
+        '<td style="padding: 8px 8px; text-align: center; color: #000;">' + window.escapeHtml(row.method || '-') + '</td>' +
+        '<td style="padding: 8px 8px; text-align: right; color: #000;">' + formattedAmount + '</td>' +
         '</tr>';
     }
 
     var totEl = document.getElementById(`print-${copy}-total`);
-    if (totEl) totEl.textContent = Number(displayAmount).toLocaleString('en-US') + " MMK";
+    if (totEl) totEl.textContent = formattedAmount;
   });
+
+  // 🎯 A4 Landscape Page Size အား Print ထုတ်ချိန်တွင် သီးသန့် သတ်မှတ်ပေးခြင်း (Payslip နှင့် မရောထွေးစေရန်)
+  var pageStyle = document.getElementById('dynamic-invoice-landscape-style');
+  if (!pageStyle) {
+    pageStyle = document.createElement('style');
+    pageStyle.id = 'dynamic-invoice-landscape-style';
+    document.head.appendChild(pageStyle);
+  }
+  pageStyle.innerHTML = '@media print { @page { size: A4 landscape !important; margin: 0 !important; } }';
 
   document.body.classList.remove('print-mode-payslip');
   document.body.classList.add('print-mode-invoice');
@@ -912,6 +930,7 @@ function printInvoice(uniqueId) {
     window.print();
     setTimeout(function () {
       document.body.classList.remove('print-mode-invoice');
+      if (pageStyle) pageStyle.innerHTML = '';
     }, 500);
   }, 100);
 }

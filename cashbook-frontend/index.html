@@ -496,98 +496,283 @@
     </div>
   </div>
 
-  <!-- ==================== 5. PRINT ENGINES (DUAL COPY) ==================== -->
-  <div id="invoice-print-area" class="bg-white text-black font-sans text-xs">
-    <div class="invoice-section">
-      <div class="space-y-3">
-        <div class="text-center font-black text-sm tracking-widest border-b border-black pb-1 uppercase">CUSTOMER COPY
-          (ကျောင်းသားမိဘအတွက်ပြေစာ)</div>
-        <div class="grid grid-cols-2 gap-4 font-bold">
-          <div>
-            <p>Name (အမည်) : <span id="print-customer-name" class="font-semibold px-2"></span></p>
-            <p class="mt-1">Class (အတန်း) : <span id="print-customer-class" class="font-semibold px-2"></span></p>
-            <p class="mt-1">Category (အမျိုးအစား) : <span id="print-customer-category"
-                class="font-semibold px-2"></span></p>
-          </div>
-          <div class="text-right">
-            <p>Date : <span id="print-customer-date" class="font-semibold"></span></p>
-            <p class="mt-1">Student ID : <span id="print-customer-id" class="font-mono font-semibold"></span></p>
-            <p class="mt-1">Voucher No : <span id="print-customer-vrno"
-                class="font-mono font-bold text-indigo-900"></span></p>
-          </div>
-        </div>
-        <table class="w-full text-left border-collapse border border-black mt-2">
-          <thead>
-            <tr class="bg-slate-100 border-b border-black">
-              <th class="border border-black p-1 text-center font-bold text-[9px] w-12">NO</th>
-              <th class="border border-black p-1 font-bold text-[9px]">DESCRIPTION</th>
-              <th class="border border-black p-1 text-center font-bold text-[9px] w-20">MONTH</th>
-              <th class="border border-black p-1 text-center font-bold text-[9px] w-28">METHOD</th>
-              <th class="border border-black p-1 text-right font-bold text-[9px] w-32">AMOUNT</th>
-            </tr>
-          </thead>
-          <tbody id="print-customer-table-body"></tbody>
-        </table>
-        <div class="text-right font-bold text-xs mt-1">Total: <span id="print-customer-total"
-            class="border-b-2 border-double border-black px-2"></span></div>
+  <!-- ==================== 5. PRINT ENGINES (A4 LANDSCAPE -> DUAL A5 PORTRAIT) ==================== -->
+  <style>
+    @media screen {
+      #invoice-print-area {
+        display: none !important;
+      }
+    }
+
+    @media print {
+      body.print-mode-invoice {
+        background: #ffffff !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      body.print-mode-invoice>*:not(#invoice-print-area) {
+        display: none !important;
+      }
+
+      body.print-mode-invoice #invoice-print-area {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: stretch !important;
+        justify-content: space-between !important;
+        width: 297mm !important;
+        height: 210mm !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        color: #000000 !important;
+        box-sizing: border-box !important;
+        position: relative !important;
+        overflow: hidden !important;
+        page-break-after: avoid !important;
+        page-break-inside: avoid !important;
+      }
+
+      /* A5 Portrait တစ်ခြမ်းစီအတွက် သတ်မှတ်ထားသော Margin: Top 0.5in, Right 0.35in, Left 1in */
+      body.print-mode-invoice .a5-invoice-half {
+        width: 50% !important;
+        height: 100% !important;
+        padding-top: 0.5in !important;
+        padding-left: 1in !important;
+        padding-right: 0.35in !important;
+        padding-bottom: 0.5in !important;
+        box-sizing: border-box !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: flex-start !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+        color: #000000 !important;
+      }
+
+      /* A4 အလယ်တည့်တည့်ရှိ Cut Here မျဉ်းဖျော့ဖျော့လေး */
+      body.print-mode-invoice .a4-center-cut-line {
+        position: absolute !important;
+        top: 0 !important;
+        bottom: 0 !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        width: 0 !important;
+        border-left: 1px dashed rgba(148, 163, 184, 0.45) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        z-index: 10 !important;
+      }
+
+      body.print-mode-invoice .a4-center-cut-label {
+        background: #ffffff !important;
+        color: rgba(148, 163, 184, 0.65) !important;
+        font-size: 9px !important;
+        font-family: monospace !important;
+        letter-spacing: 2px !important;
+        padding: 6px 2px !important;
+        writing-mode: vertical-rl !important;
+        text-orientation: mixed !important;
+        user-select: none !important;
+      }
+
+      body.print-mode-invoice .inv-table-header {
+        background-color: #a6a6a6 !important;
+        color: #000000 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+    }
+  </style>
+
+  <div id="invoice-print-area">
+    <!-- ==================== LEFT A5 PORTRAIT: RECEIVED COPY ==================== -->
+    <div class="a5-invoice-half">
+      <!-- Top Right Copy Label -->
+      <div style="text-align: right; font-weight: 700; font-size: 12.5px; color: #000; margin-bottom: 10px;">
+        Received Copy
       </div>
-      <div class="grid grid-cols-2 gap-4 pt-4 pb-2">
-        <div class="text-center">
-          <p class="border-t border-black w-40 mx-auto font-bold pt-1 text-[9px] whitespace-nowrap">Received By
-            (ငွေကိုင်)</p>
+
+      <!-- Main Heading -->
+      <div
+        style="font-size: 28px; font-weight: 800; letter-spacing: 0.5px; color: #000; line-height: 1.1; margin-bottom: 16px;">
+        INVOICE
+      </div>
+
+      <!-- Date Row -->
+      <div style="font-size: 12.5px; color: #000; margin-bottom: 18px;">
+        <span>Date</span>
+        <span style="margin-left: 16px;">:</span>
+        <span id="print-received-date" style="margin-left: 6px;"></span>
+      </div>
+
+      <!-- Student & Voucher Metadata Grid -->
+      <div
+        style="display: grid; grid-template-columns: 56% 44%; row-gap: 8px; font-size: 12.5px; color: #000; margin-bottom: 8px;">
+        <div style="display: flex; align-items: baseline;">
+          <span style="width: 44px; display: inline-block;">Name</span>
+          <span style="margin-right: 6px;">:</span>
+          <span id="print-received-name" style="font-weight: 500; flex: 1;"></span>
         </div>
-        <div class="text-center">
-          <p class="border-t border-black w-40 mx-auto font-bold pt-1 text-[9px] whitespace-nowrap">Paid By
-            (ငွေပေးသွင်းသူ)</p>
+        <div style="display: flex; align-items: baseline;">
+          <span style="width: 48px; display: inline-block;">ID</span>
+          <span style="margin-right: 6px;">:</span>
+          <span id="print-received-id" style="font-weight: 500; flex: 1;"></span>
+        </div>
+
+        <div style="display: flex; align-items: baseline;">
+          <span style="width: 44px; display: inline-block;">Class</span>
+          <span style="margin-right: 6px;">:</span>
+          <span id="print-received-class" style="font-weight: 500; flex: 1;"></span>
+        </div>
+        <div style="display: flex; align-items: baseline;">
+          <span style="width: 48px; display: inline-block;">VR NO</span>
+          <span style="margin-right: 6px;">:</span>
+          <span id="print-received-vrno" style="font-weight: 500; flex: 1;"></span>
+        </div>
+      </div>
+
+      <!-- Hidden Category Holder for Compatibility -->
+      <span id="print-received-category" style="display: none;"></span>
+
+      <!-- Grey Header Bar Table -->
+      <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; color: #000; margin-top: 2px;">
+        <thead>
+          <tr class="inv-table-header">
+            <th style="padding: 6px 8px; text-align: left; font-weight: 500; width: 34%;">Category</th>
+            <th style="padding: 6px 8px; text-align: center; font-weight: 500; width: 22%;">Month</th>
+            <th style="padding: 6px 8px; text-align: center; font-weight: 500; width: 18%;">Method</th>
+            <th style="padding: 6px 8px; text-align: right; font-weight: 500; width: 26%;">Amount</th>
+          </tr>
+        </thead>
+        <tbody id="print-received-table-body"></tbody>
+      </table>
+
+      <!-- Total Line -->
+      <div
+        style="display: flex; justify-content: flex-end; align-items: center; gap: 22px; font-size: 12.5px; color: #000; margin-top: 28px; padding-right: 8px;">
+        <span>Total</span>
+        <span id="print-received-total" style="font-weight: 500;"></span>
+      </div>
+
+      <!-- Thank You Note -->
+      <div style="font-size: 12px; color: #000; margin-top: 6px; letter-spacing: 0.2px;">
+        THANK YOU
+      </div>
+
+      <!-- Signatures Section -->
+      <div
+        style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 90px; padding: 0 8px;">
+        <div style="text-align: center; width: 45%;">
+          <div style="border-top: 1px dotted #333; width: 100%; margin-bottom: 6px;"></div>
+          <div style="font-size: 11.5px; font-family: Georgia, serif; color: #000; white-space: nowrap;">
+            Paid by: (ငွေပေးသွင်းသူ)
+          </div>
+        </div>
+        <div style="text-align: center; width: 45%;">
+          <div style="border-top: 1px dotted #333; width: 100%; margin-bottom: 6px;"></div>
+          <div style="font-size: 11.5px; font-family: Georgia, serif; color: #000; white-space: nowrap;">
+            Received by: (ငွေလက်ခံသူ)
+          </div>
         </div>
       </div>
     </div>
 
-    <div
-      class="invoice-divider border-t border-dashed border-slate-400 text-center text-slate-400 select-none text-[10px]">
-      ✂ - - - - - - - - - - - - - - - - - Cut Here - - - - - - - - - - - - - - - - - ✂
+    <!-- ==================== CENTER FAINT CUT LINE ==================== -->
+    <div class="a4-center-cut-line">
+      <span class="a4-center-cut-label">✂ Cut Here</span>
     </div>
 
-    <div class="invoice-section">
-      <div class="space-y-3">
-        <div class="text-center font-black text-sm tracking-widest border-b border-black pb-1 uppercase">RECEIVED COPY
-          (ကျောင်းတွင်းသိမ်းဆည်းရန်ပြေစာ)</div>
-        <div class="grid grid-cols-2 gap-4 font-bold">
-          <div>
-            <p>Name (အမည်) : <span id="print-received-name" class="font-semibold px-2"></span></p>
-            <p class="mt-1">Class (အတန်း) : <span id="print-received-class" class="font-semibold px-2"></span></p>
-            <p class="mt-1">Category (အမျိုးအစား) : <span id="print-received-category"
-                class="font-semibold px-2"></span></p>
-          </div>
-          <div class="text-right">
-            <p>Date : <span id="print-received-date" class="font-semibold"></span></p>
-            <p class="mt-1">Student ID : <span id="print-received-id" class="font-mono font-semibold"></span></p>
-            <p class="mt-1">Voucher No : <span id="print-received-vrno" class="font-mono font-bold"></span></p>
-          </div>
-        </div>
-        <table class="w-full text-left border-collapse border border-black mt-2">
-          <thead>
-            <tr class="bg-slate-100 border-b border-black">
-              <th class="border border-black p-1 text-center font-bold text-[9px] w-12">NO</th>
-              <th class="border border-black p-1 font-bold text-[9px]">DESCRIPTION</th>
-              <th class="border border-black p-1 text-center font-bold text-[9px] w-20">MONTH</th>
-              <th class="border border-black p-1 text-center font-bold text-[9px] w-28">METHOD</th>
-              <th class="border border-black p-1 text-right font-bold text-[9px] w-32">AMOUNT</th>
-            </tr>
-          </thead>
-          <tbody id="print-received-table-body"></tbody>
-        </table>
-        <div class="text-right font-bold text-xs mt-1">Total: <span id="print-received-total"
-            class="border-b-2 border-double border-black px-2"></span></div>
+    <!-- ==================== RIGHT A5 PORTRAIT: CUSTOMER COPY ==================== -->
+    <div class="a5-invoice-half">
+      <!-- Top Right Copy Label -->
+      <div style="text-align: right; font-weight: 700; font-size: 12.5px; color: #000; margin-bottom: 10px;">
+        Customer Copy
       </div>
-      <div class="grid grid-cols-2 gap-4 pt-4 pb-2">
-        <div class="text-center">
-          <p class="border-t border-black w-40 mx-auto font-bold pt-1 text-[9px] whitespace-nowrap">Received By
-            (ငွေကိုင်)</p>
+
+      <!-- Main Heading -->
+      <div
+        style="font-size: 28px; font-weight: 800; letter-spacing: 0.5px; color: #000; line-height: 1.1; margin-bottom: 16px;">
+        INVOICE
+      </div>
+
+      <!-- Date Row -->
+      <div style="font-size: 12.5px; color: #000; margin-bottom: 18px;">
+        <span>Date</span>
+        <span style="margin-left: 16px;">:</span>
+        <span id="print-customer-date" style="margin-left: 6px;"></span>
+      </div>
+
+      <!-- Student & Voucher Metadata Grid -->
+      <div
+        style="display: grid; grid-template-columns: 56% 44%; row-gap: 8px; font-size: 12.5px; color: #000; margin-bottom: 8px;">
+        <div style="display: flex; align-items: baseline;">
+          <span style="width: 44px; display: inline-block;">Name</span>
+          <span style="margin-right: 6px;">:</span>
+          <span id="print-customer-name" style="font-weight: 500; flex: 1;"></span>
         </div>
-        <div class="text-center">
-          <p class="border-t border-black w-40 mx-auto font-bold pt-1 text-[9px] whitespace-nowrap">Paid By
-            (ငွေပေးသွင်းသူ)</p>
+        <div style="display: flex; align-items: baseline;">
+          <span style="width: 48px; display: inline-block;">ID</span>
+          <span style="margin-right: 6px;">:</span>
+          <span id="print-customer-id" style="font-weight: 500; flex: 1;"></span>
+        </div>
+
+        <div style="display: flex; align-items: baseline;">
+          <span style="width: 44px; display: inline-block;">Class</span>
+          <span style="margin-right: 6px;">:</span>
+          <span id="print-customer-class" style="font-weight: 500; flex: 1;"></span>
+        </div>
+        <div style="display: flex; align-items: baseline;">
+          <span style="width: 48px; display: inline-block;">VR NO</span>
+          <span style="margin-right: 6px;">:</span>
+          <span id="print-customer-vrno" style="font-weight: 500; flex: 1;"></span>
+        </div>
+      </div>
+
+      <!-- Hidden Category Holder for Compatibility -->
+      <span id="print-customer-category" style="display: none;"></span>
+
+      <!-- Grey Header Bar Table -->
+      <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; color: #000; margin-top: 2px;">
+        <thead>
+          <tr class="inv-table-header">
+            <th style="padding: 6px 8px; text-align: left; font-weight: 500; width: 34%;">Category</th>
+            <th style="padding: 6px 8px; text-align: center; font-weight: 500; width: 22%;">Month</th>
+            <th style="padding: 6px 8px; text-align: center; font-weight: 500; width: 18%;">Method</th>
+            <th style="padding: 6px 8px; text-align: right; font-weight: 500; width: 26%;">Amount</th>
+          </tr>
+        </thead>
+        <tbody id="print-customer-table-body"></tbody>
+      </table>
+
+      <!-- Total Line -->
+      <div
+        style="display: flex; justify-content: flex-end; align-items: center; gap: 22px; font-size: 12.5px; color: #000; margin-top: 28px; padding-right: 8px;">
+        <span>Total</span>
+        <span id="print-customer-total" style="font-weight: 500;"></span>
+      </div>
+
+      <!-- Thank You Note -->
+      <div style="font-size: 12px; color: #000; margin-top: 6px; letter-spacing: 0.2px;">
+        THANK YOU
+      </div>
+
+      <!-- Signatures Section -->
+      <div
+        style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 90px; padding: 0 8px;">
+        <div style="text-align: center; width: 45%;">
+          <div style="border-top: 1px dotted #333; width: 100%; margin-bottom: 6px;"></div>
+          <div style="font-size: 11.5px; font-family: Georgia, serif; color: #000; white-space: nowrap;">
+            Paid by: (ငွေပေးသွင်းသူ)
+          </div>
+        </div>
+        <div style="text-align: center; width: 45%;">
+          <div style="border-top: 1px dotted #333; width: 100%; margin-bottom: 6px;"></div>
+          <div style="font-size: 11.5px; font-family: Georgia, serif; color: #000; white-space: nowrap;">
+            Received by: (ငွေလက်ခံသူ)
+          </div>
         </div>
       </div>
     </div>
