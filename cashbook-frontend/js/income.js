@@ -887,8 +887,12 @@ function printInvoice(uniqueId) {
       dateEl.textContent = rawDate || '-';
     }
 
+    var classVal = row.class || '-';
+    var catVal = row.category || '';
+    var displayClassCat = catVal ? `${classVal} | ${catVal}` : classVal;
+
     var classEl = document.getElementById(`print-${copy}-class`);
-    if (classEl) classEl.textContent = row.class || '-';
+    if (classEl) classEl.textContent = displayClassCat;
 
     var catEl = document.getElementById(`print-${copy}-category`);
     if (catEl) catEl.textContent = row.category || '-';

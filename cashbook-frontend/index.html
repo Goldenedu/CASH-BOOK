@@ -510,61 +510,78 @@
         margin: 0mm !important;
       }
 
+      *,
+      *::before,
+      *::after {
+        box-shadow: none !important;
+        text-shadow: none !important;
+      }
+
       html,
+      html.dark,
+      body,
       body.print-mode-invoice {
-        width: 100% !important;
-        height: 100% !important;
+        width: 297mm !important;
+        height: 210mm !important;
+        max-width: 297mm !important;
+        max-height: 210mm !important;
         background: #ffffff !important;
+        background-color: #ffffff !important;
         margin: 0 !important;
         padding: 0 !important;
+        border: none !important;
+        outline: none !important;
         overflow: hidden !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
 
+      /* Print မဟုတ်သော အခြား Web UI အစိတ်အပိုင်းများ အားလုံးကို ကွယ်ထားခြင်း */
       body.print-mode-invoice>*:not(#invoice-print-area) {
         display: none !important;
       }
 
-      /* 🎯 297mm အသေအစား 100% သုံးထားသဖြင့် ညာဘက်ခြမ်း လုံးဝ မပြတ်တောက်တော့ပါ */
+      /* 🎯 A4 Landscape စာရွက်အပြည့် အဖြူရောင် (အပေါ်/အောက်/ဘေး အမည်းတန်းများ လုံးဝမထွက်စေရန် 297mm x 210mm သတ်မှတ်ခြင်း) */
       body.print-mode-invoice #invoice-print-area {
         display: flex !important;
         flex-direction: row !important;
         align-items: stretch !important;
         justify-content: space-between !important;
-        width: 100% !important;
-        max-width: 100% !important;
-        height: 100vh !important;
+        width: 297mm !important;
+        max-width: 297mm !important;
+        height: 210mm !important;
+        max-height: 210mm !important;
         margin: 0 !important;
         padding: 0 !important;
         background: #ffffff !important;
+        background-color: #ffffff !important;
         color: #000000 !important;
         box-sizing: border-box !important;
         position: relative !important;
+        border: none !important;
         page-break-after: avoid !important;
         page-break-inside: avoid !important;
       }
 
-      /* 🎯 A5 Portrait တစ်ခြမ်းစီအတွက် သတ်မှတ်ထားသော Margin: Top 0.5in, Right 0.35in, Left 1in အတိအကျ */
+      /* 🎯 A5 Portrait တစ်ခြမ်းစီ Margin သတ်မှတ်ချက် */
       body.print-mode-invoice .a5-invoice-half {
         width: 50% !important;
         max-width: 50% !important;
         flex: 0 0 50% !important;
-        height: 100% !important;
+        height: 210mm !important;
         padding-top: 0.5in !important;
-        padding-left: 1in !important;
-        padding-right: 0.35in !important;
+        padding-left: 0.9in !important;
+        padding-right: 0.45in !important;
         padding-bottom: 0.4in !important;
         box-sizing: border-box !important;
         display: flex !important;
         flex-direction: column !important;
         justify-content: flex-start !important;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
+        font-family: "Pyidaungsu", "Myanmar Text", "Padauk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
         color: #000000 !important;
         overflow: hidden !important;
       }
 
-      /* 🎯 Global Dark CSS ကို ဖယ်ရှားပြီး မီးခိုးရောင်ဖျော့ဖျော့ (#e5e7eb) နှင့် အနက်ရောင်စာသား သတ်မှတ်ခြင်း */
       body.print-mode-invoice #invoice-print-area table {
         width: 100% !important;
         border-collapse: collapse !important;
@@ -597,7 +614,7 @@
         padding: 8px 6px !important;
       }
 
-      /* A4 အလယ်တည့်တည့်ရှိ Cut Here မျဉ်းဖျော့ဖျော့လေး */
+      /* A4 အလယ်တည့်တည့်ရှိ Cut Here ဖြတ်ရန် မျဉ်း */
       body.print-mode-invoice .a4-center-cut-line {
         position: absolute !important;
         top: 0 !important;
@@ -629,51 +646,58 @@
   <div id="invoice-print-area">
     <!-- ==================== LEFT A5 PORTRAIT: RECEIVED COPY ==================== -->
     <div class="a5-invoice-half">
-      <div style="text-align: right; font-weight: 700; font-size: 12px; color: #000; margin-bottom: 10px;">
+      <div style="text-align: right; font-weight: 700; font-size: 12px; color: #000; margin-bottom: 6px;">
         Received Copy
       </div>
 
+      <!-- INVOICE ခေါင်းစဉ် (Date နှင့် အကွာအဝေးကို margin-bottom: 22px ဖြင့် ချဲထားပါသည်) -->
       <div
-        style="font-size: 26px; font-weight: 800; letter-spacing: 0.5px; color: #000; line-height: 1.1; margin-bottom: 14px;">
+        style="font-size: 26px; font-weight: 800; letter-spacing: 0.5px; color: #000; line-height: 1.1; margin-bottom: 22px;">
         INVOICE
       </div>
 
       <div style="font-size: 11.5px; color: #000; margin-bottom: 14px;">
         <span>Date</span>
-        <span style="margin-left: 12px;">:</span>
-        <span id="print-received-date" style="margin-left: 6px; font-weight: 500;"></span>
+        <span style="margin-left: 12px; margin-right: 6px;">:</span>
+        <span id="print-received-date" style="font-weight: 500;"></span>
       </div>
 
-      <!-- Student & Voucher Metadata Grid -->
-      <div
-        style="display: grid; grid-template-columns: 53% 47%; row-gap: 6px; font-size: 11.5px; color: #000; margin-bottom: 8px;">
-        <div style="display: flex; align-items: baseline; padding-right: 4px;">
-          <span style="width: 38px; flex-shrink: 0;">Name</span>
-          <span style="margin-right: 5px;">:</span>
-          <span id="print-received-name"
-            style="font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
-        </div>
-        <div style="display: flex; align-items: baseline;">
-          <span style="width: 42px; flex-shrink: 0;">ID</span>
-          <span style="margin-right: 5px;">:</span>
-          <span id="print-received-id" style="font-weight: 500; white-space: nowrap;"></span>
+      <!-- Student & Voucher Metadata (ID နှင့် VR NO ကို ညာဘက်စွန်းသို့ ကပ်ထားပါသည်) -->
+      <div style="font-size: 11.5px; color: #000; margin-bottom: 10px;">
+        <!-- Row 1: Name (Left) | ID (Right) -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <div style="display: flex; align-items: center; min-width: 0; padding-right: 8px;">
+            <span style="width: 40px; flex-shrink: 0;">Name</span>
+            <span style="margin-right: 6px;">:</span>
+            <!-- မြန်မာစာ မပြတ်စေရန် line-height: 1.5 နှင့် padding-bottom: 3px ထည့်ထားပါသည် -->
+            <span id="print-received-name"
+              style="font-weight: 600; line-height: 1.5; padding-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block;"></span>
+          </div>
+          <div style="display: flex; align-items: center; flex-shrink: 0; text-align: right;">
+            <span style="margin-right: 6px;">ID</span>
+            <span style="margin-right: 6px;">:</span>
+            <span id="print-received-id" style="font-weight: 500; white-space: nowrap;"></span>
+          </div>
         </div>
 
-        <div style="display: flex; align-items: baseline; padding-right: 4px;">
-          <span style="width: 38px; flex-shrink: 0;">Class</span>
-          <span style="margin-right: 5px;">:</span>
-          <span id="print-received-class" style="font-weight: 500; white-space: nowrap;"></span>
-        </div>
-        <div style="display: flex; align-items: baseline;">
-          <span style="width: 42px; flex-shrink: 0;">VR NO</span>
-          <span style="margin-right: 5px;">:</span>
-          <span id="print-received-vrno" style="font-weight: 500; white-space: nowrap;"></span>
+        <!-- Row 2: Class | Category (Left) | VR NO (Right) -->
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; min-width: 0; padding-right: 8px;">
+            <span style="width: 40px; flex-shrink: 0;">Class</span>
+            <span style="margin-right: 6px;">:</span>
+            <span id="print-received-class" style="font-weight: 500; white-space: nowrap;"></span>
+          </div>
+          <div style="display: flex; align-items: center; flex-shrink: 0; text-align: right;">
+            <span style="margin-right: 6px;">VR NO</span>
+            <span style="margin-right: 6px;">:</span>
+            <span id="print-received-vrno" style="font-weight: 500; white-space: nowrap;"></span>
+          </div>
         </div>
       </div>
 
       <span id="print-received-category" style="display: none;"></span>
 
-      <!-- Light Grey Header Bar Table -->
+      <!-- Table Section -->
       <table>
         <thead>
           <tr>
@@ -686,21 +710,23 @@
         <tbody id="print-received-table-body"></tbody>
       </table>
 
-      <!-- Total Line -->
-      <div
-        style="display: flex; justify-content: flex-end; align-items: center; gap: 18px; font-size: 12px; color: #000; margin-top: 24px; padding-right: 6px;">
-        <span style="font-weight: 500;">Total</span>
-        <span id="print-received-total" style="font-weight: 700;"></span>
+      <!-- 🎯 Total Line (အပေါ်/အောက် မျဉ်းအပြည့်တားထားပြီး Total အား ညာဘက်စွန်း ကပ်ထားပါသည်) -->
+      <div style="border-top: 1px solid #000000; border-bottom: 1px solid #000000; margin-top: 20px; padding: 6px 0;">
+        <div
+          style="display: flex; justify-content: flex-end; align-items: center; gap: 20px; font-size: 12px; color: #000;">
+          <span style="font-weight: 600;">Total</span>
+          <span id="print-received-total" style="font-weight: 700;"></span>
+        </div>
       </div>
 
       <!-- Thank You Note -->
-      <div style="font-size: 11.5px; color: #000; margin-top: 8px; letter-spacing: 0.2px;">
+      <div style="font-size: 11.5px; font-weight: 700; color: #000; margin-top: 10px; letter-spacing: 0.4px;">
         THANK YOU
       </div>
 
       <!-- Signatures Section -->
       <div
-        style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 85px; padding: 0 4px;">
+        style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 80px; padding: 0 4px;">
         <div style="text-align: center; width: 45%;">
           <div style="border-top: 1px dotted #444; width: 100%; margin-bottom: 6px;"></div>
           <div style="font-size: 11px; font-family: Georgia, serif; color: #000; white-space: nowrap;">
@@ -723,51 +749,58 @@
 
     <!-- ==================== RIGHT A5 PORTRAIT: CUSTOMER COPY ==================== -->
     <div class="a5-invoice-half">
-      <div style="text-align: right; font-weight: 700; font-size: 12px; color: #000; margin-bottom: 10px;">
+      <div style="text-align: right; font-weight: 700; font-size: 12px; color: #000; margin-bottom: 6px;">
         Customer Copy
       </div>
 
+      <!-- INVOICE ခေါင်းစဉ် (Date နှင့် အကွာအဝေးကို margin-bottom: 22px ဖြင့် ချဲထားပါသည်) -->
       <div
-        style="font-size: 26px; font-weight: 800; letter-spacing: 0.5px; color: #000; line-height: 1.1; margin-bottom: 14px;">
+        style="font-size: 26px; font-weight: 800; letter-spacing: 0.5px; color: #000; line-height: 1.1; margin-bottom: 22px;">
         INVOICE
       </div>
 
       <div style="font-size: 11.5px; color: #000; margin-bottom: 14px;">
         <span>Date</span>
-        <span style="margin-left: 12px;">:</span>
-        <span id="print-customer-date" style="margin-left: 6px; font-weight: 500;"></span>
+        <span style="margin-left: 12px; margin-right: 6px;">:</span>
+        <span id="print-customer-date" style="font-weight: 500;"></span>
       </div>
 
-      <!-- Student & Voucher Metadata Grid -->
-      <div
-        style="display: grid; grid-template-columns: 53% 47%; row-gap: 6px; font-size: 11.5px; color: #000; margin-bottom: 8px;">
-        <div style="display: flex; align-items: baseline; padding-right: 4px;">
-          <span style="width: 38px; flex-shrink: 0;">Name</span>
-          <span style="margin-right: 5px;">:</span>
-          <span id="print-customer-name"
-            style="font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
-        </div>
-        <div style="display: flex; align-items: baseline;">
-          <span style="width: 42px; flex-shrink: 0;">ID</span>
-          <span style="margin-right: 5px;">:</span>
-          <span id="print-customer-id" style="font-weight: 500; white-space: nowrap;"></span>
+      <!-- Student & Voucher Metadata (ID နှင့် VR NO ကို ညာဘက်စွန်းသို့ ကပ်ထားပါသည်) -->
+      <div style="font-size: 11.5px; color: #000; margin-bottom: 10px;">
+        <!-- Row 1: Name (Left) | ID (Right) -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <div style="display: flex; align-items: center; min-width: 0; padding-right: 8px;">
+            <span style="width: 40px; flex-shrink: 0;">Name</span>
+            <span style="margin-right: 6px;">:</span>
+            <!-- မြန်မာစာ မပြတ်စေရန် line-height: 1.5 နှင့် padding-bottom: 3px ထည့်ထားပါသည် -->
+            <span id="print-customer-name"
+              style="font-weight: 600; line-height: 1.5; padding-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block;"></span>
+          </div>
+          <div style="display: flex; align-items: center; flex-shrink: 0; text-align: right;">
+            <span style="margin-right: 6px;">ID</span>
+            <span style="margin-right: 6px;">:</span>
+            <span id="print-customer-id" style="font-weight: 500; white-space: nowrap;"></span>
+          </div>
         </div>
 
-        <div style="display: flex; align-items: baseline; padding-right: 4px;">
-          <span style="width: 38px; flex-shrink: 0;">Class</span>
-          <span style="margin-right: 5px;">:</span>
-          <span id="print-customer-class" style="font-weight: 500; white-space: nowrap;"></span>
-        </div>
-        <div style="display: flex; align-items: baseline;">
-          <span style="width: 42px; flex-shrink: 0;">VR NO</span>
-          <span style="margin-right: 5px;">:</span>
-          <span id="print-customer-vrno" style="font-weight: 500; white-space: nowrap;"></span>
+        <!-- Row 2: Class | Category (Left) | VR NO (Right) -->
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; min-width: 0; padding-right: 8px;">
+            <span style="width: 40px; flex-shrink: 0;">Class</span>
+            <span style="margin-right: 6px;">:</span>
+            <span id="print-customer-class" style="font-weight: 500; white-space: nowrap;"></span>
+          </div>
+          <div style="display: flex; align-items: center; flex-shrink: 0; text-align: right;">
+            <span style="margin-right: 6px;">VR NO</span>
+            <span style="margin-right: 6px;">:</span>
+            <span id="print-customer-vrno" style="font-weight: 500; white-space: nowrap;"></span>
+          </div>
         </div>
       </div>
 
       <span id="print-customer-category" style="display: none;"></span>
 
-      <!-- Light Grey Header Bar Table -->
+      <!-- Table Section -->
       <table>
         <thead>
           <tr>
@@ -780,21 +813,23 @@
         <tbody id="print-customer-table-body"></tbody>
       </table>
 
-      <!-- Total Line -->
-      <div
-        style="display: flex; justify-content: flex-end; align-items: center; gap: 18px; font-size: 12px; color: #000; margin-top: 24px; padding-right: 6px;">
-        <span style="font-weight: 500;">Total</span>
-        <span id="print-customer-total" style="font-weight: 700;"></span>
+      <!-- 🎯 Total Line (အပေါ်/အောက် မျဉ်းအပြည့်တားထားပြီး Total အား ညာဘက်စွန်း ကပ်ထားပါသည်) -->
+      <div style="border-top: 1px solid #000000; border-bottom: 1px solid #000000; margin-top: 20px; padding: 6px 0;">
+        <div
+          style="display: flex; justify-content: flex-end; align-items: center; gap: 20px; font-size: 12px; color: #000;">
+          <span style="font-weight: 600;">Total</span>
+          <span id="print-customer-total" style="font-weight: 700;"></span>
+        </div>
       </div>
 
       <!-- Thank You Note -->
-      <div style="font-size: 11.5px; color: #000; margin-top: 8px; letter-spacing: 0.2px;">
+      <div style="font-size: 11.5px; font-weight: 700; color: #000; margin-top: 10px; letter-spacing: 0.4px;">
         THANK YOU
       </div>
 
       <!-- Signatures Section -->
       <div
-        style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 85px; padding: 0 4px;">
+        style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 80px; padding: 0 4px;">
         <div style="text-align: center; width: 45%;">
           <div style="border-top: 1px dotted #444; width: 100%; margin-bottom: 6px;"></div>
           <div style="font-size: 11px; font-family: Georgia, serif; color: #000; white-space: nowrap;">
