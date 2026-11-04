@@ -418,8 +418,8 @@ export async function saveExpenseEntry(db, session, body) {
     const isUniform = (tableName === 'office') && (body.category === "Advance Uniform" || body.category === "Advance Unifrom");
     const method = String(body.method || 'Cash').toLowerCase();
     const profit = parseFloat(body.profit || 0);
-    const costDebit = parseFloat(body.debit || 0);
-    const totalCashierIncome = costDebit + profit;
+    // 🎯 FIX: CAOffice တွင် အရင်း (costDebit) ဝင်ပြီးဖြစ်သဖြင့် CACash/CABank တွင်လည်း Main Cash/Bank အတိုင်း အမြတ် (profit) သာ ဝင်ရမည်
+    const totalCashierIncome = profit;
 
     let hasLinkedMain = false;
     let hasLinkedCashier = false;
@@ -562,8 +562,8 @@ export async function updateExpenseEntry(db, session, body) {
 
     const method = String(body.method || 'Cash').toLowerCase();
     const profit = parseFloat(body.profit || 0);
-    const costDebit = parseFloat(body.debit || 0);
-    const totalCashierIncome = costDebit + profit;
+    // 🎯 FIX: Edit/Update လုပ်ချိန်တွင်လည်း CACash/CABank သို့ အမြတ် (profit) သီးသန့်သာ ပို့ဆောင်မည်
+    const totalCashierIncome = profit;
 
     const profitUid = `UNIPROFIT_${uniqueid}`;
     const cashierUid = `UNICASHIER_${uniqueid}`;
