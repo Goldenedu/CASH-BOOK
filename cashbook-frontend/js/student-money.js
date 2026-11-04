@@ -243,7 +243,7 @@ function renderStudentMoneyTable() {
   }
 
   gStudentMoneyHistoryData.forEach((row, idx) => {
-    const displayNo = gStudentMoneyTotalRows - ((gStudentMoneyPage - 1) * gStudentMoneyLimit + idx);
+    const displayNo = Math.floor(parseFloat(row.no || (gStudentMoneyTotalRows - ((gStudentMoneyPage - 1) * gStudentMoneyLimit + idx)))) || 1;
     const isTransfer = row.studentId === null || row.studentId === 0 || row.fyid === 'TRANSFER' || row.fyid === 'RETURN';
     const cleanFyid = typeof window.sanitizeFyidStr === 'function' ? window.sanitizeFyidStr(row.fyid) : (row.fyid || '');
 
@@ -801,7 +801,7 @@ function renderCanteenBookTable() {
   }
 
   items.forEach((row, idx) => {
-    const displayNo = total - (start + idx);
+    const displayNo = Math.floor(parseFloat(row.no || (total - (start + idx)))) || 1;
     const balStr = Number(row.balances || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
 
     tbody.innerHTML += `
@@ -1408,7 +1408,7 @@ function renderPmCashierBookTable() {
   }
 
   items.forEach((row, idx) => {
-    const displayNo = total - (start + idx);
+    const displayNo = Math.floor(parseFloat(row.no || (total - (start + idx)))) || 1;
     const balStr = Number(row.balances || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
     const isXfer = row.category === 'Float Receive' || row.category === 'Return to Finance';
 

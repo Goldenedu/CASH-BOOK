@@ -160,7 +160,7 @@ export async function getStudentMoneyData(db, body) {
     const dataQuery = `
       SELECT id, no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, uniqueid 
       FROM student_money ${whereSql} 
-      ORDER BY date DESC, id DESC 
+      ORDER BY CAST(no AS INTEGER) DESC, id DESC 
       LIMIT ? OFFSET ?
     `;
     const rowsRes = await db.prepare(dataQuery).bind(...params, limit, offset).all();
@@ -246,6 +246,7 @@ export async function getStudentMoneySummary(db, body) {
   } catch (err) { return { success: false, message: err.message }; }
 }
 
+// 2. saveStudentMoneyEntry အား အောက်ပါအတိုင်း အစားထိုးရန်
 export async function saveStudentMoneyEntry(db, session, body) {
   try {
     const entryDate = getMyanmarDateString(body.date);
@@ -259,8 +260,12 @@ export async function saveStudentMoneyEntry(db, session, body) {
     const stmUniqueId = `STM_${rawCore}`;
     const pmcUniqueId = `PMC_${rawCore}`;
 
-    // 🛡️ IDEMPOTENCY GUARD & UPDATE CLEANUP
-    const existingStm = await db.prepare("SELECT id, date FROM student_money WHERE uniqueid = ?").bind(stmUniqueId).first();
+    // 🛡️ IDEMPOTENCY GUARD & UPDATE CLEANUP (Preserves `no` & `vr_no`)
+    const existingStm = await db.prepare("SELECT id, no, fy, date FROM student_money WHERE uniqueid = ?").bind(stmUniqueId).first();
+    let preservedStmNo = null;
+    let preservedPmcNo = null;
+    let preservedPmcVrNo = null;
+
     if (existingStm) {
       if (!body.isUpdate) {
         return {
@@ -269,9 +274,22 @@ export async function saveStudentMoneyEntry(db, session, body) {
           uniqueId: stmUniqueId
         };
       }
-      // Update ဖြစ်ပါက Mutation Policy စစ်ဆေးပြီး အဟောင်းကို ဦးစွာ ရှင်းလင်းမည်
       const policy = verifyRecordMutationPolicy(session, existingStm.date);
       if (!policy.allowed) return { success: false, message: policy.message };
+
+      const exStmCleanFy = existingStm.fy ? String(existingStm.fy).replace(/^FY\s*/i, '') : cleanFy;
+      if (exStmCleanFy === cleanFy && existingStm.no) {
+        preservedStmNo = parseInt(existingStm.no, 10);
+      }
+
+      const existingPmc = await db.prepare("SELECT id, no, vr_no, fy FROM pm_cashier_book WHERE uniqueid IN (?, ?)").bind(pmcUniqueId, stmUniqueId).first();
+      if (existingPmc) {
+        const exPmcCleanFy = existingPmc.fy ? String(existingPmc.fy).replace(/^FY\s*/i, '') : cleanFy;
+        if (exPmcCleanFy === cleanFy && existingPmc.no) {
+          preservedPmcNo = parseInt(existingPmc.no, 10);
+        }
+        preservedPmcVrNo = existingPmc.vr_no || null;
+      }
 
       await db.batch([
         db.prepare("DELETE FROM student_money WHERE uniqueid IN (?, ?)").bind(stmUniqueId, pmcUniqueId),
@@ -296,7 +314,6 @@ export async function saveStudentMoneyEntry(db, session, body) {
     if (isTransfer) {
       if (credit <= 0) return { success: false, message: "PM Cashier သို့ လွှဲမည့် Credit ငွေပမာဏကို အတိအကျ ထည့်သွင်းပါ။" };
 
-      // 🛡️ OVER-TRANSFER GUARD: Vault Physical Cash လုံလောက်မှု စစ်ဆေးခြင်း
       const [stuRes, pmRes] = await db.batch([
         db.prepare("SELECT COALESCE(SUM(debit - credit), 0) as bal FROM student_money WHERE fy IN (?, ?) AND student_id IS NOT NULL").bind(cleanFy, `FY ${cleanFy}`),
         db.prepare("SELECT COALESCE(SUM(debit - credit), 0) as bal FROM pm_cashier_book WHERE fy IN (?, ?)").bind(cleanFy, `FY ${cleanFy}`)
@@ -310,8 +327,8 @@ export async function saveStudentMoneyEntry(db, session, body) {
         };
       }
 
-      const noPm = await generateFyNo(db, 'pm_cashier_book', fy);
-      const vrPm = await generateVoucherNo(db, 'pm_cashier_book', 'PMC', entryDate);
+      const noPm = preservedPmcNo || await generateFyNo(db, 'pm_cashier_book', fy);
+      const vrPm = preservedPmcVrNo || await generateVoucherNo(db, 'pm_cashier_book', 'PMC', entryDate);
       generatedVrNo = vrPm;
       const respPerson = body.responsibilityPerson || 'Cashier 1';
       const pmRemark = body.remark || `Finance မှ ${respPerson} သို့ အရင်းငွေလွှဲပေးခြင်း`;
@@ -321,7 +338,7 @@ export async function saveStudentMoneyEntry(db, session, body) {
           .bind(noPm, entryDate, respPerson, pmRemark, method, credit, vrPm, my, fy, session?.name || 'Finance', pmcUniqueId)
       );
 
-      const noStu = await generateFyNo(db, 'student_money', cleanFy);
+      const noStu = preservedStmNo || await generateFyNo(db, 'student_money', cleanFy);
       batchStatements.push(
         db.prepare(`INSERT INTO student_money (no, date, fy, student_id, fyid, fyid_name, class, method, debit, credit, balances, remark, created_by, uniqueid) VALUES (?, ?, ?, NULL, 'TRANSFER', ?, 'Vault Transfer', ?, 0, ?, 0, ?, ?, ?)`)
           .bind(noStu, entryDate, cleanFy, `[Transfer] PM Cashier (${respPerson})`, method, credit, `[Finance Transfer] ${respPerson} သို့ အရင်းလွှဲ: ${pmRemark}`, session?.name || 'Finance', stmUniqueId)
@@ -350,7 +367,7 @@ export async function saveStudentMoneyEntry(db, session, body) {
         if (debit <= 0) return { success: false, message: "အပ်ငွေ (Deposit) ပမာဏ ထည့်သွင်းပေးပါ။" };
       }
 
-      const noStu = await generateFyNo(db, 'student_money', cleanFy);
+      const noStu = preservedStmNo || await generateFyNo(db, 'student_money', cleanFy);
       const cleanStuName = String(body.name || '').replace(/^(\[[^\]]+\]\s*)+/, '').trim();
       const stuName = cleanStuName ? `[${body.fyid || 'ID ' + studentId}] ${cleanStuName}` : `[ID ${studentId}]`;
       const prefix = rawType.toLowerCase().includes('withdraw') ? '[Finance] Withdraw' : '[Finance] Deposit';
@@ -471,7 +488,7 @@ export async function getPmCashierBookData(db, body, session) {
         db.prepare(`
           SELECT * FROM pm_cashier_book 
           ${whereSql} 
-          ORDER BY date DESC, id DESC 
+          ORDER BY CAST(no AS INTEGER) DESC, id DESC
           LIMIT ? OFFSET ?
         `).bind(...params, limit, offset)
       ]);
@@ -512,7 +529,7 @@ export async function getPmCashierBookData(db, body, session) {
             COALESCE(SUM(CASE WHEN date = ? THEN credit ELSE 0 END), 0) as todayOut
           FROM pm_cashier_book ${whereSql}
         `).bind(todayStr, todayStr, ...params),
-        db.prepare(`SELECT * FROM pm_cashier_book ${whereSql} ORDER BY date DESC, id DESC LIMIT 5000`).bind(...params)
+        db.prepare(`SELECT * FROM pm_cashier_book ${whereSql} ORDER BY CAST(no AS INTEGER) DESC, id DESC LIMIT 5000`).bind(...params)
       ]);
 
       const stats = statsRes.results[0] || { totalRows: 0, totalIn: 0, totalOut: 0, todayIn: 0, todayOut: 0 };
@@ -739,7 +756,7 @@ export async function deletePmCashierBookEntry(db, session, body) {
 export async function getCanteenBookData(db, body) {
   try {
     const fy = normalizeFyStr(body.fy || getCurrentAcademicYear()).replace(/^FY\s*/i, '');
-    const query = `SELECT * FROM canteen_book WHERE fy IN (?, ?) ORDER BY date DESC, id DESC LIMIT 500`;
+    const query = `SELECT * FROM canteen_book WHERE fy IN (?, ?) ORDER BY CAST(no AS INTEGER) DESC, id DESC LIMIT 500`;
     const res = await db.prepare(query).bind(fy, `FY ${fy}`).all();
     return { success: true, data: (res.results || []).map(r => ({ ...r, uniqueId: r.uniqueid })) };
   } catch (err) { return { success: false, message: err.message }; }

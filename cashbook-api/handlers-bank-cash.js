@@ -67,9 +67,9 @@ function getBookTitle(tableName) {
 }
 
 /**
- * 💡 Target Transfer Statement Factory
+ * 💡 Target Transfer Statement Factory (Preserves `no` & `vr_no` on Edit)
  */
-async function createTargetTransferStatement(db, body, sourceTable, targetTable, entryDate, my, normFy, createdBy, transferUid) {
+async function createTargetTransferStatement(db, body, sourceTable, targetTable, entryDate, my, normFy, createdBy, transferUid, preservedMeta = null) {
   const debit = parseFloat(body.debit || 0);
   const credit = parseFloat(body.credit || 0);
 
@@ -77,8 +77,8 @@ async function createTargetTransferStatement(db, body, sourceTable, targetTable,
   const targetCredit = debit;
 
   const targetPrefix = getTablePrefix(targetTable);
-  const targetVrNo = await generateVoucherNo(db, targetTable, targetPrefix, entryDate);
-  const targetNo = await generateFyNo(db, targetTable, normFy);
+  const targetVrNo = preservedMeta?.vrNo || await generateVoucherNo(db, targetTable, targetPrefix, entryDate);
+  const targetNo = preservedMeta?.no || await generateFyNo(db, targetTable, normFy);
   const sourceBookTitle = getBookTitle(sourceTable);
   const targetBookTitle = getBookTitle(targetTable);
   const targetDesc = `[Transfer from ${sourceBookTitle}] ${body.description || ''}`.trim();
@@ -181,7 +181,7 @@ export async function getBankCashData(db, body) {
       SELECT id, no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, is_locked, uniqueid 
       FROM ${tableName} 
       ${whereSql} 
-      ORDER BY id DESC 
+      ORDER BY CAST(no AS INTEGER) DESC, id DESC 
       LIMIT ? OFFSET ?
     `;
     const rowsRes = await db.prepare(dataQuery).bind(...params, limit, offset).all();
@@ -354,8 +354,9 @@ export async function saveBankCashEntry(db, session, body) {
   }
 }
 
+
 /**
- * 💡 Update Bank / Cash Entry
+ * 💡 Update Bank / Cash Entry (With Linked Transfer `no` & `vr_no` Preservation)
  */
 export async function updateBankCashEntry(db, session, body) {
   try {
@@ -367,13 +368,11 @@ export async function updateBankCashEntry(db, session, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    // 🚀 OPTIMIZATION: Avoid SELECT * and FETCH `date` for Incremental Recalc
-    const existing = await db.prepare(`SELECT fy, date, is_locked, uniqueid FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
+    const existing = await db.prepare(`SELECT fy, date, transfer, is_locked, uniqueid FROM ${tableName} WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ပြင်ဆင်မည့် စာရင်း ရှာမတွေ့ပါ။" };
     }
 
-    // 🎯 Phase 2: Mutation Policy Check
     const policy = verifyRecordMutationPolicy(session, existing.date);
     if (!policy.allowed) {
       return { success: false, message: policy.message };
@@ -396,7 +395,8 @@ export async function updateBankCashEntry(db, session, body) {
     }
 
     const oldFy = existing.fy ? normalizeFyStr(existing.fy) : null;
-    const oldDate = existing.date || '9999-12-31'; // Safe default
+    const oldDate = existing.date || '9999-12-31';
+    const oldTargetTable = existing.transfer ? getTableName(existing.transfer) : null;
     const transferUid = `TRANS_${uniqueid}`;
 
     const entryDate = getMyanmarDateString(body.date || existing.date);
@@ -405,11 +405,26 @@ export async function updateBankCashEntry(db, session, body) {
     const my = `${monthNames[d.getMonth()]}-${d.getFullYear()}`;
     const fy = normalizeFyStr(body.fy || calculateAcademicFyFromDate(entryDate));
 
-    // Determine the earliest date between old and new for Incremental Recalc
     const recalcDate = (entryDate < oldDate) ? entryDate : oldDate;
 
     const debit = parseFloat(body.debit || 0);
     const credit = parseFloat(body.credit || 0);
+
+    const isTransfer = String(body.category || '').trim() === 'Transfer' && body.transfer;
+    let targetTable = isTransfer ? getTableName(body.transfer) : null;
+
+    // 🛡️ Preserve existing `no` and `vr_no` in Target Transfer Book if it already exists
+    let preservedTargetMeta = null;
+    if (targetTable && targetTable !== tableName) {
+      const exTarget = await db.prepare(`SELECT no, vr_no, fy FROM ${targetTable} WHERE uniqueid = ?`).bind(transferUid).first();
+      if (exTarget) {
+        const exTargetFy = exTarget.fy ? normalizeFyStr(exTarget.fy) : fy;
+        preservedTargetMeta = {
+          no: (exTargetFy === fy) ? exTarget.no : null,
+          vrNo: exTarget.vr_no || null
+        };
+      }
+    }
 
     const batchStatements = [];
 
@@ -433,22 +448,16 @@ export async function updateBankCashEntry(db, session, body) {
       )
     );
 
-    const isTransfer = String(body.category || '').trim() === 'Transfer' && body.transfer;
-    let targetTable = null;
-
-    if (isTransfer) {
-      targetTable = getTableName(body.transfer);
-      if (targetTable !== tableName) {
-        const targetStmt = await createTargetTransferStatement(
-          db, body, tableName, targetTable, entryDate, my, fy, session?.name || 'Admin', transferUid
-        );
-        batchStatements.push(targetStmt);
-      }
+    if (isTransfer && targetTable && targetTable !== tableName) {
+      const targetStmt = await createTargetTransferStatement(
+        db, body, tableName, targetTable, entryDate, my, fy, session?.name || 'Admin', transferUid, preservedTargetMeta
+      );
+      batchStatements.push(targetStmt);
     }
 
     await db.batch(batchStatements);
 
-    // ⚡ Quota-Shield Recalculate - Incremental (Phase 1)
+    // ⚡ Quota-Shield Recalculate
     await recalculateLedgerBalances(db, tableName, fy, recalcDate);
     if (oldFy && oldFy !== fy) {
       await recalculateLedgerBalances(db, tableName, oldFy, oldDate);
@@ -456,6 +465,9 @@ export async function updateBankCashEntry(db, session, body) {
 
     if (targetTable && targetTable !== tableName) {
       await recalculateLedgerBalances(db, targetTable, fy, recalcDate);
+    }
+    if (oldTargetTable && oldTargetTable !== tableName && oldTargetTable !== targetTable) {
+      await recalculateLedgerBalances(db, oldTargetTable, oldFy || fy, oldDate);
     }
 
     return {

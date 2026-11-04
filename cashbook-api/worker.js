@@ -26,6 +26,7 @@ import * as SettingsHandlers from './handlers-settings.js';
 import * as DashboardHandlers from './handlers-dashboard.js';
 import { validateLedgerInput } from './validation.js';
 import * as CanteenPosHandlers from './handlers-canteen-pos.js';
+import { recalculateLedgerBalances } from './utils.js';
 
 // ==============================================================================
 // 💡 1. DOMAIN-SPECIFIC SERVER-SIDE RBAC PERMISSION MATRIX (PHASE 1 UPDATED)
@@ -398,6 +399,7 @@ async function resetLoginAttempts(db, username) {
   try { await db.prepare("DELETE FROM login_attempts WHERE username = ?").bind(username).run(); } catch (e) { }
 }
 
+
 async function executeAutoRecalculateAll(db, body = {}) {
   const rawBook = body.bookName || body.tableName || body.book || "";
   const targetFy = body.fy ? String(body.fy).trim().replace(/^FY\s*/i, "") : null;
@@ -421,202 +423,19 @@ async function executeAutoRecalculateAll(db, body = {}) {
   if (rawBook && tableMap[rawBook.toLowerCase().trim()]) {
     targetTables = [tableMap[rawBook.toLowerCase().trim()]];
   } else if (isExplicitAll) {
-    targetTables = ["bank", "cash", "office", "kitchen", "payroll", "student_money", "canteen_book", "pm_cashier_book", "income", "ca_bank", "ca_cash", "ca_office", "ca_kitchen", "ca_payroll"];
+    targetTables = ["bank", "cash", "office", "kitchen", "payroll", "student_money", "canteen_book", "pm_cashier_book", "ca_bank", "ca_cash", "ca_office", "ca_kitchen", "ca_payroll"];
   } else {
     return { success: false, message: "Target table name is required for recalculation." };
   }
 
   const updatedTables = [];
   for (const tbl of targetTables) {
-    try {
-      if (tbl === 'student_money') {
-        if (targetFy) {
-          if (fromDate) {
-            await db.prepare(`
-              WITH base AS (
-                SELECT sm.student_id, sm.balances as base_bal
-                FROM student_money sm
-                WHERE sm.fy IN (?, ?) AND sm.date < ? AND sm.student_id IS NOT NULL
-                  AND sm.id = (
-                    SELECT id FROM student_money sm2
-                    WHERE sm2.student_id = sm.student_id AND sm2.fy IN (?, ?) AND sm2.date < ?
-                    ORDER BY date DESC, id DESC LIMIT 1
-                  )
-              ),
-              calculated AS (
-                SELECT sm.id,
-                       ROW_NUMBER() OVER (ORDER BY sm.date ASC, sm.id ASC) as calc_no,
-                       CASE 
-                         WHEN sm.student_id IS NOT NULL THEN
-                           COALESCE(base.base_bal, 0) + SUM(sm.debit - sm.credit) OVER (
-                             PARTITION BY sm.student_id 
-                             ORDER BY sm.date ASC, sm.id ASC 
-                             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                           )
-                         ELSE 0
-                       END as calc_bal
-                FROM student_money sm
-                LEFT JOIN base ON base.student_id = sm.student_id
-                WHERE sm.fy IN (?, ?) AND sm.date >= ?
-              )
-              UPDATE student_money 
-              SET no = (SELECT COALESCE(MAX(no), 0) FROM student_money sm3 WHERE sm3.fy IN (?, ?) AND sm3.date < ?) + calculated.calc_no, 
-                  balances = calculated.calc_bal 
-              FROM calculated 
-              WHERE student_money.id = calculated.id
-                AND (student_money.no IS NOT ((SELECT COALESCE(MAX(no), 0) FROM student_money sm3 WHERE sm3.fy IN (?, ?) AND sm3.date < ?) + calculated.calc_no) OR ROUND(student_money.balances, 2) IS NOT ROUND(calculated.calc_bal, 2));
-            `).bind(targetFy, `FY ${targetFy}`, fromDate, targetFy, `FY ${targetFy}`, fromDate, targetFy, `FY ${targetFy}`, fromDate, targetFy, `FY ${targetFy}`, fromDate, targetFy, `FY ${targetFy}`, fromDate).run();
-          } else {
-            await db.prepare(`
-              WITH calculated AS (
-                SELECT id, 
-                       ROW_NUMBER() OVER (ORDER BY date ASC, id ASC) as new_no,
-                       CASE 
-                         WHEN student_id IS NOT NULL THEN
-                           SUM(debit - credit) OVER (
-                             PARTITION BY student_id 
-                             ORDER BY date ASC, id ASC 
-                             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                           )
-                         ELSE 0
-                       END as calc_bal
-                FROM student_money
-                WHERE fy IN (?, ?)
-              )
-              UPDATE student_money 
-              SET no = calculated.new_no, balances = calculated.calc_bal 
-              FROM calculated 
-              WHERE student_money.id = calculated.id
-                AND (student_money.no IS NOT calculated.new_no OR ROUND(student_money.balances, 2) IS NOT ROUND(calculated.calc_bal, 2));
-            `).bind(targetFy, `FY ${targetFy}`).run();
-          }
-        } else {
-          await db.prepare(`
-            WITH calculated AS (
-              SELECT id, 
-                     ROW_NUMBER() OVER (PARTITION BY fy ORDER BY date ASC, id ASC) as new_no,
-                     CASE 
-                       WHEN student_id IS NOT NULL THEN
-                         SUM(debit - credit) OVER (
-                           PARTITION BY student_id 
-                           ORDER BY date ASC, id ASC 
-                           ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                         )
-                       ELSE 0
-                     END as calc_bal
-              FROM student_money
-            )
-            UPDATE student_money 
-            SET no = calculated.new_no, balances = calculated.calc_bal 
-            FROM calculated 
-            WHERE student_money.id = calculated.id
-              AND (student_money.no IS NOT calculated.new_no OR ROUND(student_money.balances, 2) IS NOT ROUND(calculated.calc_bal, 2));
-          `).run();
-        }
-      } else if (tbl === 'income') {
-        if (targetFy) {
-          if (fromDate) {
-            const baseRow = await db.prepare(`SELECT no FROM income WHERE fy IN (?, ?) AND date < ? ORDER BY date DESC, id DESC LIMIT 1`).bind(targetFy, `FY ${targetFy}`, fromDate).first();
-            const baseNo = baseRow ? (parseInt(baseRow.no, 10) || 0) : 0;
-            await db.prepare(`
-              WITH calculated AS (
-                SELECT id, ? + ROW_NUMBER() OVER (ORDER BY date ASC, id ASC) as new_no 
-                FROM income
-                WHERE fy IN (?, ?) AND date >= ?
-              )
-              UPDATE income SET no = calculated.new_no FROM calculated 
-              WHERE income.id = calculated.id AND income.no IS NOT calculated.new_no;
-            `).bind(baseNo, targetFy, `FY ${targetFy}`, fromDate).run();
-          } else {
-            await db.prepare(`
-              WITH calculated AS (
-                SELECT id, ROW_NUMBER() OVER (ORDER BY date ASC, id ASC) as new_no 
-                FROM income
-                WHERE fy IN (?, ?)
-              )
-              UPDATE income SET no = calculated.new_no FROM calculated 
-              WHERE income.id = calculated.id AND income.no IS NOT calculated.new_no;
-            `).bind(targetFy, `FY ${targetFy}`).run();
-          }
-        } else {
-          await db.prepare(`
-            WITH calculated AS (
-              SELECT id, ROW_NUMBER() OVER (PARTITION BY fy ORDER BY date ASC, id ASC) as new_no 
-              FROM income
-            )
-            UPDATE income SET no = calculated.new_no FROM calculated 
-              WHERE income.id = calculated.id AND income.no IS NOT calculated.new_no;
-          `).run();
-        }
-      } else {
-        if (targetFy) {
-          if (fromDate) {
-            const baseRow = await db.prepare(`SELECT no, balances FROM ${tbl} WHERE fy IN (?, ?) AND date < ? ORDER BY date DESC, id DESC LIMIT 1`).bind(targetFy, `FY ${targetFy}`, fromDate).first();
-            const baseNo = baseRow ? (parseInt(baseRow.no, 10) || 0) : 0;
-            const baseBal = baseRow ? (parseFloat(baseRow.balances) || 0) : 0;
-
-            await db.prepare(`
-              WITH calculated AS (
-                SELECT id, 
-                       ? + ROW_NUMBER() OVER (ORDER BY date ASC, id ASC) as new_no,
-                       ? + SUM(debit - credit) OVER (
-                         ORDER BY date ASC, id ASC 
-                         ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                       ) as calc_bal
-                FROM ${tbl}
-                WHERE fy IN (?, ?) AND date >= ?
-              )
-              UPDATE ${tbl} 
-              SET no = calculated.new_no, balances = calculated.calc_bal 
-              FROM calculated 
-              WHERE ${tbl}.id = calculated.id
-                AND (${tbl}.no IS NOT calculated.new_no OR ROUND(${tbl}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2));
-            `).bind(baseNo, baseBal, targetFy, `FY ${targetFy}`, fromDate).run();
-          } else {
-            await db.prepare(`
-              WITH calculated AS (
-                SELECT id, 
-                       ROW_NUMBER() OVER (ORDER BY date ASC, id ASC) as new_no,
-                       SUM(debit - credit) OVER (
-                         ORDER BY date ASC, id ASC 
-                         ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                       ) as calc_bal
-                FROM ${tbl}
-                WHERE fy IN (?, ?)
-              )
-              UPDATE ${tbl} 
-              SET no = calculated.new_no, balances = calculated.calc_bal 
-              FROM calculated 
-              WHERE ${tbl}.id = calculated.id
-                AND (${tbl}.no IS NOT calculated.new_no OR ROUND(${tbl}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2));
-            `).bind(targetFy, `FY ${targetFy}`).run();
-          }
-        } else {
-          await db.prepare(`
-            WITH calculated AS (
-              SELECT id, 
-                     ROW_NUMBER() OVER (PARTITION BY fy ORDER BY date ASC, id ASC) as new_no,
-                     SUM(debit - credit) OVER (
-                       PARTITION BY fy 
-                       ORDER BY date ASC, id ASC 
-                       ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                     ) as calc_bal
-              FROM ${tbl}
-            )
-            UPDATE ${tbl} 
-            SET no = calculated.new_no, balances = calculated.calc_bal 
-            FROM calculated 
-            WHERE ${tbl}.id = calculated.id
-              AND (${tbl}.no IS NOT calculated.new_no OR ROUND(${tbl}.balances, 2) IS NOT ROUND(calculated.calc_bal, 2));
-          `).run();
-        }
-      }
-      updatedTables.push(tbl);
-    } catch (e) {
-      console.warn(`Recalculation warning on table ${tbl}:`, e.message);
+    if (tbl !== 'income') {
+      await recalculateLedgerBalances(db, tbl, targetFy, fromDate);
     }
+    updatedTables.push(tbl);
   }
-  return { success: true, message: `စာရင်းအုပ် (${updatedTables.length}) ခု၏ Balances ကို လုံခြုံစွာ ညှိယူပြီးပါပြီ။`, updatedTables };
+  return { success: true, message: `စာရင်းအုပ် (${updatedTables.length}) ခု၏ Balances ကို နံပါတ်စဉ် (NO) အလိုက် လုံခြုံစွာ ညှိယူပြီးပါပြီ။`, updatedTables };
 }
 
 // ==============================================================================
