@@ -412,7 +412,7 @@ async function executeAutoRecalculateAll(db, body = {}) {
     "payroll": "payroll", "hr payroll exp book": "payroll",
     "student_money": "student_money", "student money ledger": "student_money",
     "canteen_book": "canteen_book", "canteen book": "canteen_book",
-    "pm_cashier_book": "pm_cashier_book", "pm cashier book": "pm_cashier_book",
+    "pm_cashier_book": "pm_cashier_book", "pm cashier book": "pm_cashier_book", "pos_cash_book": "pos_cash_book", "pos cash book": "pos_cash_book",
     "income": "income", "main income book": "income", "ca_bank": "ca_bank", "cabank": "ca_bank",
     "ca_cash": "ca_cash", "cacash": "ca_cash", "ca_office": "ca_office", "caoffice": "ca_office",
     "ca_kitchen": "ca_kitchen", "cakitchen": "ca_kitchen", "ca_payroll": "ca_payroll", "capayroll": "ca_payroll"
@@ -682,6 +682,18 @@ export default {
         // ==========================================================
         // 💡 CANTEEN POS & MANAGEMENT EXTENSIONS
         // ==========================================================
+        case 'getPosCashBookData':
+          if (!can(userSession, 'pos_read') && !can(userSession, 'ledger_read')) return forbidden(corsHeaders);
+          result = await CanteenPosHandlers.getPosCashBookData(db, userSession, body); break;
+
+        case 'savePosCashBookEntry':
+          if (!can(userSession, 'pos_write') && !can(userSession, 'ledger_write')) return forbidden(corsHeaders);
+          result = await CanteenPosHandlers.savePosCashBookEntry(db, userSession, body); break;
+
+        case 'deletePosCashBookEntry':
+          if (!can(userSession, 'pos_admin') && !can(userSession, 'ledger_write')) return forbidden(corsHeaders, "Only Admin can delete POS Cash Book entries.");
+          result = await CanteenPosHandlers.deletePosCashBookEntry(db, userSession, body); break;
+
         case 'getPosItems':
           if (!can(userSession, 'pos_read') && !can(userSession, 'ledger_read')) return forbidden(corsHeaders);
           result = await CanteenPosHandlers.getPosItems(db, body); break;

@@ -354,69 +354,60 @@
   <!-- ============================================================================== -->
   <div class="flex-1 flex flex-col h-screen min-w-0 overflow-hidden bg-[var(--bg-base)]">
 
-    <!-- Top Action Bar (International Standard Fixed Height 64px - h-[64px]) -->
+    <!-- Top Action Bar (Exact ERP Header Style + Dark/Light Toggle) -->
     <header
-      class="bg-[var(--bg-sidebar)]/95 backdrop-blur-md border-b border-[var(--border-color)] px-5 h-[64px] flex items-center justify-between shrink-0 z-40 box-border">
-      <div class="flex items-center gap-3">
+      class="bg-[#0c1322] border-b border-slate-800 h-[64px] px-6 flex items-center justify-between z-40 shrink-0 gap-4">
+      <!-- 1. Left: Dynamic Page Title -->
+      <div class="flex items-center gap-3 shrink-0">
         <button id="btn-toggle-sidebar" onclick="toggleCanteenSidebar()"
-          class="w-9 h-9 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center text-sm lg:hidden shadow-sm">
+          class="w-9 h-9 rounded-lg bg-slate-800 text-slate-300 flex items-center justify-center text-sm lg:hidden">
           <i class="fa-solid fa-bars"></i>
         </button>
-        <div>
-          <h1 id="canteen-view-title" class="text-sm md:text-base font-black tracking-wider uppercase">CANTEEN POS
-            TERMINAL</h1>
-          <p id="pos-today-date" class="text-xs font-mono text-emerald-500 dark:text-emerald-400 font-bold">Initializing
-            MMT Clock...</p>
+        <h1 id="canteen-view-title" class="text-base md:text-lg font-extrabold text-slate-100 tracking-wide uppercase">
+          SALE COUNTER
+        </h1>
+      </div>
+
+      <!-- 2. Center: Borderless System Message Container -->
+      <div id="header-system-message-container"
+        class="flex-1 flex items-center justify-center min-w-0 px-2 overflow-hidden pointer-events-none">
+        <div id="header-system-message"
+          class="hidden pointer-events-auto items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap truncate shadow-sm transition-all duration-300">
         </div>
       </div>
 
-      <div class="flex items-center gap-2">
+      <!-- 3. Right: Dark/Light Mode Toggle & ERP Status Capsule -->
+      <div class="flex items-center gap-2.5 shrink-0">
+        <!-- Pending Sync Badge (Shows only if offline orders exist) -->
         <button id="btn-pending-sync" onclick="openPendingSyncModal()"
-          class="h-9 px-3.5 rounded-xl bg-slate-200/80 dark:bg-slate-800 border border-[var(--border-color)] text-xs md:text-sm font-bold flex items-center gap-2 transition active:scale-95 shadow-sm">
-          <i class="fa-solid fa-clock-rotate-left text-amber-500 text-sm"></i>
-          <span>Pending (<span id="pending-count" class="font-mono text-amber-500 font-black">0</span>)</span>
+          class="hidden px-3 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-400 text-xs font-bold items-center gap-1.5 transition">
+          <i class="fa-solid fa-clock-rotate-left text-xs"></i>
+          <span>Pending (<span id="pending-count" class="font-mono font-black">0</span>)</span>
         </button>
 
-        <button id="btn-admin-stock" onclick="openItemModal()"
-          class="h-9 px-3.5 rounded-xl bg-slate-200/80 dark:bg-slate-800 border border-[var(--border-color)] text-xs md:text-sm font-bold flex items-center gap-2 transition active:scale-95 shadow-sm">
-          <i class="fa-solid fa-box text-emerald-500 text-sm"></i>
-          <span>ပစ္စည်း / အဝယ်သွင်း</span>
-        </button>
-
-        <button id="btn-header-waste" onclick="openWasteModal()"
-          class="h-9 px-3.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-500 text-xs md:text-sm font-bold flex items-center gap-2 transition active:scale-95">
-          <i class="fa-solid fa-dumpster-fire text-rose-500 text-sm"></i>
-          <span>အပျက်စာရင်း</span>
-        </button>
-
-        <button id="btn-header-surplus" onclick="openSurplusModal()"
-          class="h-9 px-3.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-500 text-xs md:text-sm font-bold flex items-center gap-2 transition active:scale-95">
-          <i class="fa-solid fa-plus-circle text-emerald-500 text-sm"></i>
-          <span>အပိုစာရင်း</span>
-        </button>
-
-        <button id="btn-header-close-day" onclick="openDayCloseModal()"
-          class="h-9 px-3.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-500 text-xs md:text-sm font-bold flex items-center gap-2 transition active:scale-95">
-          <i class="fa-solid fa-store-slash text-amber-500 text-sm"></i>
-          <span id="header-close-status-text">ဆိုင်ပိတ်မည်</span>
-        </button>
-
-        <!-- Theme Switcher -->
+        <!-- Theme Switcher Button -->
         <button id="btn-theme-toggle" onclick="toggleCanteenTheme()"
-          class="w-9 h-9 rounded-xl bg-slate-200 dark:bg-slate-800 border border-[var(--border-color)] text-amber-500 dark:text-sky-300 flex items-center justify-center text-sm transition active:scale-95 shadow-sm"
-          title="Toggle Theme">
+          class="w-8 h-8 rounded-full bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-amber-400 dark:text-sky-300 flex items-center justify-center text-xs transition"
+          title="Toggle Dark/Light Mode">
           <i id="theme-toggle-icon" class="fa-solid fa-sun dark:fa-moon"></i>
         </button>
 
-        <!-- Universal Robust Refresh -->
-        <button id="btn-global-refresh" onclick="refreshActiveCanteenView()"
-          class="w-9 h-9 rounded-xl bg-slate-200 dark:bg-slate-800 border border-[var(--border-color)] text-slate-600 dark:text-slate-300 flex items-center justify-center text-sm transition active:scale-95 shadow-sm"
-          title="Refresh Current View">
-          <i class="fa-solid fa-arrows-rotate"></i>
-        </button>
+        <!-- Symmetrical ERP Status Capsule -->
+        <div id="header-status-capsule"
+          class="inline-flex items-center text-xs font-bold px-3.5 py-1.5 rounded-full gap-2.5 transition-colors duration-300 shrink-0"
+          style="background-color: transparent; border: 1px solid rgba(16, 185, 129, 0.3);">
+          <span id="pos-network-status" class="flex items-center justify-center text-emerald-400" title="Online">
+            <i id="network-icon" class="fa-solid fa-wifi text-[11px]"></i>
+          </span>
+          <span id="capsule-divider" style="color: rgba(16, 185, 129, 0.4);">|</span>
+          <div id="pos-today-date" class="text-xs font-bold text-emerald-400 font-mono">
+            FY 2026-2027 | Wed | 12:00 PM | Admin
+          </div>
+        </div>
 
+        <!-- Logout Button -->
         <button onclick="logoutPos()"
-          class="w-9 h-9 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 flex items-center justify-center text-sm transition active:scale-95 shadow-sm"
+          class="w-8 h-8 rounded-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 flex items-center justify-center text-xs transition"
           title="Logout">
           <i class="fa-solid fa-power-off"></i>
         </button>
@@ -430,6 +421,134 @@
       <!-- 📊 VIEW 1: DASHBOARD (INJECTED DYNAMICALLY FROM COMPONENTS)                -->
       <!-- ────────────────────────────────────────────────────────────────────────── -->
       <section id="view-dashboard" class="hidden"></section>
+
+      <!-- ────────────────────────────────────────────────────────────────────────── -->
+      <!-- 💰 VIEW 1.5: POS CASH BOOK (ERP STANDARD LEDGER)                           -->
+      <!-- ────────────────────────────────────────────────────────────────────────── -->
+      <section id="view-cashbook" class="space-y-2 hidden">
+        <!-- 1. Top 4 KPI Cards (Admin: Jan-Dec Yearly | Others: Daily Only) -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+            <div class="p-3.5 rounded-lg bg-amber-500/10 text-amber-400"><i
+                class="fa-solid fa-building-columns text-xl"></i></div>
+            <div>
+              <p id="pcb-kpi-label-bank" class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Bank
+                Balance</p>
+              <h3 id="pcb-bank-balance" class="text-base font-extrabold text-white mt-1 font-mono">0 MMK</h3>
+            </div>
+          </div>
+          <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+            <div class="p-3.5 rounded-lg bg-emerald-500/10 text-emerald-400"><i
+                class="fa-solid fa-money-bill-wave text-xl"></i></div>
+            <div>
+              <p id="pcb-kpi-label-cash" class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Cash
+                Balance</p>
+              <h3 id="pcb-cash-balance" class="text-base font-extrabold text-white mt-1 font-mono">0 MMK</h3>
+            </div>
+          </div>
+          <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+            <div class="p-3.5 rounded-lg bg-indigo-500/10 text-indigo-400"><i
+                class="fa-solid fa-scale-balanced text-xl"></i></div>
+            <div>
+              <p id="pcb-kpi-label-total" class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Total
+                Balance</p>
+              <h3 id="pcb-total-balance" class="text-base font-extrabold text-white mt-1 font-mono">0 MMK</h3>
+            </div>
+          </div>
+          <div class="stats-card p-5 rounded-xl flex items-start gap-4">
+            <div class="p-3.5 rounded-lg bg-sky-500/10 text-sky-400"><i class="fa-solid fa-list-check text-xl"></i>
+            </div>
+            <div>
+              <p id="pcb-kpi-label-entries" class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Total
+                Entries</p>
+              <h3 id="pcb-entries-count" class="text-base font-extrabold text-white mt-1 font-mono">0</h3>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. ERP Control Search & Action Bar -->
+        <div
+          class="flex flex-col lg:flex-row justify-between items-center bg-[#0c1322] border border-slate-800 p-4 rounded-xl gap-4">
+          <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto">
+            <div class="relative w-full sm:w-64">
+              <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i
+                  class="fa-solid fa-magnifying-glass text-xs"></i></span>
+              <input type="text" id="pcb-search" oninput="onSearchPosCashBookDebounced()"
+                placeholder="Search description, category, REF..."
+                class="w-full pl-9 pr-4 py-2 text-xs rounded-lg bg-[#0f172a] border border-slate-800 text-white focus:outline-none focus:border-indigo-500">
+            </div>
+
+            <!-- Date Filter (Hidden/Locked for non-admin roles who only see Daily) -->
+            <div id="pcb-date-filter-box"
+              class="flex items-center gap-1.5 w-full sm:w-auto bg-[#0f172a] border border-slate-800 p-1 rounded-lg text-xs">
+              <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">From:</span>
+              <input type="date" id="pcb-date-from" onchange="loadPosCashBook(1)"
+                class="bg-transparent text-white text-xs outline-none cursor-pointer">
+              <span class="text-[10px] text-slate-400 font-bold px-1.5 uppercase">To:</span>
+              <input type="date" id="pcb-date-to" onchange="loadPosCashBook(1)"
+                class="bg-transparent text-white text-xs outline-none cursor-pointer">
+              <button onclick="clearPosCashBookFilter()" class="p-1 text-slate-400 hover:text-rose-400 transition"
+                title="Clear Date Filter"><i class="fa-solid fa-circle-xmark text-xs"></i></button>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2.5 w-full lg:w-auto justify-end">
+            <button onclick="loadPosCashBook(1)"
+              class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md active:translate-y-0.5 transition-all whitespace-nowrap">
+              <i class="fa-solid fa-rotate text-xs"></i> Refresh
+            </button>
+            <button onclick="exportPosCashBookCSV()"
+              class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md active:translate-y-0.5 transition-all whitespace-nowrap">
+              <i class="fa-solid fa-file-export text-xs"></i> Export CSV
+            </button>
+            <button onclick="openPosCashBookModal()"
+              class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 active:translate-y-0.5 transition-all whitespace-nowrap">
+              <i class="fa-solid fa-plus text-xs"></i> Add New Entry
+            </button>
+          </div>
+        </div>
+
+        <!-- 3. POS Cash Book Data Grid Table -->
+        <div
+          class="table-container bg-[#0c1322] border border-slate-800 shadow-2xl relative overflow-x-auto rounded-xl">
+          <table class="w-full text-left border-collapse min-w-[1250px]">
+            <thead>
+              <tr class="bg-[#0e172a]" style="height: 52px;">
+                <th class="w-12 text-center text-slate-400 text-xs py-3">NO</th>
+                <th class="w-28 text-slate-400 text-xs py-3">DATE</th>
+                <th class="w-36 text-slate-400 text-xs py-3">CATEGORY</th>
+                <th class="min-w-[260px] text-slate-400 text-xs py-3">DESCRIPTION</th>
+                <th class="w-24 text-slate-400 text-xs py-3">METHOD</th>
+                <th class="w-32 text-right text-emerald-400 text-xs py-3">DEBIT</th>
+                <th class="w-32 text-right text-rose-400 text-xs py-3">CREDIT</th>
+                <th class="w-36 text-right text-indigo-400 text-xs py-3">BALANCE</th>
+                <th class="w-28 text-slate-400 text-xs py-3">REF</th>
+                <th class="w-36 text-right text-amber-400 text-xs py-3">SURPLUS/DEFICIT</th>
+                <th
+                  class="w-20 text-center text-slate-400 text-xs py-3 right-0 sticky bg-[#0c1322] border-l border-slate-800">
+                  ACTION</th>
+              </tr>
+            </thead>
+            <tbody id="pcb-table-body" class="divide-y divide-slate-800/40 text-slate-300 text-xs"></tbody>
+          </table>
+        </div>
+
+        <!-- 4. Pagination Controller -->
+        <div
+          class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-[#0c1322] border border-slate-800 px-6 py-3.5 rounded-xl">
+          <div id="pcb-pagination-info" class="text-xs font-semibold text-slate-400 font-mono">Showing 0 entries</div>
+          <div class="flex items-center gap-2">
+            <button onclick="changePosCashBookPage(-1)" id="pcb-btn-prev"
+              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+              <i class="fa-solid fa-chevron-left text-[10px]"></i> Previous
+            </button>
+            <button onclick="changePosCashBookPage(1)" id="pcb-btn-next"
+              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white font-bold transition-all disabled:opacity-30 disabled:pointer-events-none text-xs">
+              Next <i class="fa-solid fa-chevron-right text-[10px]"></i>
+            </button>
+          </div>
+        </div>
+      </section>
 
       <!-- ────────────────────────────────────────────────────────────────────────── -->
       <!-- ⚡ VIEW 2: POS REGISTER (PERFECT SYMMETRICAL ZERO-DELAY INLINE TERMINAL)   -->

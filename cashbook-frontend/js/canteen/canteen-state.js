@@ -51,16 +51,26 @@ window.getMMTFullDateTimeString = getMMTFullDateTimeString;
 var _liveClockInterval = null;
 function startLiveClock() {
   function tick() {
-    const fullTimeStr = getMMTFullDateTimeString();
-    const dateOnlyStr = getMMTDateString();
+    const d = new Date(Date.now() + (6.5 * 3600 * 1000));
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const dayName = days[d.getUTCDay()];
+    let fyYear = d.getUTCFullYear();
+    if (d.getUTCMonth() < 2) fyYear -= 1;
+    const fyStr = `FY ${fyYear}-${fyYear + 1}`;
+
+    let hours = d.getUTCHours();
+    const minutes = String(d.getUTCMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    const timeStr = `${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
+    const roleStr = gSession?.role || localStorage.getItem('golden_user_role') || 'Cashier';
+
     const dateEl = document.getElementById('pos-today-date');
-    if (dateEl) dateEl.textContent = fullTimeStr;
-    const sideDateEl = document.getElementById('side-today-date');
-    if (sideDateEl) sideDateEl.textContent = `MMT ${dateOnlyStr}`;
+    if (dateEl) dateEl.textContent = `${fyStr} | ${dayName} | ${timeStr} | ${roleStr}`;
   }
   tick();
   if (_liveClockInterval) clearInterval(_liveClockInterval);
-  _liveClockInterval = setInterval(tick, 1000);
+  _liveClockInterval = setInterval(tick, 10000);
 }
 
 // ------------------------------------------------------------------------------
@@ -93,7 +103,7 @@ function isTokenExpired() {
         if (Date.now() >= payload.exp * 1000) return true;
       }
     }
-  } catch (e) {}
+  } catch (e) { }
 
   return false;
 }
@@ -157,7 +167,7 @@ window.getNormalizedRole = getNormalizedRole;
 // ------------------------------------------------------------------------------
 // 🛡️ 3. SCOPE-SAFE SINGLETON HELPERS
 // ------------------------------------------------------------------------------
-window.esc = window.esc || window.escapeHtml || (s => s ? String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) : '');
+window.esc = window.esc || window.escapeHtml || (s => s ? String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])) : '');
 window.escAttr = window.escAttr || window.escapeJsAttr || (s => s ? String(s).replace(/'/g, "\\'") : '');
 
 var esc = window.esc;
@@ -213,11 +223,11 @@ async function loadCanteenComponents() {
         if (res.ok) {
           html = await res.text();
           if (html && html.trim().length > 0) {
-            try { localStorage.setItem(cacheKey, html); } catch(e) {}
+            try { localStorage.setItem(cacheKey, html); } catch (e) { }
             break;
           }
         }
-      } catch(e) {}
+      } catch (e) { }
     }
 
     if (html) {
@@ -242,7 +252,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   // 🧩 1. Mount Component Partials First (Zero Recursion Guaranteed)
   try {
     await loadCanteenComponents();
-  } catch(compErr) {
+  } catch (compErr) {
     console.warn("[CanteenState] Components mount notice:", compErr);
   }
 
@@ -257,7 +267,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   try {
     gSession = JSON.parse(userStr);
-  } catch(e) {
+  } catch (e) {
     gSession = { role: localStorage.getItem('golden_user_role') || 'Cashier' };
   }
 
@@ -288,7 +298,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (isCounter) {
     html.classList.add('role-counter');
     html.classList.remove('role-cashier', 'role-admin');
-    
+
     const sidebar = document.getElementById('canteen-sidebar');
     if (sidebar) sidebar.style.display = 'none';
     const toggleBtn = document.getElementById('btn-toggle-sidebar');
@@ -302,11 +312,11 @@ window.addEventListener('DOMContentLoaded', async () => {
   } else if (isCashier) {
     html.classList.add('role-cashier');
     html.classList.remove('role-counter', 'role-admin');
-    
+
     // Cashier: Only POS Settings is restricted
     const btnSettings = document.getElementById('btn-side-settings');
     if (btnSettings) btnSettings.style.display = 'none';
-    
+
     // Day close & Evening clearing are accessible
     const btnClose = document.getElementById('btn-header-close-day');
     if (btnClose) btnClose.style.display = '';
@@ -414,8 +424,8 @@ function initNetworkMonitor() {
           await updatePendingBadgeCount();
         }
 
-        const pendingOrders = (typeof dbGetPendingOrders === 'function') 
-          ? await dbGetPendingOrders() 
+        const pendingOrders = (typeof dbGetPendingOrders === 'function')
+          ? await dbGetPendingOrders()
           : [];
 
         if (pendingOrders && pendingOrders.length > 0) {
@@ -423,7 +433,7 @@ function initNetworkMonitor() {
           try {
             const probeBase = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
             await fetch(`${probeBase}/?_probe=${Date.now()}`, { method: 'HEAD', mode: 'no-cors', cache: 'no-store' });
-          } catch(probeErr) {}
+          } catch (probeErr) { }
 
           if (typeof autoSyncPendingOrders === 'function') {
             await autoSyncPendingOrders();
@@ -483,13 +493,13 @@ async function updatePendingBadgeCount() {
 // ------------------------------------------------------------------------------
 function switchCanteenView(viewName) {
   gActiveView = viewName;
-  const views = ['dashboard', 'pos', 'sales', 'stock', 'purchases', 'waste', 'surplus'];
+  const views = ['dashboard', 'cashbook', 'pos', 'sales', 'stock', 'purchases', 'waste', 'surplus'];
 
   views.forEach(v => {
     const el = document.getElementById(`view-${v}`);
     const navBtn = document.getElementById(`nav-btn-${v}`);
     if (el) el.classList.toggle('hidden', v !== viewName);
-    
+
     if (navBtn) {
       if (v === viewName) {
         navBtn.className = "w-full px-3 py-2 rounded-xl transition flex items-center gap-3 bg-emerald-600 text-white shadow-lg shadow-emerald-900/30";
@@ -503,17 +513,19 @@ function switchCanteenView(viewName) {
   if (titleEl) {
     const titles = {
       dashboard: 'CANTEEN EXECUTIVE DASHBOARD',
-      pos: 'CANTEEN POS REGISTER TERMINAL',
-      sales: 'CANTEEN SALES ORDERS HISTORY',
-      stock: 'REAL-TIME STOCK INVENTORY AUDITOR',
-      purchases: 'PURCHASES & SUPPLIERS AUDIT HISTORY',
-      waste: 'CANTEEN WASTAGE & LOSS AUDITOR',
-      surplus: 'CANTEEN STOCK SURPLUS AUDITOR'
+      cashbook: 'POS CASH BOOK LEDGER',
+      pos: 'SALE COUNTER TERMINAL',
+      sales: 'SALES ORDERS HISTORY',
+      stock: 'STOCK INVENTORY AUDITOR',
+      purchases: 'PURCHASES & VOUCHER LEDGER',
+      waste: 'WASTE & LOSS LEDGER',
+      surplus: 'STOCK SURPLUS LEDGER'
     };
     titleEl.textContent = titles[viewName] || 'CANTEEN POS SYSTEM';
   }
 
   if (viewName === 'dashboard' && typeof loadCanteenDashboard === 'function') loadCanteenDashboard();
+  else if (viewName === 'cashbook' && typeof loadPosCashBook === 'function') loadPosCashBook(1);
   else if (viewName === 'sales' && typeof loadSalesOrdersHistory === 'function') loadSalesOrdersHistory(1);
   else if (viewName === 'stock' && typeof loadStockInventory === 'function') loadStockInventory(1);
   else if (viewName === 'purchases' && typeof loadPurchasesHistory === 'function') loadPurchasesHistory(1);
@@ -569,8 +581,7 @@ function showToast(type, msg) {
   if (!box) return;
   const isErr = (type === 'ERROR');
   box.innerHTML = `
-    <div class="pointer-events-auto p-4 rounded-2xl shadow-2xl border-2 flex items-center gap-3 animate-in zoom-in-95 duration-150 ${
-      isErr ? 'bg-rose-950 border-rose-500 text-white shadow-[0_0_40px_rgba(244,63,94,0.4)]' : 'bg-emerald-950 border-emerald-500 text-white shadow-[0_0_40px_rgba(16,185,129,0.4)]'
+    <div class="pointer-events-auto p-4 rounded-2xl shadow-2xl border-2 flex items-center gap-3 animate-in zoom-in-95 duration-150 ${isErr ? 'bg-rose-950 border-rose-500 text-white shadow-[0_0_40px_rgba(244,63,94,0.4)]' : 'bg-emerald-950 border-emerald-500 text-white shadow-[0_0_40px_rgba(16,185,129,0.4)]'
     }">
       <i class="fa-solid ${isErr ? 'fa-triangle-exclamation text-rose-400 text-xl' : 'fa-circle-check text-emerald-400 text-xl'}"></i>
       <p class="text-xs font-bold leading-snug flex-1">${msg}</p>

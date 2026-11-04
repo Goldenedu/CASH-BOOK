@@ -552,21 +552,47 @@ CREATE INDEX IF NOT EXISTS idx_pm_cashier_resp_date ON pm_cashier_book(responsib
 
 
 -- ==============================================================================
--- MODULE 7: CANTEEN POS CORE & INVENTORY MANAGEMENT
+-- MODULE 7: CANTEEN POS CORE, POS CASH BOOK & INVENTORY MANAGEMENT
 -- ==============================================================================
 
--- 7.1 POS ITEMS MASTER (Inventory, Pricing & Surplus Stock)
+-- 7.0 POS CASH BOOK LEDGER
+CREATE TABLE IF NOT EXISTS pos_cash_book (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  no INTEGER DEFAULT 1,
+  date TEXT NOT NULL,
+  category TEXT DEFAULT 'General',
+  description TEXT,
+  method TEXT DEFAULT 'Cash' CHECK (method IN ('Cash', 'Bank')),
+  debit REAL DEFAULT 0 CHECK (debit >= 0),
+  credit REAL DEFAULT 0 CHECK (credit >= 0),
+  balances REAL DEFAULT 0,
+  ref_no TEXT DEFAULT '',
+  surplus_deficit REAL DEFAULT 0, -- Accepts both (+) and (-)
+  vr_no TEXT,
+  my TEXT,
+  fy TEXT DEFAULT 'FY 2026-2027',
+  created_by TEXT DEFAULT 'Cashier',
+  created_at TEXT DEFAULT (datetime('now')),
+  uniqueid TEXT UNIQUE
+);
+CREATE INDEX IF NOT EXISTS idx_pos_cb_date ON pos_cash_book(date);
+CREATE INDEX IF NOT EXISTS idx_pos_cb_fy_date ON pos_cash_book(fy, date);
+CREATE INDEX IF NOT EXISTS idx_pos_cb_method_date ON pos_cash_book(method, date);
+
+-- 7.1 POS ITEMS MASTER (Inventory, Retail & Wholesale Pricing)
 CREATE TABLE IF NOT EXISTS pos_items_master (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  barcode TEXT UNIQUE NOT NULL,                                       -- Primary Scan Barcode/QR
-  item_name TEXT NOT NULL,                                            -- Item Description
-  category TEXT NOT NULL DEFAULT 'Snack',                             -- Snack, Drink, Meal, Stationery
-  cost_price REAL NOT NULL DEFAULT 0 CHECK (cost_price >= 0),         -- Last Unit Cost
-  markup_percent REAL NOT NULL DEFAULT 8 CHECK (markup_percent >= 0),  -- Default Markup % (8%)
-  selling_price REAL NOT NULL DEFAULT 0 CHECK (selling_price >= 0),   -- Rounded Retail Price
-  current_stock REAL NOT NULL DEFAULT 0,                              -- Total Countable Stock
-  surplus_stock REAL NOT NULL DEFAULT 0 CHECK (surplus_stock >= 0),    -- Surplus Stock (Capital-Invariant)
-  is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),   -- 1: Active, 0: Disabled
+  barcode TEXT UNIQUE NOT NULL,
+  item_name TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'Snack',
+  cost_price REAL NOT NULL DEFAULT 0 CHECK (cost_price >= 0),
+  markup_percent REAL NOT NULL DEFAULT 8 CHECK (markup_percent >= 0),
+  selling_price REAL NOT NULL DEFAULT 0 CHECK (selling_price >= 0),
+  wholesale_markup REAL NOT NULL DEFAULT 5 CHECK (wholesale_markup >= 0),
+  wholesale_price REAL NOT NULL DEFAULT 0 CHECK (wholesale_price >= 0),
+  current_stock REAL NOT NULL DEFAULT 0,
+  surplus_stock REAL NOT NULL DEFAULT 0 CHECK (surplus_stock >= 0),
+  is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -577,6 +603,7 @@ CREATE INDEX IF NOT EXISTS idx_pos_items_active ON pos_items_master(is_active);
 CREATE TABLE IF NOT EXISTS pos_suppliers (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   supplier_name TEXT UNIQUE NOT NULL,
+  shop_name TEXT DEFAULT '',
   contact_person TEXT,
   phone_no TEXT,
   address TEXT,
@@ -584,27 +611,39 @@ CREATE TABLE IF NOT EXISTS pos_suppliers (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- 7.3 POS PURCHASES (Stock Replenishment & Historical Pricing)
+-- 7.3 POS PURCHASES (Multi-Item Voucher & Historical Pricing)
 CREATE TABLE IF NOT EXISTS pos_purchases (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   purchase_no TEXT UNIQUE NOT NULL,
-  date TEXT NOT NULL,                                                 -- YYYY-MM-DD (Strict MMT)
+  voucher_no TEXT,
+  ref_no TEXT DEFAULT '',
+  date TEXT NOT NULL,
+  method TEXT NOT NULL DEFAULT 'Cash',
   supplier_id INTEGER,
+  supplier_name TEXT DEFAULT '',
+  shop_name TEXT DEFAULT '',
+  phone_no TEXT DEFAULT '',
+  address TEXT DEFAULT '',
+  category TEXT DEFAULT 'Snack',
   item_barcode TEXT NOT NULL,
+  item_name TEXT DEFAULT '',
   qty REAL NOT NULL CHECK (qty > 0),
   cost_price REAL NOT NULL CHECK (cost_price >= 0),
   markup_percent REAL NOT NULL DEFAULT 8,
-  selling_price REAL NOT NULL CHECK (selling_price >= 0),
+  selling_price REAL NOT NULL DEFAULT 0 CHECK (selling_price >= 0),
+  wholesale_markup REAL NOT NULL DEFAULT 5,
+  wholesale_price REAL NOT NULL DEFAULT 0 CHECK (wholesale_price >= 0),
   total_cost REAL NOT NULL CHECK (total_cost >= 0),
+  actual_voucher_amount REAL DEFAULT 0,
+  surplus_deficit REAL DEFAULT 0,
   remark TEXT,
   created_by TEXT NOT NULL DEFAULT 'Admin',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  FOREIGN KEY (supplier_id) REFERENCES pos_suppliers(id) ON DELETE SET NULL,
-  FOREIGN KEY (item_barcode) REFERENCES pos_items_master(barcode) ON DELETE RESTRICT
+  FOREIGN KEY (supplier_id) REFERENCES pos_suppliers(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_pos_purchases_date ON pos_purchases(date);
 CREATE INDEX IF NOT EXISTS idx_pos_purchases_barcode ON pos_purchases(item_barcode);
-CREATE INDEX IF NOT EXISTS idx_pos_purchases_supplier ON pos_purchases(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_pos_purchases_voucher ON pos_purchases(voucher_no);
 
 
 -- ==============================================================================
