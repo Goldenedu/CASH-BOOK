@@ -516,7 +516,7 @@ function populateDropdownsCashier() {
       } else if (currentCashierSubBook === 'CAKitchen') {
         fallbacks = ["Rice & Oil", "Fish, Meat & Eggs", "Beans & Vegetables", "Others", "Home 1 Exp", "Home 2 Exp", "Liabilities", "Opening", "Closing", "Transfer"];
       } else if (currentCashierSubBook === 'CAPayroll') {
-        fallbacks = ["Full Time Salary", "Part Time Salary", "Full Time Bonus", "Part Time Bonus", "Full Time Fund", "Part Time Fund", "Opening", "Closing", "Transfer"];
+        fallbacks = ["Full Time Salary", "Part Time Salary", "Full Time Bonus", "Full Time Fund", "Opening", "Closing", "Bank Interest", "Other", "Transfer"];
       } else {
         fallbacks = ["Opening", "Income", "Expense", "Transfer", "Closing"];
       }
