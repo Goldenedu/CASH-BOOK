@@ -175,7 +175,7 @@ export async function getExpenseData(db, body) {
         SELECT id, no, date, category, staff_id, description, method, debit, credit, balances, unpaid_bonus, unpaid_fund, transfer, vr_no, my, fy, book_name, is_locked, uniqueid 
         FROM payroll 
         ${whereSql} 
-        ORDER BY id DESC 
+        ORDER BY CAST(no AS INTEGER) DESC, id DESC 
         LIMIT ? OFFSET ?
       `;
     } else if (tableName === 'office') {
@@ -183,7 +183,7 @@ export async function getExpenseData(db, body) {
         SELECT id, no, date, category, description, unit, unit_price, method, debit, credit, balances, liabilities, transfer, vr_no, my, fy, book_name, is_locked, uniqueid 
         FROM office 
         ${whereSql} 
-        ORDER BY id DESC 
+        ORDER BY CAST(no AS INTEGER) DESC, id DESC 
         LIMIT ? OFFSET ?
       `;
     } else { // kitchen
@@ -191,7 +191,7 @@ export async function getExpenseData(db, body) {
         SELECT id, no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, is_locked, uniqueid 
         FROM kitchen 
         ${whereSql} 
-        ORDER BY id DESC 
+        ORDER BY CAST(no AS INTEGER) DESC, id DESC 
         LIMIT ? OFFSET ?
       `;
     }
@@ -495,7 +495,7 @@ export async function saveExpenseEntry(db, session, body) {
 }
 
 /**
- * 💡 Update Expense Entry (Strict Table Audit & Minimal Quota Writes)
+ * 💡 Update Expense Entry (Strict Table Audit, Minimal Quota Writes & Linked Uniform `no`/`vr_no` Preservation)
  */
 export async function updateExpenseEntry(db, session, body) {
   try {
@@ -505,20 +505,18 @@ export async function updateExpenseEntry(db, session, body) {
 
     if (!uniqueid) return { success: false, message: "Unique ID မပါဝင်ပါ။" };
 
-    // 🛠️ BUGFIX: Query exact columns per table schema (No 'unit' on kitchen/payroll)
     let existingQuery = '';
     if (tableName === 'payroll') {
       existingQuery = `SELECT fy, date, description, id, category, is_locked, uniqueid FROM payroll WHERE uniqueid = ?`;
     } else if (tableName === 'office') {
       existingQuery = `SELECT fy, date, unit, description, id, category, is_locked, uniqueid FROM office WHERE uniqueid = ?`;
-    } else { // kitchen
+    } else {
       existingQuery = `SELECT fy, date, description, id, category, is_locked, uniqueid FROM kitchen WHERE uniqueid = ?`;
     }
 
     const existing = await db.prepare(existingQuery).bind(uniqueid).first();
     if (!existing) return { success: false, message: "ပြင်ဆင်မည့် စာရင်း ရှာမတွေ့ပါ။" };
 
-    // 🎯 Phase 2: Mutation Policy Check
     const policy = verifyRecordMutationPolicy(session, existing.date);
     if (!policy.allowed) {
       return { success: false, message: policy.message };
@@ -545,7 +543,6 @@ export async function updateExpenseEntry(db, session, body) {
     const oldUnit = parseFloat(existing.unit || 0);
     const oldPid = extractProductId(existing, existing.description, existing.id);
 
-    // Uniform check is strictly constrained to Office only
     const wasUniform = (tableName === 'office') && (existing.category === "Advance Uniform" || existing.category === "Advance Unifrom");
     const isUniform = (tableName === 'office') && (body.category === "Advance Uniform" || body.category === "Advance Unifrom");
 
@@ -573,9 +570,32 @@ export async function updateExpenseEntry(db, session, body) {
     const mainTable = (method === 'bank') ? 'bank' : 'cash';
     const caTable = (method === 'bank') ? 'ca_bank' : 'ca_cash';
 
+    // 🛡️ Preserve existing `no` & `vr_no` for Linked Uniform Profit & Cashier entries
+    let exMainMeta = null;
+    let exCaMeta = null;
+    if (wasUniform && isUniform) {
+      const [mRow, cRow] = await db.batch([
+        db.prepare(`SELECT no, vr_no, fy FROM ${mainTable} WHERE uniqueid = ?`).bind(profitUid),
+        db.prepare(`SELECT no, vr_no, fy FROM ${caTable} WHERE uniqueid = ?`).bind(cashierUid)
+      ]);
+      const mData = mRow?.results?.[0];
+      if (mData) {
+        exMainMeta = {
+          no: (normalizeFyStr(mData.fy || fy) === fy) ? mData.no : null,
+          vrNo: mData.vr_no || null
+        };
+      }
+      const cData = cRow?.results?.[0];
+      if (cData) {
+        exCaMeta = {
+          no: (normalizeFyStr(cData.fy || fy) === fy) ? cData.no : null,
+          vrNo: cData.vr_no || null
+        };
+      }
+    }
+
     const batchStatements = [];
 
-    // ⚡ Quota-Shield: Only execute linked uniform deletes if the record actually was or is uniform
     if (wasUniform || isUniform) {
       batchStatements.push(
         db.prepare(`DELETE FROM cash WHERE uniqueid = ?`).bind(profitUid),
@@ -623,8 +643,8 @@ export async function updateExpenseEntry(db, session, body) {
       if (profit > 0) {
         hasLinkedMain = true;
         const mainPrefix = (method === 'bank') ? 'BNK' : 'CAH';
-        const mainVrNo = await generateVoucherNo(db, mainTable, mainPrefix, entryDate);
-        const mainNo = await generateFyNo(db, mainTable, fy);
+        const mainVrNo = exMainMeta?.vrNo || await generateVoucherNo(db, mainTable, mainPrefix, entryDate);
+        const mainNo = exMainMeta?.no || await generateFyNo(db, mainTable, fy);
         const mainDesc = `[Uniform Profit] ${body.description || ''}`.trim();
 
         batchStatements.push(
@@ -642,8 +662,8 @@ export async function updateExpenseEntry(db, session, body) {
       if (totalCashierIncome > 0) {
         hasLinkedCashier = true;
         const caPrefix = (method === 'bank') ? 'CAB' : 'CAC';
-        const caVrNo = await generateVoucherNo(db, caTable, caPrefix, entryDate);
-        const caNo = await generateFyNo(db, caTable, fy);
+        const caVrNo = exCaMeta?.vrNo || await generateVoucherNo(db, caTable, caPrefix, entryDate);
+        const caNo = exCaMeta?.no || await generateFyNo(db, caTable, fy);
         const caDesc = String(body.description || '').trim();
 
         batchStatements.push(
@@ -671,16 +691,20 @@ export async function updateExpenseEntry(db, session, body) {
       }
     }
 
-    // ⚡ Recalculate target book with incremental date
     await recalculateLedgerBalances(db, tableName, fy, recalcDate);
     if (oldFy && oldFy !== fy) {
       await recalculateLedgerBalances(db, tableName, oldFy, oldDate);
     }
 
-    // ⚡ Quota-Shield: Recalculate linked tables ONLY when uniform was involved
     if (wasUniform || isUniform) {
-      if (hasLinkedMain) await recalculateLedgerBalances(db, mainTable, fy, recalcDate);
-      if (hasLinkedCashier) await recalculateLedgerBalances(db, caTable, fy, recalcDate);
+      if (hasLinkedMain || wasUniform) {
+        await recalculateLedgerBalances(db, 'cash', fy, recalcDate);
+        await recalculateLedgerBalances(db, 'bank', fy, recalcDate);
+      }
+      if (hasLinkedCashier || wasUniform) {
+        await recalculateLedgerBalances(db, 'ca_cash', fy, recalcDate);
+        await recalculateLedgerBalances(db, 'ca_bank', fy, recalcDate);
+      }
     }
 
     return { success: true, message: "စာရင်း အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။" };

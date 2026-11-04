@@ -55,17 +55,17 @@ window.MAGIC_NUMBERS = {
 // 💡 Environment Detection for API URL Configuration
 function getApiUrl() {
   const hostname = window.location.hostname;
-  
+
   // 1. Localhost စမ်းသပ်မှု
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
     return localStorage.getItem('dev_api_url') || 'http://localhost:8787';
   }
-  
+
   // 2. Secondary Development Pages စမ်းသပ်မှု
   if (hostname.includes('cash-book-dev.pages.dev') || hostname.includes('-dev')) {
     return 'https://cashbook-app-api-dev.thantoeaung734.workers.dev';
   }
-  
+
   // 3. Main Production စနစ်
   return localStorage.getItem('prod_api_url') || 'https://cashbook-app-api.goldeneduprivateschool.workers.dev';
 }
@@ -244,8 +244,8 @@ window.DROPDOWNS = {
     transfer: ["CABank", "CACash"]
   },
   caPayrollBook: {
-    category: ["Non", "Full Time Salary", "Part Time Salary", "Full Time Bonus", "Full Time Fund", "Income", "Opening", "Closing", "Transfer"],
-    method: ["Cash", "Bank"],
+    category: ["Non", "Full Time Salary", "Part Time Salary", "Full Time Bonus", "Full Time Fund", "Opening", "Closing", "Bank Interest", "Other", "Transfer"],
+    method: ["Bank", "Cash"],
     transfer: ["CABank", "CACash"]
   },
 

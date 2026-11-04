@@ -148,18 +148,64 @@ async function loadIncomeData(isSilent, forceRefresh) {
 }
 
 /**
- * 💡 Preload Promotion Matrix Rates
+ * 💡 Preload Promotion Matrix Rates & Expose Global Cache Invalidator
  */
-async function preloadPromotionMatrix() {
+async function preloadPromotionMatrix(forceRefresh = false) {
   try {
-    var res = await callApi('getPromotionData', {}, 'GET');
+    if (forceRefresh) {
+      promoMatrixCache = null;
+      window.promoMatrixCache = null;
+      try { localStorage.removeItem('golden_master_promo_matrix'); } catch (e) { }
+    }
+    var res = await callApi('getPromotionData', { forceRefresh: Boolean(forceRefresh) }, 'GET');
     if (res && res.success) {
       promoMatrixCache = res.data || [];
+      window.promoMatrixCache = promoMatrixCache;
+      try { localStorage.setItem('golden_master_promo_matrix', JSON.stringify(promoMatrixCache)); } catch (e) { }
     }
   } catch (e) {
     console.warn("Promotion Matrix Preload Warning:", e);
   }
 }
+
+/**
+ * 🎯 Student List သို့မဟုတ် Promotion Matrix ပြင်ဆင်တိုင်း Income Entry ၏ Cache အားလုံးကို အသစ်ပြန်ဆွဲယူပေးသည့် Function
+ */
+window.invalidateIncomeMasterCache = async function (refreshPromo = true, refreshStudents = true) {
+  if (refreshStudents) {
+    studentsByFyCache = {};
+    window.studentsByFyCache = {};
+    try {
+      Object.keys(localStorage).forEach(function (k) {
+        if (k.startsWith('golden_master_students_') || k.includes('getStudentData')) {
+          localStorage.removeItem(k);
+        }
+      });
+    } catch (e) { }
+  }
+
+  if (refreshPromo) {
+    promoMatrixCache = null;
+    window.promoMatrixCache = null;
+    try {
+      localStorage.removeItem('golden_master_promo_matrix');
+      Object.keys(localStorage).forEach(function (k) {
+        if (k.includes('getPromotionData')) {
+          localStorage.removeItem(k);
+        }
+      });
+    } catch (e) { }
+  }
+
+  if (navigator.onLine) {
+    if (refreshPromo) {
+      await preloadPromotionMatrix(true);
+    }
+    if (typeof window.prefetchOfflineMasterData === 'function') {
+      window.prefetchOfflineMasterData(true);
+    }
+  }
+};
 
 function renderStatsIncome(stats) {
   updateIncKpiLabels(); // Add (MMK) to titles
@@ -294,9 +340,10 @@ async function onStudentIdOrFYChangeIncome() {
   if (!studentsByFyCache[fyVal] && navigator.onLine) {
     if (fyidNameShow) fyidNameShow.value = "ကျောင်းသား စာရင်း ရှာဖွေနေပါသည်...";
     try {
-      var res = await callApi('getStudentData', { fy: fyVal, limit: 5000 }, 'GET');
+      var res = await callApi('getStudentData', { fy: fyVal, limit: 5000, forceRefresh: true }, 'GET');
       if (res && res.success) {
         studentsByFyCache[fyVal] = res.data || [];
+        try { localStorage.setItem(`golden_master_students_${fyVal}`, JSON.stringify(studentsByFyCache[fyVal])); } catch (e) { }
       }
     } catch (e) {
       console.error("Failed to load students for FY " + fyVal, e);
@@ -888,3 +935,4 @@ window.exportToCSVIncome = exportToCSVIncome;
 window.printInvoice = printInvoice;
 window.updateIncKpiLabels = updateIncKpiLabels;
 window.adjustIncKpiFontSizes = adjustIncKpiFontSizes;
+window.preloadPromotionMatrix = preloadPromotionMatrix;

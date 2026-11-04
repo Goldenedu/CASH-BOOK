@@ -141,70 +141,9 @@ export function calculateSmartPrice(costPrice, markupPercent = 8, roundTo = 50) 
 // ==============================================================================
 // ⚖️ 3.1 DEDICATED CANTEEN BOOK BALANCE RECALCULATOR (ZERO PHANTOM CASH DEBT)
 // ==============================================================================
+// handlers-canteen-pos.js ထဲရှိ recalculateCanteenBookBalances အား အစားထိုးရန်
 export async function recalculateCanteenBookBalances(db, fy, fromDate) {
-  try {
-    const cleanFy = normalizeFyStr(fy).replace(/^FY\s*/i, '');
-
-    // 🚀 OPTIMIZATION 1: fromDate ပါပါက ထိုရက်စွဲမတိုင်မီ နောက်ဆုံးလက်ကျန်ကို Base အဖြစ်ယူပါမည်
-    let runningBalance = 0;
-    let query = `
-      SELECT id, date, category, method, debit, credit, balances 
-      FROM canteen_book 
-      WHERE fy IN (?, ?) 
-    `;
-    const params = [cleanFy, `FY ${cleanFy}`];
-
-    if (fromDate) {
-      const prevBalRow = await db.prepare(`
-        SELECT balances FROM canteen_book 
-        WHERE fy IN (?, ?) AND date < ? 
-        ORDER BY date DESC, id DESC LIMIT 1
-      `).bind(cleanFy, `FY ${cleanFy}`, fromDate).first();
-      runningBalance = parseFloat(prevBalRow?.balances || 0);
-
-      query += ` AND date >= ? `;
-      params.push(fromDate);
-    }
-
-    query += ` ORDER BY date ASC, id ASC`;
-
-    const rows = await db.prepare(query).bind(...params).all();
-    if (!rows || !rows.results || rows.results.length === 0) return;
-
-    const updateStatements = [];
-
-    for (const r of rows.results) {
-      const method = String(r.method || '').trim();
-      const debit = safeAmount(r.debit);
-      const credit = safeAmount(r.credit);
-
-      // ⚖️ မူရင်း စာရင်းကိုင်စံနှုန်းအတိုင်း ၁၀၀% မပြောင်းလဲဘဲ ထိန်းသိမ်းထားပါသည်
-      if (method === 'Transfer') {
-        runningBalance += (debit - credit);
-      } else if (method === 'Cash') {
-        runningBalance -= credit;
-      } else {
-        runningBalance += (debit - credit);
-      }
-      runningBalance = Math.round(runningBalance * 100) / 100;
-
-      // 🚀 OPTIMIZATION 2: လက်ကျန် အမှန်တကယ် ပြောင်းလဲမှသာ UPDATE ရိုက်မည် (Row Writes ချွေတာခြင်း)
-      if (Number(r.balances) !== runningBalance) {
-        updateStatements.push(
-          db.prepare(`UPDATE canteen_book SET balances = ? WHERE id = ?`).bind(runningBalance, r.id)
-        );
-      }
-    }
-
-    if (updateStatements.length === 0) return;
-
-    const CHUNK_SIZE = 50;
-    for (let i = 0; i < updateStatements.length; i += CHUNK_SIZE) {
-      await db.batch(updateStatements.slice(i, i + CHUNK_SIZE));
-    }
-  } catch (err) {
-    console.error("[CanteenBook Recalculate Error]:", err);
-  }
+  return recalculateLedgerBalances(db, 'canteen_book', fy, fromDate);
 }
 
 // ==============================================================================

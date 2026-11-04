@@ -617,6 +617,9 @@ async function saveStudentForm(e) {
       if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
       window.studentsByFyCache = {};
       window.gStudentCacheForMoney = {};
+      if (typeof window.invalidateIncomeMasterCache === 'function') {
+        window.invalidateIncomeMasterCache(false, true);
+      }
 
       loadStudentData(true);
     } else {
@@ -740,6 +743,9 @@ async function deleteStudentEntry(uniqueId) {
       if (typeof window.clearAllApiCache === 'function') window.clearAllApiCache();
       window.studentsByFyCache = {};
       window.gStudentCacheForMoney = {};
+      if (typeof window.invalidateIncomeMasterCache === 'function') {
+        window.invalidateIncomeMasterCache(false, true);
+      }
       loadStudentData(true);
     } else {
       if (typeof showToast === 'function') showToast("ERROR", "ဖျက်သိမ်းမှု မအောင်မြင်ပါ: " + (response ? response.message : ""));

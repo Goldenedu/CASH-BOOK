@@ -108,10 +108,10 @@ function createInsertIncomeStatement(db, p, isMigration = false) {
 }
 
 /**
- * ⚡ Phase 2.1: Atomic Batch Clean for Linked Income Records
+ * ⚡ Phase 2.1: Atomic Batch Clean for Linked Income Records (With `no` & `vr_no` Preservation Map)
  */
-async function cleanLinkedIncomeEntries(db, uniqueid) {
-  if (!uniqueid) return { cash: false, bank: false, ca_cash: false, ca_bank: false };
+async function cleanLinkedIncomeEntries(db, uniqueid, captureMeta = false) {
+  if (!uniqueid) return { cash: false, bank: false, ca_cash: false, ca_bank: false, preservedMap: new Map() };
   const uids = [
     uniqueid,
     `${uniqueid}_CASH`,
@@ -127,6 +127,24 @@ async function cleanLinkedIncomeEntries(db, uniqueid) {
   ];
 
   const placeholders = uids.map(() => '?').join(', ');
+  const preservedMap = new Map();
+
+  // 🛡️ Edit/Update လုပ်ချိန်တွင် မူလ no နှင့် vr_no များအားလုံးကို မဖျက်မီ မှတ်သားထားသည်
+  if (captureMeta) {
+    const tables = ['income', 'cash', 'bank', 'ca_cash', 'ca_bank'];
+    const selectBatch = tables.map(tbl =>
+      db.prepare(`SELECT uniqueid, no, vr_no, fy FROM ${tbl} WHERE uniqueid IN (${placeholders})`).bind(...uids)
+    );
+    const results = await db.batch(selectBatch);
+    results.forEach((res, idx) => {
+      const tbl = tables[idx];
+      (res?.results || []).forEach(r => {
+        if (r.uniqueid) {
+          preservedMap.set(`${tbl}:${r.uniqueid}`, { no: r.no, vrNo: r.vr_no, fy: r.fy });
+        }
+      });
+    });
+  }
 
   await db.batch([
     db.prepare(`DELETE FROM income WHERE uniqueid IN (${placeholders})`).bind(...uids),
@@ -140,14 +158,15 @@ async function cleanLinkedIncomeEntries(db, uniqueid) {
     cash: true,
     bank: true,
     ca_cash: true,
-    ca_bank: true
+    ca_bank: true,
+    preservedMap
   };
 }
 
 /**
- * ⚡ FIX: Safe SELECT -> UPDATE/INSERT (Zero ON CONFLICT Errors & Queued Recalculate)
+ * ⚡ Safe SELECT -> UPDATE/INSERT (Preserves Cashier `no` & `vr_no` on Edit)
  */
-async function postCashierIndividualLine(db, targetMethod, amount, body, entryDate, my, fy, createdBy, uidSuffix, recalcQueue) {
+async function postCashierIndividualLine(db, targetMethod, amount, body, entryDate, my, fy, createdBy, uidSuffix, recalcQueue, preservedMap = null) {
   if (amount <= 0) return;
 
   const normFy = normalizeFyStr(fy);
@@ -167,8 +186,10 @@ async function postCashierIndividualLine(db, targetMethod, amount, body, entryDa
       WHERE uniqueid = ?
     `).bind(entryDate, createdBy || 'Cashier', caDesc, targetMethod, amount, my, normFy, caUid).run();
   } else {
-    const caVrNo = await generateVoucherNo(db, caTable, caPrefix, entryDate);
-    const caNo = await generateFyNo(db, caTable, normFy);
+    const meta = preservedMap ? preservedMap.get(`${caTable}:${caUid}`) : null;
+    const isSameFy = meta && normalizeFyStr(meta.fy || normFy) === normFy;
+    const caVrNo = meta?.vrNo || await generateVoucherNo(db, caTable, caPrefix, entryDate);
+    const caNo = (isSameFy && meta?.no) ? meta.no : await generateFyNo(db, caTable, normFy);
 
     await db.prepare(`
       INSERT INTO ${caTable} (
@@ -262,9 +283,9 @@ async function syncDailyIncomeRollupForDate(db, entryDate, fy, createdBy, target
 }
 
 /**
- * ⚡ FIX: Post Linked Refund Auto Entries (Zero ON CONFLICT Errors & Queued Recalculate)
+ * ⚡ Post Linked Refund Auto Entries (Preserves `no` & `vr_no` on Edit)
  */
-async function postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdBy, uniqueid, recalcQueue) {
+async function postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdBy, uniqueid, recalcQueue, preservedMap = null) {
   const normFy = normalizeFyStr(fy);
   const method = String(body.method || 'Cash').toLowerCase();
   const debit = parseFloat(body.debit || 0);
@@ -287,8 +308,10 @@ async function postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdB
         WHERE uniqueid = ?
       `).bind(entryDate, refundDesc, debit, my, normFy, mainRefUid).run();
     } else {
-      const mainVrNo = await generateVoucherNo(db, refundTable, refundPrefix, entryDate);
-      const mainNo = await generateFyNo(db, refundTable, normFy);
+      const mainMeta = preservedMap ? preservedMap.get(`${refundTable}:${mainRefUid}`) : null;
+      const isSameMainFy = mainMeta && normalizeFyStr(mainMeta.fy || normFy) === normFy;
+      const mainVrNo = mainMeta?.vrNo || await generateVoucherNo(db, refundTable, refundPrefix, entryDate);
+      const mainNo = (isSameMainFy && mainMeta?.no) ? mainMeta.no : await generateFyNo(db, refundTable, normFy);
       await db.prepare(`
         INSERT INTO ${refundTable} (
           no, date, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
@@ -307,8 +330,10 @@ async function postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdB
         WHERE uniqueid = ?
       `).bind(entryDate, createdBy || 'Cashier', refundDesc, debit, my, normFy, caRefUid).run();
     } else {
-      const caVrNo = await generateVoucherNo(db, caTable, caPrefix, entryDate);
-      const caNo = await generateFyNo(db, caTable, normFy);
+      const caMeta = preservedMap ? preservedMap.get(`${caTable}:${caRefUid}`) : null;
+      const isSameCaFy = caMeta && normalizeFyStr(caMeta.fy || normFy) === normFy;
+      const caVrNo = caMeta?.vrNo || await generateVoucherNo(db, caTable, caPrefix, entryDate);
+      const caNo = (isSameCaFy && caMeta?.no) ? caMeta.no : await generateFyNo(db, caTable, normFy);
       await db.prepare(`
         INSERT INTO ${caTable} (
           no, date, responsibility_person, category, description, method, debit, credit, balances, transfer, vr_no, my, fy, book_name, created_by, created_at, uniqueid
@@ -387,7 +412,7 @@ export async function getIncomeData(db, body) {
       SELECT id, no, effect_date, date, fy, student_id, fyid, fyid_name, class, category, account_name, method, debit, credit, aut_amount, promo, my, vr_no, remark, uniqueid, is_locked 
       FROM income 
       ${whereSql} 
-      ORDER BY date DESC, no DESC 
+      ORDER BY CAST(no AS INTEGER) DESC, id DESC 
       LIMIT ? OFFSET ?
     `;
     const rowsRes = await db.prepare(dataQuery).bind(...params, limit, offset).all();
@@ -467,12 +492,8 @@ export async function saveIncomeEntry(db, session, body) {
   return res;
 }
 
-/**
- * 💡 Phase 2.1: Internal upsert core with Atomic db.batch() for Split Payments
- */
-async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration, recalcQueue) {
+async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration, recalcQueue, preservedMap = null) {
   try {
-    // 🛡️ IDEMPOTENCY GUARD: Offline မှ ပို့လာသော uniqueid သည် D1 တွင် ရှိပြီးသားဖြစ်ပါက Duplicate မဖြစ်စေရန် ချက်ချင်း Return ပေးသည်
     const existingCheck = await db.prepare(`SELECT id FROM income WHERE uniqueid = ?`).bind(uniqueid).first();
     if (existingCheck && !body.isUpdate && !isMigration) {
       return {
@@ -492,9 +513,12 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration, re
     const cleanStudentId = parseCleanIntId(body.id || body.studentId);
     const cleanFyid = sanitizeFyidStr(body.fyid || '');
 
-    const assignedNo = (isMigration && body.no)
-      ? parseInt(body.no, 10)
-      : await generateFyNo(db, 'income', fy);
+    const mainMeta = preservedMap ? (preservedMap.get(`income:${uniqueid}`) || preservedMap.get(`income:${uniqueid}_CASH`)) : null;
+    const isSameMainFy = mainMeta && normalizeFyStr(mainMeta.fy || fy) === fy;
+
+    const assignedNo = (isSameMainFy && mainMeta?.no)
+      ? parseInt(mainMeta.no, 10)
+      : ((isMigration && body.no) ? parseInt(body.no, 10) : await generateFyNo(db, 'income', fy));
 
     if (body.isSplit) {
       const cashAmt = parseFloat(body.cashAmount || 0);
@@ -502,9 +526,10 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration, re
       const batchStmts = [];
 
       if (cashAmt > 0) {
-        const cashNo = assignedNo;
-        const cashVrNo = await generateVoucherNo(db, 'income', 'INC', entryDate);
         const cashUid = `${uniqueid}_CASH`;
+        const cashMeta = preservedMap ? preservedMap.get(`income:${cashUid}`) : null;
+        const cashNo = assignedNo;
+        const cashVrNo = cashMeta?.vrNo || await generateVoucherNo(db, 'income', 'INC', entryDate);
         const cashRemark = `[Split - Cash] ${body.remark || ''}`.trim();
 
         batchStmts.push(createInsertIncomeStatement(db, {
@@ -517,9 +542,11 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration, re
       }
 
       if (bankAmt > 0) {
-        const bankNo = isMigration ? assignedNo : await generateFyNo(db, 'income', fy);
-        const bankVrNo = await generateVoucherNo(db, 'income', 'INC', entryDate);
         const bankUid = `${uniqueid}_BANK`;
+        const bankMeta = preservedMap ? preservedMap.get(`income:${bankUid}`) : null;
+        const isSameBankFy = bankMeta && normalizeFyStr(bankMeta.fy || fy) === fy;
+        const bankNo = (isSameBankFy && bankMeta?.no) ? parseInt(bankMeta.no, 10) : (isMigration ? assignedNo : await generateFyNo(db, 'income', fy));
+        const bankVrNo = bankMeta?.vrNo || await generateVoucherNo(db, 'income', 'INC', entryDate);
         const bankRemark = `[Split - Bank] ${body.remark || ''}`.trim();
 
         batchStmts.push(createInsertIncomeStatement(db, {
@@ -531,27 +558,23 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration, re
         }, isMigration));
       }
 
-      // 🛡️ 100% ACID Compliant Split Payments Posting
       if (batchStmts.length > 0) {
         await db.batch(batchStmts);
       }
 
-      recalcQueue?.add('income', fy, entryDate);
-
       if (!isMigration) {
         if (cashAmt > 0) {
-          await postCashierIndividualLine(db, 'Cash', cashAmt, body, entryDate, my, fy, createdBy, `${uniqueid}_CASH`, recalcQueue);
+          await postCashierIndividualLine(db, 'Cash', cashAmt, body, entryDate, my, fy, createdBy, `${uniqueid}_CASH`, recalcQueue, preservedMap);
         }
         if (bankAmt > 0) {
-          await postCashierIndividualLine(db, 'Bank', bankAmt, body, entryDate, my, fy, createdBy, `${uniqueid}_BANK`, recalcQueue);
+          await postCashierIndividualLine(db, 'Bank', bankAmt, body, entryDate, my, fy, createdBy, `${uniqueid}_BANK`, recalcQueue, preservedMap);
         }
       }
     } else {
-      // 🎯 FIX: အော့ဖ်လိုင်းမှ စနစ်တကျ ထုတ်ပေးထားသော တရားဝင်ဘောင်ချာ (INC-DDMMYY-xxx) ဖြစ်ပါက ၎င်းအတိုင်း တိုက်ရိုက်သိမ်းမည်
       const isInvalidTemp = !body.vrNo || String(body.vrNo).startsWith('TEMP-') || /^OFF-\d{6}$/.test(String(body.vrNo));
       const vrNo = (!isInvalidTemp && body.vrNo)
         ? body.vrNo
-        : await generateVoucherNo(db, 'income', 'INC', entryDate);
+        : (mainMeta?.vrNo || await generateVoucherNo(db, 'income', 'INC', entryDate));
 
       const debit = parseFloat(body.debit || 0);
       const credit = parseFloat(body.credit || 0);
@@ -565,11 +588,10 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration, re
       }, isMigration);
 
       await singleStmt.run();
-      recalcQueue?.add('income', fy, entryDate);
 
       const netAmount = credit - debit;
       if (!isMigration && netAmount > 0) {
-        await postCashierIndividualLine(db, body.method || 'Cash', netAmount, body, entryDate, my, fy, createdBy, uniqueid, recalcQueue);
+        await postCashierIndividualLine(db, body.method || 'Cash', netAmount, body, entryDate, my, fy, createdBy, uniqueid, recalcQueue, preservedMap);
       }
     }
 
@@ -581,8 +603,7 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration, re
       };
     }
 
-    // Live Operational Mode
-    await postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdBy, uniqueid, recalcQueue);
+    await postLinkedIncomeAutoEntries(db, body, entryDate, my, fy, createdBy, uniqueid, recalcQueue, preservedMap);
 
     return {
       success: true,
@@ -598,9 +619,6 @@ async function _saveIncomeEntryCore(db, session, body, uniqueid, isMigration, re
   }
 }
 
-/**
- * 💡 Phase 2.1: Update Income Entry (ReferenceError & Scope Resolution)
- */
 export async function updateIncomeEntry(db, session, body) {
   try {
     const uniqueid = body.uniqueId || body.uniqueid;
@@ -608,12 +626,11 @@ export async function updateIncomeEntry(db, session, body) {
       return { success: false, message: "Unique ID မပါဝင်ပါ။" };
     }
 
-    const existing = await db.prepare(`SELECT fy, date, is_locked, uniqueid FROM income WHERE uniqueid = ?`).bind(uniqueid).first();
+    const existing = await db.prepare(`SELECT no, vr_no, fy, date, method, is_locked, uniqueid FROM income WHERE uniqueid = ?`).bind(uniqueid).first();
     if (!existing) {
       return { success: false, message: "ပြင်ဆင်မည့် ဝင်ငွေစာရင်း ရှာမတွေ့ပါ။" };
     }
 
-    // 🎯 Phase 2: Mutation Policy Check
     const policy = verifyRecordMutationPolicy(session, existing.date);
     if (!policy.allowed) {
       return { success: false, message: policy.message };
@@ -637,16 +654,16 @@ export async function updateIncomeEntry(db, session, body) {
     const oldFy = existing?.fy || null;
 
     const recalcQueue = makeRecalcQueue();
-    const cleanResults = await cleanLinkedIncomeEntries(db, uniqueid);
+    // 🛡️ Capture existing `no` & `vr_no` across all linked books before cleaning
+    const cleanResults = await cleanLinkedIncomeEntries(db, uniqueid, true);
 
-    // Queue up the old records' tables for recalculation to clear balances
     if (cleanResults.ca_cash) recalcQueue.add('ca_cash', oldFy || body.fy, oldDate || body.date);
     if (cleanResults.ca_bank) recalcQueue.add('ca_bank', oldFy || body.fy, oldDate || body.date);
     if (cleanResults.cash) recalcQueue.add('cash', oldFy || body.fy, oldDate || body.date);
     if (cleanResults.bank) recalcQueue.add('bank', oldFy || body.fy, oldDate || body.date);
-    recalcQueue.add('income', oldFy || body.fy, oldDate || body.date);
 
-    const res = await _saveIncomeEntryCore(db, session, body, uniqueid, false, recalcQueue);
+    body.isUpdate = true;
+    const res = await _saveIncomeEntryCore(db, session, body, uniqueid, false, recalcQueue, cleanResults.preservedMap);
 
     const entryDate = getMyanmarDateString(body.date || existing.date);
     const createdBy = session?.name || 'Admin';
@@ -654,12 +671,10 @@ export async function updateIncomeEntry(db, session, body) {
     const normFy = normalizeFyStr(body.fy || calculateAcademicFyFromDate(entryDate));
     const method = body.method || existing.method || 'Cash';
 
-    // Handle Rollup shifting if the date was changed
     if (oldDate && oldDate !== entryDate) {
       await syncDailyIncomeRollupForDate(db, oldDate, oldFy || normFy, createdBy, method, recalcQueue);
     }
 
-    // Flush all batched recalcs at the end
     await recalcQueue.flush(db);
 
     return res;
