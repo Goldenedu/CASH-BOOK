@@ -508,6 +508,7 @@
       @page {
         size: A4 landscape !important;
         margin: 0mm !important;
+        /* စာရွက်ဘောင်အနားသတ် အားလုံးကို ကပ်ထုတ်မည် */
       }
 
       *,
@@ -518,7 +519,6 @@
       }
 
       html,
-      html.dark,
       body,
       body.print-mode-invoice {
         width: 297mm !important;
@@ -530,7 +530,6 @@
         margin: 0 !important;
         padding: 0 !important;
         border: none !important;
-        outline: none !important;
         overflow: hidden !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
@@ -551,17 +550,16 @@
         max-width: 297mm !important;
         height: 210mm !important;
         max-height: 210mm !important;
-        margin: 0 !important;
-        padding: 0 !important;
         background: #ffffff !important;
         background-color: #ffffff !important;
-        color: #000000 !important;
+        margin: 0 !important;
+        padding: 0 !important;
         box-sizing: border-box !important;
-        position: relative !important;
         border: none !important;
         page-break-after: avoid !important;
         page-break-inside: avoid !important;
       }
+
 
       /* 🎯 A5 Portrait တစ်ခြမ်းစီ Margin သတ်မှတ်ချက် */
       body.print-mode-invoice .a5-invoice-half {
@@ -711,7 +709,8 @@
       </table>
 
       <!-- 🎯 Total Line (အပေါ်/အောက် မျဉ်းအပြည့်တားထားပြီး Total အား ညာဘက်စွန်း ကပ်ထားပါသည်) -->
-      <div style="border-top: 1px solid #000000; border-bottom: 1px solid #000000; margin-top: 20px; padding: 6px 0;">
+      <div
+        style="border-top: 1px solid #e2e8f0 !important; border-bottom: 1px solid #e2e8f0 !important; margin-top: 18px; padding: 6px 0;">
         <div
           style="display: flex; justify-content: flex-end; align-items: center; gap: 20px; font-size: 12px; color: #000;">
           <span style="font-weight: 600;">Total</span>
@@ -814,7 +813,8 @@
       </table>
 
       <!-- 🎯 Total Line (အပေါ်/အောက် မျဉ်းအပြည့်တားထားပြီး Total အား ညာဘက်စွန်း ကပ်ထားပါသည်) -->
-      <div style="border-top: 1px solid #000000; border-bottom: 1px solid #000000; margin-top: 20px; padding: 6px 0;">
+      <div
+        style="border-top: 1px solid #e2e8f0 !important; border-bottom: 1px solid #e2e8f0 !important; margin-top: 18px; padding: 6px 0;">
         <div
           style="display: flex; justify-content: flex-end; align-items: center; gap: 20px; font-size: 12px; color: #000;">
           <span style="font-weight: 600;">Total</span>
