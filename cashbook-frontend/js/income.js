@@ -902,11 +902,11 @@ function printInvoice(uniqueId) {
     var bodyEl = document.getElementById(`print-${copy}-table-body`);
     if (bodyEl) {
       bodyEl.innerHTML =
-        '<tr>' +
-        '<td style="padding: 8px 8px; text-align: left; color: #000;">' + window.escapeHtml(displayDesc) + '</td>' +
-        '<td style="padding: 8px 8px; text-align: center; color: #000;">' + window.escapeHtml(displayMonth) + '</td>' +
-        '<td style="padding: 8px 8px; text-align: center; color: #000;">' + window.escapeHtml(row.method || '-') + '</td>' +
-        '<td style="padding: 8px 8px; text-align: right; color: #000;">' + formattedAmount + '</td>' +
+        '<tr style="border: none !important; background: transparent !important;">' +
+        '<td style="padding: 8px 6px !important; text-align: left !important; color: #000000 !important; border: none !important; font-weight: 500 !important;">' + window.escapeHtml(displayDesc) + '</td>' +
+        '<td style="padding: 8px 6px !important; text-align: center !important; color: #000000 !important; border: none !important; font-weight: 500 !important;">' + window.escapeHtml(displayMonth) + '</td>' +
+        '<td style="padding: 8px 6px !important; text-align: center !important; color: #000000 !important; border: none !important; font-weight: 500 !important;">' + window.escapeHtml(row.method || '-') + '</td>' +
+        '<td style="padding: 8px 6px !important; text-align: right !important; color: #000000 !important; border: none !important; font-weight: 500 !important; white-space: nowrap !important;">' + formattedAmount + '</td>' +
         '</tr>';
     }
 

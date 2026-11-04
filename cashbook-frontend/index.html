@@ -505,10 +505,19 @@
     }
 
     @media print {
+      @page {
+        size: A4 landscape !important;
+        margin: 0mm !important;
+      }
+
+      html,
       body.print-mode-invoice {
+        width: 100% !important;
+        height: 100% !important;
         background: #ffffff !important;
         margin: 0 !important;
         padding: 0 !important;
+        overflow: hidden !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
@@ -517,38 +526,75 @@
         display: none !important;
       }
 
+      /* 🎯 297mm အသေအစား 100% သုံးထားသဖြင့် ညာဘက်ခြမ်း လုံးဝ မပြတ်တောက်တော့ပါ */
       body.print-mode-invoice #invoice-print-area {
         display: flex !important;
         flex-direction: row !important;
         align-items: stretch !important;
         justify-content: space-between !important;
-        width: 297mm !important;
-        height: 210mm !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        height: 100vh !important;
         margin: 0 !important;
         padding: 0 !important;
         background: #ffffff !important;
         color: #000000 !important;
         box-sizing: border-box !important;
         position: relative !important;
-        overflow: hidden !important;
         page-break-after: avoid !important;
         page-break-inside: avoid !important;
       }
 
-      /* A5 Portrait တစ်ခြမ်းစီအတွက် သတ်မှတ်ထားသော Margin: Top 0.5in, Right 0.35in, Left 1in */
+      /* 🎯 A5 Portrait တစ်ခြမ်းစီအတွက် သတ်မှတ်ထားသော Margin: Top 0.5in, Right 0.35in, Left 1in အတိအကျ */
       body.print-mode-invoice .a5-invoice-half {
         width: 50% !important;
+        max-width: 50% !important;
+        flex: 0 0 50% !important;
         height: 100% !important;
         padding-top: 0.5in !important;
         padding-left: 1in !important;
         padding-right: 0.35in !important;
-        padding-bottom: 0.5in !important;
+        padding-bottom: 0.4in !important;
         box-sizing: border-box !important;
         display: flex !important;
         flex-direction: column !important;
         justify-content: flex-start !important;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
         color: #000000 !important;
+        overflow: hidden !important;
+      }
+
+      /* 🎯 Global Dark CSS ကို ဖယ်ရှားပြီး မီးခိုးရောင်ဖျော့ဖျော့ (#e5e7eb) နှင့် အနက်ရောင်စာသား သတ်မှတ်ခြင်း */
+      body.print-mode-invoice #invoice-print-area table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        border: none !important;
+        margin-top: 4px !important;
+        table-layout: fixed !important;
+      }
+
+      body.print-mode-invoice #invoice-print-area thead tr,
+      body.print-mode-invoice #invoice-print-area th {
+        background-color: #e5e7eb !important;
+        color: #000000 !important;
+        border: none !important;
+        text-transform: none !important;
+        font-weight: 600 !important;
+        font-size: 11.5px !important;
+        padding: 6px 6px !important;
+        letter-spacing: normal !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      body.print-mode-invoice #invoice-print-area tbody tr,
+      body.print-mode-invoice #invoice-print-area td {
+        background-color: transparent !important;
+        color: #000000 !important;
+        border: none !important;
+        font-weight: 500 !important;
+        font-size: 11.5px !important;
+        padding: 8px 6px !important;
       }
 
       /* A4 အလယ်တည့်တည့်ရှိ Cut Here မျဉ်းဖျော့ဖျော့လေး */
@@ -559,7 +605,7 @@
         left: 50% !important;
         transform: translateX(-50%) !important;
         width: 0 !important;
-        border-left: 1px dashed rgba(148, 163, 184, 0.45) !important;
+        border-left: 1px dashed rgba(148, 163, 184, 0.4) !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
@@ -577,74 +623,64 @@
         text-orientation: mixed !important;
         user-select: none !important;
       }
-
-      body.print-mode-invoice .inv-table-header {
-        background-color: #a6a6a6 !important;
-        color: #000000 !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
     }
   </style>
 
   <div id="invoice-print-area">
     <!-- ==================== LEFT A5 PORTRAIT: RECEIVED COPY ==================== -->
     <div class="a5-invoice-half">
-      <!-- Top Right Copy Label -->
-      <div style="text-align: right; font-weight: 700; font-size: 12.5px; color: #000; margin-bottom: 10px;">
+      <div style="text-align: right; font-weight: 700; font-size: 12px; color: #000; margin-bottom: 10px;">
         Received Copy
       </div>
 
-      <!-- Main Heading -->
       <div
-        style="font-size: 28px; font-weight: 800; letter-spacing: 0.5px; color: #000; line-height: 1.1; margin-bottom: 16px;">
+        style="font-size: 26px; font-weight: 800; letter-spacing: 0.5px; color: #000; line-height: 1.1; margin-bottom: 14px;">
         INVOICE
       </div>
 
-      <!-- Date Row -->
-      <div style="font-size: 12.5px; color: #000; margin-bottom: 18px;">
+      <div style="font-size: 11.5px; color: #000; margin-bottom: 14px;">
         <span>Date</span>
-        <span style="margin-left: 16px;">:</span>
-        <span id="print-received-date" style="margin-left: 6px;"></span>
+        <span style="margin-left: 12px;">:</span>
+        <span id="print-received-date" style="margin-left: 6px; font-weight: 500;"></span>
       </div>
 
       <!-- Student & Voucher Metadata Grid -->
       <div
-        style="display: grid; grid-template-columns: 56% 44%; row-gap: 8px; font-size: 12.5px; color: #000; margin-bottom: 8px;">
-        <div style="display: flex; align-items: baseline;">
-          <span style="width: 44px; display: inline-block;">Name</span>
-          <span style="margin-right: 6px;">:</span>
-          <span id="print-received-name" style="font-weight: 500; flex: 1;"></span>
+        style="display: grid; grid-template-columns: 53% 47%; row-gap: 6px; font-size: 11.5px; color: #000; margin-bottom: 8px;">
+        <div style="display: flex; align-items: baseline; padding-right: 4px;">
+          <span style="width: 38px; flex-shrink: 0;">Name</span>
+          <span style="margin-right: 5px;">:</span>
+          <span id="print-received-name"
+            style="font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
         </div>
         <div style="display: flex; align-items: baseline;">
-          <span style="width: 48px; display: inline-block;">ID</span>
-          <span style="margin-right: 6px;">:</span>
-          <span id="print-received-id" style="font-weight: 500; flex: 1;"></span>
+          <span style="width: 42px; flex-shrink: 0;">ID</span>
+          <span style="margin-right: 5px;">:</span>
+          <span id="print-received-id" style="font-weight: 500; white-space: nowrap;"></span>
         </div>
 
-        <div style="display: flex; align-items: baseline;">
-          <span style="width: 44px; display: inline-block;">Class</span>
-          <span style="margin-right: 6px;">:</span>
-          <span id="print-received-class" style="font-weight: 500; flex: 1;"></span>
+        <div style="display: flex; align-items: baseline; padding-right: 4px;">
+          <span style="width: 38px; flex-shrink: 0;">Class</span>
+          <span style="margin-right: 5px;">:</span>
+          <span id="print-received-class" style="font-weight: 500; white-space: nowrap;"></span>
         </div>
         <div style="display: flex; align-items: baseline;">
-          <span style="width: 48px; display: inline-block;">VR NO</span>
-          <span style="margin-right: 6px;">:</span>
-          <span id="print-received-vrno" style="font-weight: 500; flex: 1;"></span>
+          <span style="width: 42px; flex-shrink: 0;">VR NO</span>
+          <span style="margin-right: 5px;">:</span>
+          <span id="print-received-vrno" style="font-weight: 500; white-space: nowrap;"></span>
         </div>
       </div>
 
-      <!-- Hidden Category Holder for Compatibility -->
       <span id="print-received-category" style="display: none;"></span>
 
-      <!-- Grey Header Bar Table -->
-      <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; color: #000; margin-top: 2px;">
+      <!-- Light Grey Header Bar Table -->
+      <table>
         <thead>
-          <tr class="inv-table-header">
-            <th style="padding: 6px 8px; text-align: left; font-weight: 500; width: 34%;">Category</th>
-            <th style="padding: 6px 8px; text-align: center; font-weight: 500; width: 22%;">Month</th>
-            <th style="padding: 6px 8px; text-align: center; font-weight: 500; width: 18%;">Method</th>
-            <th style="padding: 6px 8px; text-align: right; font-weight: 500; width: 26%;">Amount</th>
+          <tr>
+            <th style="text-align: left !important; width: 32%;">Category</th>
+            <th style="text-align: center !important; width: 22%;">Month</th>
+            <th style="text-align: center !important; width: 18%;">Method</th>
+            <th style="text-align: right !important; width: 28%;">Amount</th>
           </tr>
         </thead>
         <tbody id="print-received-table-body"></tbody>
@@ -652,28 +688,28 @@
 
       <!-- Total Line -->
       <div
-        style="display: flex; justify-content: flex-end; align-items: center; gap: 22px; font-size: 12.5px; color: #000; margin-top: 28px; padding-right: 8px;">
-        <span>Total</span>
-        <span id="print-received-total" style="font-weight: 500;"></span>
+        style="display: flex; justify-content: flex-end; align-items: center; gap: 18px; font-size: 12px; color: #000; margin-top: 24px; padding-right: 6px;">
+        <span style="font-weight: 500;">Total</span>
+        <span id="print-received-total" style="font-weight: 700;"></span>
       </div>
 
       <!-- Thank You Note -->
-      <div style="font-size: 12px; color: #000; margin-top: 6px; letter-spacing: 0.2px;">
+      <div style="font-size: 11.5px; color: #000; margin-top: 8px; letter-spacing: 0.2px;">
         THANK YOU
       </div>
 
       <!-- Signatures Section -->
       <div
-        style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 90px; padding: 0 8px;">
+        style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 85px; padding: 0 4px;">
         <div style="text-align: center; width: 45%;">
-          <div style="border-top: 1px dotted #333; width: 100%; margin-bottom: 6px;"></div>
-          <div style="font-size: 11.5px; font-family: Georgia, serif; color: #000; white-space: nowrap;">
+          <div style="border-top: 1px dotted #444; width: 100%; margin-bottom: 6px;"></div>
+          <div style="font-size: 11px; font-family: Georgia, serif; color: #000; white-space: nowrap;">
             Paid by: (ငွေပေးသွင်းသူ)
           </div>
         </div>
         <div style="text-align: center; width: 45%;">
-          <div style="border-top: 1px dotted #333; width: 100%; margin-bottom: 6px;"></div>
-          <div style="font-size: 11.5px; font-family: Georgia, serif; color: #000; white-space: nowrap;">
+          <div style="border-top: 1px dotted #444; width: 100%; margin-bottom: 6px;"></div>
+          <div style="font-size: 11px; font-family: Georgia, serif; color: #000; white-space: nowrap;">
             Received by: (ငွေလက်ခံသူ)
           </div>
         </div>
@@ -687,61 +723,58 @@
 
     <!-- ==================== RIGHT A5 PORTRAIT: CUSTOMER COPY ==================== -->
     <div class="a5-invoice-half">
-      <!-- Top Right Copy Label -->
-      <div style="text-align: right; font-weight: 700; font-size: 12.5px; color: #000; margin-bottom: 10px;">
+      <div style="text-align: right; font-weight: 700; font-size: 12px; color: #000; margin-bottom: 10px;">
         Customer Copy
       </div>
 
-      <!-- Main Heading -->
       <div
-        style="font-size: 28px; font-weight: 800; letter-spacing: 0.5px; color: #000; line-height: 1.1; margin-bottom: 16px;">
+        style="font-size: 26px; font-weight: 800; letter-spacing: 0.5px; color: #000; line-height: 1.1; margin-bottom: 14px;">
         INVOICE
       </div>
 
-      <!-- Date Row -->
-      <div style="font-size: 12.5px; color: #000; margin-bottom: 18px;">
+      <div style="font-size: 11.5px; color: #000; margin-bottom: 14px;">
         <span>Date</span>
-        <span style="margin-left: 16px;">:</span>
-        <span id="print-customer-date" style="margin-left: 6px;"></span>
+        <span style="margin-left: 12px;">:</span>
+        <span id="print-customer-date" style="margin-left: 6px; font-weight: 500;"></span>
       </div>
 
       <!-- Student & Voucher Metadata Grid -->
       <div
-        style="display: grid; grid-template-columns: 56% 44%; row-gap: 8px; font-size: 12.5px; color: #000; margin-bottom: 8px;">
-        <div style="display: flex; align-items: baseline;">
-          <span style="width: 44px; display: inline-block;">Name</span>
-          <span style="margin-right: 6px;">:</span>
-          <span id="print-customer-name" style="font-weight: 500; flex: 1;"></span>
+        style="display: grid; grid-template-columns: 53% 47%; row-gap: 6px; font-size: 11.5px; color: #000; margin-bottom: 8px;">
+        <div style="display: flex; align-items: baseline; padding-right: 4px;">
+          <span style="width: 38px; flex-shrink: 0;">Name</span>
+          <span style="margin-right: 5px;">:</span>
+          <span id="print-customer-name"
+            style="font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
         </div>
         <div style="display: flex; align-items: baseline;">
-          <span style="width: 48px; display: inline-block;">ID</span>
-          <span style="margin-right: 6px;">:</span>
-          <span id="print-customer-id" style="font-weight: 500; flex: 1;"></span>
+          <span style="width: 42px; flex-shrink: 0;">ID</span>
+          <span style="margin-right: 5px;">:</span>
+          <span id="print-customer-id" style="font-weight: 500; white-space: nowrap;"></span>
         </div>
 
-        <div style="display: flex; align-items: baseline;">
-          <span style="width: 44px; display: inline-block;">Class</span>
-          <span style="margin-right: 6px;">:</span>
-          <span id="print-customer-class" style="font-weight: 500; flex: 1;"></span>
+        <div style="display: flex; align-items: baseline; padding-right: 4px;">
+          <span style="width: 38px; flex-shrink: 0;">Class</span>
+          <span style="margin-right: 5px;">:</span>
+          <span id="print-customer-class" style="font-weight: 500; white-space: nowrap;"></span>
         </div>
         <div style="display: flex; align-items: baseline;">
-          <span style="width: 48px; display: inline-block;">VR NO</span>
-          <span style="margin-right: 6px;">:</span>
-          <span id="print-customer-vrno" style="font-weight: 500; flex: 1;"></span>
+          <span style="width: 42px; flex-shrink: 0;">VR NO</span>
+          <span style="margin-right: 5px;">:</span>
+          <span id="print-customer-vrno" style="font-weight: 500; white-space: nowrap;"></span>
         </div>
       </div>
 
-      <!-- Hidden Category Holder for Compatibility -->
       <span id="print-customer-category" style="display: none;"></span>
 
-      <!-- Grey Header Bar Table -->
-      <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; color: #000; margin-top: 2px;">
+      <!-- Light Grey Header Bar Table -->
+      <table>
         <thead>
-          <tr class="inv-table-header">
-            <th style="padding: 6px 8px; text-align: left; font-weight: 500; width: 34%;">Category</th>
-            <th style="padding: 6px 8px; text-align: center; font-weight: 500; width: 22%;">Month</th>
-            <th style="padding: 6px 8px; text-align: center; font-weight: 500; width: 18%;">Method</th>
-            <th style="padding: 6px 8px; text-align: right; font-weight: 500; width: 26%;">Amount</th>
+          <tr>
+            <th style="text-align: left !important; width: 32%;">Category</th>
+            <th style="text-align: center !important; width: 22%;">Month</th>
+            <th style="text-align: center !important; width: 18%;">Method</th>
+            <th style="text-align: right !important; width: 28%;">Amount</th>
           </tr>
         </thead>
         <tbody id="print-customer-table-body"></tbody>
@@ -749,28 +782,28 @@
 
       <!-- Total Line -->
       <div
-        style="display: flex; justify-content: flex-end; align-items: center; gap: 22px; font-size: 12.5px; color: #000; margin-top: 28px; padding-right: 8px;">
-        <span>Total</span>
-        <span id="print-customer-total" style="font-weight: 500;"></span>
+        style="display: flex; justify-content: flex-end; align-items: center; gap: 18px; font-size: 12px; color: #000; margin-top: 24px; padding-right: 6px;">
+        <span style="font-weight: 500;">Total</span>
+        <span id="print-customer-total" style="font-weight: 700;"></span>
       </div>
 
       <!-- Thank You Note -->
-      <div style="font-size: 12px; color: #000; margin-top: 6px; letter-spacing: 0.2px;">
+      <div style="font-size: 11.5px; color: #000; margin-top: 8px; letter-spacing: 0.2px;">
         THANK YOU
       </div>
 
       <!-- Signatures Section -->
       <div
-        style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 90px; padding: 0 8px;">
+        style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 85px; padding: 0 4px;">
         <div style="text-align: center; width: 45%;">
-          <div style="border-top: 1px dotted #333; width: 100%; margin-bottom: 6px;"></div>
-          <div style="font-size: 11.5px; font-family: Georgia, serif; color: #000; white-space: nowrap;">
+          <div style="border-top: 1px dotted #444; width: 100%; margin-bottom: 6px;"></div>
+          <div style="font-size: 11px; font-family: Georgia, serif; color: #000; white-space: nowrap;">
             Paid by: (ငွေပေးသွင်းသူ)
           </div>
         </div>
         <div style="text-align: center; width: 45%;">
-          <div style="border-top: 1px dotted #333; width: 100%; margin-bottom: 6px;"></div>
-          <div style="font-size: 11.5px; font-family: Georgia, serif; color: #000; white-space: nowrap;">
+          <div style="border-top: 1px dotted #444; width: 100%; margin-bottom: 6px;"></div>
+          <div style="font-size: 11px; font-family: Georgia, serif; color: #000; white-space: nowrap;">
             Received by: (ငွေလက်ခံသူ)
           </div>
         </div>
