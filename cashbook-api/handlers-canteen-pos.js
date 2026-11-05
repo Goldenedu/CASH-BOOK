@@ -1109,7 +1109,7 @@ export async function savePosPurchase(db, session, body) {
     const ref = String(body.ref || '').trim();
     const remark = String(body.remark || '').trim();
 
-    // Support both Multi-Item Array (`body.items`) and Legacy Single-Item Payload
+    // Multi-Item Array ရော Single-Item Payload ပါ လက်ခံနိုင်ရန် စီစဉ်ခြင်း
     let rawItems = Array.isArray(body.items) && body.items.length > 0
       ? body.items
       : [{
@@ -1156,7 +1156,7 @@ export async function savePosPurchase(db, session, body) {
     }
 
     if (validItems.length === 0) {
-      return { success: false, message: "Please provide at least 1 valid item with Barcode, Qty > 0, and Buy Price > 0." };
+      return { success: false, message: "ကျေးဇူးပြု၍ Barcode၊ အရေအတွက် (Qty > 0) နှင့် ဝယ်ဈေး (Cost Price > 0) အနည်းဆုံး ပစ္စည်း ၁ မျိုး ထည့်သွင်းပေးပါ။" };
     }
 
     calculatedTotal = Math.round(calculatedTotal * 100) / 100;
@@ -1164,7 +1164,6 @@ export async function savePosPurchase(db, session, body) {
       ? safeAmount(body.voucherAmount)
       : calculatedTotal;
 
-    // Difference between Calculated Total and Actual Voucher Amount (+/-)
     const surplusDeficit = (body.surplusDeficit !== undefined && body.surplusDeficit !== '')
       ? safeSignedAmount(body.surplusDeficit)
       : Math.round((calculatedTotal - voucherAmount) * 100) / 100;
@@ -1172,19 +1171,19 @@ export async function savePosPurchase(db, session, body) {
     const rawCore = body.uniqueId ? String(body.uniqueId).trim().replace(/^(PO_|PUR_|PCB_)+/i, '') : generateUniqueId('').replace(/^_/, '');
     const voucherNo = body.voucherNo || await generateVoucherNo(db, 'pos_purchases', 'PUR', entryDate);
 
-    // Idempotency Guard
+    // Idempotency Guard (ဘောက်ချာ နှစ်ခါမထပ်စေရန် ကာကွယ်ခြင်း)
     const existingVoucher = await db.prepare("SELECT id, voucher_no FROM pos_purchases WHERE voucher_no = ? LIMIT 1").bind(voucherNo).first();
     if (existingVoucher && !body.isUpdate) {
       return {
         success: true,
         voucherNo: existingVoucher.voucher_no,
-        message: "Purchase voucher already recorded (Duplicate prevented)."
+        message: "ဤအဝယ်ဘောက်ချာသည် စနစ်အတွင်း သိမ်းဆည်းပြီးသား ဖြစ်ပါသည်။"
       };
     }
 
     const batchStatements = [];
 
-    // Optional Auto-Upsert Supplier if Shop/Supplier Name is provided
+    // ကုန်သည်အချက်အလက် ထည့်သွင်း/ပြင်ဆင်ခြင်း
     if (shopName || supplierName) {
       const supKey = shopName || supplierName;
       batchStatements.push(
@@ -1200,7 +1199,7 @@ export async function savePosPurchase(db, session, body) {
       );
     }
 
-    // Get starting sequence `no` for pos_purchases
+    // Starting Sequence No ရှာဖွေခြင်း
     const lastPurRow = await db.prepare("SELECT MAX(CAST(no AS INTEGER)) as maxNo, COUNT(id) as cnt FROM pos_purchases").first();
     let nextPurNo = Math.max(parseInt(lastPurRow?.maxNo || 0, 10), parseInt(lastPurRow?.cnt || 0, 10));
 
@@ -1210,7 +1209,7 @@ export async function savePosPurchase(db, session, body) {
       const linePurchaseNo = `${voucherNo}-${String(i + 1).padStart(2, '0')}`;
       const lineUid = `PUR_${rawCore}_${i + 1}`;
 
-      // 1. Upsert Master Item & Increment Stock
+      // ၁။ Master Item & Stock တိုးမြှင့်ခြင်း (၉ ကွက် အတိအကျ)
       batchStatements.push(
         db.prepare(`
           INSERT INTO pos_items_master (
@@ -1235,26 +1234,26 @@ export async function savePosPurchase(db, session, body) {
         )
       );
 
-      // 2. Insert 17-Column Purchase Line Record
+      // ၂။ POS Purchases Line ထည့်သွင်းခြင်း (၂၇ ကွက် အတိအကျ)
       batchStatements.push(
         db.prepare(`
           INSERT INTO pos_purchases (
-  no, purchase_no, voucher_no, vr_no, date, item_barcode, category, item_name, method,
-  qty, cost_price, total_cost, markup_percent, selling_price, wholesale_markup, wholesale_price,
-  supplier_id, supplier_name, shop_name, phone_no, address, ref, remark,
-  voucher_amount, surplus_deficit, created_by, uniqueid
-)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            no, purchase_no, voucher_no, vr_no, date, item_barcode, category, item_name, method,
+            qty, cost_price, total_cost, markup_percent, selling_price, wholesale_markup, wholesale_price,
+            supplier_id, supplier_name, shop_name, phone_no, address, ref, ref_no, remark,
+            voucher_amount, surplus_deficit, created_by, uniqueid
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
-          nextPurNo, linePurchaseNo, voucherNo, entryDate, it.barcode, it.category, it.itemName, method,
+          nextPurNo, linePurchaseNo, voucherNo, voucherNo, entryDate, it.barcode, it.category, it.itemName, method,
           it.qty, it.costPrice, it.totalCost, it.markupPercent, it.sellingPrice, it.wholesaleMarkup, it.wholesalePrice,
-          supplierId, supplierName, shopName, phoneNo, address, ref, remark,
+          supplierId, supplierName, shopName, phoneNo, address, ref, ref, remark,
           voucherAmount, surplusDeficit, session?.name || 'Admin', lineUid
         )
       );
     }
 
-    // 3. Automatically Post Voucher Amount as Credit & Difference as Surplus/Deficit into POS Cash Book
+    // ၃။ POS Cash Book ထဲသို့ အလိုအလျောက် စာရင်းသွင်းခြင်း (၁၅ ကွက် အတိအကျ)
     const noPcb = await generateFyNo(db, 'pos_cash_book', fy);
     const pcbUid = `PCB_PUR_${rawCore}`;
     const pcbDesc = `[${voucherNo}] ${shopName || supplierName || 'Purchase'}: ${summaryParts.join(', ')}`.slice(0, 500);
@@ -1265,9 +1264,9 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
           no, date, category, description, method, debit, credit, balances,
           ref, surplus_deficit, vr_no, my, fy, created_by, uniqueid
         )
-        VALUES (?, ?, 'Purchase', ?, ?, 0, ?, 0, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
-        noPcb, entryDate, pcbDesc, method, voucherAmount,
+        noPcb, entryDate, 'Purchase', pcbDesc, method, 0, voucherAmount, 0,
         ref || voucherNo, surplusDeficit, voucherNo, my, fy,
         session?.name || 'Admin', pcbUid
       )
