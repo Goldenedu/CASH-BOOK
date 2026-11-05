@@ -123,6 +123,7 @@ async function ensureCanteenSchema(db) {
     "ALTER TABLE pos_purchases ADD COLUMN voucher_amount REAL DEFAULT 0",
     "ALTER TABLE pos_purchases ADD COLUMN surplus_deficit REAL DEFAULT 0",
     "ALTER TABLE pos_purchases ADD COLUMN uniqueid TEXT",
+    "ALTER TABLE pos_purchases ADD COLUMN vr_no TEXT DEFAULT ''",
     "ALTER TABLE pos_waste_records ADD COLUMN items_json TEXT"
   ];
 
@@ -1238,12 +1239,12 @@ export async function savePosPurchase(db, session, body) {
       batchStatements.push(
         db.prepare(`
           INSERT INTO pos_purchases (
-            no, purchase_no, voucher_no, date, item_barcode, category, item_name, method,
-            qty, cost_price, total_cost, markup_percent, selling_price, wholesale_markup, wholesale_price,
-            supplier_id, supplier_name, shop_name, phone_no, address, ref, remark,
-            voucher_amount, surplus_deficit, created_by, uniqueid
-          )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  no, purchase_no, voucher_no, vr_no, date, item_barcode, category, item_name, method,
+  qty, cost_price, total_cost, markup_percent, selling_price, wholesale_markup, wholesale_price,
+  supplier_id, supplier_name, shop_name, phone_no, address, ref, remark,
+  voucher_amount, surplus_deficit, created_by, uniqueid
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
           nextPurNo, linePurchaseNo, voucherNo, entryDate, it.barcode, it.category, it.itemName, method,
           it.qty, it.costPrice, it.totalCost, it.markupPercent, it.sellingPrice, it.wholesaleMarkup, it.wholesalePrice,

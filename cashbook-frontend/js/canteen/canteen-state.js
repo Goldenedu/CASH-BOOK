@@ -554,7 +554,10 @@ async function refreshActiveCanteenView() {
       await loadWasteHistory(gWastePage || 1);
     } else if (gActiveView === 'surplus' && typeof loadSurplusHistory === 'function') {
       await loadSurplusHistory(gSurplusPage || 1);
-    } else if (gActiveView === 'pos') {
+    } else if (gActiveView === 'cashbook' && typeof loadPosCashBook === 'function') {
+      await loadPosCashBook(gPosCashBookPage || 1);
+    }
+    else if (gActiveView === 'pos') {
       if (typeof loadItemsCatalog === 'function') await loadItemsCatalog(true);
       await cacheStudentDirectoryForOffline();
     }

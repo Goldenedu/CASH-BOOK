@@ -423,7 +423,7 @@ async function executeAutoRecalculateAll(db, body = {}) {
   if (rawBook && tableMap[rawBook.toLowerCase().trim()]) {
     targetTables = [tableMap[rawBook.toLowerCase().trim()]];
   } else if (isExplicitAll) {
-    targetTables = ["bank", "cash", "office", "kitchen", "payroll", "student_money", "canteen_book", "pm_cashier_book", "ca_bank", "ca_cash", "ca_office", "ca_kitchen", "ca_payroll"];
+    targetTables = ["bank", "cash", "office", "kitchen", "payroll", "student_money", "canteen_book", "pm_cashier_book", "pos_cash_book", "ca_bank", "ca_cash", "ca_office", "ca_kitchen", "ca_payroll"];
   } else {
     return { success: false, message: "Target table name is required for recalculation." };
   }
@@ -825,6 +825,10 @@ export default {
         case 'getCanteenClosureStatus':
           if (!can(userSession, 'pos_read') && !can(userSession, 'ledger_read')) return forbidden(corsHeaders);
           result = await CanteenPosHandlers.getCanteenClosureStatus(db, body); break;
+
+        case 'getUnclosedCanteenDates':
+  if (!can(userSession, 'pos_read') && !can(userSession, 'ledger_read')) return forbidden(corsHeaders);
+  result = await CanteenPosHandlers.getUnclosedCanteenDates(db, body); break;
 
         // 🌐 OFFLINE BATCH IDEMPOTENT SYNC
         case 'syncOfflinePosOrders':
